@@ -1,0 +1,114 @@
+@import "@unocss/reset/tailwind.css";
+
+/* Blender-inspired dark theme — shared across all tLib UI components */
+@layer base {
+	:root {
+		--background: 225 8% 12%;
+		--foreground: 220 10% 90%;
+		--card: 225 8% 16%;
+		--card-foreground: 220 10% 90%;
+		--popover: 225 10% 18%;
+		--popover-foreground: 220 10% 90%;
+		--primary: 211 80% 55%;
+		--primary-foreground: 0 0% 100%;
+		--secondary: 225 10% 26%;
+		--secondary-foreground: 220 10% 90%;
+		--muted: 225 8% 24%;
+		--muted-foreground: 220 8% 58%;
+		--accent: 211 80% 55%;
+		--accent-foreground: 0 0% 100%;
+		--destructive: 0 62% 50%;
+		--destructive-foreground: 0 0% 100%;
+		--border: 225 10% 30%;
+		--input: 225 10% 22%;
+		--ring: 211 80% 55%;
+		--radius: 0.375rem;
+		--font-sans: Inter, sans-serif;
+	}
+
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+		background: transparent !important;
+	}
+
+	body {
+		color: hsl(var(--foreground));
+		font-family: var(--font-sans);
+		font-feature-settings: "rlig" 1, "calt" 1;
+		user-select: none;
+		-webkit-user-select: none;
+	}
+
+	#root {
+		width: 100%;
+		height: 100%;
+		position: relative;
+	}
+
+	::-webkit-scrollbar { width: 6px; height: 6px; }
+	::-webkit-scrollbar-track { background: transparent; }
+	::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.3); border-radius: 3px; }
+	::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
+	::selection { background: hsl(var(--primary) / 0.3); }
+
+	input[type="number"]::-webkit-inner-spin-button,
+	input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+	input[type="number"] { -moz-appearance: textfield; }
+}
+
+/* Settings panel styles — compact mono-spaced panel matching tRadio/tELS */
+@layer components {
+	.settings-panel {
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border) / 0.6);
+		border-radius: calc(var(--radius) + 2px);
+		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+		font-family: Inter, sans-serif;
+		font-size: 12px;
+		color: hsl(var(--foreground));
+	}
+
+	.settings-range {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 100%;
+		height: 4px;
+		border-radius: 2px;
+		background: hsl(var(--secondary));
+		outline: none;
+		cursor: pointer;
+	}
+	.settings-range::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: hsl(var(--primary));
+		cursor: pointer;
+		box-shadow: 0 0 0 2px hsl(var(--background));
+	}
+	.settings-range::-moz-range-thumb {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: hsl(var(--primary));
+		cursor: pointer;
+		border: none;
+		box-shadow: 0 0 0 2px hsl(var(--background));
+	}
+
+	.settings-sep {
+		height: 1px;
+		background: hsl(var(--border) / 0.6);
+	}
+
+	.settings-scroll::-webkit-scrollbar { width: 6px; }
+	.settings-scroll::-webkit-scrollbar-track { background: transparent; }
+	.settings-scroll::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.3); border-radius: 3px; }
+	.settings-scroll::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
+}

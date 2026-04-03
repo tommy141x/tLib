@@ -1,0 +1,16 @@
+import Menu from "@/components/Menu";
+import Dialog from "@/components/Dialog";
+import Toast from "@/components/Toast";
+
+// Theme store initializes its NUI listeners on import
+import "@/stores/theme-store";
+
+export default function App() {
+	return (
+		<>
+			<Menu />
+			<Dialog />
+			<Toast />
+		</>
+	);
+}
