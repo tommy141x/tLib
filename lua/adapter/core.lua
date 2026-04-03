@@ -250,6 +250,9 @@ elseif _TLIB_IS_FIVEM then
     end
 
     function Platform.AddEventHandler(name, cb)
+        -- RegisterNetEvent marks the event as safe to receive from clients.
+        -- Calling it on a local-only event is harmless and idempotent.
+        RegisterNetEvent(name)
         AddEventHandler(name, cb)
     end
 

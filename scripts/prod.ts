@@ -79,7 +79,6 @@ const zip = new AdmZip();
 addToZip(zip, DIST, "tLib");
 zip.writeZip(ZIP_PATH);
 
-rmSync(DIST, { recursive: true });
-
 const mb = (statSync(ZIP_PATH).size / 1024 / 1024).toFixed(2);
-console.log(`\nDone! tLib.zip — ${mb} MB\n`);
+console.log(`\nDone! tLib.zip — ${mb} MB`);
+console.log(`      dist/    — unzipped output\n`);
