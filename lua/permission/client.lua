@@ -3,17 +3,21 @@
 
 local isAdmin = false
 
-RegisterNetEvent("tLib:receiveAdminPermission", function(result)
+Platform.AddEventHandler("tLib:receiveAdminPermission", function(result)
     isAdmin = result == true
 end)
 
-AddEventHandler("onClientResourceStart", function(resourceName)
-    if resourceName == GetCurrentResourceName() then
-        TriggerServerEvent("tLib:requestAdminPermission")
-    end
-end)
+-- On FiveM, re-request permission when the resource (re)starts.
+-- On Helix, the package init runs at startup so the TriggerServerEvent below suffices.
+if _TLIB_IS_FIVEM then
+    AddEventHandler("onClientResourceStart", function(resourceName)
+        if resourceName == Platform.getPackageName() then
+            Platform.TriggerServerEvent("tLib:requestAdminPermission")
+        end
+    end)
+end
 
-TriggerServerEvent("tLib:requestAdminPermission")
+Platform.TriggerServerEvent("tLib:requestAdminPermission")
 
 function Permission_IsAdmin()
     return isAdmin
@@ -24,6 +28,6 @@ function Permission_registerClientExports()
         return isAdmin
     end)
     Platform.export('tLib', 'RefreshAdminPermission', function()
-        TriggerServerEvent("tLib:requestAdminPermission")
+        Platform.TriggerServerEvent("tLib:requestAdminPermission")
     end)
 end

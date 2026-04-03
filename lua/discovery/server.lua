@@ -11,12 +11,88 @@
 --   - Auto-registering standard server events (request, save, remove, export)
 --   - Late-starting resource detection
 --
--- Platform note: Uses FiveM natives for resource enumeration and file I/O.
--- On Helix, these functions are stubbed until Helix equivalents exist.
+-- Platform note: File I/O and resource enumeration use FiveM natives.
+-- Helix equivalents are not yet known — those paths are stubbed and log a warning.
 
 local log = Logger.create('tLib/discovery')
 
 Discovery = {}
+
+-- ── Platform helpers ───────────────────────────────────────────────────────
+-- All FiveM-specific natives are isolated here. Swap in Helix equivalents
+-- once they are known; nothing else in this file needs to change.
+
+local function _loadFile(resource, path)
+    if _TLIB_IS_FIVEM then
+        return LoadResourceFile(resource, path)
+    else
+        log('_loadFile: no Helix file-read equivalent yet (resource=' .. tostring(resource) .. ' path=' .. tostring(path) .. ')', 3)
+        return nil
+    end
+end
+
+local function _saveFile(resource, path, content)
+    if _TLIB_IS_FIVEM then
+        SaveResourceFile(resource, path, content, -1)
+    else
+        log('_saveFile: no Helix file-write equivalent yet (resource=' .. tostring(resource) .. ')', 3)
+    end
+end
+
+local function _getResourceMeta(resource, key)
+    if _TLIB_IS_FIVEM then
+        return GetResourceMetadata(resource, key, 0)
+    else
+        return nil
+    end
+end
+
+local function _getResourceCount()
+    if _TLIB_IS_FIVEM then
+        return GetNumResources()
+    else
+        return 0
+    end
+end
+
+local function _getResourceAtIndex(i)
+    if _TLIB_IS_FIVEM then
+        return GetResourceByFindIndex(i)
+    else
+        return nil
+    end
+end
+
+local function _getResourceState(resource)
+    if _TLIB_IS_FIVEM then
+        return GetResourceState(resource)
+    else
+        return 'unknown'
+    end
+end
+
+local function _hashKey(key)
+    if _TLIB_IS_FIVEM then
+        return GetHashKey(key)
+    else
+        -- Helix: no direct equivalent — return key unchanged
+        return key
+    end
+end
+
+local function _chatMessage(src, tag, message)
+    if _TLIB_IS_FIVEM then
+        Platform.TriggerClientEvent("chat:addMessage", src, { args = { tag, message } })
+    end
+    -- Helix: no chat equivalent known yet
+end
+
+local function _onResourceStart(cb)
+    if _TLIB_IS_FIVEM then
+        AddEventHandler("onResourceStart", cb)
+    end
+    -- Helix: no equivalent known yet — late resource detection not supported
+end
 
 -- ══════════════════════════════════════════════════════════════════
 --  MANIFEST MODIFICATION (Node.js-free, pure Lua)
@@ -79,7 +155,7 @@ function Discovery.create(opts)
     local defaultFile   = opts.defaultFileName
     local localFile     = opts.localFile or "data.json"
     local tag           = opts.logTag or metadataKey
-    local chatTag       = opts.chatTag or ("[" .. GetCurrentResourceName() .. "]")
+    local chatTag       = opts.chatTag or ("[" .. Platform.getPackageName() .. "]")
 
     -- Auto-register this metadata key as a manifest sibling for grouping
     Discovery.addManifestSibling(metadataKey)
@@ -94,7 +170,7 @@ function Discovery.create(opts)
 
     local function registerAlias(key)
         if tonumber(key) == nil then
-            hashToName[tostring(GetHashKey(key))] = key
+            hashToName[tostring(_hashKey(key))] = key
         end
     end
 
@@ -125,7 +201,7 @@ function Discovery.create(opts)
 
     function inst:loadLocal(filePath)
         filePath = filePath or localFile
-        local raw = LoadResourceFile(GetCurrentResourceName(), filePath)
+        local raw = _loadFile(Platform.getPackageName(), filePath)
         if raw and raw ~= "" then
             configs = json.decode(raw) or {}
             for key in pairs(configs) do registerAlias(key) end
@@ -144,14 +220,14 @@ function Discovery.create(opts)
                 localOnly[model] = copy
             end
         end
-        SaveResourceFile(GetCurrentResourceName(), filePath, json.encode(localOnly), -1)
+        _saveFile(Platform.getPackageName(), filePath, json.encode(localOnly))
     end
 
     function inst:loadExternalFromResource(resName)
-        local configPath = GetResourceMetadata(resName, metadataKey, 0)
+        local configPath = _getResourceMeta(resName, metadataKey)
         if not configPath or configPath == "" then return 0 end
 
-        local raw = LoadResourceFile(resName, configPath)
+        local raw = _loadFile(resName, configPath)
         if not raw or raw == "" then return 0 end
 
         local extConfigs = json.decode(raw)
@@ -175,10 +251,10 @@ function Discovery.create(opts)
     end
 
     function inst:scanExternal()
-        local numResources = GetNumResources()
+        local numResources = _getResourceCount()
         for i = 0, numResources - 1 do
-            local resName = GetResourceByFindIndex(i)
-            if resName and resName ~= GetCurrentResourceName() then
+            local resName = _getResourceAtIndex(i)
+            if resName and resName ~= Platform.getPackageName() then
                 inst:loadExternalFromResource(resName)
             end
         end
@@ -212,10 +288,10 @@ function Discovery.create(opts)
 
         local ext = externalSources[model]
         if ext then
-            local raw = LoadResourceFile(ext.resource, ext.filePath)
+            local raw = _loadFile(ext.resource, ext.filePath)
             local extData = (raw and raw ~= "") and json.decode(raw) or {}
             extData[model] = config
-            SaveResourceFile(ext.resource, ext.filePath, json.encode(extData), -1)
+            _saveFile(ext.resource, ext.filePath, json.encode(extData))
             log("[" .. tag .. "] Saved '" .. model .. "' → " .. ext.resource .. "/" .. ext.filePath, 2)
         else
             config._local = true
@@ -228,10 +304,10 @@ function Discovery.create(opts)
         model = resolveModel(model)
         local ext = externalSources[model]
         if ext then
-            local raw = LoadResourceFile(ext.resource, ext.filePath)
+            local raw = _loadFile(ext.resource, ext.filePath)
             local extData = (raw and raw ~= "") and json.decode(raw) or {}
             extData[model] = nil
-            SaveResourceFile(ext.resource, ext.filePath, json.encode(extData), -1)
+            _saveFile(ext.resource, ext.filePath, json.encode(extData))
             externalSources[model] = nil
         end
         configs[model] = nil
@@ -245,12 +321,12 @@ function Discovery.create(opts)
         end
 
         local targets = {}
-        table.insert(targets, { name = GetCurrentResourceName(), hasMetadata = true, isLocal = true })
+        table.insert(targets, { name = Platform.getPackageName(), hasMetadata = true, isLocal = true })
 
-        local numResources = GetNumResources()
+        local numResources = _getResourceCount()
         for i = 0, numResources - 1 do
-            local resName = GetResourceByFindIndex(i)
-            if resName and resName ~= GetCurrentResourceName() and GetResourceState(resName) == "started" then
+            local resName = _getResourceAtIndex(i)
+            if resName and resName ~= Platform.getPackageName() and _getResourceState(resName) == "started" then
                 local hasMetadata = activeResources[resName] == true
                 table.insert(targets, { name = resName, hasMetadata = hasMetadata })
             end
@@ -273,13 +349,13 @@ function Discovery.create(opts)
         if not config then return false end
 
         -- Move back to local
-        if targetResource == GetCurrentResourceName() then
+        if targetResource == Platform.getPackageName() then
             local oldExt = externalSources[model]
             if oldExt then
-                local raw = LoadResourceFile(oldExt.resource, oldExt.filePath)
+                local raw = _loadFile(oldExt.resource, oldExt.filePath)
                 local extData = (raw and raw ~= "") and json.decode(raw) or {}
                 extData[model] = nil
-                SaveResourceFile(oldExt.resource, oldExt.filePath, json.encode(extData), -1)
+                _saveFile(oldExt.resource, oldExt.filePath, json.encode(extData))
             end
             externalSources[model] = nil
             config._local = nil
@@ -290,29 +366,29 @@ function Discovery.create(opts)
         -- 1. Remove from current location
         local oldExt = externalSources[model]
         if oldExt then
-            local raw = LoadResourceFile(oldExt.resource, oldExt.filePath)
+            local raw = _loadFile(oldExt.resource, oldExt.filePath)
             local extData = (raw and raw ~= "") and json.decode(raw) or {}
             extData[model] = nil
-            SaveResourceFile(oldExt.resource, oldExt.filePath, json.encode(extData), -1)
+            _saveFile(oldExt.resource, oldExt.filePath, json.encode(extData))
         end
         config._local = nil
         inst:saveLocal()
 
         -- 2. Determine target file path
-        local targetPath = GetResourceMetadata(targetResource, metadataKey, 0)
+        local targetPath = _getResourceMeta(targetResource, metadataKey)
         if not targetPath or targetPath == "" then
             targetPath = defaultFile
         end
 
         -- 3. Write config to target resource
-        local raw = LoadResourceFile(targetResource, targetPath)
+        local raw = _loadFile(targetResource, targetPath)
         local targetData = (raw and raw ~= "") and json.decode(raw) or {}
         local cleanConfig = {}
         for k, v in pairs(config) do
             if k ~= "_local" then cleanConfig[k] = v end
         end
         targetData[model] = cleanConfig
-        SaveResourceFile(targetResource, targetPath, json.encode(targetData), -1)
+        _saveFile(targetResource, targetPath, json.encode(targetData))
 
         -- 4. Ensure fxmanifest has the metadata line
         local ok = appendToManifest(targetResource, metadataKey, targetPath)
@@ -338,15 +414,15 @@ function Discovery.create(opts)
     inst:deduplicateConfigs()
 
     -- Watch for resources that start after us
-    AddEventHandler("onResourceStart", function(resName)
-        if resName == GetCurrentResourceName() then return end
+    _onResourceStart(function(resName)
+        if resName == Platform.getPackageName() then return end
         local count = inst:loadExternalFromResource(resName)
 
         -- Also check runtime tracking for resources we previously exported to
         if count == 0 then
             for _, ext in pairs(externalSources) do
                 if ext.resource == resName then
-                    local raw2 = LoadResourceFile(resName, ext.filePath)
+                    local raw2 = _loadFile(resName, ext.filePath)
                     if raw2 and raw2 ~= "" then
                         local extConfigs = json.decode(raw2)
                         if extConfigs then
@@ -365,7 +441,7 @@ function Discovery.create(opts)
         end
 
         if count > 0 and opts.receiveEvent then
-            TriggerClientEvent(opts.receiveEvent, -1, configs)
+            Platform.TriggerClientEvent(opts.receiveEvent, -1, configs)
         end
     end)
 
@@ -383,7 +459,7 @@ function Discovery.create(opts)
         local afterRemove   = opts.afterRemove
 
         local function broadcast()
-            TriggerClientEvent(receiveEv, -1, configs)
+            Platform.TriggerClientEvent(receiveEv, -1, configs)
         end
 
         local function checkPerm(src)
@@ -392,12 +468,12 @@ function Discovery.create(opts)
         end
 
         -- Request all configs
-        RegisterNetEvent(prefix .. ":config_request", function()
-            TriggerClientEvent(receiveEv, source, configs)
+        Platform.AddEventHandler(prefix .. ":config_request", function()
+            Platform.TriggerClientEvent(receiveEv, source, configs)
         end)
 
         -- Save a model's config
-        RegisterNetEvent(prefix .. ":config_save", function(model, config)
+        Platform.AddEventHandler(prefix .. ":config_save", function(model, config)
             local src = source
             if not checkPerm(src) then return end
             model = resolveModel(model)
@@ -407,7 +483,7 @@ function Discovery.create(opts)
         end)
 
         -- Remove a model's config
-        RegisterNetEvent(prefix .. ":config_remove", function(model)
+        Platform.AddEventHandler(prefix .. ":config_remove", function(model)
             local src = source
             if not checkPerm(src) then return end
             model = resolveModel(model)
@@ -419,20 +495,20 @@ function Discovery.create(opts)
         end)
 
         -- Get external source for a model
-        RegisterNetEvent(prefix .. ":getExternalSource", function(model)
+        Platform.AddEventHandler(prefix .. ":getExternalSource", function(model)
             local src = source
             model = resolveModel(model)
             local ext = externalSources[model]
-            TriggerClientEvent(sourceInfoEv, src, model, ext and ext.resource or nil)
+            Platform.TriggerClientEvent(sourceInfoEv, src, model, ext and ext.resource or nil)
         end)
 
         -- Get export target list
-        RegisterNetEvent(prefix .. ":getExportTargets", function()
-            TriggerClientEvent(targetsEv, source, inst:getExportTargets())
+        Platform.AddEventHandler(prefix .. ":getExportTargets", function()
+            Platform.TriggerClientEvent(targetsEv, source, inst:getExportTargets())
         end)
 
         -- Export config to another resource
-        RegisterNetEvent(prefix .. ":exportConfig", function(model, targetResource)
+        Platform.AddEventHandler(prefix .. ":exportConfig", function(model, targetResource)
             local src = source
             if not checkPerm(src) then return end
             model = resolveModel(model)
@@ -443,24 +519,19 @@ function Discovery.create(opts)
 
             broadcast()
 
-            if targetResource == GetCurrentResourceName() then
-                TriggerClientEvent(sourceInfoEv, src, model, nil)
-                TriggerClientEvent("chat:addMessage", src, {
-                    args = { chatTag, "Moved ~b~" .. model .. "~w~ back to local ~y~data.json~w~." }
-                })
+            if targetResource == Platform.getPackageName() then
+                Platform.TriggerClientEvent(sourceInfoEv, src, model, nil)
+                _chatMessage(src, chatTag, "Moved ~b~" .. model .. "~w~ back to local ~y~data.json~w~.")
                 log("[" .. tag .. "] Player " .. src .. " moved '" .. model .. "' back to local data.json", 2)
             else
-                TriggerClientEvent(sourceInfoEv, src, model, targetResource)
-                TriggerClientEvent("chat:addMessage", src, {
-                    args = { chatTag, "Exported ~b~" .. model .. "~w~ config to ~y~" .. targetResource .. "~w~." }
-                })
+                Platform.TriggerClientEvent(sourceInfoEv, src, model, targetResource)
+                _chatMessage(src, chatTag, "Exported ~b~" .. model .. "~w~ config to ~y~" .. targetResource .. "~w~.")
 
                 -- Warn if fxmanifest couldn't be modified
                 if not appendToManifest(targetResource, metadataKey, targetPath or defaultFile) then
-                    TriggerClientEvent("chat:addMessage", src, {
-                        args = { "^1" .. chatTag, "Could not modify fxmanifest.lua for ~y~" .. targetResource ..
-                            "~w~. Please add manually: ~g~" .. metadataKey .. " '" .. (targetPath or defaultFile) .. "'" }
-                    })
+                    _chatMessage(src, "^1" .. chatTag,
+                        "Could not modify fxmanifest.lua for ~y~" .. targetResource ..
+                        "~w~. Please add manually: ~g~" .. metadataKey .. " '" .. (targetPath or defaultFile) .. "'")
                 end
 
                 log("[" .. tag .. "] Player " .. src .. " exported '" .. model .. "' to '" .. targetResource .. "'", 2)
