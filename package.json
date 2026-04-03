@@ -1,0 +1,42 @@
+{
+  "name": "tlib",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "prod": "bun run scripts/prod.ts"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "adm-zip": "^0.5.17"
+  },
+  "client": [
+    "lua/adapter/init.lua",
+    "lua/utils/logger.lua",
+    "lua/adapter/core.lua",
+    "lua/coords/shared.lua",
+    "lua/adapter/player.lua",
+    "lua/theme/exports.lua",
+    "lua/theme/client.lua",
+    "lua/menu/state.lua",
+    "lua/menu/actions.lua",
+    "lua/menu/navigation.lua",
+    "lua/menu/exports.lua",
+    "lua/menu/client.lua",
+    "lua/toast/exports.lua",
+    "lua/toast/client.lua",
+    "lua/dialog/state.lua",
+    "lua/dialog/exports.lua",
+    "lua/dialog/client.lua",
+    "client.lua"
+  ],
+  "server": [
+    "lua/adapter/init.lua",
+    "lua/utils/logger.lua",
+    "lua/adapter/core.lua",
+    "lua/coords/shared.lua",
+    "lua/adapter/helix/http.lua",
+    "lua/adapter/utils.lua",
+    "lua/discovery/server.lua",
+    "server.lua"
+  ]
+}

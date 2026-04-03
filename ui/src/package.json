@@ -1,0 +1,30 @@
+{
+  "name": "tlib-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && bun build ../../server/main.ts --outfile ../../server/bundle.js --target node --format cjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ark-ui/solid": "^5.35.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "solid-js": "^1.9.12",
+    "solid-motionone": "^1.0.4",
+    "unocss-merge": "^0.8.2"
+  },
+  "devDependencies": {
+    "@iconify/json": "^2.2.458",
+    "@unocss/preset-wind3": "^66.6.7",
+    "@unocss/preset-attributify": "^66.6.7",
+    "@unocss/preset-web-fonts": "^66.6.7",
+    "@unocss/reset": "^66.6.7",
+    "typescript": "^5.9.3",
+    "unocss": "^66.6.7",
+    "unplugin-icons": "^23.0.1",
+    "vite": "^6.3.5",
+    "vite-plugin-solid": "^2.11.11"
+  }
+}
