@@ -1,0 +1,64 @@
+name: Sync Docs to Main Docs Repo
+
+on:
+  push:
+    branches:
+      - main # Change to 'master' if needed
+    paths:
+      - "docs/**"
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repo
+        uses: https://github.com/actions/checkout@v4
+        with:
+          fetch-depth: 1 # Lighter - only need latest commit
+
+      - name: Checkout main docs repo
+        uses: https://github.com/actions/checkout@v4
+        with:
+          repository: "TIMMYG-Studios/docs"
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          path: "docs-repo" # ← This is the folder name it clones into
+          fetch-depth: 1 # Lighter - only need latest commit
+
+      - name: Sync documentation files
+        run: |
+          # Create target directories if they don't exist
+          mkdir -p docs-repo/content/docs/${{ secrets.PRODUCT_NAME }}
+          mkdir -p docs-repo/public/assets/${{ secrets.PRODUCT_NAME }}
+
+          # Remove old content
+          rm -rf docs-repo/content/docs/${{ secrets.PRODUCT_NAME }}/*
+          rm -rf docs-repo/public/assets/${{ secrets.PRODUCT_NAME }}/*
+
+          # Copy new content
+          cp -r docs/content/* docs-repo/content/docs/${{ secrets.PRODUCT_NAME }}/
+          cp -r docs/public/* docs-repo/public/assets/${{ secrets.PRODUCT_NAME }}/ 2>/dev/null || true
+
+          echo "Files synced successfully to ${{ secrets.PRODUCT_NAME }}"
+
+      - name: Commit and push to docs repo
+        run: |
+          cd docs-repo
+
+          git config user.name "Gitea Actions Bot"
+          git config user.email "actions@gitea.local"
+
+          git add content/docs/${{ secrets.PRODUCT_NAME }}/
+          git add public/assets/${{ secrets.PRODUCT_NAME }}/
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update ${{ secrets.PRODUCT_NAME }} docs from source repo
+
+            Source commit: ${{ github.sha }}
+            Triggered by: ${{ github.actor }}"
+
+            git push
+            echo "Changes pushed successfully"
+          fi
