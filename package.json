@@ -1,11 +1,21 @@
 {
   "name": "tlib",
   "version": "1.0.0",
+  "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "prod": "bun run scripts/prod.ts"
+    "build": "cd ui/src && bun run build",
+    "dev": "cd ui/src && bunx vp dev",
+    "prod": "bun run scripts/prod.ts",
+    "setup": "bun install && cd ui/src && bun install",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
     "@types/adm-zip": "^0.5.8",
     "adm-zip": "^0.5.17"
   },

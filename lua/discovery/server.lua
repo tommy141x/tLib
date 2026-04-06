@@ -154,6 +154,7 @@ function Discovery.create(opts)
     local metadataKey   = opts.metadataKey
     local defaultFile   = opts.defaultFileName
     local localFile     = opts.localFile or "data.json"
+    local localSection  = opts.localSection   -- optional: read/write only this key within localFile
     local tag           = opts.logTag or metadataKey
     local chatTag       = opts.chatTag or ("[" .. Platform.getPackageName() .. "]")
 
@@ -203,7 +204,12 @@ function Discovery.create(opts)
         filePath = filePath or localFile
         local raw = _loadFile(Platform.getPackageName(), filePath)
         if raw and raw ~= "" then
-            configs = json.decode(raw) or {}
+            local decoded = json.decode(raw) or {}
+            if localSection then
+                configs = (type(decoded[localSection]) == "table") and decoded[localSection] or {}
+            else
+                configs = decoded
+            end
             for key in pairs(configs) do registerAlias(key) end
         end
     end
@@ -220,7 +226,15 @@ function Discovery.create(opts)
                 localOnly[model] = copy
             end
         end
-        _saveFile(Platform.getPackageName(), filePath, json.encode(localOnly))
+        if localSection then
+            -- Merge into the existing file so sibling sections are preserved
+            local raw = _loadFile(Platform.getPackageName(), filePath)
+            local fileData = (raw and raw ~= "") and json.decode(raw) or {}
+            fileData[localSection] = localOnly
+            _saveFile(Platform.getPackageName(), filePath, json.encode(fileData))
+        else
+            _saveFile(Platform.getPackageName(), filePath, json.encode(localOnly))
+        end
     end
 
     function inst:loadExternalFromResource(resName)

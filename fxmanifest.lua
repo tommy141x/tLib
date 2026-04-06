@@ -10,6 +10,7 @@ shared_scripts {
     'lua/adapter/init.lua',
     'lua/utils/logger.lua',
     'lua/adapter/core.lua',
+    'lua/utils/shared.lua',
     'lua/coords/shared.lua',
 }
 
@@ -36,6 +37,7 @@ server_scripts {
     'lua/adapter/utils.lua',
     'lua/discovery/server.lua',
     'lua/permission/server.lua',
+    'lua/serversettings/server.lua',
     'server.lua',
 }
 
