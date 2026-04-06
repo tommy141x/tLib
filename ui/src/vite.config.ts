@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import UnoCSS from "unocss/vite";
 import Icons from "unplugin-icons/vite";
-import { defineConfig } from "vite";
+import { defineConfig } from "vite-plus";
 import solid from "vite-plugin-solid";
 
 export default defineConfig({

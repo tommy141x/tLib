@@ -21,6 +21,7 @@
 -- Register server-side exports
 Discovery.registerExports()
 Permission.registerExports()
+ServerSettings.registerExports()
 
 Platform.onShutdown(function()
 end)

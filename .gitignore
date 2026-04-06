@@ -3,6 +3,8 @@ node_modules/
 
 # Build outputs
 dist/
+ts/src/build/
+scripts/
 ui/build/
 server/bundle.js
 *.zip

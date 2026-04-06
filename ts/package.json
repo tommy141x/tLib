@@ -8,10 +8,12 @@
     "./coordinate-utils": "./src/coordinate-utils.ts",
     "./gizmo": "./src/gizmo/index.ts",
     "./move-mode": "./src/move-mode.ts",
-    "./hud-template": "./src/hud-template.ts"
+    "./hud-template": "./src/hud-template.ts",
+    "./admin-ui": "./src/admin-ui/index.tsx"
   },
   "peerDependencies": {
-    "three": ">=0.150.0"
+    "three": ">=0.150.0",
+    "solid-js": ">=1.8.0"
   },
   "devDependencies": {
     "@types/three": ">=0.150.0"

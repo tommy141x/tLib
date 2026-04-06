@@ -1,10 +1,10 @@
 export { GizmoScene } from "./GizmoScene";
-export { buildVehicleQuat, fivemWorldToLocal, fivemLocalToWorld } from "./vehicle-math";
 export type {
-	Vec3,
-	VehicleMatrix,
-	EditorMode,
-	SpaceMode,
-	GizmoSceneConfig,
-	GizmoItemData,
+  EditorMode,
+  GizmoItemData,
+  GizmoSceneConfig,
+  SpaceMode,
+  Vec3,
+  VehicleMatrix,
 } from "./types";
+export { buildVehicleQuat, fivemLocalToWorld, fivemWorldToLocal } from "./vehicle-math";
