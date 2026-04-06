@@ -1,0 +1,9 @@
+{
+  "title": "tLib",
+  "description": "Shared utility library for tScripts FiveM resources.",
+  "defaultOpen": false,
+  "icon": "Library",
+  "pages": [
+    "installation"
+  ]
+}

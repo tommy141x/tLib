@@ -3,15 +3,18 @@
  * Uses the same settings-panel CSS classes and compact mono-spaced styling.
  */
 
-import { createSignal, For, Show, onMount, onCleanup } from "solid-js";
+import { createSignal, For, Show, onMount, onCleanup, createMemo } from "solid-js";
 import { onNuiEvent, fetchNui } from "@/lib/nui";
 import { applyScopedTheme } from "@/stores/theme-store";
+import { Select as ArkSelect, createListCollection } from "@ark-ui/solid";
 import IconX from "~icons/lucide/x";
 import IconSettings from "~icons/lucide/settings-2";
+import IconCheck from "~icons/lucide/check";
+import IconChevronDown from "~icons/lucide/chevron-down";
 
 interface DialogField {
 	id: string;
-	type: "text" | "number" | "password" | "textarea" | "select" | "radio" | "slider" | "checkbox" | "button";
+	type: "text" | "number" | "password" | "textarea" | "select" | "dropdown" | "radio" | "slider" | "checkbox" | "button";
 	label: string;
 	description?: string;
 	required?: boolean;
@@ -25,6 +28,8 @@ interface DialogField {
 	variant?: "default" | "primary" | "destructive";
 	/** Section label shown above a group of fields */
 	section?: string;
+	/** Row group key — fields sharing the same `row` value render side-by-side */
+	row?: string;
 }
 
 interface DialogData {
@@ -126,28 +131,48 @@ export default function Dialog() {
 
 						{/* Body */}
 						<div class="flex flex-col gap-4 p-3 overflow-y-auto settings-scroll">
-							<For each={d().fields}>
-								{(field, idx) => {
-									const prevField = () => idx() > 0 ? d().fields[idx() - 1] : null;
-									const showSep = () => field.section && field.section !== prevField()?.section;
-									const showSection = () => field.section && field.section !== prevField()?.section;
+							<For each={groupFieldsByRow(d().fields)}>
+								{(group, gIdx) => {
+									const firstField = group[0];
+									const prevGroup = () => gIdx() > 0 ? groupFieldsByRow(d().fields)[gIdx() - 1] : null;
+									const prevSection = () => prevGroup()?.[0]?.section;
+									const showSep = () => firstField.section && firstField.section !== prevSection();
+									const showSection = () => firstField.section && firstField.section !== prevSection();
+									const isRow = group.length > 1;
 
 									return (
 										<>
-											<Show when={showSep() && idx() > 0}>
+											<Show when={showSep() && gIdx() > 0}>
 												<div class="settings-sep" />
 											</Show>
 											<Show when={showSection()}>
 												<span class="text-[9px] font-mono text-[hsl(var(--muted-foreground)/0.5)] uppercase tracking-wide">
-													{field.section}
+													{firstField.section}
 												</span>
 											</Show>
-											<FieldRenderer
-												field={field}
-												values={values}
-												updateField={updateField}
-												onButtonClick={onButtonClick}
-											/>
+											{isRow ? (
+												<div class="flex gap-2 items-end">
+													<For each={group}>
+														{(field) => (
+															<div class="flex-1 min-w-0">
+																<FieldRenderer
+																	field={field}
+																	values={values}
+																	updateField={updateField}
+																	onButtonClick={onButtonClick}
+																/>
+															</div>
+														)}
+													</For>
+												</div>
+											) : (
+												<FieldRenderer
+													field={firstField}
+													values={values}
+													updateField={updateField}
+													onButtonClick={onButtonClick}
+												/>
+											)}
 										</>
 									);
 								}}
@@ -158,6 +183,24 @@ export default function Dialog() {
 			)}
 		</Show>
 	);
+}
+
+// ── Helpers ──
+
+/** Groups consecutive fields sharing the same `row` key into arrays. */
+function groupFieldsByRow(fields: DialogField[]): DialogField[][] {
+	const groups: DialogField[][] = [];
+	for (const field of fields) {
+		if (field.row && groups.length > 0) {
+			const last = groups[groups.length - 1];
+			if (last[0].row === field.row) {
+				last.push(field);
+				continue;
+			}
+		}
+		groups.push([field]);
+	}
+	return groups;
 }
 
 // ── Sub-components (matching tRadio's compact style) ──
@@ -183,9 +226,13 @@ function FieldRenderer(props: {
 		const isDestructive = field.variant === "destructive";
 		const isPrimary = field.variant === "primary";
 		return (
-			<div class="flex flex-col gap-1">
+			<div class="flex flex-col gap-1" classList={{ "justify-end h-full": !!field.row }}>
+				{/* Show a spacer label when in a row, so the button aligns with sibling input areas */}
+				<Show when={field.row}>
+					<span class="text-[10px] font-mono text-transparent select-none">&nbsp;</span>
+				</Show>
 				<button
-					class="w-full py-1 text-[9px] font-mono rounded transition-colors"
+					class="w-full py-1 px-2 text-[9px] font-mono rounded transition-colors whitespace-nowrap"
 					classList={{
 						"bg-destructive text-destructive-foreground hover:bg-destructive/90": isDestructive,
 						"bg-primary text-primary-foreground hover:bg-primary/90": isPrimary,
@@ -297,6 +344,60 @@ function FieldRenderer(props: {
 						)}
 					</For>
 				</div>
+			</div>
+		);
+	}
+
+	if (field.type === "dropdown") {
+		const items = (field.options ?? []).map((o) => ({ value: o.value, label: o.label }));
+		const collection = createListCollection({
+			items,
+			itemToValue: (item) => item.value,
+			itemToString: (item) => item.label,
+		});
+		return (
+			<div class="flex flex-col gap-1.5">
+				<span class="text-[10px] font-mono text-[hsl(var(--muted-foreground))]">
+					{field.label}
+				</span>
+				<ArkSelect.Root
+					collection={collection}
+					value={val() != null ? [String(val())] : []}
+					onValueChange={(details) => {
+						if (details.value[0] !== undefined) {
+							props.updateField(field.id, details.value[0]);
+						}
+					}}
+					positioning={{ sameWidth: true }}
+					disabled={field.disabled}
+				>
+					<ArkSelect.Control>
+						<ArkSelect.Trigger class="w-full flex items-center justify-between px-2 py-1 text-[10px] font-mono rounded bg-[hsl(var(--input))] border border-[hsl(var(--border)/0.8)] text-[hsl(var(--foreground))] hover:border-[hsl(var(--ring)/0.5)] transition-colors cursor-pointer focus:outline-none focus-visible:outline-none [&]:ring-0 [&]:outline-none">
+							<ArkSelect.ValueText placeholder={field.placeholder ?? "Select..."} class="flex-1 text-left truncate" />
+							<ArkSelect.Indicator class="shrink-0 ml-1 transition-transform duration-200 data-[state=open]:rotate-180">
+								<IconChevronDown class="w-3 h-3 opacity-60" />
+							</ArkSelect.Indicator>
+						</ArkSelect.Trigger>
+					</ArkSelect.Control>
+					<ArkSelect.Positioner>
+						<ArkSelect.Content class="z-[10000] overflow-hidden rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-0.5 shadow-md max-h-[200px] overflow-y-auto">
+							<For each={items}>
+								{(item) => (
+									<ArkSelect.Item
+										item={item}
+										class="flex items-center justify-between px-2 py-1 text-[9px] font-mono rounded-sm cursor-pointer select-none hover:bg-[hsl(var(--secondary))] data-highlighted:bg-[hsl(var(--secondary))] transition-colors"
+									>
+										<ArkSelect.ItemText>{item.label}</ArkSelect.ItemText>
+										<ArkSelect.ItemIndicator class="shrink-0 ml-2">
+											<IconCheck class="w-3 h-3 text-primary" />
+										</ArkSelect.ItemIndicator>
+									</ArkSelect.Item>
+								)}
+							</For>
+						</ArkSelect.Content>
+					</ArkSelect.Positioner>
+					<ArkSelect.HiddenSelect />
+				</ArkSelect.Root>
 			</div>
 		);
 	}

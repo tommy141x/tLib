@@ -15,6 +15,7 @@ local VALID_FIELD_TYPES = {
     password = true,
     textarea = true,
     select   = true,
+    dropdown = true,
     slider   = true,
     checkbox = true,
     radio    = true,
@@ -43,6 +44,8 @@ local function serialiseField(f)
         description = type(f.description) == 'string' and f.description or nil,
         required    = f.required == true,
         disabled    = f.disabled == true,
+        section     = type(f.section) == 'string' and f.section or nil,
+        row         = type(f.row) == 'string' and f.row or nil,
     }
 
     if fieldType == 'text' or fieldType == 'number' or
@@ -53,6 +56,19 @@ local function serialiseField(f)
             s.min = type(f.min) == 'number' and f.min or nil
             s.max = type(f.max) == 'number' and f.max or nil
         end
+    elseif fieldType == 'dropdown' then
+        -- Native <select> dropdown — same data shape as select/radio
+        local opts = {}
+        if type(f.options) == 'table' then
+            for _, opt in ipairs(f.options) do
+                if type(opt) == 'table' and type(opt.value) == 'string' and type(opt.label) == 'string' then
+                    table.insert(opts, { value = opt.value, label = opt.label })
+                end
+            end
+        end
+        s.options      = opts
+        s.placeholder  = type(f.placeholder) == 'string' and f.placeholder or nil
+        s.defaultValue = type(f.defaultValue) == 'string' and f.defaultValue or nil
     elseif fieldType == 'select' or fieldType == 'radio' then
         -- options must be an array of { value, label } tables
         local opts = {}
