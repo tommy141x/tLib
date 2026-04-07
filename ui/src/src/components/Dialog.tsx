@@ -30,6 +30,8 @@ interface DialogField {
 	section?: string;
 	/** Row group key — fields sharing the same `row` value render side-by-side */
 	row?: string;
+	/** Flex behavior in a row: "shrink" = only as wide as content, default = flex-1 */
+	flex?: "shrink";
 }
 
 interface DialogData {
@@ -70,6 +72,25 @@ export default function Dialog() {
 	});
 
 	onNuiEvent<{ id: string }>("closeDialog", () => setDialog(null));
+
+	onNuiEvent<{ dialogId: string; fieldId: string; options?: { value: string; label: string }[]; defaultValue?: string | number | boolean; disabled?: boolean; label?: string }>("updateDialogField", (data) => {
+		const d = dialog();
+		if (!d || d.id !== data.dialogId) return;
+		const fieldIdx = d.fields.findIndex((f) => f.id === data.fieldId);
+		if (fieldIdx === -1) return;
+		const updatedFields = [...d.fields];
+		const field = { ...updatedFields[fieldIdx] };
+		if (data.options !== undefined) field.options = data.options;
+		if (data.defaultValue !== undefined) field.defaultValue = data.defaultValue;
+		if (data.disabled !== undefined) field.disabled = data.disabled;
+		if (data.label !== undefined) field.label = data.label;
+		updatedFields[fieldIdx] = field;
+		setDialog({ ...d, fields: updatedFields });
+		// Update the value if a new defaultValue was provided and current value is empty or matches old default
+		if (data.defaultValue !== undefined) {
+			setValues((prev) => ({ ...prev, [data.fieldId]: data.defaultValue! }));
+		}
+	});
 
 	function updateField(id: string, value: string | number | boolean) {
 		setValues((prev) => ({ ...prev, [id]: value }));
@@ -151,10 +172,10 @@ export default function Dialog() {
 												</span>
 											</Show>
 											{isRow ? (
-												<div class="flex gap-2 items-end">
+												<div class="flex gap-2 items-stretch">
 													<For each={group}>
 														{(field) => (
-															<div class="flex-1 min-w-0">
+															<div class="flex flex-col justify-end" classList={{ "flex-1 min-w-0": field.flex !== "shrink", "shrink-0": field.flex === "shrink" }}>
 																<FieldRenderer
 																	field={field}
 																	values={values}
@@ -226,11 +247,7 @@ function FieldRenderer(props: {
 		const isDestructive = field.variant === "destructive";
 		const isPrimary = field.variant === "primary";
 		return (
-			<div class="flex flex-col gap-1" classList={{ "justify-end h-full": !!field.row }}>
-				{/* Show a spacer label when in a row, so the button aligns with sibling input areas */}
-				<Show when={field.row}>
-					<span class="text-[10px] font-mono text-transparent select-none">&nbsp;</span>
-				</Show>
+			<div class="flex flex-col gap-1">
 				<button
 					class="w-full py-1 px-2 text-[9px] font-mono rounded transition-colors whitespace-nowrap"
 					classList={{
@@ -349,57 +366,7 @@ function FieldRenderer(props: {
 	}
 
 	if (field.type === "dropdown") {
-		const items = (field.options ?? []).map((o) => ({ value: o.value, label: o.label }));
-		const collection = createListCollection({
-			items,
-			itemToValue: (item) => item.value,
-			itemToString: (item) => item.label,
-		});
-		return (
-			<div class="flex flex-col gap-1.5">
-				<span class="text-[10px] font-mono text-[hsl(var(--muted-foreground))]">
-					{field.label}
-				</span>
-				<ArkSelect.Root
-					collection={collection}
-					value={val() != null ? [String(val())] : []}
-					onValueChange={(details) => {
-						if (details.value[0] !== undefined) {
-							props.updateField(field.id, details.value[0]);
-						}
-					}}
-					positioning={{ sameWidth: true }}
-					disabled={field.disabled}
-				>
-					<ArkSelect.Control>
-						<ArkSelect.Trigger class="w-full flex items-center justify-between px-2 py-1 text-[10px] font-mono rounded bg-[hsl(var(--input))] border border-[hsl(var(--border)/0.8)] text-[hsl(var(--foreground))] hover:border-[hsl(var(--ring)/0.5)] transition-colors cursor-pointer focus:outline-none focus-visible:outline-none [&]:ring-0 [&]:outline-none">
-							<ArkSelect.ValueText placeholder={field.placeholder ?? "Select..."} class="flex-1 text-left truncate" />
-							<ArkSelect.Indicator class="shrink-0 ml-1 transition-transform duration-200 data-[state=open]:rotate-180">
-								<IconChevronDown class="w-3 h-3 opacity-60" />
-							</ArkSelect.Indicator>
-						</ArkSelect.Trigger>
-					</ArkSelect.Control>
-					<ArkSelect.Positioner>
-						<ArkSelect.Content class="z-[10000] overflow-hidden rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-0.5 shadow-md max-h-[200px] overflow-y-auto">
-							<For each={items}>
-								{(item) => (
-									<ArkSelect.Item
-										item={item}
-										class="flex items-center justify-between px-2 py-1 text-[9px] font-mono rounded-sm cursor-pointer select-none hover:bg-[hsl(var(--secondary))] data-highlighted:bg-[hsl(var(--secondary))] transition-colors"
-									>
-										<ArkSelect.ItemText>{item.label}</ArkSelect.ItemText>
-										<ArkSelect.ItemIndicator class="shrink-0 ml-2">
-											<IconCheck class="w-3 h-3 text-primary" />
-										</ArkSelect.ItemIndicator>
-									</ArkSelect.Item>
-								)}
-							</For>
-						</ArkSelect.Content>
-					</ArkSelect.Positioner>
-					<ArkSelect.HiddenSelect />
-				</ArkSelect.Root>
-			</div>
-		);
+		return <DropdownField field={field} val={val} updateField={props.updateField} />;
 	}
 
 	if (field.type === "radio") {
@@ -455,6 +422,73 @@ function FieldRenderer(props: {
 					onInput={(e) => props.updateField(field.id, field.type === "number" ? Number(e.currentTarget.value) : e.currentTarget.value)}
 				/>
 			)}
+		</div>
+	);
+}
+
+/** Separate component so Ark UI Select re-renders when options/value change */
+function DropdownField(props: {
+	field: DialogField;
+	val: () => string | number | boolean | undefined;
+	updateField: (id: string, value: string | number | boolean) => void;
+}) {
+	const items = createMemo(() =>
+		(props.field.options ?? []).map((o) => ({ value: o.value, label: o.label }))
+	);
+	const collection = createMemo(() =>
+		createListCollection({
+			items: items(),
+			itemToValue: (item: { value: string; label: string }) => item.value,
+			itemToString: (item: { value: string; label: string }) => item.label,
+		})
+	);
+	const currentValue = createMemo(() =>
+		props.val() != null ? [String(props.val())] : []
+	);
+
+	return (
+		<div class="flex flex-col gap-1.5">
+			<span class="text-[10px] font-mono text-[hsl(var(--muted-foreground))]">
+				{props.field.label}
+			</span>
+			<ArkSelect.Root
+				collection={collection()}
+				value={currentValue()}
+				onValueChange={(details) => {
+					if (details.value[0] !== undefined) {
+						props.updateField(props.field.id, details.value[0]);
+					}
+				}}
+				positioning={{ sameWidth: true }}
+				disabled={props.field.disabled}
+			>
+				<ArkSelect.Control>
+					<ArkSelect.Trigger class="w-full flex items-center justify-between px-2 py-1 text-[10px] font-mono rounded bg-[hsl(var(--input))] border border-[hsl(var(--border)/0.8)] text-[hsl(var(--foreground))] hover:border-[hsl(var(--ring)/0.5)] transition-colors cursor-pointer focus:outline-none focus-visible:outline-none [&]:ring-0 [&]:outline-none">
+						<ArkSelect.ValueText placeholder={props.field.placeholder ?? "Select..."} class="flex-1 text-left truncate" />
+						<ArkSelect.Indicator class="shrink-0 ml-1 transition-transform duration-200 data-[state=open]:rotate-180">
+							<IconChevronDown class="w-3 h-3 opacity-60" />
+						</ArkSelect.Indicator>
+					</ArkSelect.Trigger>
+				</ArkSelect.Control>
+				<ArkSelect.Positioner>
+					<ArkSelect.Content class="z-[10000] overflow-hidden rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-0.5 shadow-md max-h-[200px] overflow-y-auto">
+						<For each={items()}>
+							{(item) => (
+								<ArkSelect.Item
+									item={item}
+									class="flex items-center justify-between px-2 py-1 text-[9px] font-mono rounded-sm cursor-pointer select-none hover:bg-[hsl(var(--secondary))] data-highlighted:bg-[hsl(var(--secondary))] transition-colors"
+								>
+									<ArkSelect.ItemText>{item.label}</ArkSelect.ItemText>
+									<ArkSelect.ItemIndicator class="shrink-0 ml-2">
+										<IconCheck class="w-3 h-3 text-primary" />
+									</ArkSelect.ItemIndicator>
+								</ArkSelect.Item>
+							)}
+						</For>
+					</ArkSelect.Content>
+				</ArkSelect.Positioner>
+				<ArkSelect.HiddenSelect />
+			</ArkSelect.Root>
 		</div>
 	);
 }

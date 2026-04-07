@@ -46,6 +46,7 @@ local function serialiseField(f)
         disabled    = f.disabled == true,
         section     = type(f.section) == 'string' and f.section or nil,
         row         = type(f.row) == 'string' and f.row or nil,
+        flex        = type(f.flex) == 'string' and f.flex or nil,
     }
 
     if fieldType == 'text' or fieldType == 'number' or
@@ -318,6 +319,56 @@ function DialogExports.register()
         lockPlayerInput()
         Platform.TriggerEvent('tLib:dialog:opened', id)
         return id
+    end)
+
+    -- ── UpdateDialogField ──────────────────────────────────────────────────────
+    -- Updates a single field's properties in an open dialog.
+    -- Useful for dynamically updating select/dropdown options after async operations.
+    --
+    -- Parameters
+    --   dialogId  string  The id of the open dialog.
+    --   fieldId   string  The id of the field to update.
+    --   updates   table   Properties to merge into the field (e.g. { options = {...} }).
+    registerExport('UpdateDialogField', function(dialogId, fieldId, updates)
+        if type(dialogId) ~= 'string' or dialogId == '' then
+            log('UpdateDialogField: dialogId must be a non-empty string', 3)
+            return
+        end
+        if type(fieldId) ~= 'string' or fieldId == '' then
+            log('UpdateDialogField: fieldId must be a non-empty string', 3)
+            return
+        end
+        if type(updates) ~= 'table' then
+            log('UpdateDialogField: updates must be a table', 3)
+            return
+        end
+        if not DialogState.get(dialogId) then
+            log('UpdateDialogField: dialog "' .. dialogId .. '" is not open', 4)
+            return
+        end
+
+        -- Serialise options if provided
+        local payload = { dialogId = dialogId, fieldId = fieldId }
+        if updates.options and type(updates.options) == 'table' then
+            local opts = {}
+            for _, opt in ipairs(updates.options) do
+                if type(opt) == 'table' and type(opt.value) == 'string' and type(opt.label) == 'string' then
+                    table.insert(opts, { value = opt.value, label = opt.label })
+                end
+            end
+            payload.options = opts
+        end
+        if updates.defaultValue ~= nil then
+            payload.defaultValue = updates.defaultValue
+        end
+        if updates.disabled ~= nil then
+            payload.disabled = updates.disabled == true
+        end
+        if updates.label ~= nil then
+            payload.label = updates.label
+        end
+
+        Platform.sendUIEvent(ui, 'updateDialogField', payload)
     end)
 
     -- ── CloseDialog ───────────────────────────────────────────────────────────

@@ -55,8 +55,7 @@ export default function Toast() {
 					<div
 						class="pointer-events-auto rounded-lg border border-border/60 px-4 py-3 flex gap-3 items-start shadow-lg"
 						style={{
-							background: "hsl(var(--card) / 0.95)",
-							"backdrop-filter": "blur(16px)",
+							background: "hsl(var(--card))",
 						}}
 					>
 						<span
