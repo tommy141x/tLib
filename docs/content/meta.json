@@ -1,9 +1,11 @@
 {
   "title": "tLib",
-  "description": "Shared utility library for tScripts FiveM resources.",
+  "description": "Shared UI and utility library for FiveM and Helix resources.",
   "defaultOpen": false,
   "icon": "Library",
   "pages": [
-    "installation"
+    "installation",
+    "exports",
+    "import-modules"
   ]
 }

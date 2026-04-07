@@ -1,9 +1,77 @@
 ---
 title: Installation
-description: How to install and configure tLib for your FiveM server.
+description: How to install tLib on your FiveM or Helix server.
 icon: Settings
+badges:
+  - text: "Setup"
+    variant: "default"
 ---
 
-## Installation
+## Prerequisites
 
-Placeholder — installation docs coming soon
+- FiveM or Helix server
+
+---
+
+<Steps>
+
+### Download
+
+Download the latest release from [GitHub Releases](https://github.com/tommy141x/tLib/releases).
+
+### Extract
+
+Place the `tLib` folder in your server's `resources` directory.
+
+### Start the Resource
+
+Add to your `server.cfg` **before** any resource that depends on it:
+
+```txt title="server.cfg"
+ensure tLib
+```
+
+</Steps>
+
+---
+
+## Usage in Your Resource
+
+To use tLib as a dependency, add it to your resource's `fxmanifest.lua`:
+
+```lua title="fxmanifest.lua"
+dependencies { 'tLib' }
+```
+
+### Using Exports
+
+Call tLib systems directly via exports:
+
+```lua
+-- Create and open a menu
+local menuId = exports['tLib']:CreateMenu('my_menu', 'My Menu', 'Subtitle')
+exports['tLib']:AddButton(menuId, 'btn1', 'Click Me', 'A button', function()
+    print('clicked!')
+end)
+exports['tLib']:RefreshMenu(menuId)
+exports['tLib']:OpenMenu(menuId)
+```
+
+### Using Import Modules
+
+For lightweight modules (coords, kvp, settings, movemode, layouts), declare them in your `fxmanifest.lua` and add the imports script:
+
+```lua title="fxmanifest.lua"
+dependencies { 'tLib' }
+shared_scripts { '@tLib/imports.lua' }
+tlib_modules { 'kvp', 'settings' }
+```
+
+Then access them via the `tlib` global:
+
+```lua
+local kvp = tlib.kvp
+local value = kvp.getString('my_key', 'default')
+```
+
+Modules are lazy-loaded — they only load when first accessed.

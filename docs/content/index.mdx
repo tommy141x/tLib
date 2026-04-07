@@ -1,14 +1,49 @@
 ---
 title: tLib
-description: Shared utility library for tScripts FiveM resources.
+description: Shared UI and utility library for FiveM and Helix resources.
 badges:
-  - text: "FiveM Script"
+  - text: "v1.0.0"
+    variant: "default"
+  - text: "Open Source"
     variant: "secondary"
+  - text: "FiveM / Helix"
+    variant: "outline"
 ---
+
+<div className="flex items-center gap-4 my-4">
+  <Button href="https://github.com/tommy141x/tLib" icon="Github" variant="default">
+    GitHub
+  </Button>
+  <Button href="https://github.com/tommy141x/tLib/releases" icon="Download" variant="secondary">
+    Download
+  </Button>
+</div>
 
 ## What is tLib?
 
-tLib is the shared utility library that powers tScripts FiveM resources. It provides common modules for settings, KVP storage, UI layouts, and more.
+tLib is a shared utility library for FiveM and Helix resources. It provides UI components (menus, dialogs, toasts, themes), reusable Lua import modules (settings, KVP, coords, layouts, move mode), and TypeScript/NUI utilities for resource developers.
+
+It has no configuration — just install it and use it as a dependency.
+
+---
+
+## Features
+
+### UI Component Suite
+
+Full NUI-based menu system with submenus and dynamic updates, modal form dialogs with multiple field types, stackable toast notifications, and a CSS variable-based theme system.
+
+### Import Modules
+
+Lightweight Lua modules that load on demand — typed KVP storage, settings stores with persistence, vehicle coordinate math, layout discovery, and drag-to-reposition for HUDs.
+
+### TypeScript / NUI Utilities
+
+Shared TypeScript packages (`@tlib/shared`) including a Three.js-based 3D gizmo, undo/redo system, coordinate conversion helpers, and a framework-agnostic drag handler.
+
+### Platform Abstraction
+
+Works on both FiveM and Helix through an adapter layer — write once, run on either platform.
 
 ---
 
@@ -16,11 +51,31 @@ tLib is the shared utility library that powers tScripts FiveM resources. It prov
 
 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
   <Card title="Installation">
-    Getting started with tLib.
+    Download and set up tLib on your server.
 
     <div className="mt-4">
       <Button href="/docs/tlib/installation" icon="Settings" variant="default">
         Installation Guide
+      </Button>
+    </div>
+  </Card>
+
+  <Card title="Exports">
+    Menu, Dialog, Toast, Theme, Logger, HTTP, and Permission exports.
+
+    <div className="mt-4">
+      <Button href="/docs/tlib/exports" icon="Code" variant="default">
+        Exports Reference
+      </Button>
+    </div>
+  </Card>
+
+  <Card title="Import Modules">
+    Lightweight Lua modules: coords, kvp, settings, movemode, and layouts.
+
+    <div className="mt-4">
+      <Button href="/docs/tlib/import-modules" icon="Package" variant="default">
+        Import Modules
       </Button>
     </div>
   </Card>
