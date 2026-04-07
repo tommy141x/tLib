@@ -101,8 +101,7 @@ export default function Menu() {
 					<div
 						class="rounded-lg border border-border/60 overflow-hidden shadow-lg"
 						style={{
-							background: "hsl(var(--card) / 0.95)",
-							"backdrop-filter": "blur(16px)",
+							background: "hsl(var(--card))",
 						}}
 					>
 						{/* Banner */}
