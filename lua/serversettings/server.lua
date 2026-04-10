@@ -87,7 +87,7 @@ function ServerSettings.create(opts)
             if ok then
                 SaveResourceFile(resName, file, encoded, -1)
             else
-                log("Failed to encode " .. file .. " for save", 0)
+                log("Failed to encode " .. file .. " for save", 4)
             end
         else
             -- Root-level: write settings directly as the entire file
@@ -95,7 +95,7 @@ function ServerSettings.create(opts)
             if ok then
                 SaveResourceFile(resName, file, encoded, -1)
             else
-                log("Failed to encode " .. file .. " for save", 0)
+                log("Failed to encode " .. file .. " for save", 4)
             end
         end
     end
@@ -155,7 +155,7 @@ function ServerSettings.create(opts)
     --- Broadcast current settings to all clients.
     function inst:broadcast()
         if updEvent then
-            TriggerClientEvent(updEvent, -1, { settings = settings })
+            Platform.TriggerClientEvent(updEvent, -1, { settings = settings })
         end
         if onAfterSave then
             pcall(onAfterSave, settings)
@@ -179,7 +179,7 @@ function ServerSettings.create(opts)
                     for k, v in pairs(extra) do payload[k] = v end
                 end
             end
-            TriggerClientEvent(updEvent or (reqEvent .. ":response"), src, payload)
+            Platform.TriggerClientEvent(updEvent or (reqEvent .. ":response"), src, payload)
         end)
     end
 

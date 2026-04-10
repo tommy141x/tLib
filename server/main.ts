@@ -14,22 +14,14 @@ declare function exports(name: string, fn: (...args: unknown[]) => unknown): voi
 //  MANIFEST WRITER
 // ══════════════════════════════════════════════════════════════════
 
-/**
- * Sibling metadata keys — used to group new metadata lines near related
- * existing ones when appending to fxmanifest.lua.
- * Populated at runtime via RegisterManifestSibling as Discovery instances are created.
- */
+// sibling keys so new manifest lines get grouped near related ones
 const siblings: string[] = [];
 
 exports("RegisterManifestSibling", (key: string) => {
 	if (!siblings.includes(key)) siblings.push(key);
 });
 
-/**
- * Ensure a resource's fxmanifest.lua contains a metadata line for the given key.
- * Uses Node.js fs for reliable cross-resource file writes.
- * Returns true on success, false on failure.
- */
+// adds a metadata line to fxmanifest if it's not already there
 exports("AppendToManifest", (resourceName: string, metadataKey: string, filePath: string): boolean => {
 	try {
 		const resPath = GetResourcePath(resourceName);

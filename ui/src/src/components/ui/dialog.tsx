@@ -19,19 +19,7 @@ function cn(...classLists: ClassValue[]) {
   return unoMerge(clsx(classLists));
 }
 
-/**
- * Helper to create dialog state for controlled dialogs.
- * This is necessary for proper SSR hydration in SolidStart.
- *
- * @example
- * const dialog = createDialogState();
- * return (
- *   <Dialog open={dialog.isOpen()} onOpenChange={(e) => dialog.setOpen(e.open)}>
- *     <Button onClick={dialog.open}>Open Dialog</Button>
- *     <DialogContent>...</DialogContent>
- *   </Dialog>
- * );
- */
+// controlled dialog state — without this SolidStart SSR hydration breaks
 export function createDialogState() {
   const [open, setOpen] = createSignal(false);
 
@@ -63,7 +51,6 @@ interface DialogProps {
 }
 
 export const Dialog = (props: DialogProps) => {
-  // Use defaultOpen for uncontrolled dialogs to ensure proper initialization
   const merged = mergeProps({ defaultOpen: false }, props);
   return <ArkDialog.Root {...merged}>{merged.children}</ArkDialog.Root>;
 };
@@ -72,36 +59,11 @@ interface DialogTriggerProps {
   children?: JSX.Element;
 }
 
-/**
- * DialogTrigger - Wrapper for dialog trigger elements
- *
- * IMPORTANT SSR HYDRATION FIX:
- *
- * This component uses a workaround for a hydration issue in SolidStart with Ark UI's Dialog.Trigger.
- *
- * THE PROBLEM:
- * - When using <ArkDialog.Trigger> directly with children that have onClick handlers (like <Button>),
- *   the click event doesn't work on first page load after SSR
- * - The Dialog.Context render prop doesn't execute during hydration, so event handlers don't attach
- * - Only after a re-render (like switching tabs) does it start working
- *
- * THE SOLUTION:
- * - Wrap children in a <div> with display:contents (invisible, doesn't affect layout)
- * - Put the onClick handler on the wrapper div instead of relying on Ark UI's trigger
- * - Manually call context().setOpen(true) to open the dialog
- * - This ensures the click handler is attached on first render, even during SSR hydration
- *
- * WHY IT WORKS:
- * - Plain divs with onClick handlers hydrate correctly in SolidStart
- * - Children (like Button components) render normally without onClick conflicts
- * - The wrapper intercepts all clicks and delegates to the dialog context
- * - display:contents makes the wrapper invisible in the DOM tree
- *
- * DO NOT:
- * - Replace this with <ArkDialog.Trigger> directly wrapping Button components
- * - Remove the wrapper div or display:contents styling
- * - Try to clone/modify children props (doesn't work in Solid's reactivity model)
- */
+// HACK: ArkDialog.Trigger doesn't attach click handlers on first SSR load.
+// Render prop skips hydration so nothing wires up until a re-render.
+// Workaround: display:contents div with our own onClick → setOpen(true).
+// don't replace with <ArkDialog.Trigger> directly, it WILL break.
+// don't try to clone children props either, Solid doesn't work like that.
 export const DialogTrigger = (props: DialogTriggerProps) => {
   const resolved = resolveChildren(() => props.children);
 

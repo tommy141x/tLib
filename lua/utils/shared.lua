@@ -6,8 +6,11 @@ Utils = {}
 
 local _hexChars = '0123456789abcdef'
 
+-- Seed math.random once at load time so IDs are not identical across VM restarts.
+-- Combines os.clock (sub-second precision) with GetGameTimer (if available) for entropy.
+math.randomseed(os.clock() * 100000 + (GetGameTimer and GetGameTimer() or os.time()))
+
 --- Generate a random 16-character hex ID suitable for stable entity identifiers.
---- Uses math.random — seed with math.randomseed(GetGameTimer()) if needed.
 --- @return string  16-character lowercase hex string
 function Utils.generateId()
     local t = {}
