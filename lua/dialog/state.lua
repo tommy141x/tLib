@@ -1,6 +1,4 @@
 -- tLib/lua/dialog/state.lua
--- Owns all mutable dialog data and the helpers that read or derive from it.
--- Exposes setUI, register, get, remove, generateId, and getUI.
 
 DialogState      = {}
 

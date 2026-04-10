@@ -33,12 +33,7 @@ type RadioGroupProps = {
 };
 
 export const RadioGroup: Component<RadioGroupProps> = (props) => {
-  return (
-    <ArkRadioGroup.Root
-      {...props}
-      class={cn("flex flex-col gap-3", props.class)}
-    />
-  );
+  return <ArkRadioGroup.Root {...props} class={cn("flex flex-col gap-3", props.class)} />;
 };
 
 type RadioGroupLabelProps = {
@@ -48,10 +43,7 @@ type RadioGroupLabelProps = {
 
 export const RadioGroupLabel: Component<RadioGroupLabelProps> = (props) => {
   return (
-    <ArkRadioGroup.Label
-      class={cn("text-sm font-medium leading-none", props.class)}
-      {...props}
-    />
+    <ArkRadioGroup.Label class={cn("text-sm font-medium leading-none", props.class)} {...props} />
   );
 };
 
@@ -71,7 +63,7 @@ export const RadioGroupItem: Component<RadioGroupItemProps> = (props) => {
       invalid={props.invalid}
       class={cn(
         "flex items-center gap-2 cursor-pointer data-disabled:cursor-not-allowed data-disabled:opacity-50",
-        props.class,
+        props.class
       )}
     >
       <ArkRadioGroup.ItemControl class="relative h-4 w-4 rounded-full border border-primary ring-offset-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 overflow-hidden">

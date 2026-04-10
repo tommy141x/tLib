@@ -68,7 +68,7 @@ export const TooltipContent = (props: TooltipContentProps) => {
                   <ArkTooltip.Content
                     class={cn(
                       "z-50 rounded-md bg-secondary text-secondary-foreground px-3 py-1.5 text-xs shadow-md",
-                      local.class,
+                      local.class
                     )}
                     {...others}
                   >

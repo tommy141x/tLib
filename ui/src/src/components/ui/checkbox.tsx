@@ -25,9 +25,7 @@ interface CheckboxProps {
   class?: string;
 }
 
-export const Checkbox = (
-  props: CheckboxProps & { size?: "sm" | "md" | "lg" },
-) => {
+export const Checkbox = (props: CheckboxProps & { size?: "sm" | "md" | "lg" }) => {
   const [local, others] = splitProps(props, ["children", "class", "size"]);
 
   const sizes = {
@@ -39,14 +37,11 @@ export const Checkbox = (
   const currentSize = sizes[local.size || "md"];
 
   return (
-    <ArkCheckbox.Root
-      class={cn("flex items-center gap-2", local.class)}
-      {...others}
-    >
+    <ArkCheckbox.Root class={cn("flex items-center gap-2", local.class)} {...others}>
       <ArkCheckbox.Control
         class={cn(
           "peer shrink-0 rounded-sm border border-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground transition-all duration-200 ease-out hover:border-ring hover:shadow-sm",
-          currentSize.control,
+          currentSize.control
         )}
       >
         <ArkCheckbox.Indicator class="flex items-center justify-center w-full h-full transition-all duration-200 ease-out data-[state=checked]:animate-in data-[state=checked]:fade-in data-[state=checked]:zoom-in-50 [&[hidden]]:hidden">
@@ -57,7 +52,7 @@ export const Checkbox = (
         <ArkCheckbox.Label
           class={cn(
             "font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 transition-colors duration-150 cursor-pointer select-none",
-            currentSize.label,
+            currentSize.label
           )}
         >
           {local.children}
@@ -70,32 +65,26 @@ export const Checkbox = (
 
 // Composable API for advanced usage
 export const CheckboxRoot = ArkCheckbox.Root;
-export const CheckboxLabel = (props: {
-  children?: JSX.Element;
-  class?: string;
-}) => {
+export const CheckboxLabel = (props: { children?: JSX.Element; class?: string }) => {
   const [local, others] = splitProps(props, ["class"]);
   return (
     <ArkCheckbox.Label
       class={cn(
         "text-base font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 transition-colors duration-150 cursor-pointer select-none",
-        local.class,
+        local.class
       )}
       {...others}
     />
   );
 };
 
-export const CheckboxControl = (props: {
-  children?: JSX.Element;
-  class?: string;
-}) => {
+export const CheckboxControl = (props: { children?: JSX.Element; class?: string }) => {
   const [local, others] = splitProps(props, ["class"]);
   return (
     <ArkCheckbox.Control
       class={cn(
         "peer h-5 w-5 shrink-0 rounded-sm border border-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground transition-all duration-200 ease-out hover:border-ring hover:shadow-sm",
-        local.class,
+        local.class
       )}
       {...others}
     />
@@ -107,25 +96,18 @@ export const CheckboxIndicator = (props: {
   children?: JSX.Element;
   class?: string;
 }) => {
-  const [local, others] = splitProps(props, [
-    "class",
-    "children",
-    "indeterminate",
-  ]);
+  const [local, others] = splitProps(props, ["class", "children", "indeterminate"]);
   return (
     <ArkCheckbox.Indicator
       indeterminate={local.indeterminate}
       class={cn(
         "flex items-center justify-center w-full h-full transition-all duration-200 ease-out data-[state=checked]:animate-in data-[state=checked]:fade-in data-[state=checked]:zoom-in-50 data-[state=indeterminate]:animate-in data-[state=indeterminate]:fade-in data-[state=indeterminate]:zoom-in-50 [&[hidden]]:hidden",
-        local.class,
+        local.class
       )}
       {...others}
     >
       {local.children || (
-        <Show
-          when={local.indeterminate}
-          fallback={<IconCheck class="h-4 w-4" />}
-        >
+        <Show when={local.indeterminate} fallback={<IconCheck class="h-4 w-4" />}>
           <IconMinus class="h-4 w-4" />
         </Show>
       )}
@@ -142,16 +124,11 @@ interface CheckboxGroupProps {
 }
 
 export const CheckboxGroup = (
-  props: CheckboxGroupProps & Omit<ArkCheckbox.GroupProps, "class">,
+  props: CheckboxGroupProps & Omit<ArkCheckbox.GroupProps, "class">
 ) => {
   const [local, others] = splitProps(props, ["class"]);
 
-  return (
-    <ArkCheckbox.Group
-      class={cn("flex flex-col gap-2", local.class)}
-      {...others}
-    />
-  );
+  return <ArkCheckbox.Group class={cn("flex flex-col gap-2", local.class)} {...others} />;
 };
 
 export default Checkbox;

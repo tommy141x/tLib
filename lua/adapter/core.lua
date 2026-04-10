@@ -1,72 +1,8 @@
 -- tLib/lua/adapter/core.lua
--- Core platform abstractions: threading, timing, events, WebUI, exports,
--- and shutdown hooks.
---
--- Depends on: lua/adapter/init.lua  (_TLIB_IS_HELIX / _TLIB_IS_FIVEM / Platform)
---
--- Surfaces provided:
---
---   Threading
---     Platform.createThread(fn)
---     Platform.wait(ms)
---
---   Timing
---     Platform.setInterval(fn, ms)  → handle
---     Platform.clearInterval(handle)
---     Platform.setTimeout(fn, ms)   → handle
---     Platform.clearTimeout(handle)
---
---   WebUI / NUI
---     Platform.createUI(name, path) → ui handle
---     Platform.sendUIEvent(ui, evt, data)
---     Platform.onUIEvent(ui, evt, cb)
---     Platform.bringUIToFront(ui)
---     Platform.setInputMode(ui, mode)   0=game  1=ui-only
---     Platform.destroyUI(ui)
---
---   Events
---     Platform.TriggerEvent(name, ...)
---     Platform.AddEventHandler(name, cb)
---     Platform.TriggerServerEvent(name, ...)
---     Platform.TriggerClientEvent(name, target, ...)  -- server → client
---
---   NOTE: Platform.onServerEvent and Platform.onClientEvent have been removed.
---   On FiveM both sides use AddEventHandler for local listeners, so
---   Platform.AddEventHandler covers all cases.  The old names are kept as
---   aliases below for backward compatibility.
---
---   Exports
---     Platform.export(resource, name, fn)
---       Helix: passes resource explicitly.
---       FiveM: resource is ignored; FiveM infers it from the manifest.
---
---     NOTE: *calling* exports from other resources is identical on both
---     platforms — use exports['resource']:Method(...) directly everywhere.
---     No Platform wrapper is needed or provided for that direction.
---
---   Callbacks (shim support)
---     Platform.storeCallback(fn)
---       On Helix: stores fn in tLib's internal callback table and returns a
---       __tLibCb_ key string.  Use this when an export needs to RETURN a
---       callable to the consumer — the key string crosses the VM boundary
---       safely, and tLibShim.lua's unsanitiseReturn (Case 1) wraps it back
---       into a real callable in the consumer VM.
---       On FiveM: returns fn unchanged — functions cross the boundary natively
---       so no key is needed.
---       When Helix natively supports functions across export boundaries, change
---       the Helix branch to also return fn unchanged, then delete the shims.
---
---     Platform.invokeCallback (REMOVED — kept as no-op for backward compat)
---       Export handlers now receive real callables via Platform.wrapExport's
---       unwrapping middleware and call them directly.  Platform.invokeCallback
---       compiles and runs without error but does nothing.
---
---   Shutdown
---     Platform.onShutdown(cb)
+-- core platform abstractions: threads, timers, events, UI, exports
+
 
 local log = Logger.create('tLib/adapter/core')
-
--- ── Threading ─────────────────────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.createThread(fn)
@@ -89,7 +25,6 @@ else
     Platform.wait         = Platform._stub('wait')
 end
 
--- ── Timing ────────────────────────────────────────────────────────────────────
 -- Built on top of Platform.createThread / Platform.wait so no further
 -- branching is needed here.
 
@@ -135,8 +70,6 @@ end
 function Platform.clearTimeout(handle)
     _timerHandles[handle] = nil
 end
-
--- ── WebUI / NUI ────────────────────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.createUI(name, path)
@@ -219,8 +152,6 @@ else
     Platform.destroyUI      = Platform._stub('destroyUI')
 end
 
--- ── Events ────────────────────────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     -- Helix exposes these as globals; names may vary slightly between versions
     -- so we probe once at load time.
@@ -270,12 +201,10 @@ else
     Platform.TriggerClientEvent = Platform._stub('TriggerClientEvent')
 end
 
--- ── Exports (registering) ─────────────────────────────────────────────────────
 -- Calling exports from other resources is identical on both platforms:
 --   exports['resource']:Method(...)
 -- No wrapper is needed for the call direction — use that syntax directly.
 
--- ── Shim-key unwrapping middleware (incoming args) ────────────────────────────
 -- On Helix, tLibShim.lua (running in the consumer's VM) replaces every function
 -- argument with an auto-generated string key ("__tLibCb_<n>_<rand>") before the
 -- call crosses the VM boundary.  Platform.wrapExport wraps a handler so that
@@ -299,7 +228,6 @@ end
 -- Platform.export is an alias for Platform.wrapExport so all existing call
 -- sites work unchanged.
 --
--- ── Returning callables from exports (outgoing return values) ─────────────────
 -- The unwrapping middleware above solves the INCOMING direction.  But Helix
 -- also cannot carry a function across the boundary in the RETURN direction —
 -- a closure returned from an export handler in tLib's VM arrives in the
@@ -343,7 +271,6 @@ local _SHIM_PREFIX_LEN = #_SHIM_PREFIX
 --   Embedding the package name provides a hard structural guarantee at zero cost.
 local _TLIB_KEY_PREFIX = _SHIM_PREFIX .. 'tLib_'
 
--- ── tLib-side callback store (for Platform.storeCallback) ────────────────────
 -- Distinct from the consumer-side _callbacks table inside tLibShim.lua.
 -- Lives in tLib's VM; keyed by __tLibCb_ strings exactly like the shim's store.
 --
@@ -485,7 +412,6 @@ function Platform.export(resource, name, fn)
     Platform.wrapExport(resource, name, fn)
 end
 
--- ── Platform.storeCallback ────────────────────────────────────────────────────
 -- Use this when an export handler needs to RETURN a callable to the consumer.
 -- On Helix a closure cannot cross the VM boundary in the return direction, so
 -- we store it locally and return a key string that the consumer shim's
@@ -560,7 +486,6 @@ else
     Platform.storeCallback = Platform._stub('storeCallback')
 end
 
--- ── Platform.invokeCallback — backward-compat no-op ──────────────────────────
 -- Export handlers previously had to call Platform.invokeCallback(storedKey, ...)
 -- instead of storedKey(...).  Now that Platform.wrapExport unwraps all incoming
 -- shim keys into live proxy callables before the handler sees them, stored
@@ -572,8 +497,6 @@ function Platform.invokeCallback(key, ...)
     -- Intentional no-op.  Kept for backward compatibility only.
     -- Call stored callbacks directly: if fn then fn(...) end
 end
-
--- ── Shutdown ──────────────────────────────────────────────────────────────────
 
 local _shutdownCallbacks = {}
 

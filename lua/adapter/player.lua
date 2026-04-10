@@ -1,52 +1,9 @@
--- tLib/lua/adapter/player.lua
--- Player-related platform abstractions: input blocking, input mode query,
--- and key bindings.
---
--- Depends on: lua/adapter/init.lua  (_TLIB_IS_HELIX / _TLIB_IS_FIVEM / Platform)
---             lua/adapter/core.lua  (Platform.createThread / Platform.wait)
---
--- Surfaces provided:
---
---   Platform.bindKey(key, cb, eventType, bindingId)
---     Bind a callback to a key press (or release).
---     eventType:  "Pressed" (default) | "Released"
---     bindingId:  optional human-readable identifier used as the console
---                 command token and the label shown in GTA V Settings >
---                 Controls > FiveM.  Must be alphanumeric + underscores only.
---                 When omitted a unique token is generated automatically.
---                 On FiveM, providing an explicit id is recommended when the
---                 same key is bound from multiple resources so each binding
---                 has a clear, stable name in the keybind settings screen.
---
---   Platform.setIgnoreMoveInput(bool)
---     Block or unblock player movement controls.
---
---   Platform.setIgnoreLookInput(bool)
---     Block or unblock player camera/look controls.
---
---   Platform.getInputMode()
---     Returns 1 when the player is in a UI/cursor mode (i.e. key handlers
---     should be suppressed), 0 otherwise.
+-- player input: key binds, input blocking, input mode query
 
--- Tracks whether the UI currently has input focus (set by Platform.setInputMode).
--- _tLibUIFocused  — used by Platform.getInputMode() on Helix.
--- _tLibNUIFocused — used by Platform.getInputMode() on FiveM; mirrors the
---                   SetNuiFocus state that Platform.setInputMode manages so that
---                   navigation.lua's blocked() check correctly suppresses menu
---                   keys while a dialog (or any other UI) has cursor focus.
---
--- Load order: logger.lua (shared_scripts) → core.lua (shared_scripts) →
---             player.lua (client_scripts).  Both globals are initialised here
---             at file scope.  Platform.setInputMode (defined in core.lua) only
---             ever writes to them in response to a runtime call — it is never
---             invoked between core.lua loading and player.lua loading — so
---             there is no window where they could be nil when accessed.
 _tLibUIFocused  = false
 _tLibNUIFocused = false
 
 local log       = Logger.create('tLib/adapter/player')
-
--- ── Key bindings ──────────────────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.bindKey(key, cb, eventType, bindingId)
@@ -130,8 +87,6 @@ else
     Platform.bindKey = Platform._stub('bindKey')
 end
 
--- ── Player input blocking ──────────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.setIgnoreMoveInput(state)
         if HPlayer and HPlayer.SetIgnoreMoveInput then
@@ -192,7 +147,6 @@ else
     Platform.setIgnoreLookInput = Platform._stub('setIgnoreLookInput')
 end
 
--- ── Input mode query ──────────────────────────────────────────────────────────
 -- Returns 1 when the player is in a UI/cursor-focused state (key handlers in
 -- navigation.lua use this to suppress input), 0 otherwise.
 

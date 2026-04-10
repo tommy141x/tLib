@@ -1,15 +1,7 @@
-/**
- * Vehicle matrix math shared between gizmo consumers.
- * Pure functions — no scene state, no Three.js scene graph dependency.
- */
-
 import * as THREE from "three";
 import type { Vec3, VehicleMatrix } from "./types";
 
-/**
- * Build a Three.js quaternion from a FiveM vehicle matrix.
- * Maps vehicle right/up/back to Three.js X/Y/Z columns.
- */
+// maps vehicle right/up/back to Three.js X/Y/Z columns
 export function buildVehicleQuat(matrix: VehicleMatrix): THREE.Quaternion {
   const threeRight = new THREE.Vector3(matrix.right.x, matrix.right.z, -matrix.right.y).normalize();
   const threeUp = new THREE.Vector3(matrix.up.x, matrix.up.z, -matrix.up.y).normalize();

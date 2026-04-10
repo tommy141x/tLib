@@ -1,5 +1,4 @@
 -- tLibShim.lua
--- ─────────────────────────────────────────────────────────────────────────────
 -- Temporary Helix workaround: makes inline function arguments to exports['tLib']
 -- work as expected despite Helix serialising functions to strings at the
 -- cross-package VM boundary.
@@ -56,7 +55,6 @@
 --   file into the new package and add it as the first entry in package.json's
 --   client list.
 
--- ── Callback store ────────────────────────────────────────────────────────────
 -- Keys have the form:  __tLibCb_<package>_<counter>
 --
 -- The package name component (_PKG_ID) makes keys from different consumer VMs
@@ -89,7 +87,6 @@ local function storeCallback(fn)
     return key
 end
 
--- ── Argument sanitisation ─────────────────────────────────────────────────────
 -- Walks an argument list and replaces every function value with a string key.
 -- Tables are deep-copied recursively so that functions at any nesting depth are
 -- captured — this is required for BatchUpdate updateMenu ops where onOpen/onClose
@@ -120,7 +117,6 @@ local function sanitiseArgs(args)
     return out
 end
 
--- ── Return-value unsanitisation ───────────────────────────────────────────────
 -- If an export returns a shim key string, tLib stored a closure under that key
 -- and returned it via Platform.storeCallback. Wrap it in a function that fires
 -- TriggerLocalClientEvent('tLib:callback', key, ...) so tLib's VM receives the
@@ -157,7 +153,6 @@ local function unsanitiseReturn(v, _seen)
     return v
 end
 
--- ── Event listener ────────────────────────────────────────────────────────────
 -- tLib fires TriggerLocalClientEvent('tLib:callback', key, ...) when it wants
 -- to invoke a callback that originated in this package.
 -- RegisterClientEvent is Helix's cross-package event API — the same one
@@ -199,7 +194,6 @@ RegisterClientEvent('tLib:callback', function(key, ...)
     _dispatching = false
 end)
 
--- ── Proxy ─────────────────────────────────────────────────────────────────────
 -- Wraps the real exports['tLib'] table. Unknown methods fall through via
 -- __index so non-callback exports (ShowToast, SetItemLabel, etc.) are
 -- completely unaffected.

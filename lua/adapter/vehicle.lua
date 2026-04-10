@@ -1,78 +1,6 @@
 -- tLib/lua/adapter/vehicle.lua
--- Vehicle platform abstractions.
---
--- Depends on: lua/adapter/init.lua  (_TLIB_IS_HELIX / _TLIB_IS_FIVEM / Platform)
---
--- Surfaces provided:
---
---   Platform.getPlayerVehicle()
---     Returns the vehicle the local player is currently in, or nil.
---     FiveM: returns entity handle (integer).
---     Helix: returns HVehicle wrapper table (or nil).
---
---   Platform.getVehicleSpeed(vehicle)
---     Returns the vehicle's current speed in m/s (always a positive number).
---     FiveM: GetEntitySpeed() — already in m/s.
---     Helix: GetVelocityForNavMovement() magnitude, converted from UE units (cm/s → m/s).
---
---   Platform.getVehiclePlate(vehicle)
---     Returns the vehicle's number plate string, trimmed of whitespace.
---     FiveM: GetVehicleNumberPlateText().
---     Helix: no native plate system — returns an empty string and warns once.
---
---   Platform.setVehiclePlate(vehicle, plate)
---     Sets the vehicle's number plate string.
---     FiveM: SetVehicleNumberPlateText().
---     Helix: no-op (no native plate API). Warns once.
---
---   Platform.getVehicleNetId(vehicle)
---     Returns the network ID of the vehicle (integer) for server-side lookups.
---     FiveM: VehToNet(vehicle).
---     Helix: Helix does not expose a separate net-id layer — returns the
---            vehicle's .Object pointer tostring as a unique stable string,
---            or nil if the vehicle wrapper is invalid.
---
---   Platform.spawnVehicle(model, coords, heading, cb)
---     Spawns a vehicle and calls cb(vehicle) once it is ready.
---     model   — FiveM: model hash or name string.
---               Helix: full blueprint asset path string.
---     coords  — table {x, y, z} or Vector (both platforms accept tables).
---     heading — number, degrees yaw.
---     cb      — function(vehicle) called when the vehicle is available.
---     FiveM:  RequestModel → CreateVehicle → SetEntityAsNoLongerNeeded.
---     Helix:  HVehicle constructor with an async spawn callback.
---
---   Platform.deleteVehicle(vehicle)
---     Removes the vehicle from the world.
---     FiveM: DeleteVehicle().
---     Helix: DeleteVehicle() global (from Helix functions API).
---
---   Platform.setVehicleEngineOn(vehicle, state, instantly)
---     Turns the vehicle engine on or off.
---     state   — boolean.
---     instantly — boolean (FiveM only; Helix always acts immediately).
---     FiveM: SetVehicleEngineOn(vehicle, state, instantly, true).
---     Helix: state=true → HoldStarter(0) then ReleaseStarter();
---            state=false → StopEngine().
---
---   Platform.getVehicleClass(vehicle)
---     Returns a normalised vehicle class string or integer.
---     FiveM: GetVehicleClass() — returns the integer class index (0-22).
---     Helix: no equivalent — returns nil and warns once.
---
---   Platform.isVehicleSeatFree(vehicle, seatIndex)
---     Returns true if the given seat is unoccupied.
---     seatIndex: -1 = driver, 0 = front-right passenger, 1+ = rear seats.
---     FiveM: IsVehicleSeatFree(vehicle, seatIndex).
---     Helix: no per-seat query API — returns nil and warns once.
---
---   Platform.getVehicleNumberOfPassengers(vehicle)
---     Returns the number of passengers currently in the vehicle (driver excluded).
---     FiveM: GetVehicleNumberOfPassengers(vehicle).
---     Helix: no direct equivalent — returns nil and warns once.
+-- vehicle platform abstractions (FiveM + Helix)
 
--- ── Warn-once helper ──────────────────────────────────────────────────────────
--- Avoids flooding the console when a stub surface is called in a tight loop.
 
 local log = Logger.create('tLib/adapter/vehicle')
 
@@ -83,8 +11,6 @@ local function _warnOnce(key, msg)
         log(msg, 3)
     end
 end
-
--- ── Platform.getPlayerVehicle ─────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.getPlayerVehicle()
@@ -105,8 +31,6 @@ elseif _TLIB_IS_FIVEM then
 else
     Platform.getPlayerVehicle = Platform._stub('getPlayerVehicle')
 end
-
--- ── Platform.getVehicleSpeed ──────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.getVehicleSpeed(vehicle)
@@ -135,8 +59,6 @@ else
     Platform.getVehicleSpeed = Platform._stub('getVehicleSpeed')
 end
 
--- ── Platform.getVehiclePlate ──────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.getVehiclePlate(vehicle)
         -- Helix HVehicle has no native plate/license-plate API as of this
@@ -156,8 +78,6 @@ else
     Platform.getVehiclePlate = Platform._stub('getVehiclePlate')
 end
 
--- ── Platform.setVehiclePlate ──────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.setVehiclePlate(vehicle, plate)
         _warnOnce('setVehiclePlate',
@@ -171,8 +91,6 @@ elseif _TLIB_IS_FIVEM then
 else
     Platform.setVehiclePlate = Platform._stub('setVehiclePlate')
 end
-
--- ── Platform.getVehicleNetId ──────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.getVehicleNetId(vehicle)
@@ -193,8 +111,6 @@ elseif _TLIB_IS_FIVEM then
 else
     Platform.getVehicleNetId = Platform._stub('getVehicleNetId')
 end
-
--- ── Platform.spawnVehicle ─────────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     -- model   → full blueprint asset path, e.g.
@@ -258,8 +174,6 @@ else
     Platform.spawnVehicle = Platform._stub('spawnVehicle')
 end
 
--- ── Platform.deleteVehicle ────────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.deleteVehicle(vehicle)
         if not vehicle then return end
@@ -279,8 +193,6 @@ elseif _TLIB_IS_FIVEM then
 else
     Platform.deleteVehicle = Platform._stub('deleteVehicle')
 end
-
--- ── Platform.setVehicleEngineOn ───────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     -- instantly is ignored on Helix — the engine responds immediately.
@@ -310,8 +222,6 @@ else
     Platform.setVehicleEngineOn = Platform._stub('setVehicleEngineOn')
 end
 
--- ── Platform.getVehicleClass ──────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.getVehicleClass(vehicle)
         -- Helix does not expose a GTA-style numeric vehicle class.
@@ -328,7 +238,6 @@ else
     Platform.getVehicleClass = Platform._stub('getVehicleClass')
 end
 
--- ── Platform.isVehicleSeatFree ────────────────────────────────────────────────
 -- seatIndex: -1 = driver, 0 = front passenger, 1+ = rear seats.
 
 if _TLIB_IS_HELIX then
@@ -346,8 +255,6 @@ elseif _TLIB_IS_FIVEM then
 else
     Platform.isVehicleSeatFree = Platform._stub('isVehicleSeatFree')
 end
-
--- ── Platform.getVehicleNumberOfPassengers ────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.getVehicleNumberOfPassengers(vehicle)

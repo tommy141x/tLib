@@ -1,8 +1,4 @@
 -- tLib/lua/menu/actions.lua
--- Handles confirm / left / right input on the focused item.
--- Delegates all state mutation to MenuState.patchItem and submenu
--- navigation to MenuNavigation.openMenu.
--- Uses Platform.* for all event firing so this file is runtime-agnostic.
 
 MenuActions = {}
 

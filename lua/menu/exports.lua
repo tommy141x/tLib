@@ -1,13 +1,9 @@
 -- tLib/lua/menu/exports.lua
--- Registers all exports('tLib', ...) for the menu subsystem.
--- All state reads/writes go through MenuState; open/close transitions go through MenuNavigation.
 
 MenuExports   = {}
 
 local log     = Logger.create('tLib/menu')
 local resolve = MenuUtils.resolve
-
--- ── Item option helpers ───────────────────────────────────────────────────────
 
 local function applyOpts(item, opts)
     if type(opts) ~= 'table' then return end
@@ -25,7 +21,6 @@ local function applyBaseOpts(item, opts)
     if opts.priority ~= nil then item.priority = tonumber(opts.priority) or 500 end
 end
 
--- ── Shared item factory ───────────────────────────────────────────────────────
 -- Used by both the individual Add* exports and BatchUpdate so item construction
 -- logic lives in exactly one place. Returns a fully populated item table or nil
 -- on unknown type.
@@ -85,8 +80,6 @@ local function buildItem(menu, op)
     applyOpts(item, op.opts)
     return item
 end
-
--- ── Shared mutation helpers ───────────────────────────────────────────────────
 
 -- Applies changes to a menu's top-level fields in Lua state, routes UI-visible
 -- fields through MenuState.patchMenu, and fires tLib:menu:updated.
@@ -162,8 +155,6 @@ local function setPriorityImpl(menuId, itemId, priority)
     return true
 end
 
--- ── Export registration ───────────────────────────────────────────────────────
-
 function MenuExports.register()
     local function registerExport(name, fn)
         Platform.export('tLib', name, fn)
@@ -171,8 +162,6 @@ function MenuExports.register()
     local function TriggerEvent(...)
         Platform.TriggerEvent(...)
     end
-
-    -- ── Menu lifecycle ────────────────────────────────────────────────────────
 
     -- opts table (all optional):
     --   position      string   "top-left" | "top-center" | ... | "bottom-right"
@@ -253,8 +242,6 @@ function MenuExports.register()
         TriggerEvent('tLib:menu:deleted', menuId)
     end)
 
-    -- ── Menu-level mutation ───────────────────────────────────────────────────
-
     -- Merges any top-level menu fields. Accepted keys: title, subtitle, banner,
     -- position, size, inheritLayout, onOpen, onClose. Fires tLib:menu:updated.
     registerExport('UpdateMenu', function(menuId, changes)
@@ -278,7 +265,6 @@ function MenuExports.register()
         return updateMenuImpl(menuId, { subtitle = subtitle })
     end)
 
-    -- ── Item additions ────────────────────────────────────────────────────────
     -- NOTE: Add* exports write to Lua state only. If the target menu is currently
     -- visible, call RefreshMenu(menuId) after all Add* calls to push the changes
     -- to the UI. Batch additions followed by a single RefreshMenu is the
@@ -415,8 +401,6 @@ function MenuExports.register()
         return item.id
     end)
 
-    -- ── Item removal ──────────────────────────────────────────────────────────
-
     registerExport('RemoveItem', function(menuId, itemId)
         local allMenus = MenuState.getMenus()
         local menu     = allMenus[menuId]
@@ -430,8 +414,6 @@ function MenuExports.register()
         end
         TriggerEvent('tLib:item:removed', menuId, itemId)
     end)
-
-    -- ── Item mutation ─────────────────────────────────────────────────────────
 
     registerExport('UpdateItem', function(menuId, itemId, changes)
         return updateItemImpl(menuId, itemId, changes)
@@ -500,8 +482,6 @@ function MenuExports.register()
         return updateItemImpl(menuId, itemId, { step = math.max(1, tonumber(step) or 1) })
     end)
 
-    -- ── Item ordering ─────────────────────────────────────────────────────────
-
     registerExport('MoveItemToTop', function(menuId, itemId)
         local allMenus = MenuState.getMenus()
         local menu     = allMenus[menuId]
@@ -552,8 +532,6 @@ function MenuExports.register()
         return true
     end)
 
-    -- ── Refresh ───────────────────────────────────────────────────────────────
-
     registerExport('RefreshMenu', function(menuId)
         MenuState.refreshMenu(menuId)
     end)
@@ -561,8 +539,6 @@ function MenuExports.register()
     registerExport('RefreshItem', function(menuId, itemId)
         MenuState.refreshItem(menuId, itemId)
     end)
-
-    -- ── Discovery ─────────────────────────────────────────────────────────────
 
     registerExport('GetCurrentMenuId', function()
         local stack = MenuState.getStack()
@@ -640,8 +616,6 @@ function MenuExports.register()
         local stack = MenuState.getStack()
         return #stack > 0 and stack[#stack] == menuId
     end)
-
-    -- ── Batch operations ──────────────────────────────────────────────────────
 
     -- Applies all operations to Lua state atomically, then fires a single
     -- refreshMenu per affected visible menu rather than one per operation.

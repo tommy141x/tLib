@@ -22,7 +22,7 @@ const kbdVariants = cva(
     defaultVariants: {
       size: "default",
     },
-  },
+  }
 );
 
 interface KbdProps extends VariantProps<typeof kbdVariants> {
@@ -34,10 +34,7 @@ export const Kbd: Component<KbdProps> = (props) => {
   const [local, others] = splitProps(props, ["children", "class", "size"]);
 
   return (
-    <kbd
-      class={cn(kbdVariants({ size: local.size || "default" }), local.class)}
-      {...others}
-    >
+    <kbd class={cn(kbdVariants({ size: local.size || "default" }), local.class)} {...others}>
       {local.children}
     </kbd>
   );

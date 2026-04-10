@@ -1,10 +1,4 @@
--- tLib/lua/coords/shared.lua
--- Pure-math coordinate conversion utilities.
--- No platform calls — works on both FiveM and Helix, client and server.
---
--- All functions take pre-extracted matrix vectors (not entity handles) so they
--- stay platform-agnostic. Consumers call GetEntityMatrix(vehicle) or equivalent
--- themselves and pass the vectors in.
+-- coordinate math — takes raw matrix vectors, no entity handles or platform calls
 
 Coords = {}
 

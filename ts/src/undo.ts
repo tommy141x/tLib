@@ -1,27 +1,15 @@
-/**
- * Undo/Redo system — fully decoupled from stores via registry pattern.
- *
- * Each store registers itself with `registerUndoable(tag, capture, restore)`.
- * Components call `withUndo(label, tags, fn)` for simple mutations, or
- * `pushUndo(label, tags)` / `commitUndo()` for batched operations (drag paint, gizmo drag).
- *
- * Undo entries store per-store snapshots (before + after) using structuredClone.
- * Restoring uses each store's own restore function (typically SolidJS reconcile).
- */
-
-// ── Registry ──
+// undo/redo — stores register with registerUndoable(), then use
+// withUndo() for one-shot mutations or pushUndo()/commitUndo() for batched ops (drag, paint).
 
 type SnapshotFn = () => unknown;
 type RestoreFn = (snapshot: unknown) => void;
 
 const registry = new Map<string, { capture: SnapshotFn; restore: RestoreFn }>();
 
-/** Register a store's undoable state. Called once per store at module init. */
+// call once per store at init
 export function registerUndoable(tag: string, capture: SnapshotFn, restore: RestoreFn): void {
   registry.set(tag, { capture, restore });
 }
-
-// ── Types ──
 
 interface StoreSnapshots {
   [tag: string]: unknown;
@@ -33,15 +21,11 @@ interface UndoEntry {
   after: StoreSnapshots;
 }
 
-// ── State ──
-
 const MAX_HISTORY = 100;
 
 let undoStack: UndoEntry[] = [];
 let redoStack: UndoEntry[] = [];
 let pendingBatch: { label: string; tags: Set<string>; before: StoreSnapshots } | null = null;
-
-// ── Internal ──
 
 function captureStores(tags: Iterable<string>): StoreSnapshots {
   const snap: StoreSnapshots = {};
@@ -72,14 +56,8 @@ function commitBatch(): void {
   pendingBatch = null;
 }
 
-// ── Public API ──
-
-/**
- * Start (or extend) an undo batch. Call BEFORE mutating.
- * If called again with the same label while a batch is open, the batch is
- * extended to include any new store tags without re-capturing "before".
- * This is how drag-painting batches many cell edits into one undo entry.
- */
+// call before mutating. calling again with same label extends the batch
+// (drag-paint uses this to batch many cell edits into one undo entry)
 export function pushUndo(label: string, tags: string[]): void {
   if (pendingBatch && pendingBatch.label === label) {
     // Extend: capture any newly-involved stores
@@ -101,19 +79,16 @@ export function pushUndo(label: string, tags: string[]): void {
   };
 }
 
-/** Finalize the current batch (capture "after" snapshot, push entry). */
 export function commitUndo(): void {
   commitBatch();
 }
 
-/** Convenience: wraps a synchronous mutation in a single undo checkpoint. */
 export function withUndo(label: string, tags: string[], fn: () => void): void {
   pushUndo(label, tags);
   fn();
   commitUndo();
 }
 
-/** Undo the most recent change. */
 export function undo(): void {
   if (pendingBatch) commitBatch();
   const entry = undoStack.pop();
@@ -122,7 +97,6 @@ export function undo(): void {
   redoStack.push(entry);
 }
 
-/** Redo the most recently undone change. */
 export function redo(): void {
   const entry = redoStack.pop();
   if (!entry) return;
@@ -130,7 +104,7 @@ export function redo(): void {
   undoStack.push(entry);
 }
 
-/** Discard all history (call on editor open/close/save). */
+// call on editor open/close/save
 export function clearHistory(): void {
   undoStack = [];
   redoStack = [];

@@ -60,9 +60,7 @@ export const Slider: Component<SliderProps> = (props) => {
               {props.label}
             </ArkSlider.Label>
           )}
-          {props.showValue && (
-            <ArkSlider.ValueText class="text-sm text-muted-foreground" />
-          )}
+          {props.showValue && <ArkSlider.ValueText class="text-sm text-muted-foreground" />}
         </div>
       )}
       <ArkSlider.Control class="relative flex items-center w-full touch-none select-none">

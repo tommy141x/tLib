@@ -1,17 +1,8 @@
-/**
- * Input Component - Multi-variant input with support for text, password, tags, textarea, and combobox
- *
- * Fixed: Controlled input handling (value prop)
- * - 'value', 'defaultValue', and 'onValueChange' are now only extracted for tags variant
- * - For all other input types, these props pass through {...others} to Field.Input
- * - This allows proper controlled component behavior with value={signal()}
- */
+// value/defaultValue/onValueChange only extracted for tags variant,
+// everything else passes through to Field.Input for controlled components
 
 import { Field } from "@ark-ui/solid";
-import {
-  Combobox as ArkCombobox,
-  useListCollection,
-} from "@ark-ui/solid/combobox";
+import { Combobox as ArkCombobox, useListCollection } from "@ark-ui/solid/combobox";
 import { useFilter } from "@ark-ui/solid/locale";
 import { TagsInput as ArkTagsInput } from "@ark-ui/solid/tags-input";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -63,7 +54,7 @@ const inputVariants = cva(
       variant: "default",
       size: "default",
     },
-  },
+  }
 );
 
 const tagVariants = cva(
@@ -79,13 +70,12 @@ const tagVariants = cva(
     defaultVariants: {
       size: "default",
     },
-  },
+  }
 );
 
 // Input component with variants
 type InputProps = Omit<
-  JSX.InputHTMLAttributes<HTMLInputElement> &
-    JSX.TextareaHTMLAttributes<HTMLTextAreaElement>,
+  JSX.InputHTMLAttributes<HTMLInputElement> & JSX.TextareaHTMLAttributes<HTMLTextAreaElement>,
   "type"
 > &
   VariantProps<typeof inputVariants> & {
@@ -179,9 +169,7 @@ export const Input = (props: InputProps) => {
     "ignorePasswordManagers",
     "autoresize",
     // Only extract these for tags variant - otherwise let them pass through
-    ...(isTagsVariant
-      ? (["value", "defaultValue", "onValueChange"] as const)
-      : []),
+    ...(isTagsVariant ? (["value", "defaultValue", "onValueChange"] as const) : []),
     "max",
     "maxLength",
     "addOnPaste",
@@ -199,9 +187,7 @@ export const Input = (props: InputProps) => {
   const hasError = createMemo(() => !!wrapperProps.error);
   const hasSuccess = createMemo(() => !!wrapperProps.success && !hasError());
 
-  const [showPassword, setShowPassword] = createSignal(
-    local.defaultVisible ?? false,
-  );
+  const [showPassword, setShowPassword] = createSignal(local.defaultVisible ?? false);
 
   // Handle controlled visibility
   const isPasswordVisible = () => local.visible ?? showPassword();
@@ -234,16 +220,10 @@ export const Input = (props: InputProps) => {
   // Combobox variant
   const isCombobox = () => effectiveVariant() === "combobox";
 
-  // ComboboxInput is a named component that owns the useFilter /
-  // useListCollection hook calls for the combobox variant. Placing these
-  // hooks inside an IIFE that is called inline in JSX creates them outside
-  // a stable Solid owner and causes SSR/client hydration mismatches
-  // ("template is not a function"). A named component fixes this.
+  // hooks need a stable Solid owner, IIFEs cause hydration errors
   const ComboboxInput: Component = () => {
     const filterFn = useFilter({ sensitivity: "base" });
-    const items = (local.options || []).map((opt) =>
-      typeof opt === "string" ? opt : opt.label,
-    );
+    const items = (local.options || []).map((opt) => (typeof opt === "string" ? opt : opt.label));
 
     const { collection, filter } = useListCollection({
       initialItems: items,
@@ -282,19 +262,15 @@ export const Input = (props: InputProps) => {
                       variant: effectiveVariant(),
                       size: local.size,
                     }),
-                    local.clearable &&
-                      (context().value.length > 0 || context().inputValue)
+                    local.clearable && (context().value.length > 0 || context().inputValue)
                       ? "pr-20"
                       : "pr-10",
-                    local.class,
+                    local.class
                   )}
                   {...others}
                 />
                 <Show
-                  when={
-                    local.clearable &&
-                    (context().value.length > 0 || context().inputValue)
-                  }
+                  when={local.clearable && (context().value.length > 0 || context().inputValue)}
                 >
                   <ArkCombobox.ClearTrigger class="absolute right-10 top-0 h-full px-2 text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center disabled:opacity-50">
                     <IconX class="h-3.5 w-3.5" />
@@ -323,9 +299,7 @@ export const Input = (props: InputProps) => {
                             <Show
                               when={
                                 collection().stringifyItem(item) &&
-                                context().value.includes(
-                                  collection().stringifyItem(item) ?? "",
-                                )
+                                context().value.includes(collection().stringifyItem(item) ?? "")
                               }
                             >
                               <ArkCombobox.ItemIndicator class="ml-auto inline-flex h-4 w-4 items-center justify-center shrink-0">
@@ -346,11 +320,7 @@ export const Input = (props: InputProps) => {
     );
   };
 
-  // InputContent is a named component so SolidJS treats it as a reactive node
-  // in the render tree. Calling a plain helper as {renderInput()} bakes its
-  // result into a static snapshot — a named component re-runs when its tracked
-  // signals (isPasswordVisible, effectiveVariant, etc.) change, preventing
-  // "template is not a function" hydration errors.
+  // named component so signals trigger re-render (plain helpers cause hydration errors)
   const InputContent: Component = () => (
     <Show
       when={!isTags() && !isTextarea() && !isCombobox()}
@@ -368,7 +338,7 @@ export const Input = (props: InputProps) => {
                       variant: effectiveVariant(),
                       size: local.size,
                     }),
-                    local.class,
+                    local.class
                   )}
                   // biome-ignore lint/suspicious/noExplicitAny: ark-ui type compatibility
                   {...(others as any)}
@@ -404,7 +374,7 @@ export const Input = (props: InputProps) => {
                             variant: effectiveVariant(),
                             size: local.size,
                           }),
-                          local.class,
+                          local.class
                         )}
                       >
                         <Index each={api().value}>
@@ -413,7 +383,7 @@ export const Input = (props: InputProps) => {
                               <ArkTagsInput.ItemPreview
                                 class={cn(
                                   tagVariants({ size: local.size }),
-                                  "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+                                  "data-highlighted:bg-accent data-highlighted:text-accent-foreground"
                                 )}
                               >
                                 <ArkTagsInput.ItemText class="select-none">
@@ -466,15 +436,13 @@ export const Input = (props: InputProps) => {
               required={local.required}
               data-1p-ignore={local.ignorePasswordManagers}
               data-lpignore={local.ignorePasswordManagers}
-              data-form-type={
-                local.ignorePasswordManagers ? "other" : undefined
-              }
+              data-form-type={local.ignorePasswordManagers ? "other" : undefined}
               class={cn(
                 inputVariants({
                   variant: effectiveVariant(),
                   size: local.size,
                 }),
-                local.class,
+                local.class
               )}
               {...others}
             />
@@ -484,11 +452,7 @@ export const Input = (props: InputProps) => {
               disabled={local.disabled}
               class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isPasswordVisible() ? (
-                <IconEyeOff class="h-4 w-4" />
-              ) : (
-                <IconEye class="h-4 w-4" />
-              )}
+              {isPasswordVisible() ? <IconEyeOff class="h-4 w-4" /> : <IconEye class="h-4 w-4" />}
             </button>
           </div>
         }
@@ -506,7 +470,7 @@ export const Input = (props: InputProps) => {
             inputVariants({ variant: effectiveVariant(), size: local.size }),
             hasError() && "border-destructive focus-visible:ring-destructive",
             hasSuccess() && "border-green-500 focus-visible:ring-green-500",
-            local.class,
+            local.class
           )}
           {...others}
         />
@@ -533,7 +497,7 @@ export const Input = (props: InputProps) => {
           for={fieldId()}
           class={cn(
             "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
-            wrapperProps.labelClass,
+            wrapperProps.labelClass
           )}
         >
           {wrapperProps.label}

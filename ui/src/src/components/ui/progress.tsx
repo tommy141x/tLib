@@ -118,9 +118,7 @@ export const Progress: Component<ProgressProps> = (props) => {
               {(context) => (
                 <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div class="text-2xl font-bold text-primary">
-                    {context().value !== null
-                      ? `${Math.round(context().value ?? 0)}%`
-                      : "..."}
+                    {context().value !== null ? `${Math.round(context().value ?? 0)}%` : "..."}
                   </div>
                 </div>
               )}

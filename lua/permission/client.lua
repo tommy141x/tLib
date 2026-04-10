@@ -1,10 +1,5 @@
--- tLib/lua/permission/client.lua
--- Client-side admin permission cache. Populated from server.
---
--- Permission levels (mirrors server):
---   0 = no access
---   1 = admin  (ace: tlib.admin)
---   2 = superadmin (ace: tlib.superadmin)
+-- client-side permission cache, populated from server
+-- 0 = none, 1 = admin, 2 = superadmin
 
 local permLevel = 0
 local isAdmin   = false  -- kept for backward compat: true when permLevel >= 1

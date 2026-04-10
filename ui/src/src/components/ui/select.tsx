@@ -2,15 +2,7 @@ import { Select as ArkSelect, createListCollection } from "@ark-ui/solid";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ClassValue } from "clsx";
 import clsx from "clsx";
-import {
-  createContext,
-  createMemo,
-  For,
-  type JSX,
-  Show,
-  splitProps,
-  useContext,
-} from "solid-js";
+import { createContext, createMemo, For, type JSX, Show, splitProps, useContext } from "solid-js";
 import { Motion, Presence } from "solid-motionone";
 import { unoMerge } from "unocss-merge";
 import IconCheck from "~icons/lucide/check";
@@ -26,8 +18,7 @@ const selectTriggerVariants = cva(
     variants: {
       variant: {
         default: "border border-input bg-background text-foreground",
-        outline:
-          "border border-input bg-transparent text-foreground hover:bg-accent",
+        outline: "border border-input bg-transparent text-foreground hover:bg-accent",
         ghost: "border-0 hover:bg-accent hover:text-accent-foreground",
       },
       size: {
@@ -40,7 +31,7 @@ const selectTriggerVariants = cva(
       variant: "default",
       size: "default",
     },
-  },
+  }
 );
 
 // Context for Select
@@ -81,7 +72,7 @@ export const Select = (props: SelectProps) => {
   const [local, triggerVariants, others] = splitProps(
     props,
     ["children", "class"],
-    ["variant", "size"],
+    ["variant", "size"]
   );
 
   const itemsArray: SelectItemData[] = [];
@@ -128,25 +119,21 @@ export const Select = (props: SelectProps) => {
               selectTriggerVariants({
                 variant: triggerVariants.variant,
                 size: triggerVariants.size,
-              }),
+              })
             )}
           >
             <ArkSelect.Context>
               {(context) => {
                 const selectedValues = () => context().value;
                 const selectedItems = () =>
-                  itemsArray.filter((item) =>
-                    selectedValues().includes(item.value),
-                  );
+                  itemsArray.filter((item) => selectedValues().includes(item.value));
 
                 return (
                   <div class="flex items-center gap-2 flex-1 min-w-0">
                     <Show
                       when={selectedItems().length > 0}
                       fallback={
-                        <span class="text-muted-foreground">
-                          {contextValue.getPlaceholder()}
-                        </span>
+                        <span class="text-muted-foreground">{contextValue.getPlaceholder()}</span>
                       }
                     >
                       <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -222,10 +209,7 @@ export const Select = (props: SelectProps) => {
                           }
                         >
                           <For each={collection().group()}>
-                            {([groupLabel, groupItems]: [
-                              string,
-                              SelectItemData[],
-                            ]) => (
+                            {([groupLabel, groupItems]: [string, SelectItemData[]]) => (
                               <ArkSelect.ItemGroup class="p-1 not-first:pt-2">
                                 <ArkSelect.ItemGroupLabel class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
                                   {groupLabel}
@@ -283,8 +267,7 @@ export const SelectPlaceholder = (props: { children: string }) => {
 export const SelectItem = (props: { value: string; children: JSX.Element }) => {
   const context = useContext(SelectContext);
   if (context) {
-    const label =
-      typeof props.children === "string" ? props.children : props.value;
+    const label = typeof props.children === "string" ? props.children : props.value;
     const item: SelectItemData = {
       value: props.value,
       label: label,
@@ -315,11 +298,7 @@ export const SelectGroup = (props: { children: JSX.Element }) => {
     },
   };
 
-  return (
-    <SelectContext.Provider value={groupContext}>
-      {props.children}
-    </SelectContext.Provider>
-  );
+  return <SelectContext.Provider value={groupContext}>{props.children}</SelectContext.Provider>;
 };
 
 // SelectLabel component (for group labels)
@@ -337,10 +316,7 @@ export { createListCollection };
 // Composable API for advanced usage
 export const SelectRoot = ArkSelect.Root;
 
-export const SelectTrigger = (props: {
-  children?: JSX.Element;
-  class?: string;
-}) => {
+export const SelectTrigger = (props: { children?: JSX.Element; class?: string }) => {
   const [local, others] = splitProps(props, ["class", "children"]);
   return (
     <ArkSelect.Control>
@@ -351,16 +327,13 @@ export const SelectTrigger = (props: {
   );
 };
 
-export const SelectValueText = (props: {
-  placeholder?: string;
-  class?: string;
-}) => {
+export const SelectValueText = (props: { placeholder?: string; class?: string }) => {
   const [local, others] = splitProps(props, ["class", "placeholder"]);
   return (
     <ArkSelect.ValueText
       class={cn(
         "flex-1 text-left truncate data-placeholder-shown:text-muted-foreground",
-        local.class,
+        local.class
       )}
       placeholder={local.placeholder}
       {...others}
@@ -368,17 +341,11 @@ export const SelectValueText = (props: {
   );
 };
 
-export const SelectIndicator = (props: {
-  children?: JSX.Element;
-  class?: string;
-}) => {
+export const SelectIndicator = (props: { children?: JSX.Element; class?: string }) => {
   const [local, others] = splitProps(props, ["class", "children"]);
   return (
     <ArkSelect.Indicator
-      class={cn(
-        "transition-transform duration-200 data-[state=open]:rotate-180",
-        local.class,
-      )}
+      class={cn("transition-transform duration-200 data-[state=open]:rotate-180", local.class)}
       {...others}
     >
       {local.children || <IconChevronDown class="h-4 w-4" />}

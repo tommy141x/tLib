@@ -1,35 +1,8 @@
-/**
- * HUD DevTools — browser-side development panel for previewing HTML layouts.
- *
- * When a ui.html layout is opened directly in a browser (not FiveM NUI),
- * this module detects the environment and injects a floating devtools panel
- * that lets designers manipulate state values and see the layout respond.
- *
- * Usage — instantiate directly:
- *   const binder = new HudBinder(root, { onAction: ... });
- *   binder.scan();
- *   new HudDevTools(root, binder, controls, options);
- *
- * Control types:
- *   toggle  — on/off boolean (checkbox-style button)
- *   slider  — numeric range (min/max/step)
- *   select  — dropdown from a list of string options
- *   text    — free-form text input
- *
- * Built-in panel controls (always present):
- *   Scale        — scales the root element via CSS transform
- *   Show Buttons — highlights all [data-hud-btn] elements with a blue overlay
- *   Layout Editor — drag/resize any data-hud-* element, shows coordinates, exports CSS/JSON
- *
- * Environment detection:
- *   FiveM NUI has `window.invokeNative` — if absent, we're in a regular browser.
- */
+// floating devtools panel for previewing HUD layouts in a regular browser.
+// if window.invokeNative exists we're in FiveM NUI, otherwise inject the panel.
 
-import { HudBinder } from "./hud-template";
+import type { HudBinder } from "./hud-template";
 
-// ── Layout editor target attributes ───────────────────────────────────────────
-
-/** All data-hud-* attributes whose elements are selectable in the layout editor. */
 const EDITABLE_ATTRS = [
   "data-hud-btn",
   "data-hud-text",
@@ -44,8 +17,6 @@ const EDITABLE_ATTRS = [
 
 const EDITABLE_SELECTOR = EDITABLE_ATTRS.map((a) => `[${a}]`).join(", ");
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
 export interface DevToolControl {
   type: "toggle" | "slider" | "select" | "text";
   key: string;
@@ -59,19 +30,13 @@ export interface DevToolControl {
   options?: string[];
 }
 
-/** Resolved identity for a data-hud-* element used by the layout editor. */
 interface HudElementIdentity {
-  /** Short display label shown in the panel and floating label. */
   label: string;
-  /** CSS selector suitable for pasting into a stylesheet. */
   cssSelector: string;
-  /** The attribute value (key) used in the JSON export. */
   key: string;
-  /** Which data-hud-* attribute identified this element. */
   attr: string;
 }
 
-/** Internal tracking record for each element wired up by the layout editor. */
 interface EditorElement {
   el: HTMLElement;
   label: HTMLElement;
@@ -80,18 +45,13 @@ interface EditorElement {
   savedOverflow: string;
   savedPosition: string;
   savedPointerEvents: string;
-  /** True when we converted a position:static element to absolute so left/top work.
-   *  Reset uses this to fully revert the element; disable does NOT restore it so
-   *  edits persist after toggling the editor off. */
+  // true if we flipped static → absolute. reset reverts this, disable doesn't.
   wasConverted: boolean;
   clickCapture: (e: MouseEvent) => void;
   dragDown: (e: MouseEvent) => void;
   resizeDown: (e: MouseEvent) => void;
 }
 
-// ── Environment detection ──────────────────────────────────────────────────────
-
-/** Returns true if running inside FiveM's NUI browser (CEF). */
 export function isNUI(): boolean {
   try {
     return typeof (window as any).invokeNative === "function";
@@ -100,14 +60,9 @@ export function isNUI(): boolean {
   }
 }
 
-// ── HudDevTools ───────────────────────────────────────────────────────────────
-
 export interface HudDevToolsOptions {
-  /** Extra hardcoded state values not exposed as controls (e.g. display text defaults). */
   defaults?: Record<string, unknown>;
-  /** Called before every binder.update() — mutate state in place for derived values. */
   beforeUpdate?: (state: Record<string, unknown>) => void;
-  /** Called after every binder.update() — use for DOM side-effects (alert overlays, text fitting, etc.). */
   afterUpdate?: (state: Record<string, unknown>) => void;
 }
 
@@ -142,7 +97,11 @@ export class HudDevTools {
     this.beforeUpdate = options?.beforeUpdate;
     this.afterUpdate = options?.afterUpdate;
     const pathSegment =
-      location.pathname.replace(/\/ui\.html$/i, "").split("/").filter(Boolean).pop() ??
+      location.pathname
+        .replace(/\/ui\.html$/i, "")
+        .split("/")
+        .filter(Boolean)
+        .pop() ??
       location.pathname.replace(/[^a-z0-9]/gi, "_") ??
       "default";
     this.storageKey = `hud-devtools:${pathSegment}`;
@@ -180,8 +139,6 @@ export class HudDevTools {
     this.makeDraggable();
   }
 
-  // ── State helpers ──────────────────────────────────────────────────────────
-
   private setNested(key: string, value: unknown): void {
     if (key.includes(".")) {
       const parts = key.split(".");
@@ -214,7 +171,13 @@ export class HudDevTools {
   private deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): void {
     for (const k of Object.keys(source)) {
       const sv = source[k];
-      if (sv && typeof sv === "object" && !Array.isArray(sv) && target[k] && typeof target[k] === "object") {
+      if (
+        sv &&
+        typeof sv === "object" &&
+        !Array.isArray(sv) &&
+        target[k] &&
+        typeof target[k] === "object"
+      ) {
         this.deepMerge(target[k] as Record<string, unknown>, sv as Record<string, unknown>);
       } else {
         target[k] = sv;
@@ -240,10 +203,14 @@ export class HudDevTools {
 
   private controlDefault(ctrl: DevToolControl): unknown {
     switch (ctrl.type) {
-      case "toggle": return false;
-      case "slider": return ctrl.min ?? 0;
-      case "select": return ctrl.options?.[0] ?? "";
-      case "text":   return "";
+      case "toggle":
+        return false;
+      case "slider":
+        return ctrl.min ?? 0;
+      case "select":
+        return ctrl.options?.[0] ?? "";
+      case "text":
+        return "";
     }
   }
 
@@ -255,18 +222,16 @@ export class HudDevTools {
     this.saveState();
   }
 
-  // ── Panel construction ─────────────────────────────────────────────────────
-
   private buildPanel(): HTMLElement {
     const panel = document.createElement("div");
     panel.className = "hud-devtools";
     panel.innerHTML =
       '<div class="hdt-header">' +
-        '<span class="hdt-title">\u2699 DevTools</span>' +
-        '<div style="display:flex;gap:4px">' +
-          '<button class="hdt-reset" title="Reset to defaults">Reset</button>' +
-          '<button class="hdt-collapse" title="Collapse">\u2014</button>' +
-        "</div>" +
+      '<span class="hdt-title">\u2699 DevTools</span>' +
+      '<div style="display:flex;gap:4px">' +
+      '<button class="hdt-reset" title="Reset to defaults">Reset</button>' +
+      '<button class="hdt-collapse" title="Collapse">\u2014</button>' +
+      "</div>" +
       "</div>" +
       '<div class="hdt-body"></div>';
 
@@ -283,19 +248,20 @@ export class HudDevTools {
     });
 
     // Reset
-    panel.querySelector(".hdt-reset")!.addEventListener("click", (e) => {
+    panel.querySelector(".hdt-reset")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this.clearSavedState();
       location.reload();
     });
 
-    // ── Scale ──
     const scaleKey = `${this.storageKey}:scale`;
     let savedScale = 1;
     try {
       const ss = localStorage.getItem(scaleKey);
       if (ss) savedScale = parseFloat(ss) || 1;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     this.root.style.transform = `scale(${savedScale})`;
     this.root.style.transformOrigin = "center center";
 
@@ -311,7 +277,9 @@ export class HudDevTools {
       const slider = document.createElement("input");
       slider.type = "range";
       slider.className = "hdt-slider";
-      slider.min = "0.5"; slider.max = "3"; slider.step = "0.1";
+      slider.min = "0.5";
+      slider.max = "3";
+      slider.step = "0.1";
       slider.value = String(savedScale);
       const val = document.createElement("span");
       val.className = "hdt-value";
@@ -320,7 +288,11 @@ export class HudDevTools {
         const v = parseFloat(slider.value);
         this.root.style.transform = `scale(${v})`;
         val.textContent = v.toFixed(1);
-        try { localStorage.setItem(scaleKey, String(v)); } catch { /* ignore */ }
+        try {
+          localStorage.setItem(scaleKey, String(v));
+        } catch {
+          /* ignore */
+        }
       });
       wrap.appendChild(slider);
       wrap.appendChild(val);
@@ -328,10 +300,13 @@ export class HudDevTools {
       body.appendChild(row);
     }
 
-    // ── Show Buttons ──
     const btnHighlightKey = `${this.storageKey}:btnHighlight`;
     let btnHighlightOn = false;
-    try { btnHighlightOn = localStorage.getItem(btnHighlightKey) === "1"; } catch { /* ignore */ }
+    try {
+      btnHighlightOn = localStorage.getItem(btnHighlightKey) === "1";
+    } catch {
+      /* ignore */
+    }
 
     if (!document.getElementById("hdt-btn-highlight-style")) {
       const hlStyle = document.createElement("style");
@@ -361,14 +336,17 @@ export class HudDevTools {
         this.root.classList.toggle("hdt-btn-highlight", btnHighlightOn);
         btn.textContent = btnHighlightOn ? "ON" : "OFF";
         btn.classList.toggle("active", btnHighlightOn);
-        try { localStorage.setItem(btnHighlightKey, btnHighlightOn ? "1" : "0"); } catch { /* ignore */ }
+        try {
+          localStorage.setItem(btnHighlightKey, btnHighlightOn ? "1" : "0");
+        } catch {
+          /* ignore */
+        }
       });
       wrap.appendChild(btn);
       row.appendChild(wrap);
       body.appendChild(row);
     }
 
-    // ── Layout Editor ──
     {
       const row = document.createElement("div");
       row.className = "hdt-row";
@@ -403,18 +381,20 @@ export class HudDevTools {
     this.editorExportRow = document.createElement("div");
     this.editorExportRow.className = "hdt-editor-exports";
     this.editorExportRow.style.display = "none";
-    this.editorExportRow.appendChild(this.makeExportButton("Copy CSS",  () => this.copyEditorCSS()));
-    this.editorExportRow.appendChild(this.makeExportButton("Copy JSON", () => this.copyEditorJSON()));
-    this.editorExportRow.appendChild(this.makeExportButton("Log",       () => this.logEditorToConsole()));
-    this.editorExportRow.appendChild(this.makeExportButton("Revert",    () => this.resetEditorLayout()));
+    this.editorExportRow.appendChild(this.makeExportButton("Copy CSS", () => this.copyEditorCSS()));
+    this.editorExportRow.appendChild(
+      this.makeExportButton("Copy JSON", () => this.copyEditorJSON())
+    );
+    this.editorExportRow.appendChild(this.makeExportButton("Log", () => this.logEditorToConsole()));
+    this.editorExportRow.appendChild(
+      this.makeExportButton("Revert", () => this.resetEditorLayout())
+    );
     body.appendChild(this.editorExportRow);
 
-    // ── Separator ──
     const sep = document.createElement("div");
     sep.style.cssText = "height:1px;background:hsl(225 10% 30%/.6);margin:2px 0";
     body.appendChild(sep);
 
-    // ── User controls ──
     for (const ctrl of this.controls) {
       const row = document.createElement("div");
       row.className = "hdt-row";
@@ -512,7 +492,10 @@ export class HudDevTools {
   private makeDraggable(): void {
     const header = this.panel.querySelector(".hdt-header") as HTMLElement;
     let dragging = false;
-    let startX = 0, startY = 0, startLeft = 0, startTop = 0;
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
 
     header.addEventListener("mousedown", (e) => {
       if ((e.target as HTMLElement).tagName === "BUTTON") return;
@@ -528,7 +511,7 @@ export class HudDevTools {
     window.addEventListener("mousemove", (e) => {
       if (!dragging) return;
       this.panel.style.left = `${startLeft + (e.clientX - startX)}px`;
-      this.panel.style.top  = `${startTop  + (e.clientY - startY)}px`;
+      this.panel.style.top = `${startTop + (e.clientY - startY)}px`;
       this.panel.style.right = "auto";
     });
 
@@ -537,29 +520,40 @@ export class HudDevTools {
     });
   }
 
-  // ── Layout Editor ──────────────────────────────────────────────────────────
-
   private getEditorScale(): number {
     const m = this.root.style.transform.match(/scale\(([\d.]+)\)/);
     return m ? parseFloat(m[1]) : 1;
   }
 
-  private getElementGeometry(el: HTMLElement): { left: number; top: number; width: number; height: number } {
+  private getElementGeometry(el: HTMLElement): {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } {
     const cs = getComputedStyle(el);
     const scale = this.getEditorScale();
 
     // Lazily-cached rects — at most one getBoundingClientRect call per rect per call.
     let rootRect: DOMRect | null = null;
-    let elRect:   DOMRect | null = null;
-    const getElRect   = (): DOMRect => { if (!elRect)   elRect   = el.getBoundingClientRect();         return elRect; };
-    const getRootRect = (): DOMRect => { if (!rootRect) rootRect = this.root.getBoundingClientRect();   return rootRect; };
+    let elRect: DOMRect | null = null;
+    const getElRect = (): DOMRect => {
+      if (!elRect) elRect = el.getBoundingClientRect();
+      return elRect;
+    };
+    const getRootRect = (): DOMRect => {
+      if (!rootRect) rootRect = this.root.getBoundingClientRect();
+      return rootRect;
+    };
 
     // width/height: prefer inline → computed (if non-zero numeric) → actual bounding rect.
     // parseFloat("auto") = NaN, which is falsy, so auto-sized elements fall through to the rect.
-    const width  = el.style.width  ? parseFloat(el.style.width)
-                 : (parseFloat(cs.width)  || getElRect().width  / scale);
-    const height = el.style.height ? parseFloat(el.style.height)
-                 : (parseFloat(cs.height) || getElRect().height / scale);
+    const width = el.style.width
+      ? parseFloat(el.style.width)
+      : parseFloat(cs.width) || getElRect().width / scale;
+    const height = el.style.height
+      ? parseFloat(el.style.height)
+      : parseFloat(cs.height) || getElRect().height / scale;
 
     // left/top: prefer inline → computed (if not "auto") → bounding rect relative to root.
     const getOffset = (inline: string, computed: string, side: "left" | "top"): number => {
@@ -569,14 +563,14 @@ export class HudDevTools {
     };
 
     return {
-      left:   Math.round(getOffset(el.style.left, cs.left, "left")),
-      top:    Math.round(getOffset(el.style.top,  cs.top,  "top")),
-      width:  Math.round(width),
+      left: Math.round(getOffset(el.style.left, cs.left, "left")),
+      top: Math.round(getOffset(el.style.top, cs.top, "top")),
+      width: Math.round(width),
       height: Math.round(height),
     };
   }
 
-  /** Nearest non-static ancestor within root — becomes the containing block when position:absolute is set. */
+  // nearest non-static ancestor (containing block for position:absolute)
   private getContainingBlock(el: HTMLElement): HTMLElement {
     let p = el.parentElement;
     while (p && p !== this.root) {
@@ -586,14 +580,8 @@ export class HudDevTools {
     return this.root;
   }
 
-  /** Collect all elements the layout editor should make editable.
-   *  Three passes cover every meaningful layout element:
-   *  1. All data-hud-* bound elements (text, buttons, LEDs, show/hide, etc.)
-   *  2. All absolutely-positioned descendants (decoratives not using hud bindings)
-   *  3. All <img> and <svg> elements (icons that may be statically positioned)
-   *
-   *  Deduplication: if an element's nearest positioned ancestor (its containing block)
-   *  is also in the set, the child is excluded. The child will move with the parent,
+  /** Three passes: data-hud-* elements, absolute-positioned descendants, img/svg.
+   *  Deduped: if parent is already in set, child is excluded (moves with parent
    *  and including both creates duplicate overlapping outlines/labels. */
   private getEditableElements(): HTMLElement[] {
     const seen = new Set<HTMLElement>();
@@ -606,12 +594,9 @@ export class HudDevTools {
     for (const el of this.root.querySelectorAll<HTMLElement>("img, svg")) {
       seen.add(el);
     }
-    // Deduplication: if a data-hud-* bound element's containing block is also in the
-    // set, exclude the bound element — it's a text/LED/show node inside a positioned
-    // container, and both having outlines creates confusing "ghost" duplicates.
-    // img/svg elements are NOT deduplicated — they have fixed CSS sizes and must be
-    // independently selectable/resizable regardless of whether their parent is in the set.
-    return [...seen].filter(el => {
+    // skip elements whose containing block is already editable (avoids ghost outlines)
+    // exception: img/svg always selectable since they have their own CSS sizes
+    return [...seen].filter((el) => {
       if (!el.matches(EDITABLE_SELECTOR)) return true;
       const cb = this.getContainingBlock(el);
       return cb === this.root || !seen.has(cb);
@@ -651,16 +636,19 @@ export class HudDevTools {
         const orig = btn.textContent;
         btn.textContent = "✓";
         btn.classList.add("active");
-        setTimeout(() => { btn.textContent = orig; btn.classList.remove("active"); }, 1200);
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove("active");
+        }, 1200);
       }
     });
     return btn;
   }
 
-  /** Returns entries that were explicitly repositioned or resized in this editor session. */
+  // only returns elements the user actually moved/resized
   private getDirtyElements(): EditorElement[] {
-    return this.editorElements.filter(({ el }) =>
-      el.style.left || el.style.top || el.style.width || el.style.height
+    return this.editorElements.filter(
+      ({ el }) => el.style.left || el.style.top || el.style.width || el.style.height
     );
   }
 
@@ -684,7 +672,12 @@ export class HudDevTools {
     if (cls) {
       return { label: `.${cls}`, cssSelector: `.${cls}`, key: cls, attr: "" };
     }
-    return { label: el.tagName.toLowerCase(), cssSelector: el.tagName.toLowerCase(), key: el.tagName.toLowerCase(), attr: "" };
+    return {
+      label: el.tagName.toLowerCase(),
+      cssSelector: el.tagName.toLowerCase(),
+      key: el.tagName.toLowerCase(),
+      attr: "",
+    };
   }
 
   // Stored so we can remove the exact same listener reference in disableLayoutEditor
@@ -702,23 +695,23 @@ export class HudDevTools {
     // Converting element A to absolute removes it from normal flow, which would shift
     // element B's getBoundingClientRect() if we computed them one-by-one during the loop.
     type Conversion = { left: number; top: number; width: number; height: number } | null;
-    const conversions: Conversion[] = elements.map(el => {
+    const conversions: Conversion[] = elements.map((el) => {
       if (getComputedStyle(el).position !== "static") return null;
-      const cb     = this.getContainingBlock(el);
+      const cb = this.getContainingBlock(el);
       const cbRect = cb.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
       // Position relative to the containing block (where absolute coords are measured from).
       // Use actual bounding rect dimensions to handle inline/auto-sized elements correctly.
       return {
-        left:   Math.round((elRect.left   - cbRect.left) / scale),
-        top:    Math.round((elRect.top    - cbRect.top)  / scale),
-        width:  Math.round(elRect.width   / scale),
-        height: Math.round(elRect.height  / scale),
+        left: Math.round((elRect.left - cbRect.left) / scale),
+        top: Math.round((elRect.top - cbRect.top) / scale),
+        width: Math.round(elRect.width / scale),
+        height: Math.round(elRect.height / scale),
       };
     });
 
     for (let i = 0; i < elements.length; i++) {
-      const el   = elements[i];
+      const el = elements[i];
       const conv = conversions[i];
       const identity = this.getElementIdentity(el);
 
@@ -727,10 +720,10 @@ export class HudDevTools {
       let wasConverted = false;
       if (conv) {
         el.style.position = "absolute";
-        el.style.left     = `${conv.left}px`;
-        el.style.top      = `${conv.top}px`;
-        el.style.width    = `${conv.width}px`;
-        el.style.height   = `${conv.height}px`;
+        el.style.left = `${conv.left}px`;
+        el.style.top = `${conv.top}px`;
+        el.style.width = `${conv.width}px`;
+        el.style.height = `${conv.height}px`;
         wasConverted = true;
       }
 
@@ -768,13 +761,14 @@ export class HudDevTools {
         e.preventDefault();
         e.stopPropagation();
         const scale = this.getEditorScale();
-        const x0 = e.clientX, y0 = e.clientY;
+        const x0 = e.clientX;
+        const y0 = e.clientY;
         const { left: l0, top: t0 } = this.getElementGeometry(el);
         this.selectEditorElement(el);
 
         const onMove = (ev: MouseEvent): void => {
           el.style.left = `${Math.round(l0 + (ev.clientX - x0) / scale)}px`;
-          el.style.top  = `${Math.round(t0 + (ev.clientY - y0) / scale)}px`;
+          el.style.top = `${Math.round(t0 + (ev.clientY - y0) / scale)}px`;
           this.updateEditorInfo(el);
         };
         const onUp = (): void => {
@@ -791,12 +785,13 @@ export class HudDevTools {
         e.preventDefault();
         e.stopPropagation();
         const scale = this.getEditorScale();
-        const x0 = e.clientX, y0 = e.clientY;
+        const x0 = e.clientX;
+        const y0 = e.clientY;
         const { width: w0, height: h0 } = this.getElementGeometry(el);
         this.selectEditorElement(el);
 
         const onMove = (ev: MouseEvent): void => {
-          el.style.width  = `${Math.max(8, Math.round(w0 + (ev.clientX - x0) / scale))}px`;
+          el.style.width = `${Math.max(8, Math.round(w0 + (ev.clientX - x0) / scale))}px`;
           el.style.height = `${Math.max(8, Math.round(h0 + (ev.clientY - y0) / scale))}px`;
           this.updateEditorInfo(el);
           // Re-run afterUpdate so fit-text and other size-dependent DOM effects update live
@@ -812,9 +807,17 @@ export class HudDevTools {
       handle.addEventListener("mousedown", resizeDown);
 
       const entry: EditorElement = {
-        el, label, handle, identity,
-        savedOverflow, savedPosition, savedPointerEvents, wasConverted,
-        clickCapture, dragDown, resizeDown,
+        el,
+        label,
+        handle,
+        identity,
+        savedOverflow,
+        savedPosition,
+        savedPointerEvents,
+        wasConverted,
+        clickCapture,
+        dragDown,
+        resizeDown,
       };
       this.editorElements.push(entry);
       this.editorElementMap.set(el, entry);
@@ -830,15 +833,24 @@ export class HudDevTools {
       this.root.removeEventListener("dragstart", this.editorDragStartHandler);
       this.editorDragStartHandler = null;
     }
-    for (const { el, label, handle, savedOverflow, savedPointerEvents, clickCapture, dragDown, resizeDown } of this.editorElements) {
+    for (const {
+      el,
+      label,
+      handle,
+      savedOverflow,
+      savedPointerEvents,
+      clickCapture,
+      dragDown,
+      resizeDown,
+    } of this.editorElements) {
       el.removeEventListener("click", clickCapture, true);
       el.removeEventListener("mousedown", dragDown);
       handle.removeEventListener("mousedown", resizeDown);
       label.remove();
       handle.remove();
       el.classList.remove("hdt-editor-el", "hdt-editor-selected");
-      el.style.cursor        = "";
-      el.style.overflow      = savedOverflow;
+      el.style.cursor = "";
+      el.style.overflow = savedOverflow;
       el.style.pointerEvents = savedPointerEvents;
       // Intentionally do NOT restore position for converted elements: their new absolute
       // coordinates represent the designer's edit and should persist after toggling off.
@@ -853,7 +865,10 @@ export class HudDevTools {
 
   private copyEditorCSS(): void {
     const dirty = this.getDirtyElements();
-    if (!dirty.length) { console.log("%c[DevTools] No elements moved — nothing to copy", "color:#f59e0b"); return; }
+    if (!dirty.length) {
+      console.log("%c[DevTools] No elements moved — nothing to copy", "color:#f59e0b");
+      return;
+    }
     const lines = dirty.map(({ el, identity, wasConverted }) => {
       const { left, top, width, height } = this.getElementGeometry(el);
       const pos = wasConverted ? "position: absolute; " : "";
@@ -861,24 +876,46 @@ export class HudDevTools {
     });
     const text = lines.join("\n");
     navigator.clipboard.writeText(text).catch(() => {});
-    console.log("%c[DevTools] Copied CSS:%c\n" + text, "color:#3b82f6;font-weight:bold", "color:inherit");
+    console.log(
+      `%c[DevTools] Copied CSS:%c\n${text}`,
+      "color:#3b82f6;font-weight:bold",
+      "color:inherit"
+    );
   }
 
   private copyEditorJSON(): void {
     const dirty = this.getDirtyElements();
-    if (!dirty.length) { console.log("%c[DevTools] No elements moved — nothing to copy", "color:#f59e0b"); return; }
+    if (!dirty.length) {
+      console.log("%c[DevTools] No elements moved — nothing to copy", "color:#f59e0b");
+      return;
+    }
     const arr = dirty.map(({ el, identity, wasConverted }) => {
       const { left, top, width, height } = this.getElementGeometry(el);
-      return { attr: identity.attr, key: identity.key, x: left, y: top, width, height, ...(wasConverted && { position: "absolute" }) };
+      return {
+        attr: identity.attr,
+        key: identity.key,
+        x: left,
+        y: top,
+        width,
+        height,
+        ...(wasConverted && { position: "absolute" }),
+      };
     });
     const text = JSON.stringify(arr, null, 2);
     navigator.clipboard.writeText(text).catch(() => {});
-    console.log("%c[DevTools] Copied JSON:%c\n" + text, "color:#3b82f6;font-weight:bold", "color:inherit");
+    console.log(
+      `%c[DevTools] Copied JSON:%c\n${text}`,
+      "color:#3b82f6;font-weight:bold",
+      "color:inherit"
+    );
   }
 
   private logEditorToConsole(): void {
     const dirty = this.getDirtyElements();
-    if (!dirty.length) { console.log("%c[DevTools] No elements moved", "color:#f59e0b"); return; }
+    if (!dirty.length) {
+      console.log("%c[DevTools] No elements moved", "color:#f59e0b");
+      return;
+    }
     console.group("%c[DevTools] Layout changes", "color:#3b82f6;font-weight:bold");
     for (const { el, identity } of dirty) {
       const { left, top, width, height } = this.getElementGeometry(el);
@@ -893,9 +930,9 @@ export class HudDevTools {
 
   private resetEditorLayout(): void {
     for (const { el, savedPosition, savedOverflow, wasConverted } of this.editorElements) {
-      el.style.left   = "";
-      el.style.top    = "";
-      el.style.width  = "";
+      el.style.left = "";
+      el.style.top = "";
+      el.style.width = "";
       el.style.height = "";
       // For converted elements, fully revert the static→absolute conversion so the
       // element returns to its original layout-flow position.
@@ -907,15 +944,11 @@ export class HudDevTools {
     this.updateEditorInfo(this.selectedEditorEl);
   }
 
-  // ── Public API ─────────────────────────────────────────────────────────────
-
   destroy(): void {
     if (this.layoutEditorOn) this.disableLayoutEditor();
     this.panel.remove();
   }
 }
-
-// ── DevTools Panel CSS ─────────────────────────────────────────────────────────
 
 const DEVTOOLS_CSS = `
 .hud-devtools {

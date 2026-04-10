@@ -3,9 +3,5 @@
   "description": "Shared UI and utility library for FiveM and Helix resources.",
   "defaultOpen": false,
   "icon": "Library",
-  "pages": [
-    "installation",
-    "exports",
-    "import-modules"
-  ]
+  "pages": ["installation", "exports", "import-modules"]
 }

@@ -1,7 +1,5 @@
 -- tLib/lua/theme/exports.lua
--- Registers all exports('tLib', ...) for the theme subsystem.
--- Themes are pure UI-side constructs — Lua holds a registry mirror so it can
--- validate ids and answer GetThemes without a round-trip to the WebUI.
+-- lua mirrors the theme registry so it can validate without hitting the UI
 
 ThemeExports  = {}
 
@@ -10,13 +8,10 @@ local log     = Logger.create('tLib/theme')
 -- WebUI reference — set once by ThemeExports.register(ui)
 local ui      = nil
 
--- ── Local theme registry (mirrors the UI-side store) ─────────────────────────
 -- Keyed by theme id. Stores the full definition table so GetThemes can return
 -- a copy without hitting the WebUI.
 
 local _themes = {}
-
--- ── Validation helpers ────────────────────────────────────────────────────────
 
 local function assertUI(fname)
     if not ui then
@@ -42,8 +37,6 @@ local function shallowCopy(t)
     return copy
 end
 
--- ── Export registration ───────────────────────────────────────────────────────
-
 function ThemeExports.register(webui)
     ui = webui
 
@@ -51,7 +44,6 @@ function ThemeExports.register(webui)
         Platform.export('tLib', name, fn)
     end
 
-    -- ── AddTheme ──────────────────────────────────────────────────────────────
     -- Registers a new theme or replaces an existing one with the same id.
     -- The definition is forwarded to the WebUI store immediately.
     --
@@ -112,7 +104,6 @@ function ThemeExports.register(webui)
         return true
     end)
 
-    -- ── RemoveTheme ───────────────────────────────────────────────────────────
     -- Removes a theme from both the Lua registry and the UI store.
     -- If the theme is currently set as the global active theme the UI will
     -- automatically clear the :root override (handled in store.ts).
@@ -136,7 +127,6 @@ function ThemeExports.register(webui)
         return true
     end)
 
-    -- ── SetTheme ──────────────────────────────────────────────────────────────
     -- Sets the global active theme, applying its CSS vars to :root in the UI.
     -- This affects the entire NUI — menus, dialogs, and toasts that do not
     -- specify their own per-component theme will inherit these vars.
@@ -170,7 +160,6 @@ function ThemeExports.register(webui)
         return true
     end)
 
-    -- ── GetThemes ─────────────────────────────────────────────────────────────
     -- Returns a copy of all registered theme definitions keyed by id.
     -- This reads from the Lua mirror so no UI round-trip is required.
     --
@@ -187,7 +176,6 @@ function ThemeExports.register(webui)
         return copy
     end)
 
-    -- ── GetTheme ──────────────────────────────────────────────────────────────
     -- Returns the definition of a single theme, or nil if not registered.
     --
     -- Parameters

@@ -73,10 +73,7 @@ export const DialogTrigger = (props: DialogTriggerProps) => {
         return (
           // biome-ignore lint/a11y/noStaticElementInteractions: transparent wrapper div
           // biome-ignore lint/a11y/useKeyWithClickEvents: child element handles keyboard
-          <div
-            onClick={() => context().setOpen(true)}
-            style={{ display: "contents" }}
-          >
+          <div onClick={() => context().setOpen(true)} style={{ display: "contents" }}>
             {resolved()}
           </div>
         );
@@ -135,7 +132,7 @@ export const DialogContent = (props: DialogContentProps) => {
                     <ArkDialog.Content
                       class={cn(
                         "relative w-full max-w-lg rounded-lg bg-background border border-border p-6 shadow-lg",
-                        local.class,
+                        local.class
                       )}
                       {...others}
                     >
@@ -162,10 +159,7 @@ export const DialogTitle = (props: DialogTitleProps) => {
   const [local, others] = splitProps(props, ["class"]);
 
   return (
-    <ArkDialog.Title
-      class={cn("text-lg font-semibold text-foreground", local.class)}
-      {...others}
-    />
+    <ArkDialog.Title class={cn("text-lg font-semibold text-foreground", local.class)} {...others} />
   );
 };
 
@@ -197,7 +191,7 @@ export const DialogCloseTrigger = (props: DialogCloseTriggerProps) => {
     <ArkDialog.CloseTrigger
       class={cn(
         "absolute right-6 top-6 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none",
-        local.class,
+        local.class
       )}
       {...others}
     >
@@ -218,12 +212,7 @@ interface DialogFooterProps {
 
 export const DialogFooter = (props: DialogFooterProps) => {
   return (
-    <div
-      class={cn(
-        "flex flex-col-reverse sm:flex-row sm:justify-end sm:gap-2 mt-6",
-        props.class,
-      )}
-    >
+    <div class={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:gap-2 mt-6", props.class)}>
       {props.children}
     </div>
   );

@@ -1,9 +1,5 @@
 -- tLib/lua/menu/state.lua
--- Owns all mutable menu data and the helpers that read or derive from it.
--- Exposes setUI, pushMenu, hideUI, patchItem, patchMenu, refreshMenu,
--- refreshItem, serialiseMenu, and the stack/lifecycle helpers used by other menu modules.
 
--- ── Shared utilities ──────────────────────────────────────────────────────────
 -- MenuUtils is defined here (the first module loaded) so that actions.lua,
 -- navigation.lua, and exports.lua can all reference it without re-defining it.
 
@@ -17,8 +13,6 @@ function MenuUtils.resolve(v, def)
     return v ~= nil and v or def
 end
 
--- ── Module ────────────────────────────────────────────────────────────────────
-
 MenuState            = {}
 
 local log            = Logger.create('tLib/menu')
@@ -29,8 +23,6 @@ local menuStack      = {}
 
 -- Convenience alias used throughout this file.
 local resolve        = MenuUtils.resolve
-
--- ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 local menuReady      = false
 local readyCallbacks = {}
@@ -51,13 +43,9 @@ function MenuState.onReady(callback)
     if menuReady then callback() else table.insert(readyCallbacks, callback) end
 end
 
--- ── UI injection ──────────────────────────────────────────────────────────────
-
 function MenuState.setUI(webui)
     ui = webui
 end
-
--- ── Id generation ─────────────────────────────────────────────────────────────
 
 local _idCounter = 0
 
@@ -65,8 +53,6 @@ function MenuState.generateId()
     _idCounter = _idCounter + 1
     return 'tlib_' .. tostring(_idCounter)
 end
-
--- ── Stack accessors ───────────────────────────────────────────────────────────
 
 function MenuState.getMenus()
     return menus
@@ -81,8 +67,6 @@ function MenuState.currentMenu()
     return menus[menuStack[#menuStack]]
 end
 
--- ── Stack mutation helpers ────────────────────────────────────────────────────
-
 function MenuState.pushToStack(menuId)
     table.insert(menuStack, menuId)
 end
@@ -95,14 +79,11 @@ function MenuState.clearStack()
     while #menuStack > 0 do table.remove(menuStack) end
 end
 
--- ── Item order counter ────────────────────────────────────────────────────────
-
 function MenuState.nextItemOrder(menu)
     menu._orderCounter = (menu._orderCounter or 0) + 1
     return menu._orderCounter
 end
 
--- ── O(1) item index management ────────────────────────────────────────────────
 -- Each menu carries a _itemIndex table (id → item) that is maintained in sync
 -- with the items array. All mutation paths (addItem, removeItem, clearItems)
 -- must go through these helpers so the index never drifts.
@@ -139,8 +120,6 @@ function MenuState.findItemById(menu, itemId)
     if not menu or not itemId then return nil end
     return menu._itemIndex[itemId]
 end
-
--- ── Serialisation helpers ─────────────────────────────────────────────────────
 
 local function filteredSortedItems(menu)
     local result = {}
@@ -288,8 +267,6 @@ function MenuState.serialiseMenu(menu)
     return serialised
 end
 
--- ── WebUI helpers ─────────────────────────────────────────────────────────────
-
 function MenuState.pushMenu()
     local menu = MenuState.currentMenu()
     if not menu then
@@ -313,8 +290,6 @@ function MenuState.preloadBanner(url)
         Platform.sendUIEvent(ui, 'preloadBanner', url)
     end)
 end
-
--- ── Granular item update ──────────────────────────────────────────────────────
 
 -- Fields resolved before sending to the UI (may be stored as functions).
 local _dynamic = { label = true, description = true, disabled = true, rightLabel = true }
@@ -360,7 +335,6 @@ function MenuState.patchItem(menuId, itemId, changes)
     end
 end
 
--- ── Menu-level patch ──────────────────────────────────────────────────────────
 -- Merges changes into Lua state and, if on top, sends a lightweight 'patchMenu'
 -- event so the UI can update reactively without a full setMenu re-push.
 
@@ -396,8 +370,6 @@ function MenuState.patchMenu(menuId, changes)
         Platform.sendUIEvent(ui, 'patchMenu', { changes = resolved })
     end
 end
-
--- ── Refresh helpers ───────────────────────────────────────────────────────────
 
 -- Force a full re-serialisation for the given menu. No-op if not on top.
 function MenuState.refreshMenu(menuId)

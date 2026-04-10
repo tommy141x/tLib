@@ -1,5 +1,4 @@
--- tLib — Layouts module
--- Layout discovery: scans a resource's directory for layout subfolders.
+-- scans a resource's directory for layout subfolders.
 --
 -- Usage (server-side — directory scanning requires io.popen):
 --   local names = tlib.layouts.scan('layouts', 'ui.html')
@@ -18,13 +17,10 @@
 
 local layouts = {}
 
---- Scan a resource directory for layout subfolders containing a marker file.
---- Server-side only (uses io.popen for directory listing).
---- Results are cached per basePath — layouts don't change at runtime.
---- @param basePath string  Path relative to resource root (e.g. "layouts")
---- @param matchFile string File that must exist in each subfolder (e.g. "ui.html")
---- @param resourceName? string  Resource to scan (default: current resource)
---- @return string[] Array of layout names, sorted alphabetically
+--- @param basePath string
+--- @param matchFile string
+--- @param resourceName? string
+--- @return string[]
 function layouts.scan(basePath, matchFile, resourceName)
     resourceName = resourceName or GetCurrentResourceName()
 
@@ -69,26 +65,23 @@ function layouts.clearCache()
     layouts._cache = {}
 end
 
---- Load a layout file's contents.
---- Works on both client and server.
---- @param basePath string   e.g. "layouts"
---- @param layoutName string e.g. "modern"
---- @param fileName string   e.g. "ui.html"
---- @param resourceName? string  Resource to load from (default: current)
---- @return string|nil File contents, or nil if not found
+--- @param basePath string
+--- @param layoutName string
+--- @param fileName string
+--- @param resourceName? string
+--- @return string|nil
 function layouts.load(basePath, layoutName, fileName, resourceName)
     resourceName = resourceName or GetCurrentResourceName()
     local path = basePath .. "/" .. layoutName .. "/" .. fileName
     return LoadResourceFile(resourceName, path)
 end
 
---- Load a layout file and replace {{KEY}} template placeholders.
 --- @param basePath string
 --- @param layoutName string
 --- @param fileName string
---- @param vars table  { KEY = "value", ... }
+--- @param vars table
 --- @param resourceName? string
---- @return string|nil Templated content, or nil if file not found
+--- @return string|nil
 function layouts.loadTemplate(basePath, layoutName, fileName, vars, resourceName)
     local content = layouts.load(basePath, layoutName, fileName, resourceName)
     if not content then return nil end
@@ -99,7 +92,6 @@ function layouts.loadTemplate(basePath, layoutName, fileName, vars, resourceName
     return content
 end
 
---- Check if a specific layout exists.
 --- @param basePath string
 --- @param layoutName string
 --- @param matchFile string

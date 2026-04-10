@@ -469,7 +469,6 @@ local function buildRequest(method, host, path, headers, body)
     return table.concat(lines, '\r\n')
 end
 
--- ── Non-blocking I/O helpers ──────────────────────────────────────────────────
 --
 -- Both helpers accept the socket module (`sockmod`) rather than a global so
 -- they work whether called for a plain TCP socket or a LuaSec TLS connection
@@ -506,7 +505,6 @@ end
 -- `deadline` — sockmod.gettime() epoch value for the overall timeout.
 -- Calls callback(err, status, body) exactly once.
 local function sendAndReceive(conn, request, sockmod, deadline, callback)
-    -- ── Non-blocking send ─────────────────────────────────────────────────
     -- conn:send(data, i) tries to send from byte i to end.
     -- On full success it returns the index of the last byte sent (= #data).
     -- On a partial non-blocking send it returns nil, 'timeout', lastByteIndex.
@@ -537,7 +535,6 @@ local function sendAndReceive(conn, request, sockmod, deadline, callback)
         end
     end
 
-    -- ── Non-blocking receive ──────────────────────────────────────────────
     -- We poll for readability before every receive call so the coroutine
     -- yields between chunks rather than blocking the VM.
     -- 'closed'              → clean end-of-stream, stop collecting.
@@ -617,7 +614,6 @@ function Http.fetch(opts, callback)
         local sockmod = require('socket')
         local deadline = sockmod.gettime() + timeout
 
-        -- ── Plain TCP connect (non-blocking) ──────────────────────────────
         local tcp = sockmod.tcp()
         tcp:settimeout(0)
 
@@ -646,7 +642,6 @@ function Http.fetch(opts, callback)
         local conn
 
         if scheme == 'https' then
-            -- ── TLS upgrade (non-blocking) ────────────────────────────────
             local tlsParams = {
                 mode     = 'client',
                 protocol = 'any',

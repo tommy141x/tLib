@@ -61,10 +61,7 @@ interface PopoverProps {
 }
 
 export const Popover = (props: PopoverProps) => {
-  const merged = mergeProps(
-    { closeOnInteractOutside: true, closeOnEscape: true },
-    props,
-  );
+  const merged = mergeProps({ closeOnInteractOutside: true, closeOnEscape: true }, props);
   return <ArkPopover.Root {...merged} />;
 };
 
@@ -113,7 +110,7 @@ export const PopoverContent = (props: PopoverContentProps) => {
                 <ArkPopover.Content
                   class={cn(
                     "z-50 w-72 rounded-lg border border-border bg-popover text-popover-foreground shadow-md outline-none",
-                    local.class,
+                    local.class
                   )}
                   {...others}
                 >
@@ -158,10 +155,7 @@ export const PopoverDescription = (props: PopoverDescriptionProps) => {
   const [local, others] = splitProps(props, ["class"]);
 
   return (
-    <ArkPopover.Description
-      class={cn("text-sm text-muted-foreground", local.class)}
-      {...others}
-    />
+    <ArkPopover.Description class={cn("text-sm text-muted-foreground", local.class)} {...others} />
   );
 };
 
@@ -177,7 +171,7 @@ export const PopoverCloseTrigger = (props: PopoverCloseTriggerProps) => {
     <ArkPopover.CloseTrigger
       class={cn(
         "rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none",
-        local.class,
+        local.class
       )}
       {...others}
     >
@@ -220,9 +214,7 @@ interface PopoverFooterProps {
 
 export const PopoverFooter = (props: PopoverFooterProps) => {
   return (
-    <div
-      class={cn("flex items-center justify-end gap-2 p-4 pt-0", props.class)}
-    >
+    <div class={cn("flex items-center justify-end gap-2 p-4 pt-0", props.class)}>
       {props.children}
     </div>
   );
