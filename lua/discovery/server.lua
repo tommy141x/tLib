@@ -1,18 +1,7 @@
 -- tLib/lua/discovery/server.lua
--- Resource discovery & external config management.
---
--- Provides a factory function (via export) that creates a Discovery instance
--- parameterized by metadata key, event prefix, and hooks. Handles:
---   - Scanning all running resources for configs tagged with a metadata key
---   - Loading/saving model configs to the correct location (local or external)
---   - Hash ↔ spawn name alias resolution and deduplication
---   - Export targets for the UI picker
---   - Exporting configs to other resources (including fxmanifest modification)
---   - Auto-registering standard server events (request, save, remove, export)
---   - Late-starting resource detection
---
--- Platform note: File I/O and resource enumeration use FiveM natives.
--- Helix equivalents are not yet known — those paths are stubbed and log a warning.
+-- scans resources for tagged configs, loads/saves them, resolves hash↔name
+-- aliases, handles manifest modification + late-start detection.
+-- file I/O is all FiveM natives, helix paths are stubbed for now.
 
 local log = Logger.create('tLib/discovery')
 
@@ -477,7 +466,11 @@ function Discovery.create(opts)
         end
 
         local function checkPerm(src)
-            if not permCheck then return true end
+            if not permCheck then
+                -- Default to admin check when no permissionCheck is provided.
+                -- This prevents unauthenticated filesystem writes.
+                return Permission.isPlayerAdmin(src)
+            end
             return permCheck(src)
         end
 

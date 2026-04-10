@@ -407,42 +407,54 @@ end
 -- the idiomatic Helix pattern shown in the docs.
 -- _unwrapValue is available here so shim keys are resolved before scheduling.
 
+-- Map from tLib handle → native Helix timer handle, so Clear* can pass the
+-- correct native handle back to the Helix Timer API.
+local _nativeTimerHandles = {}
+
 if _TLIB_IS_HELIX then
     function Platform.setInterval(fn, ms)
         local realFn = _unwrapValue(fn)
         local handle = _nextHandle()
         _timerHandles[handle] = true
-        Timer.SetInterval(function()
+        local nativeHandle = Timer.SetInterval(function()
             if _timerHandles[handle] then
                 realFn()
             else
-                Timer.ClearInterval(handle)
+                Timer.ClearInterval(_nativeTimerHandles[handle] or handle)
+                _nativeTimerHandles[handle] = nil
             end
         end, ms)
+        _nativeTimerHandles[handle] = nativeHandle
         return handle
     end
 
     function Platform.clearInterval(handle)
         _timerHandles[handle] = nil
-        Timer.ClearInterval(handle)
+        local native = _nativeTimerHandles[handle]
+        _nativeTimerHandles[handle] = nil
+        Timer.ClearInterval(native or handle)
     end
 
     function Platform.setTimeout(fn, ms)
         local realFn = _unwrapValue(fn)
         local handle = _nextHandle()
         _timerHandles[handle] = true
-        Timer.SetTimeout(function()
+        local nativeHandle = Timer.SetTimeout(function()
             if _timerHandles[handle] then
                 _timerHandles[handle] = nil
+                _nativeTimerHandles[handle] = nil
                 realFn()
             end
         end, ms)
+        _nativeTimerHandles[handle] = nativeHandle
         return handle
     end
 
     function Platform.clearTimeout(handle)
         _timerHandles[handle] = nil
-        Timer.ClearTimeout(handle)
+        local native = _nativeTimerHandles[handle]
+        _nativeTimerHandles[handle] = nil
+        Timer.ClearTimeout(native or handle)
     end
 end
 

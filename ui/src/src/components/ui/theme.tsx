@@ -102,7 +102,7 @@ export const ThemeProvider: Component<ThemeProviderProps> = (props) => {
 
   const [themes] = createSignal<ThemeDefinition[]>(config.themes);
 
-  // Initialize theme - always start with default to avoid hydration mismatch
+  // start with default — picking from storage here causes hydration mismatch
   const [theme, setThemeState] = createSignal<string>(
     config.defaultTheme || config.themes[0]?.id || "",
   );
@@ -265,7 +265,6 @@ export const ThemeProvider: Component<ThemeProviderProps> = (props) => {
     return () => window.removeEventListener("storage", handleStorageChange);
   });
 
-  // Initialize on mount - restore saved theme from localStorage
   onMount(() => {
     const stored = localStorage.getItem(storageKey);
     if (stored && config.themes.some((t) => t.id === stored)) {

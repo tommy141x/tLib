@@ -95,7 +95,7 @@ export const Select = (props: SelectProps) => {
     },
   };
 
-  // Create a wrapper component to ensure items are collected before creating collection
+  // items need to be collected before the collection is created
   const SelectWithCollection = () => {
     const collection = createMemo(() => {
       const hasGroups = itemsArray.some((item) => item.group);

@@ -23,8 +23,7 @@ local _isHelix = not _isFiveM
     and (type(WebUI) == 'function' or type(WebUI) == 'table')
     and type(Input) == 'table'
 
--- Edge-case: neither detected yet (early require before all globals are set).
--- Best-effort fallback so tLib degrades gracefully instead of crashing.
+-- globals might not be set yet if we're loaded early, try weaker checks
 if not _isFiveM and not _isHelix then
     if type(WebUI) == 'function' then
         _isHelix = true
