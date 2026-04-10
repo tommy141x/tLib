@@ -1,9 +1,5 @@
 -- tLib/lua/serversettings/server.lua
--- Server Settings factory — reusable admin-configurable settings persistence.
---
--- Creates an instance that manages a settings section within a JSON data file,
--- with admin permission gating, deep merge, broadcast to clients, and optional
--- dispatch panel notification.
+-- admin-configurable settings persisted to a JSON file.
 --
 -- Usage:
 --   local ss = exports['tLib']:CreateServerSettings({
@@ -59,8 +55,6 @@ function ServerSettings.create(opts)
     local onAfterSave = opts.onAfterSave
 
     local settings = {}
-
-    -- ── Load ──
 
     local function loadFromFile()
         local raw = LoadResourceFile(resName, file)
@@ -118,8 +112,6 @@ function ServerSettings.create(opts)
         end
     end
 
-    -- ── Instance ──
-
     local inst = {}
 
     --- Get the full settings table.
@@ -161,8 +153,6 @@ function ServerSettings.create(opts)
             pcall(onAfterSave, settings)
         end
     end
-
-    -- ── Auto-register events ──
 
     -- Client requests settings on join
     if reqEvent then

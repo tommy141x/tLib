@@ -1,11 +1,5 @@
--- tLib/lua/permission/server.lua
--- Server-side admin permission checking.
--- FiveM: uses ACE system. Helix: stubbed until equivalent is known.
---
--- Permission levels:
---   0 = no access
---   1 = admin          (ace: tlib.admin)
---   2 = superadmin     (ace: tlib.superadmin — implies tlib.admin)
+-- server-side permission check (FiveM ACE, helix stubbed)
+-- 0 = none, 1 = admin (tlib.admin), 2 = superadmin (tlib.superadmin)
 
 Permission = {}
 

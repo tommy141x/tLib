@@ -1,36 +1,10 @@
-/**
- * HUD Template Binder — data-binding engine for HTML layout templates.
- *
- * Binds state to DOM elements using data-hud-* attributes.
- * Call update() with a state object and all bound elements update automatically.
- * Supports dot-path keys (e.g. "leds.R1") for nested state access.
- *
- * Supported attributes:
- *   data-hud-text="key"           — sets textContent to state[key]
- *   data-hud-html="key"           — sets innerHTML to state[key]
- *   data-hud-led="key"            — toggles .active class based on boolean state[key]
- *   data-hud-show="key"           — visible when state[key] is truthy
- *   data-hud-hide="key"           — hidden when state[key] is truthy
- *   data-hud-led-color="key"      — sets background-color from { r, g, b, a? } state[key]
- *   data-hud-eq="key:value"       — toggles .active when String(state[key]) === value
- *   data-hud-attr="key:attrName"  — sets DOM attribute to state[key], removes when falsy
- *   data-hud-btn="action"         — click handler fires onAction callback
- *
- * Usage:
- *   const binder = new HudBinder(container, {
- *     onAction: (action) => fetchNui('lightbar:hudButton', { action }),
- *     resolveBool: (key, state) => { ... },  // optional custom boolean logic
- *   });
- *   binder.update({ lightsActive: true, currentPattern: 'Code 3', leds: { R1: {r:255,g:0,b:0} } });
- */
+// data-binding for HUD HTML templates.
+// update(state) pushes values to all data-hud-* elements automatically.
+// supports: text, html, led, show, hide, led-color, eq, attr, btn
 
 export interface HudBinderOptions {
-  /** Called when a data-hud-btn element is clicked */
   onAction?: (action: string) => void;
-  /**
-   * Custom boolean resolver for data-hud-led / data-hud-show / data-hud-hide.
-   * Return undefined to fall back to default (!!value) logic.
-   */
+  // return undefined to fall back to !!value
   resolveBool?: (key: string, state: Record<string, unknown>) => boolean | undefined;
 }
 
@@ -56,7 +30,7 @@ export class HudBinder {
         const action = btn.getAttribute("data-hud-btn")!;
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
-          this.opts.onAction!(action);
+          this.opts.onAction?.(action);
         });
       }
     }
@@ -65,11 +39,6 @@ export class HudBinder {
     this.update(this.state);
   }
 
-  /**
-   * Scan the layout for all state keys it references via data-hud-* attributes.
-   * Used to tell the backend which keys to send (optimization).
-   * Returns top-level keys and, for dot-path keys like "leds.R1", sub-names.
-   */
   scanKeys(): { keys: string[]; subNames: Record<string, string[]> } {
     if (!this.root) return { keys: [], subNames: {} };
     const keys = new Set<string>();
@@ -104,14 +73,13 @@ export class HudBinder {
 
     for (const attr of ["data-hud-eq", "data-hud-attr"]) {
       for (const el of this.root.querySelectorAll<HTMLElement>(`[${attr}]`)) {
-        keys.add(el.getAttribute(attr)!.split(":")[0]);
+        keys.add(el.getAttribute(attr)?.split(":")[0]);
       }
     }
 
     return { keys: [...keys], subNames };
   }
 
-  /** Update all bindings with new state. */
   update(newState: Record<string, unknown>): void {
     this.state = newState;
 
@@ -180,14 +148,11 @@ export class HudBinder {
     }
   }
 
-  /** Get the current state. */
   getState(): Record<string, unknown> {
     return this.state;
   }
 
-  // ── Internal helpers ──
-
-  /** Resolve a value from state, supporting dot-path notation (e.g. "leds.R1") */
+  // supports dot paths like "leds.R1"
   private resolve(key: string): unknown {
     if (key.includes(".")) {
       const parts = key.split(".");
@@ -201,7 +166,6 @@ export class HudBinder {
     return this.state[key];
   }
 
-  /** Resolve a boolean value, with optional custom resolver */
   private resolveBool(key: string): boolean {
     if (this.opts.resolveBool) {
       const custom = this.opts.resolveBool(key, this.state);
@@ -210,7 +174,6 @@ export class HudBinder {
     return !!this.resolve(key);
   }
 
-  /** Extract top-level key from a possibly dotted path */
   private topKey(key: string): string {
     const dot = key.indexOf(".");
     return dot >= 0 ? key.slice(0, dot) : key;

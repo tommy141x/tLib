@@ -1,8 +1,4 @@
 -- tLib/lua/toast/exports.lua
--- Registers all exports('tLib', ...) for the toast subsystem.
--- All UI communication goes through the shared WebUI instance injected via
--- ToastExports.register(ui).  No stack/state is maintained Lua-side because
--- Ark UI owns the live toast list in the browser.
 
 ToastExports     = {}
 
@@ -11,8 +7,7 @@ local log        = Logger.create('tLib/toast')
 -- WebUI reference — set once by ToastExports.register(ui)
 local ui         = nil
 
--- ── Id generation ─────────────────────────────────────────────────────────────
--- Separate counter from the menu subsystem so ids never collide.
+-- separate counter from menus
 
 local _idCounter = 0
 
@@ -20,8 +15,6 @@ local function generateId()
     _idCounter = _idCounter + 1
     return 'tlib_toast_' .. tostring(_idCounter)
 end
-
--- ── Validation helpers ────────────────────────────────────────────────────────
 
 local VALID_TYPES = {
     success = true,
@@ -46,12 +39,9 @@ local function resolveType(t)
     return 'info'
 end
 
--- ── Export registration ───────────────────────────────────────────────────────
-
 function ToastExports.register(webui)
     ui = webui
 
-    -- ── ShowToast ─────────────────────────────────────────────────────────────
     -- Creates a new toast notification and pushes it to the UI.
     -- Toasts are purely informational and non-interactable.
     --
@@ -98,7 +88,6 @@ function ToastExports.register(webui)
         return id
     end)
 
-    -- ── UpdateToast ───────────────────────────────────────────────────────────
     -- Merges partial changes into a live toast in place.
     -- The primary use-case is resolving a "loading" toast to "success" or
     -- "error" after an async operation completes server-side.
@@ -145,7 +134,6 @@ function ToastExports.register(webui)
         Platform.TriggerEvent('tLib:toast:updated', id, patch)
     end)
 
-    -- ── DismissToast ──────────────────────────────────────────────────────────
     -- Programmatically removes a single toast before its duration expires.
     -- Essential for dismissing persistent "loading" toasts once the async
     -- work they represent has completed.
@@ -162,7 +150,6 @@ function ToastExports.register(webui)
         Platform.TriggerEvent('tLib:toast:dismissed', id)
     end)
 
-    -- ── DismissAll ────────────────────────────────────────────────────────────
     -- Clears every visible toast immediately.
     registerExport('DismissAll', function()
         if not assertUI('DismissAll') then return end

@@ -34,10 +34,7 @@ export const HoverCardTrigger = (props: HoverCardTriggerProps) => {
 
   return (
     <ArkHoverCard.Trigger
-      class={cn(
-        "cursor-help underline decoration-dotted underline-offset-4",
-        local.class,
-      )}
+      class={cn("cursor-help underline decoration-dotted underline-offset-4", local.class)}
       {...others}
     />
   );
@@ -66,7 +63,7 @@ export const HoverCardContent = (props: HoverCardContentProps) => {
                 <ArkHoverCard.Content
                   class={cn(
                     "z-50 w-64 rounded-md border border-border bg-background p-4 shadow-md outline-none",
-                    local.class,
+                    local.class
                   )}
                   {...others}
                 >

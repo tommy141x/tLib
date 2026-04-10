@@ -32,17 +32,10 @@ export interface CardProps {
 }
 
 export const Card: Component<CardProps> = (props) => {
-  const [local, variantProps, others] = splitProps(
-    props,
-    ["children", "class"],
-    ["variant"],
-  );
+  const [local, variantProps, others] = splitProps(props, ["children", "class"], ["variant"]);
 
   return (
-    <div
-      class={cn(cardVariants({ variant: variantProps.variant }), local.class)}
-      {...others}
-    >
+    <div class={cn(cardVariants({ variant: variantProps.variant }), local.class)} {...others}>
       {local.children}
     </div>
   );
@@ -57,13 +50,7 @@ export const CardTitle: Component<CardTitleProps> = (props) => {
   const [local, others] = splitProps(props, ["children", "class"]);
 
   return (
-    <h3
-      class={cn(
-        "text-2xl font-semibold leading-none tracking-tight",
-        local.class,
-      )}
-      {...others}
-    >
+    <h3 class={cn("text-2xl font-semibold leading-none tracking-tight", local.class)} {...others}>
       {local.children}
     </h3>
   );

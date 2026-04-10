@@ -1,8 +1,4 @@
 -- tLib/lua/menu/navigation.lua
--- Owns key bindings, WebUI event handlers, and the menu stack lifecycle.
--- openMenu / closeTop / closeAll / closeMenu are the public stack helpers.
--- Uses Platform.* for all runtime-specific calls so this file is agnostic
--- between Helix and FiveM.
 
 MenuNavigation = {}
 
@@ -42,7 +38,6 @@ function MenuNavigation.init(webui)
         return #MenuState.getStack() == 0 or Platform.getInputMode() == 1
     end
 
-    -- ── Up / Down ────────────────────────────────────────────────────────────
     -- On FiveM, NUI callbacks (JS → Lua) are unreliable so we compute the
     -- new focused item in Lua and update menu.focusedId immediately.  The UI
     -- still runs its own moveFocus for rendering.
@@ -83,7 +78,6 @@ function MenuNavigation.init(webui)
         MenuActions.handleRight()
     end, 'Pressed')
 
-    -- ── Enter ─────────────────────────────────────────────────────────────────
     -- On both platforms, focusedId is always up-to-date by the time Enter
     -- fires: FiveM computes focus in Lua (above), Helix is synchronous.
     Platform.bindKey('Enter', function()
@@ -96,7 +90,6 @@ function MenuNavigation.init(webui)
         MenuNavigation.closeTop()
     end, 'Pressed')
 
-    -- ── focusChanged (UI → Lua) ───────────────────────────────────────────────
     -- On Helix this is the primary focus-sync mechanism (synchronous).
     -- On FiveM this is a secondary sync — Lua already computed focus above,
     -- but if the NUI callback arrives it will reconcile any drift.

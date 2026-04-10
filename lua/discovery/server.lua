@@ -7,9 +7,7 @@ local log = Logger.create('tLib/discovery')
 
 Discovery = {}
 
--- ── Platform helpers ───────────────────────────────────────────────────────
--- All FiveM-specific natives are isolated here. Swap in Helix equivalents
--- once they are known; nothing else in this file needs to change.
+-- FiveM natives, swap for helix when known
 
 local function _loadFile(resource, path)
     if _TLIB_IS_FIVEM then
@@ -83,13 +81,7 @@ local function _onResourceStart(cb)
     -- Helix: no equivalent known yet — late resource detection not supported
 end
 
--- ══════════════════════════════════════════════════════════════════
---  MANIFEST MODIFICATION (Node.js-free, pure Lua)
--- ══════════════════════════════════════════════════════════════════
-
--- Sibling metadata keys — auto-populated as Discovery instances are created.
--- When appending a new metadata line to a fxmanifest, we look for existing
--- sibling keys to group near. No hardcoded resource names.
+-- manifest sibling keys for grouping
 local MANIFEST_SIBLINGS = {}
 
 --- Register a metadata key as a manifest sibling (called automatically by Discovery.create).
@@ -110,34 +102,7 @@ local function appendToManifest(resourceName, metadataKey, filePath)
 end
 
 
--- ══════════════════════════════════════════════════════════════════
---  DISCOVERY INSTANCE FACTORY
--- ══════════════════════════════════════════════════════════════════
-
---[[
-    Discovery.create(opts) — creates and returns a fully initialized Discovery instance.
-
-    Required opts:
-        metadataKey     string   — fxmanifest metadata key (e.g. "tels_config", "tradio_config")
-        defaultFileName string   — file name to create when exporting to a resource without existing metadata
-        localFile       string   — path to the local data file (e.g. "data.json")
-
-    Optional opts:
-        logTag          string   — prefix for log messages (default: metadataKey)
-        chatTag         string   — chat message prefix, e.g. "[tELS]" (default: "[resource]")
-
-        eventPrefix     string   — if provided, auto-registers standard server events:
-                                    {prefix}:config_request, {prefix}:config_save,
-                                    {prefix}:config_remove, {prefix}:getExternalSource,
-                                    {prefix}:getExportTargets, {prefix}:exportConfig
-        receiveEvent    string   — client event name to broadcast configs to (e.g. "lightbar:config_receive")
-        sourceInfoEvent string   — client event for external source info (e.g. "lightbar:externalSourceInfo")
-        exportTargetsEvent string — client event for export target list (e.g. "lightbar:exportTargets")
-
-        permissionCheck function(src) → boolean — called before save/remove/export; return false to deny
-        afterSave       function(model, config)  — called after a model is saved (e.g. orphan ref cleanup)
-        afterRemove     function(model)           — called after a model is removed
-]]
+-- see opts below for what Discovery.create() accepts
 
 function Discovery.create(opts)
     local metadataKey   = opts.metadataKey
@@ -156,8 +121,6 @@ function Discovery.create(opts)
 
     local inst = {}
 
-    -- ── Alias helpers ──
-
     local function registerAlias(key)
         if tonumber(key) == nil then
             hashToName[tostring(_hashKey(key))] = key
@@ -168,10 +131,7 @@ function Discovery.create(opts)
         return hashToName[tostring(model)] or model
     end
 
-    -- ══════════════════════════════════════════════════════════════
-    --  CORE API (always available, even without eventPrefix)
-    -- ══════════════════════════════════════════════════════════════
-
+    
     function inst:getConfigs()
         return configs
     end
@@ -407,11 +367,7 @@ function Discovery.create(opts)
         return true, targetPath
     end
 
-    -- ══════════════════════════════════════════════════════════════
-    --  AUTO-INITIALIZATION
-    -- ══════════════════════════════════════════════════════════════
-
-    -- Load local first (takes priority), then external, then deduplicate
+        -- Load local first (takes priority), then external, then deduplicate
     inst:loadLocal()
     inst:scanExternal()
     inst:deduplicateConfigs()
@@ -448,11 +404,7 @@ function Discovery.create(opts)
         end
     end)
 
-    -- ══════════════════════════════════════════════════════════════
-    --  AUTO-REGISTER STANDARD EVENTS (if eventPrefix provided)
-    -- ══════════════════════════════════════════════════════════════
-
-    if opts.eventPrefix then
+        if opts.eventPrefix then
         local prefix        = opts.eventPrefix
         local receiveEv     = opts.receiveEvent or (prefix .. ":config_receive")
         local sourceInfoEv  = opts.sourceInfoEvent or (prefix .. ":externalSourceInfo")
@@ -549,10 +501,6 @@ function Discovery.create(opts)
     return inst
 end
 
-
--- ══════════════════════════════════════════════════════════════════
---  EXPORTS
--- ══════════════════════════════════════════════════════════════════
 
 function Discovery.registerExports()
     Platform.export('tLib', 'CreateDiscovery', function(opts)

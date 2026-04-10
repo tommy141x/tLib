@@ -1,114 +1,5 @@
--- tLib/lua/adapter/world.lua
--- World / entity platform abstractions.
---
--- Depends on: lua/adapter/init.lua  (_TLIB_IS_HELIX / _TLIB_IS_FIVEM / Platform)
---
--- Surfaces provided:
---
---   Platform.getPlayerCoords()
---     Returns the local player's current world position as {x, y, z}.
---     FiveM: GetEntityCoords(PlayerPedId()).
---     Helix: K2_GetActorLocation() on the controlled pawn's actor.
---
---   Platform.getPlayerHeading()
---     Returns the local player's current heading (yaw) in degrees.
---     FiveM: GetEntityHeading(PlayerPedId()).
---     Helix: K2_GetActorRotation().Yaw on the controlled pawn.
---
---   Platform.getPlayerPed()
---     Returns the local player's ped/pawn entity handle.
---     FiveM: PlayerPedId() — integer entity handle.
---     Helix: GetPlayerPawn() — APawn userdata.
---
---   Platform.getEntityCoords(entity)
---     Returns the world position of any entity as {x, y, z}.
---     FiveM: GetEntityCoords(entity).
---     Helix: GetEntityCoords(entity) global (Helix functions API) → Vector,
---            normalised to a plain {x, y, z} table.
---
---   Platform.setEntityCoords(entity, coords)
---     Teleports an entity to the given world position.
---     coords may be a table {x,y,z} or a Helix Vector.
---     FiveM: SetEntityCoords with no offset, world-space, clear-area flags.
---     Helix: SetEntityCoords(entity, Vector) global.
---
---   Platform.getEntityHeading(entity)
---     Returns the heading (yaw) of an entity in degrees.
---     FiveM: GetEntityHeading(entity).
---     Helix: GetEntityHeading(entity) global (Helix functions API).
---
---   Platform.setEntityHeading(entity, heading)
---     Sets the heading (yaw) of an entity in degrees.
---     FiveM: SetEntityHeading(entity, heading).
---     Helix: SetEntityHeading(entity, heading) global.
---
---   Platform.doesEntityExist(entity)
---     Returns true if the entity handle is valid and alive.
---     FiveM: DoesEntityExist(entity).
---     Helix: DoesEntityExist(entity) global.
---
---   Platform.deleteEntity(entity)
---     Deletes an entity from the world.
---     FiveM: DeleteEntity() after SetEntityAsMissionEntity().
---     Helix: DeleteEntity(entity) global.
---
---   Platform.createObject(model, coords, networked)
---     Spawns a static prop at the given coords.
---     Returns the entity handle, or nil on failure.
---     model    — FiveM: model name/hash. Helix: asset path string.
---     coords   — table {x, y, z}.
---     networked — boolean (FiveM only; Helix objects are always networked).
---     FiveM: RequestModel → CreateObject → SetModelAsNoLongerNeeded.
---     Helix: StaticMesh constructor — returns an AStaticMeshActor.
---
---   Platform.createPed(model, coords, heading, networked)
---     Spawns a ped/NPC at the given coords and heading.
---     Returns the entity handle, or nil on failure.
---     model    — FiveM: model name/hash. Helix: asset path / ignored (HPawn uses default).
---     coords   — table {x, y, z}.
---     heading  — yaw in degrees.
---     networked — boolean (FiveM only).
---     FiveM: RequestModel → CreatePed (type 4 = PED_TYPE_CIVILIAN_MALE) → SetModelAsNoLongerNeeded.
---     Helix: HPawn constructor with spawn callback.
---
---   Platform.getClosestPlayer(coords, radius)
---     Returns (player, distance) for the nearest player within radius of coords.
---     coords  — table {x, y, z}.
---     radius  — max search distance, or nil for unlimited.
---     FiveM:  Iterates GetActivePlayers() and measures distance manually.
---     Helix:  GetClosestPlayer(Vector, radius) global.
---
---   Platform.getPlayersInRadius(coords, radius)
---     Returns a list of all player handles within radius of coords.
---     coords  — table {x, y, z}.
---     radius  — search radius.
---     FiveM:  Iterates GetActivePlayers() manually.
---     Helix:  GetPlayersInArea(Vector, radius) global.
---
---   Platform.getGroundZ(x, y)
---     Returns the ground Z coordinate at the given X/Y world position.
---     FiveM: GetGroundZFor_3dCoord with a sky-drop probe.
---     Helix: Trace downward from a high point using the Trace API.
---
---   Platform.drawText3D(coords, text, opts)
---     Renders a text label in the world at coords for one frame.
---     opts: { scale, color, outline }  (all optional)
---     FiveM: Set3dTextLabelThisFrame / DrawText3d pattern.
---     Helix: TextRender constructor held for one tick then destroyed.
---            NOTE: on Helix this is expensive if called every frame;
---            consumers should cache the TextRender and update it instead.
---
---   Platform.drawMarker(markerType, coords, opts)
---     Draws a marker in the world for one frame.
---     markerType — integer (FiveM marker type index).
---     coords     — table {x, y, z}.
---     opts: { dir, rot, scale, color, bobUpDown, faceCamera }
---     FiveM: DrawMarker native.
---     Helix: Niagara / StaticMesh approximation — a warn-once stub because
---            Helix has no direct DrawMarker equivalent. Consumers should use
---            the Niagara or StaticMesh classes for persistent markers.
+-- world / entity platform abstractions (FiveM + Helix)
 
--- ── Warn-once helper ──────────────────────────────────────────────────────────
 
 local log = Logger.create('tLib/adapter/world')
 
@@ -120,7 +11,6 @@ local function _warnOnce(key, msg)
     end
 end
 
--- ── Internal coord normaliser ─────────────────────────────────────────────────
 -- Accepts either a plain {x,y,z} table, a FiveM vector3, or a Helix Vector
 -- and always returns a plain Lua table with lowercase x/y/z keys.
 
@@ -134,8 +24,6 @@ local function _toCoordTable(v)
         z = v.z or v.Z or 0,
     }
 end
-
--- ── Platform.getPlayerCoords ──────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.getPlayerCoords()
@@ -162,8 +50,6 @@ else
     Platform.getPlayerCoords = Platform._stub('getPlayerCoords')
 end
 
--- ── Platform.getPlayerHeading ─────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.getPlayerHeading()
         local pawn = GetPlayerPawn and GetPlayerPawn()
@@ -185,8 +71,6 @@ else
     Platform.getPlayerHeading = Platform._stub('getPlayerHeading')
 end
 
--- ── Platform.getPlayerPed ─────────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.getPlayerPed()
         return GetPlayerPawn and GetPlayerPawn() or nil
@@ -198,8 +82,6 @@ elseif _TLIB_IS_FIVEM then
 else
     Platform.getPlayerPed = Platform._stub('getPlayerPed')
 end
-
--- ── Platform.getEntityCoords ──────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.getEntityCoords(entity)
@@ -225,8 +107,6 @@ else
     Platform.getEntityCoords = Platform._stub('getEntityCoords')
 end
 
--- ── Platform.setEntityCoords ──────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.setEntityCoords(entity, coords)
         if not entity then return end
@@ -246,8 +126,6 @@ elseif _TLIB_IS_FIVEM then
 else
     Platform.setEntityCoords = Platform._stub('setEntityCoords')
 end
-
--- ── Platform.getEntityHeading ─────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.getEntityHeading(entity)
@@ -270,8 +148,6 @@ else
     Platform.getEntityHeading = Platform._stub('getEntityHeading')
 end
 
--- ── Platform.setEntityHeading ─────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.setEntityHeading(entity, heading)
         if not entity then return end
@@ -289,8 +165,6 @@ elseif _TLIB_IS_FIVEM then
 else
     Platform.setEntityHeading = Platform._stub('setEntityHeading')
 end
-
--- ── Platform.doesEntityExist ──────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     function Platform.doesEntityExist(entity)
@@ -313,8 +187,6 @@ else
     Platform.doesEntityExist = Platform._stub('doesEntityExist')
 end
 
--- ── Platform.deleteEntity ─────────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     function Platform.deleteEntity(entity)
         if not entity then return end
@@ -333,8 +205,6 @@ elseif _TLIB_IS_FIVEM then
 else
     Platform.deleteEntity = Platform._stub('deleteEntity')
 end
-
--- ── Platform.createObject ─────────────────────────────────────────────────────
 
 if _TLIB_IS_HELIX then
     -- model   → full UE static mesh asset path, e.g. '/Game/Props/SM_Barrel.SM_Barrel'
@@ -387,8 +257,6 @@ else
     Platform.createObject = Platform._stub('createObject')
 end
 
--- ── Platform.createPed ────────────────────────────────────────────────────────
-
 if _TLIB_IS_HELIX then
     -- model    → ignored in current Helix HPawn (uses server-side character config).
     --            Pass nil or any string; it is accepted for API symmetry.
@@ -440,7 +308,6 @@ else
     Platform.createPed = Platform._stub('createPed')
 end
 
--- ── Platform.getClosestPlayer ─────────────────────────────────────────────────
 -- Returns (player, distance) — both nil if no player found within radius.
 
 if _TLIB_IS_HELIX then
@@ -485,7 +352,6 @@ else
     Platform.getClosestPlayer = Platform._stub('getClosestPlayer')
 end
 
--- ── Platform.getPlayersInRadius ───────────────────────────────────────────────
 -- Returns a list (array table) of player handles within radius of coords.
 
 if _TLIB_IS_HELIX then
@@ -523,7 +389,6 @@ else
     Platform.getPlayersInRadius = Platform._stub('getPlayersInRadius')
 end
 
--- ── Platform.getGroundZ ───────────────────────────────────────────────────────
 -- Returns the ground Z at (x, y), or nil if the probe fails.
 
 if _TLIB_IS_HELIX then
@@ -567,7 +432,6 @@ else
     Platform.getGroundZ = Platform._stub('getGroundZ')
 end
 
--- ── Platform.drawText3D ───────────────────────────────────────────────────────
 -- Renders world-space text for ONE frame.  Call every frame from a thread.
 -- opts keys (all optional):
 --   scale   number  text scale (FiveM default 0.35)
@@ -636,7 +500,6 @@ else
     Platform.drawText3D = Platform._stub('drawText3D')
 end
 
--- ── Platform.drawMarker ───────────────────────────────────────────────────────
 -- Draws a marker in the world for ONE frame.  Call every frame from a thread.
 -- markerType — integer (FiveM marker type; see FiveM docs).
 -- coords     — table {x, y, z}

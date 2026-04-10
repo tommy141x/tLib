@@ -1,19 +1,5 @@
-/**
- * Move Mode — Generic drag-to-reposition + scroll-to-scale for fixed-position UI elements.
- *
- * Framework-agnostic: returns event handlers that can be attached to any DOM element.
- * Position is expressed as { right, bottom, scale } (CSS fixed positioning from bottom-right).
- *
- * Usage with SolidJS:
- *   const drag = createDragHandler({
- *     getPosition: () => store.position,
- *     setPosition: (pos) => setStore("position", pos),
- *     onSave: (pos) => fetchNui("savePosition", pos),
- *     scaleRange: [0.5, 2.0],
- *   });
- *
- *   <div onMouseDown={drag.onMouseDown} onWheel={drag.onWheel} />
- */
+// drag to reposition + scroll to scale for fixed-position UI elements.
+// position is { right, bottom, scale } (CSS fixed from bottom-right).
 
 export interface DragPosition {
   right: number;
@@ -22,16 +8,11 @@ export interface DragPosition {
 }
 
 export interface DragHandlerOptions {
-  /** Get current position */
   getPosition: () => DragPosition;
-  /** Update position (called during drag) */
   setPosition: (pos: DragPosition) => void;
-  /** Called when drag ends or scale changes — persist the position */
   onSave?: (pos: DragPosition) => void;
-  /** Min/max scale [min, max] — default [0.5, 2.0] */
-  scaleRange?: [number, number];
-  /** Scale step per wheel tick — default 0.05 */
-  scaleStep?: number;
+  scaleRange?: [number, number]; // default [0.5, 2.0]
+  scaleStep?: number; // default 0.05
 }
 
 export interface DragHandlers {
@@ -39,10 +20,6 @@ export interface DragHandlers {
   onWheel: (e: WheelEvent) => void;
 }
 
-/**
- * Create drag handlers for repositioning a fixed-position element.
- * Supports mouse drag (position) and scroll wheel (scale).
- */
 export function createDragHandler(opts: DragHandlerOptions): DragHandlers {
   const scaleRange = opts.scaleRange ?? [0.5, 2.0];
   const scaleStep = opts.scaleStep ?? 0.05;

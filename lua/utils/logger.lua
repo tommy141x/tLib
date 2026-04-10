@@ -1,75 +1,5 @@
 -- tLib/lua/utils/logger.lua
--- Structured logger for tLib and any other Helix/FiveM package.
---
--- Levels: 1=DEBUG  2=INFO  3=WARN  4=ERROR
---
--- Every line emitted on Helix is prefixed with [packageName][side] so output
--- is immediately attributable in the console regardless of how many packages
--- are running simultaneously:
---
---   [tLib][client] [tLib/menu/INFO] Menu opened
---   [tMenu][client] [tMenu/INFO] Player spawned
---
--- The prefix comes from _TLIB_PACKAGE and _TLIB_SIDE, both set by
--- lua/adapter/init.lua before this file is loaded.  On FiveM those globals are
--- also set (FiveM has GetCurrentResourceName / IsDuplicityVersion), so the
--- format is consistent across platforms.
---
--- ── WITHIN tLib (files required by client.lua / server.lua) ──────────────────
---
---   local log = Logger.create('tLib/menu')
---   log('Menu opened')              -- INFO  → [tLib][client] [tLib/menu/INFO] Menu opened
---   log('Config missing', 3)        -- WARN
---   log('Player', player, 'joined') -- multiple values, INFO
---   log(someTable, 1)               -- DEBUG
---
--- ── FROM OTHER PACKAGES (separate Lua VMs) — factory style (recommended) ─────
---
---   At the top of the consumer package, call CreateLogger once:
---     local log = exports['tLib']:CreateLogger('mySource', print)
---   Then log anywhere with the same vararg convention:
---     log('Player spawned', player)   -- INFO
---     log('Bad value', val, 3)        -- WARN
---     log(someTable, 1)               -- DEBUG
---
---   The 'mySource' label is embedded in the formatted line.  On Helix the
---   [package][side] prefix is prepended automatically using the context of
---   the tLib VM (i.e. [tLib][client]) because CreateLogger runs inside tLib.
---   The consumer's own package name is not available to tLib directly, but the
---   loggerId (first argument) is the recommended place to put it:
---
---     local log = exports['tLib']:CreateLogger('tMenu', print)
---     -- emits: [tLib][client] [tMenu/INFO] hello
---
---   How it works on both Helix and FiveM:
---     INCOMING (printFn argument):
---       Platform.wrapExport unwraps any shim key string produced by
---       tLibShim.lua back into a live proxy callable before the handler sees
---       it.  CreateLogger therefore always receives a real function for printFn.
---
---     OUTGOING (return value — the log closure):
---       Platform.storeCallback handles the return direction.  On Helix it
---       stores the closure in tLib's own callback table and returns a
---       __tLibCb_ key string, which crosses the VM boundary safely.
---       tLibShim.lua's unsanitiseReturn wraps the key back into a real callable
---       in the consumer VM.  On FiveM it returns the closure directly.
---       The consumer always ends up with a real callable regardless of platform.
---
--- ── FROM OTHER PACKAGES — low-level style (still supported) ──────────────────
---
---   local log = function(...)
---       local line = exports['tLib']:Log('mypkg', {...})
---       if line then print(line) end
---   end
---
---   tLib receives (loggerId, args) where args is a plain table of the original
---   varargs.  If the last element is a number it is used as the log level
---   (default 2=INFO).  Remaining elements are tostring'd and joined.
---   Returns the formatted line string, or nil if filtered/empty.
---   The caller owns the print call — on Helix the [package][side] prefix is
---   included in the returned string so callers do not need to add it themselves.
---   Colon-bracket notation is required — dot notation drops strings at the
---   cross-VM boundary.
+-- levels: 1=DEBUG 2=INFO 3=WARN 4=ERROR
 
 Logger          = {}
 
@@ -83,15 +13,12 @@ function Logger.setLevel(level)
     _minLevel = level
 end
 
--- ── Execution-side label ──────────────────────────────────────────────────────
 -- The only context the log body needs to carry.  The runtime (Helix) already
 -- stamps [packageName] on every print line; the source label passed to
 -- CreateLogger is redundant with that.  Side is the one piece neither runtime
 -- nor console adds automatically.
 
 local _side = Platform.getSide()
-
--- ── Internal helpers ──────────────────────────────────────────────────────────
 
 -- Extract the level from the tail of an args list and return (level, n).
 -- If the last element is a number it is consumed as the level; n is adjusted.
@@ -129,8 +56,6 @@ local function _format(source, lvl, args, n)
     return string.format('[%s][%s] %s', _side, label, text)
 end
 
--- ── Internal emitter ──────────────────────────────────────────────────────────
-
 -- All public surfaces delegate here.
 -- source: string or nil
 -- ...:    any values; if the last value is a number it is used as the log level
@@ -149,8 +74,6 @@ local function _emit(source, ...)
     if line then print(line) end
 end
 
--- ── Public API ────────────────────────────────────────────────────────────────
-
 --- Emit a log line with no source label.
 -- All args are tostring'd and joined with spaces.
 -- If the last arg is a number it is treated as the log level (default: 2=INFO).
@@ -158,10 +81,7 @@ function Logger.log(...)
     _emit(nil, ...)
 end
 
--- ── Scoped factory ────────────────────────────────────────────────────────────
-
---- Create a logger bound to a fixed source name.
--- Returns a plain function — usage is identical inside and outside tLib.
+-- returns a log function pinned to a source name
 --
 -- @param  source  Non-empty string identifier, e.g. 'tLib/menu' or 'tMenu'
 -- @return function(...)
@@ -179,8 +99,6 @@ function Logger.create(source)
         _emit(source, ...)
     end
 end
-
--- ── WebUI bridge ──────────────────────────────────────────────────────────────
 
 --- Register the WebUI event handler that forwards JS log calls to the console.
 -- Call once from client.lua, passing the shared WebUI instance.
@@ -201,8 +119,6 @@ function Logger.init(ui)
     end)
 end
 
--- ── Exports ───────────────────────────────────────────────────────────────────
-
 --- Register tLib exports so other packages can emit logs without requiring
 -- this file directly.  Called from client.lua (and intentionally NOT from
 -- server.lua — see server.lua for the explanation).
@@ -210,7 +126,6 @@ end
 -- Consuming packages MUST use colon-bracket notation to call these exports.
 -- Dot notation silently drops string arguments at the Helix cross-VM boundary.
 --
--- ── CreateLogger (recommended) ────────────────────────────────────────────────
 -- Returns a ready-to-call log function bound to a fixed source label.
 --
 --   local log = exports['tLib']:CreateLogger('tMenu', print)
@@ -241,17 +156,14 @@ end
 --              wraps it back into a real callable in the consumer VM.
 --   On FiveM:  the closure is returned directly.
 --
--- ── Log (low-level, still supported) ─────────────────────────────────────────
 -- Formats and returns a log line string (including the [package][side] prefix);
 -- the caller owns the print call.
 --
 --   local line = exports['tLib']:Log('tMenu', { 'msg', 2 })
 --   if line then print(line) end
 --
--- ── SetLogLevel ───────────────────────────────────────────────────────────────
 --   exports['tLib']:SetLogLevel(1)  -- lower minimum level globally
 function Logger.registerExports()
-    -- ── Internal helper shared by Log and CreateLogger ────────────────────────
     -- Formats args into a fully-prefixed line string.
     -- On Helix the Helix runtime does NOT prepend package/timestamp on its own
     -- for cross-VM print calls that route through a proxy, so we include the
@@ -271,7 +183,6 @@ function Logger.registerExports()
         return _format(loggerId, lvl, args, n)
     end
 
-    -- ── CreateLogger ──────────────────────────────────────────────────────────
     -- Incoming: on Helix, Platform.wrapExport has already unwrapped any shim
     -- key for printFn into a live proxy callable.  On FiveM, cross-resource
     -- function references arrive as a callable funcref (table/userdata with a
@@ -328,7 +239,6 @@ function Logger.registerExports()
         return Platform.storeCallback(closure)
     end)
 
-    -- ── Log (low-level) ───────────────────────────────────────────────────────
     Platform.export('tLib', 'Log', function(loggerId, args)
         if type(args) ~= 'table' then
             print(string.format(
@@ -342,7 +252,6 @@ function Logger.registerExports()
         return _formatForConsumer(loggerId, args)
     end)
 
-    -- ── SetLogLevel ───────────────────────────────────────────────────────────
     Platform.export('tLib', 'SetLogLevel', function(level)
         Logger.setLevel(level)
     end)

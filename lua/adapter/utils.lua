@@ -1,19 +1,6 @@
 -- tLib/lua/adapter/utils.lua
--- HTTP and other utility platform abstractions.
---
--- Depends on: lua/adapter/init.lua  (_TLIB_IS_HELIX / _TLIB_IS_FIVEM / Platform)
---             lua/adapter/core.lua  (Platform.export)
---             lua/adapter/helix/http.lua  (loaded inline below on Helix — defines Http.fetch)
---
--- Surfaces provided:
---
---   Platform.Fetch(opts, callback)
---     Cross-platform HTTP fetch.
---     opts.url     — string, required
---     opts.method  — string, default 'GET'
---     opts.headers — table,  default {}
---     opts.body    — string, default ''
---     callback(statusCode, body, headers, errorData)
+-- HTTP fetch and misc utils
+
 
 if _TLIB_IS_HELIX then
     function Platform.Fetch(opts, callback)

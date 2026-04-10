@@ -1,17 +1,6 @@
-/**
- * @tlib/shared/admin-ui — Reusable SolidJS components for admin settings panels.
- *
- * Provides dark-themed UI primitives matching the tLib Blender-style design.
- * Used by tRadio AdminSettingsPanel, tELS ClientSettingsPanel, and any future
- * resource that needs an admin settings overlay.
- *
- * Usage:
- *   import { AdminToggle, AdminSlider, SectionLabel, Sep, AdminPanel } from "@tlib/shared/admin-ui";
- */
+// dark-themed settings panel components (used by tRadio, tELS, etc.)
 
 import { type JSX, type ParentProps, Show } from "solid-js";
-
-// ── Colors (HSL strings for inline styles — avoids CSS variable dependency) ──
 
 const C = {
   bg: "hsl(225 8% 12%)",
@@ -28,8 +17,6 @@ const C = {
   destructive: "hsl(0 62% 50%)",
   destructiveHover: "hsl(0 62% 60%)",
 } as const;
-
-// ── SectionLabel ──
 
 export function SectionLabel(props: { label: string }) {
   return (
@@ -48,13 +35,9 @@ export function SectionLabel(props: { label: string }) {
   );
 }
 
-// ── Separator ──
-
 export function Sep() {
   return <div style={{ height: "1px", background: C.border }} />;
 }
-
-// ── Toggle (On/Off buttons) ──
 
 export function AdminToggle(props: {
   label: string;
@@ -117,8 +100,6 @@ export function AdminToggle(props: {
   );
 }
 
-// ── Slider ──
-
 export function AdminSlider(props: {
   label: string;
   description?: string;
@@ -173,8 +154,6 @@ export function AdminSlider(props: {
   );
 }
 
-// ── Action Button ──
-
 export function AdminButton(props: {
   label: string;
   variant?: "default" | "destructive";
@@ -201,9 +180,6 @@ export function AdminButton(props: {
     </button>
   );
 }
-
-// ── Panel Wrapper ──
-// Full-screen overlay with centered card, escape handling, dark backdrop.
 
 export function AdminPanel(
   props: ParentProps<{
@@ -311,5 +287,4 @@ export function AdminPanel(
   );
 }
 
-// Re-export colors for consumers that need them
 export { C as AdminColors };

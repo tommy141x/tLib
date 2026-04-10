@@ -40,17 +40,11 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  },
+  }
 );
 
 type ButtonProps = {
-  variant?:
-    | "default"
-    | "destructive"
-    | "outline"
-    | "secondary"
-    | "ghost"
-    | "link";
+  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
   size?: "default" | "sm" | "lg" | "icon";
   class?: string | undefined;
   children?: JSX.Element;
@@ -73,7 +67,7 @@ type ButtonProps = {
 const Button: Component<ButtonProps> = (props) => {
   const merged = mergeProps(
     { variant: "default" as const, size: "default" as const, toggle: false },
-    props,
+    props
   );
 
   const [local, toggleProps, others] = splitProps(
@@ -91,18 +85,13 @@ const Button: Component<ButtonProps> = (props) => {
       "disabled",
       "as",
     ],
-    ["pressed", "defaultPressed", "onPressedChange"],
+    ["pressed", "defaultPressed", "onPressedChange"]
   );
 
   const isDisabled = () => !!(local.disabled || local.loading);
 
-  // LeftIconSlot / RightIconSlot are tiny components defined inside Button so
-  // they close over `local`. Defining them as named components (capital letter)
-  // means SolidJS treats them as reactive nodes in the render tree — they
-  // re-run when `local.loading` or `local.leftIcon` / `local.rightIcon` change,
-  // rather than being evaluated once and baked into a static JSX snapshot.
-  // This is the correct pattern to avoid "template is not a function" hydration
-  // errors that occur when bare ternaries or called helper-functions are used.
+  // named components so Solid re-renders them reactively.
+  // plain helpers cause "template is not a function" hydration errors.
   const LeftIconSlot: Component = () => {
     if (local.loading || !local.leftIcon) return null;
     return <>{local.leftIcon()}</>;
@@ -133,15 +122,10 @@ const Button: Component<ButtonProps> = (props) => {
     return (
       <ArkToggle.Root
         pressed={toggleProps.pressed as unknown as boolean | undefined}
-        defaultPressed={
-          toggleProps.defaultPressed as unknown as boolean | undefined
-        }
+        defaultPressed={toggleProps.defaultPressed as unknown as boolean | undefined}
         onPressedChange={toggleProps.onPressedChange}
         disabled={isDisabled()}
-        class={cn(
-          buttonVariants({ variant: local.variant, size: local.size }),
-          local.class,
-        )}
+        class={cn(buttonVariants({ variant: local.variant, size: local.size }), local.class)}
         {...others}
       >
         {innerContent}
@@ -154,10 +138,7 @@ const Button: Component<ButtonProps> = (props) => {
     return (
       <button
         disabled={isDisabled()}
-        class={cn(
-          buttonVariants({ variant: local.variant, size: local.size }),
-          local.class,
-        )}
+        class={cn(buttonVariants({ variant: local.variant, size: local.size }), local.class)}
         {...others}
       >
         {innerContent}
@@ -173,10 +154,7 @@ const Button: Component<ButtonProps> = (props) => {
   return (
     <Dynamic
       component={local.as}
-      class={cn(
-        buttonVariants({ variant: local.variant, size: local.size }),
-        local.class,
-      )}
+      class={cn(buttonVariants({ variant: local.variant, size: local.size }), local.class)}
       {...extraProps}
       {...others}
     >
@@ -185,5 +163,5 @@ const Button: Component<ButtonProps> = (props) => {
   );
 };
 
-export { Button, buttonVariants };
 export type { ButtonProps };
+export { Button, buttonVariants };

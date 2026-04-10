@@ -1,75 +1,8 @@
-/**
- * Toaster Component - Toast notification system using Ark UI
- *
- * EASY SETUP (Recommended):
- *
- * 1. Add the Toast component to your app root (uses default singleton):
- *
- *    import { Toast, toaster } from "./components/toast";
- *
- *    export default function App() {
- *      return (
- *        <>
- *          <Toast />
- *          // Your app content
- *        </>
- *      );
- *    }
- *
- * 2. Use the default toaster anywhere in your app:
- *
- *    import { toaster } from "./components/toast";
- *
- *    toaster.success({ title: "Success!", description: "Done!" });
- *    toaster.error({ title: "Error", description: "Something went wrong" });
- *
- * CUSTOM CONFIGURATION:
- *
- * Option A - Configure via props:
- *
- *    <Toast config={{ placement: "top", gap: 24 }} />
- *
- * Option B - Configure before use (in app.tsx):
- *
- *    import { configureToaster } from "./components/toast";
- *
- *    configureToaster("default", {
- *      placement: "top-end",
- *      overlap: false,
- *      gap: 24,
- *    });
- *
- * MULTIPLE TOASTERS:
- *
- * You can have multiple named toasters for different positions:
- *
- *    // In app.tsx
- *    <Toast name="main" config={{ placement: "bottom-end" }} />
- *    <Toast name="alerts" config={{ placement: "top" }} />
- *
- *    // In your components
- *    import { getToaster } from "./components/toast";
- *
- *    const mainToaster = getToaster("main");
- *    const alertToaster = getToaster("alerts");
- *
- *    mainToaster.success({ title: "Saved!" });
- *    alertToaster.error({ title: "Error!" });
- *
- * FEATURES:
- * - Default singleton toaster (no setup needed)
- * - Multiple named toasters support
- * - All toast types (success, error, warning, info, loading)
- * - Promise-based toasts for async operations
- * - Action buttons and custom durations
- * - Stacking animations and pause on hover
- * - Dark mode support
- */
+// toast system on top of Ark UI
+//   <Toast /> in app root, then: toaster.success({ title: "Done!" })
+//   multiple named toasters via <Toast name="x" /> + getToaster("x")
 
-import type {
-  CreateToasterProps,
-  CreateToasterReturn,
-} from "@ark-ui/solid/toast";
+import type { CreateToasterProps, CreateToasterReturn } from "@ark-ui/solid/toast";
 import {
   Toast as ArkToast,
   Toaster as ArkToaster,
@@ -105,14 +38,9 @@ export type ToasterInstance = CreateToasterReturn;
 
 const toasterRegistry = new Map<string, CreateToasterReturn>();
 
-/**
- * Get or create a named toaster instance
- * @param name - Name of the toaster (default: "default")
- * @param config - Configuration for the toaster (only used on first call)
- */
 export function getToaster(
   name: string = "default",
-  config?: CreateToasterProps,
+  config?: CreateToasterProps
 ): CreateToasterReturn {
   if (!toasterRegistry.has(name)) {
     const defaultConfig: CreateToasterProps = {
@@ -128,20 +56,9 @@ export function getToaster(
   return toaster;
 }
 
-/**
- * Configure a named toaster before it's created
- * Call this in your app.tsx before rendering the Toast component
- * @param name - Name of the toaster
- * @param config - Configuration for the toaster
- */
-export function configureToaster(
-  name: string,
-  config: CreateToasterProps,
-): void {
+export function configureToaster(name: string, config: CreateToasterProps): void {
   if (toasterRegistry.has(name)) {
-    console.warn(
-      `Toaster "${name}" is already created. Configuration will be ignored.`,
-    );
+    console.warn(`Toaster "${name}" is already created. Configuration will be ignored.`);
     return;
   }
   toasterRegistry.set(name, arkCreateToaster(config));
@@ -207,16 +124,10 @@ const ToastIcon: Component<{ type?: string }> = (props) => {
 
 // Main Toast component
 export const Toast: Component<ToastProps> = (props) => {
-  const [local, others] = splitProps(props, [
-    "toaster",
-    "name",
-    "config",
-    "class",
-  ]);
+  const [local, others] = splitProps(props, ["toaster", "name", "config", "class"]);
 
   // Get toaster instance: use provided toaster, or get/create named toaster
-  const toasterInstance =
-    local.toaster || getToaster(local.name || "default", local.config);
+  const toasterInstance = local.toaster || getToaster(local.name || "default", local.config);
 
   if (!toasterInstance) return null;
 
@@ -285,7 +196,7 @@ export const Toast: Component<ToastProps> = (props) => {
                 "data-[type=warning]:border-yellow-600/50 dark:data-[type=warning]:border-yellow-400/50",
                 "data-[type=info]:border-primary/50",
                 "data-[type=loading]:border-primary/50",
-                local.class,
+                local.class
               )}
               style={{
                 "border-radius": "var(--radius)",

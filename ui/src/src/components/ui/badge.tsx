@@ -14,8 +14,7 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+        default: "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive:
@@ -31,7 +30,7 @@ const badgeVariants = cva(
       variant: "default",
       clickable: false,
     },
-  },
+  }
 );
 
 export interface BadgeProps {
@@ -47,7 +46,7 @@ export const Badge: Component<BadgeProps> = (props) => {
   const [local, variantProps, others] = splitProps(
     props,
     ["children", "class", "onClick"],
-    ["variant", "clickable"],
+    ["variant", "clickable"]
   );
 
   const classes = cn(
@@ -55,7 +54,7 @@ export const Badge: Component<BadgeProps> = (props) => {
       variant: variantProps.variant,
       clickable: variantProps.clickable,
     }),
-    local.class,
+    local.class
   );
 
   if (variantProps.clickable || local.onClick) {

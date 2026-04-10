@@ -1,10 +1,5 @@
--- tLib — Settings module (client-side)
--- Typed settings with KVP persistence and server default fallback.
---
--- Handles the common pattern: "use player's KVP value if they've set one,
--- otherwise fall back to server default, otherwise use hardcoded default."
---
--- Depends on: tlib.kvp
+-- settings with KVP persistence: player KVP → server default → hardcoded default.
+-- depends on tlib.kvp
 --
 -- Usage:
 --   local settings = tlib.settings.create({
@@ -23,9 +18,8 @@
 
 local settingsMod = {}
 
---- Create a new settings store.
---- @param defs table[] Array of { key, type, default, clamp? }
---- @return table Settings instance
+--- @param defs table[] { key, type, default, clamp? }
+--- @return table
 function settingsMod.create(defs)
     local kvp = tlib.kvp
 

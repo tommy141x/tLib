@@ -7,13 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": [
-      "**",
-      "!**/node_modules",
-      "!**/dist",
-      "!**/assets",
-      "!**/ui/build"
-    ]
+    "includes": ["**", "!**/node_modules", "!**/dist", "!**/assets", "!**/ui/build"]
   },
   "formatter": {
     "enabled": true,

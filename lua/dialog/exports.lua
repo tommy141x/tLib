@@ -1,13 +1,8 @@
 -- tLib/lua/dialog/exports.lua
--- Registers all exports('tLib', ...) for the dialog subsystem.
--- All state reads/writes go through DialogState. Results are delivered to
--- consumers via local events, and optionally via inline callbacks when provided.
 
 DialogExports = {}
 
 local log = Logger.create('tLib/dialog')
-
--- ── Serialisation ─────────────────────────────────────────────────────────────
 
 local VALID_FIELD_TYPES = {
     text     = true,
@@ -121,7 +116,6 @@ local function serialiseDialog(id, opts)
     }
 end
 
--- ── Input helpers ─────────────────────────────────────────────────────────────
 -- Centralise the two-step input lock/unlock so every close path is consistent.
 -- SetInputMode alone does not always release HPlayer move/look locks in Helix,
 -- so we explicitly mirror what the menu system does.
@@ -137,7 +131,6 @@ local function unlockPlayerInput(ui)
     Platform.setIgnoreLookInput(false)
 end
 
--- ── WebUI event handlers ──────────────────────────────────────────────────────
 -- Wired once during DialogExports.register(). Both handlers validate the
 -- incoming id, clean up Lua state, then fire the appropriate local event.
 
@@ -206,8 +199,6 @@ local function wireEvents(ui)
     end)
 end
 
--- ── Export registration ───────────────────────────────────────────────────────
-
 function DialogExports.register()
     local ui = DialogState.getUI()
     wireEvents(ui)
@@ -216,7 +207,6 @@ function DialogExports.register()
         Platform.export('tLib', name, fn)
     end
 
-    -- ── ShowDialog ────────────────────────────────────────────────────────────
     -- Serialises the dialog definition, pushes it to the WebUI, and registers
     -- the id so subsequent submit/cancel events can be correlated.
     --
@@ -321,7 +311,6 @@ function DialogExports.register()
         return id
     end)
 
-    -- ── UpdateDialogField ──────────────────────────────────────────────────────
     -- Updates a single field's properties in an open dialog.
     -- Useful for dynamically updating select/dropdown options after async operations.
     --
@@ -371,7 +360,6 @@ function DialogExports.register()
         Platform.sendUIEvent(ui, 'updateDialogField', payload)
     end)
 
-    -- ── CloseDialog ───────────────────────────────────────────────────────────
     -- Programmatically closes an open dialog and fires tLib:dialog:cancelled.
     -- No-op if the id is not currently registered (already submitted/cancelled).
     --

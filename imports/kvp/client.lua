@@ -1,22 +1,11 @@
--- tLib — KVP module (client-side)
--- Typed, community-prefixed Key-Value Pair storage.
+-- typed KVP storage, auto-prefixed per community so each server's settings are isolated.
+-- prefix comes from convar tlib_community_id → sv_projectName → none
 --
--- Community prefix is auto-detected once from convars:
---   1. convar "tlib_community_id" (explicit override)
---   2. convar "sv_projectName" (FiveM server project name)
---   3. no prefix (fallback)
---
--- Usage:
 --   tlib.kvp.getString('tels_hud_layout', 'default')
 --   tlib.kvp.setFloat('tels_hud_scale', 1.5)
 --   tlib.kvp.delete('tels_hud_scale')
---
--- All keys are automatically prefixed with the community ID so each server
--- gets its own isolated set of saved player settings.
 
 local kvp = {}
-
--- ── Community prefix (resolved once at load time) ──
 
 local _prefix = nil
 
@@ -50,10 +39,6 @@ end
 function kvp.getPrefix()
     return _prefix
 end
-
--- ══════════════════════════════════════════════════════════════════
---  GETTERS (typed, with defaults)
--- ══════════════════════════════════════════════════════════════════
 
 --- @param key string
 --- @param default? string
@@ -121,10 +106,6 @@ function kvp.has(key)
     EndFindKvp(handle)
     return found ~= nil
 end
-
--- ══════════════════════════════════════════════════════════════════
---  SETTERS (typed)
--- ══════════════════════════════════════════════════════════════════
 
 --- @param key string
 --- @param value string
@@ -195,10 +176,6 @@ function kvp.get(key, default)
     end
     return v
 end
-
--- ══════════════════════════════════════════════════════════════════
---  DELETE
--- ══════════════════════════════════════════════════════════════════
 
 --- @param key string
 function kvp.delete(key)

@@ -1,16 +1,5 @@
-/**
- * GizmoScene — Unified Three.js gizmo editor for vehicle-attached items.
- *
- * Renders TransformControls on a transparent canvas overlay.
- * The actual game objects (LEDs, props) are rendered by Lua on the game side.
- *
- * Supports:
- *   - Translate / Rotate (always)
- *   - Scale (opt-in via features.scale)
- *   - Multi-select with center-of-mass positioning (opt-in via features.multiSelect)
- *   - Click-to-select picking (opt-in via features.picking)
- *   - LED-to-LED snap (opt-in via features.snap)
- */
+// Three.js TransformControls on a transparent overlay.
+// game objects are rendered by Lua, this just draws the gizmo handles.
 
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
@@ -37,7 +26,6 @@ export class GizmoScene {
   private selectedIndices: number[] = [];
   private dragStartFivemPos: Vec3 | null = null;
 
-  /** Current vehicle matrix in FiveM space */
   private matrix: VehicleMatrix = {
     fwd: { x: 0, y: 1, z: 0 },
     right: { x: 1, y: 0, z: 0 },
@@ -46,24 +34,19 @@ export class GizmoScene {
   };
   private vehicleQuat = new THREE.Quaternion();
 
-  /** Feature flags */
   private features: Required<NonNullable<GizmoSceneConfig["features"]>>;
 
-  /** Scale mode start values */
   scaleStartSw = 0;
   scaleStartSh = 0;
 
-  /** Gimbal lock tracking for YXZ LED rotation extraction */
+  // gimbal lock tracking
   private prevYaw = 0;
   private prevPitch = 0;
   private prevRoll = 0;
 
-  /** Current item data (for snap + picking) */
   private currentItems: GizmoItemData[] = [];
   private snapActive = false;
   private snapThreshold = 0.01;
-
-  // ── Callbacks ──
 
   onPositionChange: ((fivemWorldPos: Vec3) => void) | null = null;
   onMultiTranslate: ((indices: number[], worldDelta: Vec3) => void) | null = null;
@@ -110,7 +93,6 @@ export class GizmoScene {
     this.transformControls.visible = false;
     this.transformControls.enabled = false;
 
-    // ── objectChange handler ──
     this.transformControls.addEventListener("objectChange", () => {
       if (this.selectedIdx < 0) return;
       const mode = this.transformControls.mode;
@@ -161,7 +143,6 @@ export class GizmoScene {
       }
     });
 
-    // ── dragging-changed handler ──
     this.transformControls.addEventListener("dragging-changed", (event) => {
       if (event.value) {
         this.dragStartFivemPos = threeToFivemPos(this.gizmoTarget.position);
@@ -175,7 +156,6 @@ export class GizmoScene {
       }
     });
 
-    // ── Click-to-select (opt-in) ──
     if (this.features.picking) {
       let mouseDownPos: { x: number; y: number } | null = null;
       let wasDragging = false;
@@ -205,10 +185,7 @@ export class GizmoScene {
     window.addEventListener("resize", this._onResize);
   }
 
-  // ════════════════════════════════════════════════════════
   //  Lifecycle
-  // ════════════════════════════════════════════════════════
-
   private _onResize(): void {
     const parent = this.renderer.domElement.parentElement;
     if (!parent) return;
@@ -244,10 +221,7 @@ export class GizmoScene {
     this.renderer.dispose();
   }
 
-  // ════════════════════════════════════════════════════════
   //  Camera
-  // ════════════════════════════════════════════════════════
-
   syncCamera(position: Vec3, focus: Vec3): void {
     applyCameraSync(this.camera, position, focus);
   }
@@ -257,10 +231,7 @@ export class GizmoScene {
     this.camera.updateProjectionMatrix();
   }
 
-  // ════════════════════════════════════════════════════════
   //  Vehicle Matrix
-  // ════════════════════════════════════════════════════════
-
   setVehicleMatrix(fwd: Vec3, right: Vec3, up: Vec3, pos: Vec3): void;
   setVehicleMatrix(matrix: VehicleMatrix): void;
   setVehicleMatrix(fwdOrMatrix: Vec3 | VehicleMatrix, right?: Vec3, up?: Vec3, pos?: Vec3): void {
@@ -272,14 +243,6 @@ export class GizmoScene {
     this.vehicleQuat = buildVehicleQuat(this.matrix);
   }
 
-  // ════════════════════════════════════════════════════════
-  //  Gizmo Positioning — LED style (yaw/pitch/roll)
-  // ════════════════════════════════════════════════════════
-
-  /**
-   * Position the gizmo for LED-style items with yaw/pitch/roll rotation.
-   * Supports multi-select: gizmo at center of selected items.
-   */
   updateGizmoPosition(
     items: GizmoItemData[],
     selectedIdx: number,
@@ -296,10 +259,10 @@ export class GizmoScene {
 
     // Position: center of selected items (multi) or single item
     if (this.features.multiSelect && this.selectedIndices.length > 1) {
-      let cx = 0,
-        cy = 0,
-        cz = 0,
-        count = 0;
+      let cx = 0;
+      let cy = 0;
+      let cz = 0;
+      let count = 0;
       for (const i of this.selectedIndices) {
         if (i >= 0 && i < items.length) {
           cx += items[i].x;
@@ -354,7 +317,7 @@ export class GizmoScene {
     this.transformControls.enabled = true;
   }
 
-  /** Extract LED-style rotation (YXZ Euler with two-solution gimbal lock tracking) */
+  // YXZ euler with gimbal lock tracking
   extractLedRotation(): { yaw: number; pitch: number; roll: number } {
     const invVehicle = this.vehicleQuat.clone().invert();
     const localQuat = invVehicle.multiply(this.gizmoTarget.quaternion.clone());
@@ -365,7 +328,8 @@ export class GizmoScene {
     const sinX = Math.max(-1, Math.min(1, -m23));
 
     const ex1 = Math.asin(sinX);
-    let ey1: number, ez1: number;
+    let ey1: number;
+    let ez1: number;
     if (Math.abs(sinX) < 0.9999999) {
       ey1 = Math.atan2(te[8], te[10]);
       ez1 = Math.atan2(te[1], te[5]);
@@ -404,11 +368,7 @@ export class GizmoScene {
     return result;
   }
 
-  // ════════════════════════════════════════════════════════
-  //  Gizmo Positioning — Prop style (dolu_tool rx/ry/rz)
-  // ════════════════════════════════════════════════════════
-
-  /** Position and orient the gizmo for a prop using dolu_tool's Euler convention (YZX order). */
+  // dolu_tool euler convention (YZX order)
   updatePropGizmo(propData: {
     x: number;
     y: number;
@@ -436,7 +396,7 @@ export class GizmoScene {
     this.transformControls.enabled = true;
   }
 
-  /** Extract prop rotation as FiveM rx/ry/rz degrees (dolu_tool YZX convention). */
+  // extract as FiveM rx/ry/rz degrees (dolu_tool YZX)
   extractPropRotation(): { rx: number; ry: number; rz: number } {
     const invVehicle = this.vehicleQuat.clone().invert();
     const localQuat = invVehicle.multiply(this.gizmoTarget.quaternion.clone());
@@ -448,10 +408,7 @@ export class GizmoScene {
     };
   }
 
-  // ════════════════════════════════════════════════════════
   //  Mode / Space / Snap
-  // ════════════════════════════════════════════════════════
-
   setMode(mode: EditorMode): void {
     this.transformControls.setMode(mode);
   }
@@ -473,15 +430,11 @@ export class GizmoScene {
     this.transformControls.setTranslationSnap(null);
   }
 
-  /** Update item data reference (for snap + picking calculations) */
   setCurrentItems(items: GizmoItemData[]): void {
     this.currentItems = items;
   }
 
-  // ════════════════════════════════════════════════════════
   //  Picking
-  // ════════════════════════════════════════════════════════
-
   private _pickItem(e: PointerEvent): void {
     if (!this.currentItems.length || !this.onItemClick) return;
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -514,10 +467,7 @@ export class GizmoScene {
     }
   }
 
-  // ════════════════════════════════════════════════════════
   //  Internal helpers
-  // ════════════════════════════════════════════════════════
-
   private itemToThreeWorld(item: GizmoItemData): THREE.Vector3 {
     const wp = fivemLocalToWorld(this.matrix, item.x, item.y, item.z);
     return fivemToThreePos(wp.x, wp.y, wp.z);
@@ -534,12 +484,12 @@ export class GizmoScene {
 
     const selfSw = (self.sw as number) ?? 0;
     const selfSh = (self.sh as number) ?? 0;
-    let sx = local.x,
-      sy = local.y,
-      sz = local.z;
-    let bestDx = t,
-      bestDy = t,
-      bestDz = t;
+    let sx = local.x;
+    let sy = local.y;
+    let sz = local.z;
+    let bestDx = t;
+    let bestDy = t;
+    let bestDz = t;
 
     for (let i = 0; i < this.currentItems.length; i++) {
       if (i === selfIdx) continue;

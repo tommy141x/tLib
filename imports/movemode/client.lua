@@ -1,8 +1,5 @@
--- tLib — Move Mode module (client-side)
--- Generic UI repositioning with KVP persistence.
---
--- Manages enter/exit move mode, NUI focus, and position save/load.
--- The actual drag interaction happens in the NUI/web side (see @tlib/shared/move-mode).
+-- UI repositioning with KVP persistence.
+-- drag interaction is on the NUI side (see @tlib/shared/move-mode).
 --
 -- Usage:
 --   local mover = tlib.movemode.create({
@@ -25,9 +22,8 @@
 
 local movemode = {}
 
---- Create a new move mode instance.
 --- @param opts table
---- @return table Move mode instance
+--- @return table
 function movemode.create(opts)
     local keys     = opts.keys     -- { right, bottom, scale }
     local defaults = opts.defaults or { right = 20.0, bottom = 20.0, scale = 1.0 }
