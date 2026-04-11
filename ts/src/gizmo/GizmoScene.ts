@@ -19,6 +19,7 @@ export class GizmoScene {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   transformControls: TransformControls;
+  private gizmoHelper: THREE.Object3D;
   gizmoTarget: THREE.Mesh;
 
   private animationId: number | null = null;
@@ -88,9 +89,10 @@ export class GizmoScene {
     this.transformControls.setSize(0.75);
     this.transformControls.setSpace("local");
     this.transformControls.attach(this.gizmoTarget);
-    this.scene.add(this.transformControls.getHelper());
+    this.gizmoHelper = this.transformControls.getHelper();
+    this.scene.add(this.gizmoHelper);
 
-    this.transformControls.visible = false;
+    this.gizmoHelper.visible = false;
     this.transformControls.enabled = false;
 
     this.transformControls.addEventListener("objectChange", () => {
@@ -252,7 +254,7 @@ export class GizmoScene {
     this.selectedIndices = selectedIndices ?? (selectedIdx >= 0 ? [selectedIdx] : []);
 
     if (this.selectedIndices.length === 0 || selectedIdx < 0 || selectedIdx >= items.length) {
-      this.transformControls.visible = false;
+      this.gizmoHelper.visible = false;
       this.transformControls.enabled = false;
       return;
     }
@@ -313,7 +315,7 @@ export class GizmoScene {
     this.scaleStartSh = (item.sh as number) ?? 1;
     this.gizmoTarget.scale.set(1, 1, 1);
 
-    this.transformControls.visible = true;
+    this.gizmoHelper.visible = true;
     this.transformControls.enabled = true;
   }
 
@@ -392,7 +394,7 @@ export class GizmoScene {
     const localQuat = new THREE.Quaternion().setFromEuler(localEuler);
     this.gizmoTarget.quaternion.copy(this.vehicleQuat).multiply(localQuat);
 
-    this.transformControls.visible = true;
+    this.gizmoHelper.visible = true;
     this.transformControls.enabled = true;
   }
 

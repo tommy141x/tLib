@@ -90,3 +90,30 @@ for i = 1, GetNumResourceMetadata(resourceName, 'tlib_module') do
         loadModule(tlib, name)
     end
 end
+
+-- check if consumer requires a minimum tLib version
+local function parseVer(s)
+    if not s then return { 0, 0, 0 } end
+    s = s:gsub("^v", "")
+    local parts = {}
+    for n in s:gmatch("%d+") do parts[#parts + 1] = tonumber(n) end
+    while #parts < 3 do parts[#parts + 1] = 0 end
+    return parts
+end
+
+local requiredVersion = GetResourceMetadata(resourceName, 'tlib_min_version', 0)
+if requiredVersion and requiredVersion ~= '' then
+    local tlibVersion = GetResourceMetadata(tLibName, 'version', 0) or '0.0.0'
+    local req = parseVer(requiredVersion)
+    local cur = parseVer(tlibVersion)
+    local outdated = false
+    for i = 1, 3 do
+        if cur[i] < req[i] then outdated = true; break
+        elseif cur[i] > req[i] then break end
+    end
+    if outdated then
+        local msg = ('\n^1[%s] requires tLib v%s or newer (found v%s). Please update tLib.^0'):format(
+            resourceName, requiredVersion, tlibVersion)
+        print(msg)
+    end
+end

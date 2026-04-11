@@ -332,7 +332,7 @@ function DialogExports.register()
             return
         end
         if not DialogState.get(dialogId) then
-            log('UpdateDialogField: dialog "' .. dialogId .. '" is not open', 4)
+            log('UpdateDialogField: dialog "' .. dialogId .. '" is not open', 1)
             return
         end
 

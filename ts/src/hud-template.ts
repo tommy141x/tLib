@@ -73,7 +73,8 @@ export class HudBinder {
 
     for (const attr of ["data-hud-eq", "data-hud-attr"]) {
       for (const el of this.root.querySelectorAll<HTMLElement>(`[${attr}]`)) {
-        keys.add(el.getAttribute(attr)?.split(":")[0]);
+        const v = el.getAttribute(attr)?.split(":")[0];
+        if (v) keys.add(v);
       }
     }
 

@@ -71,8 +71,6 @@ export const DialogTrigger = (props: DialogTriggerProps) => {
     <ArkDialog.Context>
       {(context) => {
         return (
-          // biome-ignore lint/a11y/noStaticElementInteractions: transparent wrapper div
-          // biome-ignore lint/a11y/useKeyWithClickEvents: child element handles keyboard
           <div onClick={() => context().setOpen(true)} style={{ display: "contents" }}>
             {resolved()}
           </div>
