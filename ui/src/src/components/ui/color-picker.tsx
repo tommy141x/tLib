@@ -4,8 +4,8 @@ import { For, Show, splitProps } from "solid-js";
 import { Portal } from "solid-js/web";
 import { Motion, Presence } from "solid-motionone";
 import IconPipette from "~icons/lucide/pipette";
-import { cn } from "../lib/cn";
-import type { ComponentMeta } from "../lib/meta";
+import { cn } from "../../lib/cn";
+import type { ComponentMeta } from "../../lib/meta";
 
 // Re-export parseColor for convenience
 export { parseColor };

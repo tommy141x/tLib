@@ -1,14 +1,13 @@
--- tLib/lua/utils/shared.lua
--- loads after adapter/core.lua so Platform.export is available
+-- loads after adapter/core.lua (needs Platform.export)
 
 Utils = {}
 
 local _hexChars = '0123456789abcdef'
 
--- seed once so generateId doesn't spit out identical IDs across restarts
-math.randomseed(os.clock() * 100000 + (GetGameTimer and GetGameTimer() or os.time()))
+-- no `os` in FiveM sandbox; GetGameTimer is 0 on server boot so mix in resource hash
+local _seed = (GetGameTimer and GetGameTimer() or 0) + tonumber(GetHashKey(GetCurrentResourceName())) % 100000
+math.randomseed(_seed)
 
---- @return string 16-char hex id
 function Utils.generateId()
     local t = {}
     for i = 1, 16 do

@@ -227,10 +227,10 @@ export class HudDevTools {
     panel.className = "hud-devtools";
     panel.innerHTML =
       '<div class="hdt-header">' +
-      '<span class="hdt-title">\u2699 DevTools</span>' +
+      '<span class="hdt-title">&#9881; DevTools</span>' +
       '<div style="display:flex;gap:4px">' +
       '<button class="hdt-reset" title="Reset to defaults">Reset</button>' +
-      '<button class="hdt-collapse" title="Collapse">\u2014</button>' +
+      '<button class="hdt-collapse" title="Collapse">&#8212;</button>' +
       "</div>" +
       "</div>" +
       '<div class="hdt-body"></div>';
@@ -244,7 +244,7 @@ export class HudDevTools {
       e.stopPropagation();
       collapsed = !collapsed;
       body.style.display = collapsed ? "none" : "flex";
-      collapseBtn.textContent = collapsed ? "+" : "\u2014";
+      collapseBtn.textContent = collapsed ? "+" : String.fromCharCode(0x2014);
     });
 
     // Reset
@@ -611,7 +611,7 @@ export class HudDevTools {
     const entry = this.editorElementMap.get(el);
     const label = entry?.identity.label ?? "?";
     const { left, top, width, height } = this.getElementGeometry(el);
-    this.editorInfoEl.textContent = `${label}  ·  ${left},${top}  ${width}\u00d7${height}`;
+    this.editorInfoEl.textContent = `${label}  ·  ${left},${top}  ${width}${String.fromCharCode(0xd7)}${height}`;
   }
 
   private selectEditorElement(el: HTMLElement | null): void {
@@ -634,7 +634,7 @@ export class HudDevTools {
       // Flash confirmation — only for copy buttons, not Reset
       if (label.startsWith("Copy")) {
         const orig = btn.textContent;
-        btn.textContent = "✓";
+        btn.textContent = String.fromCharCode(0x2713);
         btn.classList.add("active");
         setTimeout(() => {
           btn.textContent = orig;
