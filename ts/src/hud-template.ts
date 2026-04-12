@@ -78,6 +78,14 @@ export class HudBinder {
       }
     }
 
+    // data-hud-keys: additional keys declared by layout scripts
+    for (const el of this.root.querySelectorAll<HTMLElement>("[data-hud-keys]")) {
+      for (const k of el.getAttribute("data-hud-keys")!.split(",")) {
+        const trimmed = k.trim();
+        if (trimmed) keys.add(trimmed);
+      }
+    }
+
     return { keys: [...keys], subNames };
   }
 

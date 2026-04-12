@@ -51,7 +51,7 @@ export function onNuiEvent<T = unknown>(action: string, handler: (data: T) => vo
     if (msg.name === action) {
       handler((msg.args?.[0] ?? msg) as T);
     } else if (msg.action === action) {
-      handler(msg as T);
+      handler((msg.data ?? msg) as T);
     } else if (msg.type === action) {
       handler(msg as T);
     }
@@ -67,7 +67,7 @@ export function onAnyNuiEvent(handler: (action: string, data: unknown) => void):
     if (msg.name) {
       handler(msg.name, msg.args?.[0] ?? msg);
     } else if (msg.action) {
-      handler(msg.action, msg);
+      handler(msg.action, msg.data ?? msg);
     } else if (msg.type) {
       handler(msg.type, msg);
     }

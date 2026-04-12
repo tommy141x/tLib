@@ -64,6 +64,10 @@ export interface HudDevToolsOptions {
   defaults?: Record<string, unknown>;
   beforeUpdate?: (state: Record<string, unknown>) => void;
   afterUpdate?: (state: Record<string, unknown>) => void;
+  /** Show the "Show Buttons" highlight toggle (default: true) */
+  showButtonHighlight?: boolean;
+  /** Show the "Layout Editor" toggle (default: true) */
+  showLayoutEditor?: boolean;
 }
 
 export class HudDevTools {
@@ -75,6 +79,7 @@ export class HudDevTools {
   private storageKey: string;
   private beforeUpdate?: (state: Record<string, unknown>) => void;
   private afterUpdate?: (state: Record<string, unknown>) => void;
+  private opts: HudDevToolsOptions;
 
   // Layout editor
   private layoutEditorOn = false;
@@ -94,6 +99,7 @@ export class HudDevTools {
     this.binder = binder;
     this.controls = controls;
     this.state = {};
+    this.opts = options ?? {};
     this.beforeUpdate = options?.beforeUpdate;
     this.afterUpdate = options?.afterUpdate;
     const pathSegment =
@@ -308,17 +314,17 @@ export class HudDevTools {
       /* ignore */
     }
 
-    if (!document.getElementById("hdt-btn-highlight-style")) {
-      const hlStyle = document.createElement("style");
-      hlStyle.id = "hdt-btn-highlight-style";
-      hlStyle.textContent =
-        ".hdt-btn-highlight [data-hud-btn]{background:rgba(59,130,246,0.25);border:1.5px solid rgba(59,130,246,0.5);border-radius:50%;box-shadow:0 0 6px rgba(59,130,246,0.3);}" +
-        ".hdt-btn-highlight [data-hud-btn]:hover{background:rgba(59,130,246,0.45);}";
-      document.head.appendChild(hlStyle);
-    }
-    if (btnHighlightOn) this.root.classList.add("hdt-btn-highlight");
+    if (this.opts.showButtonHighlight !== false) {
+      if (!document.getElementById("hdt-btn-highlight-style")) {
+        const hlStyle = document.createElement("style");
+        hlStyle.id = "hdt-btn-highlight-style";
+        hlStyle.textContent =
+          ".hdt-btn-highlight [data-hud-btn]{background:rgba(59,130,246,0.25);border:1.5px solid rgba(59,130,246,0.5);border-radius:50%;box-shadow:0 0 6px rgba(59,130,246,0.3);}" +
+          ".hdt-btn-highlight [data-hud-btn]:hover{background:rgba(59,130,246,0.45);}";
+        document.head.appendChild(hlStyle);
+      }
+      if (btnHighlightOn) this.root.classList.add("hdt-btn-highlight");
 
-    {
       const row = document.createElement("div");
       row.className = "hdt-row";
       const lbl = document.createElement("label");
@@ -347,7 +353,7 @@ export class HudDevTools {
       body.appendChild(row);
     }
 
-    {
+    if (this.opts.showLayoutEditor !== false) {
       const row = document.createElement("div");
       row.className = "hdt-row";
       const lbl = document.createElement("label");
