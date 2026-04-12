@@ -19,8 +19,11 @@
 local resourceName = GetCurrentResourceName()
 local tLibName = 'tLib'
 
--- Don't load into tLib's own VM (it loads modules directly via fxmanifest)
 if resourceName == tLibName then return end
+
+if GetResourceState(tLibName) ~= 'started' then
+    error('^1tLib must be started before this resource.^0', 0)
+end
 
 local context = IsDuplicityVersion() and 'server' or 'client'
 
@@ -112,8 +115,11 @@ if requiredVersion and requiredVersion ~= '' then
         elseif cur[i] > req[i] then break end
     end
     if outdated then
-        local msg = ('\n^1[%s] requires tLib v%s or newer (found v%s). Please update tLib.^0'):format(
-            resourceName, requiredVersion, tlibVersion)
-        print(msg)
+        if IsDuplicityVersion() then
+            TriggerEvent('tlib:vcWarning', resourceName .. ' requires tLib v' .. requiredVersion .. '+ (found v' .. tlibVersion .. ')')
+        else
+            print(('\n^1[%s] requires tLib v%s or newer (found v%s)^0'):format(
+                resourceName, requiredVersion, tlibVersion))
+        end
     end
 end

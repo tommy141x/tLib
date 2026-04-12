@@ -208,7 +208,7 @@ function Discovery.create(opts)
             end
         end
         if count > 0 then
-            log("[" .. tag .. "] Loaded " .. count .. " config(s) from '" .. resName .. "/" .. configPath .. "'", 2)
+            log("[" .. tag .. "] Loaded " .. count .. " config(s) from '" .. resName .. "/" .. configPath .. "'", 1)
         end
         return count
     end

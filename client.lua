@@ -35,3 +35,5 @@ Platform.onShutdown(function()
     Platform.destroyUI(ui)
     ui = nil
 end)
+
+exports('HasLoaded', function() return true end)

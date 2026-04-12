@@ -68,4 +68,3 @@ function Platform._stub(name)
     end
 end
 
-print('platform=' .. Platform.name)
