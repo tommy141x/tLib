@@ -360,6 +360,29 @@ function DialogExports.register()
         Platform.sendUIEvent(ui, 'updateDialogField', payload)
     end)
 
+    -- Replaces the fields array on an open dialog without recreating it.
+    -- Existing field values are preserved; new fields get their defaultValue.
+    registerExport('UpdateDialogFields', function(dialogId, fields)
+        if type(dialogId) ~= 'string' or dialogId == '' then
+            log('UpdateDialogFields: dialogId must be a non-empty string', 3)
+            return
+        end
+        if type(fields) ~= 'table' then
+            log('UpdateDialogFields: fields must be a table', 3)
+            return
+        end
+        if not DialogState.get(dialogId) then
+            log('UpdateDialogFields: dialog "' .. dialogId .. '" is not open', 1)
+            return
+        end
+        local serialised = {}
+        for _, f in ipairs(fields) do
+            local sf = serialiseField(f)
+            if sf then table.insert(serialised, sf) end
+        end
+        Platform.sendUIEvent(ui, 'updateDialogFields', { dialogId = dialogId, fields = serialised })
+    end)
+
     -- Programmatically closes an open dialog and fires tLib:dialog:cancelled.
     -- No-op if the id is not currently registered (already submitted/cancelled).
     --

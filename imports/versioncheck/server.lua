@@ -258,6 +258,10 @@ AddEventHandler('onResourceStart', function(res)
 end)
 
 if not _isTlib then
+    -- check if tLib already printed (covers resource restart after boot)
+    if GetResourceState('tLib') == 'started' then
+        _tlibDone = true
+    end
     AddEventHandler('tlib:versioncheckDone', function()
         _tlibDone = true
         if _settled and _pending then
