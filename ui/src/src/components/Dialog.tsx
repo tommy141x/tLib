@@ -77,11 +77,36 @@ export default function Dialog() {
       }
     }
     setValues(init);
+    setOffset({ x: 0, y: 0 });
     setDialog(data);
     if (panelRef && data.theme) applyScopedTheme(data.theme, panelRef);
   });
 
   onNuiEvent<{ id: string }>("closeDialog", () => setDialog(null));
+
+  // Replace the fields array on an open dialog without recreating it
+  onNuiEvent<{ dialogId: string; fields: DialogField[] }>("updateDialogFields", (data) => {
+    const d = dialog();
+    if (!d || d.id !== data.dialogId) return;
+    // Keep existing values, add defaults for new fields
+    const prev = values();
+    const init: Record<string, string | number | boolean> = { ...prev };
+    for (const f of data.fields) {
+      if (f.type === "button") continue;
+      if (init[f.id] !== undefined) continue; // keep existing value
+      if (f.defaultValue !== undefined) {
+        init[f.id] = f.defaultValue;
+      } else if (f.type === "checkbox") {
+        init[f.id] = false;
+      } else if (f.type === "slider") {
+        init[f.id] = f.min ?? 0;
+      } else {
+        init[f.id] = "";
+      }
+    }
+    setValues(init);
+    setDialog({ ...d, fields: data.fields });
+  });
 
   onNuiEvent<{
     dialogId: string;
@@ -108,6 +133,50 @@ export default function Dialog() {
       setValues((prev) => ({ ...prev, [data.fieldId]: data.defaultValue! }));
     }
   });
+
+  // drag state
+  const [offset, setOffset] = createSignal({ x: 0, y: 0 });
+  let dragging = false;
+  let dragStart = { x: 0, y: 0 };
+  let dragOffsetStart = { x: 0, y: 0 };
+
+  function onDragStart(e: MouseEvent) {
+    if (e.button !== 0) return;
+    dragging = true;
+    dragStart = { x: e.clientX, y: e.clientY };
+    dragOffsetStart = { ...offset() };
+    e.preventDefault();
+
+    function onDragMove(e: MouseEvent) {
+      if (!dragging) return;
+      let nx = dragOffsetStart.x + (e.clientX - dragStart.x);
+      let ny = dragOffsetStart.y + (e.clientY - dragStart.y);
+      // clamp so panel stays on screen
+      if (panelRef) {
+        const rect = panelRef.getBoundingClientRect();
+        const pw = rect.width;
+        const ph = rect.height;
+        const cx = (window.innerWidth - pw) / 2;
+        const cy = (window.innerHeight - ph) / 2;
+        const minX = -cx;
+        const maxX = cx;
+        const minY = -cy;
+        const maxY = cy;
+        nx = Math.max(minX, Math.min(maxX, nx));
+        ny = Math.max(minY, Math.min(maxY, ny));
+      }
+      setOffset({ x: nx, y: ny });
+    }
+
+    function onDragEnd() {
+      dragging = false;
+      window.removeEventListener("mousemove", onDragMove);
+      window.removeEventListener("mouseup", onDragEnd);
+    }
+
+    window.addEventListener("mousemove", onDragMove);
+    window.addEventListener("mouseup", onDragEnd);
+  }
 
   function updateField(id: string, value: string | number | boolean) {
     setValues((prev) => ({ ...prev, [id]: value }));
@@ -152,11 +221,18 @@ export default function Dialog() {
           <div
             ref={panelRef}
             class="settings-panel flex flex-col overflow-hidden pointer-events-auto"
-            style={{ width: SIZE_W[d().size] ?? SIZE_W.md, "max-height": "85vh" }}
+            style={{
+              width: SIZE_W[d().size] ?? SIZE_W.md,
+              "max-height": "85vh",
+              transform: `translate(${offset().x}px, ${offset().y}px)`,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div class="flex items-center justify-between px-3 py-2 border-b border-[hsl(var(--border)/0.6)]">
+            {/* Header — drag to move */}
+            <div
+              class="flex items-center justify-between px-3 py-2 border-b border-[hsl(var(--border)/0.6)] cursor-grab active:cursor-grabbing select-none"
+              onMouseDown={onDragStart}
+            >
               <span class="flex items-center gap-1.5 text-[10px] font-mono font-semibold text-[hsl(var(--muted-foreground))]">
                 <IconSettings class="w-3 h-3 opacity-60" />
                 {d().title}

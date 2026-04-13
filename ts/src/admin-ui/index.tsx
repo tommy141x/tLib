@@ -44,6 +44,8 @@ export function AdminToggle(props: {
   description?: string;
   value: boolean;
   onChange: (v: boolean) => void;
+  onLabel?: string;
+  offLabel?: string;
 }) {
   const btnBase: JSX.CSSProperties = {
     padding: "2px 10px",
@@ -83,7 +85,7 @@ export function AdminToggle(props: {
           }}
           onClick={() => props.onChange(true)}
         >
-          On
+          {props.onLabel ?? "On"}
         </button>
         <button
           style={{
@@ -93,7 +95,7 @@ export function AdminToggle(props: {
           }}
           onClick={() => props.onChange(false)}
         >
-          Off
+          {props.offLabel ?? "Off"}
         </button>
       </div>
     </div>

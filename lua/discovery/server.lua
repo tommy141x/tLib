@@ -109,8 +109,9 @@ function Discovery.create(opts)
     local defaultFile   = opts.defaultFileName
     local localFile     = opts.localFile or "data.json"
     local localSection  = opts.localSection   -- optional: read/write only this key within localFile
+    local ownerResource = opts.resourceName or Platform.getPackageName()
     local tag           = opts.logTag or metadataKey
-    local chatTag       = opts.chatTag or ("[" .. Platform.getPackageName() .. "]")
+    local chatTag       = opts.chatTag or ("[" .. ownerResource .. "]")
 
     -- Auto-register this metadata key as a manifest sibling for grouping
     Discovery.addManifestSibling(metadataKey)
@@ -151,7 +152,7 @@ function Discovery.create(opts)
 
     function inst:loadLocal(filePath)
         filePath = filePath or localFile
-        local raw = _loadFile(Platform.getPackageName(), filePath)
+        local raw = _loadFile(ownerResource, filePath)
         if raw and raw ~= "" then
             local decoded = json.decode(raw) or {}
             if localSection then
@@ -177,12 +178,12 @@ function Discovery.create(opts)
         end
         if localSection then
             -- Merge into the existing file so sibling sections are preserved
-            local raw = _loadFile(Platform.getPackageName(), filePath)
+            local raw = _loadFile(ownerResource, filePath)
             local fileData = (raw and raw ~= "") and json.decode(raw) or {}
             fileData[localSection] = localOnly
-            _saveFile(Platform.getPackageName(), filePath, json.encode(fileData))
+            _saveFile(ownerResource, filePath, json.encode(fileData))
         else
-            _saveFile(Platform.getPackageName(), filePath, json.encode(localOnly))
+            _saveFile(ownerResource, filePath, json.encode(localOnly))
         end
     end
 
@@ -217,7 +218,7 @@ function Discovery.create(opts)
         local numResources = _getResourceCount()
         for i = 0, numResources - 1 do
             local resName = _getResourceAtIndex(i)
-            if resName and resName ~= Platform.getPackageName() then
+            if resName and resName ~= ownerResource then
                 inst:loadExternalFromResource(resName)
             end
         end
@@ -284,12 +285,12 @@ function Discovery.create(opts)
         end
 
         local targets = {}
-        table.insert(targets, { name = Platform.getPackageName(), hasMetadata = true, isLocal = true })
+        table.insert(targets, { name = ownerResource, hasMetadata = true, isLocal = true })
 
         local numResources = _getResourceCount()
         for i = 0, numResources - 1 do
             local resName = _getResourceAtIndex(i)
-            if resName and resName ~= Platform.getPackageName() and _getResourceState(resName) == "started" then
+            if resName and resName ~= ownerResource and _getResourceState(resName) == "started" then
                 local hasMetadata = activeResources[resName] == true
                 table.insert(targets, { name = resName, hasMetadata = hasMetadata })
             end
@@ -312,7 +313,7 @@ function Discovery.create(opts)
         if not config then return false end
 
         -- Move back to local
-        if targetResource == Platform.getPackageName() then
+        if targetResource == ownerResource then
             local oldExt = externalSources[model]
             if oldExt then
                 local raw = _loadFile(oldExt.resource, oldExt.filePath)
@@ -374,7 +375,7 @@ function Discovery.create(opts)
 
     -- Watch for resources that start after us
     _onResourceStart(function(resName)
-        if resName == Platform.getPackageName() then return end
+        if resName == ownerResource then return end
         local count = inst:loadExternalFromResource(resName)
 
         -- Also check runtime tracking for resources we previously exported to
@@ -478,7 +479,7 @@ function Discovery.create(opts)
 
             broadcast()
 
-            if targetResource == Platform.getPackageName() then
+            if targetResource == ownerResource then
                 Platform.TriggerClientEvent(sourceInfoEv, src, model, nil)
                 _chatMessage(src, chatTag, "Moved ~b~" .. model .. "~w~ back to local ~y~data.json~w~.")
                 log("[" .. tag .. "] Player " .. src .. " moved '" .. model .. "' back to local data.json", 2)
@@ -504,6 +505,10 @@ end
 
 function Discovery.registerExports()
     Platform.export('tLib', 'CreateDiscovery', function(opts)
+        -- capture caller at export time so discovery reads/writes the right resource
+        if not opts.resourceName then
+            opts.resourceName = GetInvokingResource()
+        end
         return Discovery.create(opts)
     end)
     -- AppendToManifest is exported by server/bundle.js (Node.js) for reliable fs access
