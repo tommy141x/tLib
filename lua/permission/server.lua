@@ -20,7 +20,7 @@ function Permission.isPlayerAdmin(playerId)
     return Permission.getPlayerLevel(playerId) >= 1
 end
 
-Platform.AddEventHandler("tLib:requestAdminPermission", function()
+Platform.AddNetEventHandler("tLib:requestAdminPermission", function()
     local src = source
     -- Send the numeric level; client handles both number (new) and bool (legacy).
     Platform.TriggerClientEvent("tLib:receiveAdminPermission", src, Permission.getPlayerLevel(src))

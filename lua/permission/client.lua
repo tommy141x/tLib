@@ -4,7 +4,7 @@
 local permLevel = 0
 local isAdmin   = false  -- kept for backward compat: true when permLevel >= 1
 
-Platform.AddEventHandler("tLib:receiveAdminPermission", function(result)
+Platform.AddNetEventHandler("tLib:receiveAdminPermission", function(result)
     if type(result) == "number" then
         permLevel = result
     else
@@ -14,17 +14,17 @@ Platform.AddEventHandler("tLib:receiveAdminPermission", function(result)
     isAdmin = permLevel >= 1
 end)
 
--- On FiveM, re-request permission when the resource (re)starts.
--- On Helix, the package init runs at startup so the TriggerServerEvent below suffices.
+-- On FiveM, request permission when the resource (re)starts.
+-- On Helix, the package init runs at startup so the fallback below suffices.
 if _TLIB_IS_FIVEM then
     AddEventHandler("onClientResourceStart", function(resourceName)
         if resourceName == Platform.getPackageName() then
             Platform.TriggerServerEvent("tLib:requestAdminPermission")
         end
     end)
+else
+    Platform.TriggerServerEvent("tLib:requestAdminPermission")
 end
-
-Platform.TriggerServerEvent("tLib:requestAdminPermission")
 
 function Permission_IsAdmin()
     return isAdmin

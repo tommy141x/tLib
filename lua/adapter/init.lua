@@ -53,12 +53,16 @@ function Platform.isHelix() return Platform.name == 'helix' end
 
 function Platform.isFiveM() return Platform.name == 'fivem' end
 
+local _cachedContext
 function Platform.context()
-    return {
-        package  = Platform.getPackageName(),
-        side     = Platform.getSide(),
-        platform = Platform.name,
-    }
+    if not _cachedContext then
+        _cachedContext = {
+            package  = Platform.getPackageName(),
+            side     = Platform.getSide(),
+            platform = Platform.name,
+        }
+    end
+    return _cachedContext
 end
 
 function Platform._stub(name)

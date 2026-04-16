@@ -4,13 +4,7 @@
 
 local log = Logger.create('tLib/adapter/vehicle')
 
-local _warnedOnce = {}
-local function _warnOnce(key, msg)
-    if not _warnedOnce[key] then
-        _warnedOnce[key] = true
-        log(msg, 3)
-    end
-end
+local _warnOnce = Utils.warnOnce
 
 if _TLIB_IS_HELIX then
     function Platform.getPlayerVehicle()
@@ -149,8 +143,15 @@ elseif _TLIB_IS_FIVEM then
         Platform.createThread(function()
             local hash = type(model) == 'number' and model or GetHashKey(model)
             RequestModel(hash)
+            local waited = 0
             while not HasModelLoaded(hash) do
                 Platform.wait(10)
+                waited = waited + 10
+                if waited > 5000 then
+                    SetModelAsNoLongerNeeded(hash)
+                    if type(cb) == 'function' then cb(nil) end
+                    return
+                end
             end
 
             local veh = CreateVehicle(

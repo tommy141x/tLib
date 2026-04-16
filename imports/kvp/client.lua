@@ -53,23 +53,16 @@ end
 --- @param default? number
 --- @return number
 function kvp.getFloat(key, default)
-    local v = GetResourceKvpFloat(kvp.key(key))
-    if v ~= 0.0 then return v end
-    -- 0.0 could be a real value or "not set" — check if key exists
-    local s = GetResourceKvpString(kvp.key(key))
-    if s and s ~= "" then return v end
-    return default or 0.0
+    if not kvp.has(key) then return default or 0.0 end
+    return GetResourceKvpFloat(kvp.key(key))
 end
 
 --- @param key string
 --- @param default? number
 --- @return number
 function kvp.getInt(key, default)
-    local v = GetResourceKvpInt(kvp.key(key))
-    if v ~= 0 then return v end
-    local s = GetResourceKvpString(kvp.key(key))
-    if s and s ~= "" then return v end
-    return default or 0
+    if not kvp.has(key) then return default or 0 end
+    return GetResourceKvpInt(kvp.key(key))
 end
 
 --- @param key string
@@ -104,7 +97,7 @@ function kvp.has(key)
     if handle == -1 then return false end
     local found = FindKvp(handle)
     EndFindKvp(handle)
-    return found ~= nil
+    return found == resolved
 end
 
 --- @param key string

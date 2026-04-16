@@ -428,12 +428,14 @@ function Discovery.create(opts)
         end
 
         -- Request all configs
-        Platform.AddEventHandler(prefix .. ":config_request", function()
-            Platform.TriggerClientEvent(receiveEv, source, configs)
+        Platform.AddNetEventHandler(prefix .. ":config_request", function()
+            local src = source
+            if not src or src <= 0 then return end
+            Platform.TriggerClientEvent(receiveEv, src, configs)
         end)
 
         -- Save a model's config
-        Platform.AddEventHandler(prefix .. ":config_save", function(model, config)
+        Platform.AddNetEventHandler(prefix .. ":config_save", function(model, config)
             local src = source
             if not checkPerm(src) then return end
             model = resolveModel(model)
@@ -443,7 +445,7 @@ function Discovery.create(opts)
         end)
 
         -- Remove a model's config
-        Platform.AddEventHandler(prefix .. ":config_remove", function(model)
+        Platform.AddNetEventHandler(prefix .. ":config_remove", function(model)
             local src = source
             if not checkPerm(src) then return end
             model = resolveModel(model)
@@ -455,20 +457,25 @@ function Discovery.create(opts)
         end)
 
         -- Get external source for a model
-        Platform.AddEventHandler(prefix .. ":getExternalSource", function(model)
+        Platform.AddNetEventHandler(prefix .. ":getExternalSource", function(model)
             local src = source
+            if not src or src <= 0 then return end
+            if not checkPerm(src) then return end
             model = resolveModel(model)
             local ext = externalSources[model]
             Platform.TriggerClientEvent(sourceInfoEv, src, model, ext and ext.resource or nil)
         end)
 
         -- Get export target list
-        Platform.AddEventHandler(prefix .. ":getExportTargets", function()
-            Platform.TriggerClientEvent(targetsEv, source, inst:getExportTargets())
+        Platform.AddNetEventHandler(prefix .. ":getExportTargets", function()
+            local src = source
+            if not src or src <= 0 then return end
+            if not checkPerm(src) then return end
+            Platform.TriggerClientEvent(targetsEv, src, inst:getExportTargets())
         end)
 
         -- Export config to another resource
-        Platform.AddEventHandler(prefix .. ":exportConfig", function(model, targetResource)
+        Platform.AddNetEventHandler(prefix .. ":exportConfig", function(model, targetResource)
             local src = source
             if not checkPerm(src) then return end
             model = resolveModel(model)

@@ -4,18 +4,24 @@ lua54 'yes'
 
 author 'Tommy Johnston'
 description 'tLib — shared UI and utility library (FiveM/Helix)'
-version '0.2'
+version '0.3'
 
 shared_scripts {
     'lua/adapter/init.lua',
     'lua/utils/logger.lua',
+    'lua/adapter/shim.lua',
     'lua/adapter/core.lua',
+    'lua/adapter/events.lua',
+    'lua/adapter/ui.lua',
+    'lua/adapter/shutdown.lua',
     'lua/utils/shared.lua',
     'lua/coords/shared.lua',
 }
 
 client_scripts {
     'lua/adapter/player.lua',
+    'lua/adapter/vehicle.lua',
+    'lua/adapter/world.lua',
     'lua/permission/client.lua',
     'lua/theme/exports.lua',
     'lua/theme/client.lua',
@@ -46,8 +52,8 @@ files {
     'imports/**/shared.lua',
     'imports/**/client.lua',
     'imports/**/*.lua',
-    'ui/build/index.html',
-    'ui/build/**/*',
+    'ui/index.html',
+    'ui/assets/**/*',
 }
 
-ui_page 'ui/build/index.html'
+ui_page 'ui/index.html'

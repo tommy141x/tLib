@@ -1,4 +1,4 @@
--- server: cached coord index rebuilt every N ms. client: direct GetActivePlayers.
+-- cached coord index rebuilt every REFRESH_MS on both server and client.
 
 local spatial = {}
 
@@ -47,21 +47,38 @@ local function nearbyServer(coords, radius)
     return result
 end
 
-local function nearbyClient(coords, radius)
-    local result = {}
-    local players = GetActivePlayers()
-    local rSq = radius * radius
+local clientIndex = {}
+local clientLastUpdate = 0
 
+local function rebuildClientIndex()
+    local now = GetGameTimer()
+    if (now - clientLastUpdate) < REFRESH_MS then return end
+    clientLastUpdate = now
+
+    clientIndex = {}
+    local players = GetActivePlayers()
     for _, pid in ipairs(players) do
         local ped = GetPlayerPed(pid)
         if DoesEntityExist(ped) then
             local pc = GetEntityCoords(ped)
-            local dx = coords.x - pc.x
-            local dy = coords.y - pc.y
-            local dz = coords.z - pc.z
-            if dx * dx + dy * dy + dz * dz <= rSq then
-                result[#result + 1] = GetPlayerServerId(pid)
-            end
+            clientIndex[#clientIndex + 1] = { serverId = GetPlayerServerId(pid), coords = pc }
+        end
+    end
+end
+
+local function nearbyClient(coords, radius)
+    rebuildClientIndex()
+
+    local result = {}
+    local rSq = radius * radius
+
+    for _, entry in ipairs(clientIndex) do
+        local pc = entry.coords
+        local dx = coords.x - pc.x
+        local dy = coords.y - pc.y
+        local dz = coords.z - pc.z
+        if dx * dx + dy * dy + dz * dz <= rSq then
+            result[#result + 1] = entry.serverId
         end
     end
 

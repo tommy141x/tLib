@@ -13,7 +13,8 @@ function MenuUtils.resolve(v, def)
     return v ~= nil and v or def
 end
 
-MenuState            = {}
+MenuState                  = {}
+MenuState.DEFAULT_PRIORITY = 500
 
 local log            = Logger.create('tLib/menu')
 
@@ -88,10 +89,19 @@ end
 -- with the items array. All mutation paths (addItem, removeItem, clearItems)
 -- must go through these helpers so the index never drifts.
 
+--- Invalidate the filtered/sorted cache so the next call recomputes.
+local function invalidateFilterCache(menu)
+    menu._filteredDirty = true
+end
+
 --- Insert an item into both the items array and the O(1) index.
 function MenuState.addItem(menu, item)
     table.insert(menu.items, item)
     menu._itemIndex[item.id] = item
+    if type(item.visible) == 'function' then
+        menu._hasDynamicVisibility = true
+    end
+    invalidateFilterCache(menu)
 end
 
 --- Remove an item from both the items array and the O(1) index.
@@ -101,6 +111,7 @@ function MenuState.removeItem(menu, itemId)
         if menu.items[i].id == itemId then
             table.remove(menu.items, i)
             menu._itemIndex[itemId] = nil
+            invalidateFilterCache(menu)
             return true
         end
     end
@@ -109,10 +120,13 @@ end
 
 --- Clear all items and reset the index and order counter.
 function MenuState.clearItems(menu)
-    menu.items         = {}
-    menu._itemIndex    = {}
-    menu.focusedId     = nil
-    menu._orderCounter = 0
+    menu.items                = {}
+    menu._itemIndex           = {}
+    menu.focusedId            = nil
+    menu._orderCounter        = 0
+    menu._filteredCache       = nil
+    menu._filteredDirty       = true
+    menu._hasDynamicVisibility = false
 end
 
 --- O(1) item lookup by id.
@@ -122,6 +136,13 @@ function MenuState.findItemById(menu, itemId)
 end
 
 local function filteredSortedItems(menu)
+    -- When no item uses a visibility function we can safely cache the result
+    -- and skip the filter+sort on every keypress. Menus with dynamic visibility
+    -- always recompute because the visibility can change externally.
+    if not menu._hasDynamicVisibility and not menu._filteredDirty and menu._filteredCache then
+        return menu._filteredCache
+    end
+
     local result = {}
     for _, item in ipairs(menu.items) do
         local v = item.visible
@@ -137,10 +158,13 @@ local function filteredSortedItems(menu)
         if isVisible then table.insert(result, item) end
     end
     table.sort(result, function(a, b)
-        local pa, pb = a.priority or 500, b.priority or 500
+        local pa, pb = a.priority or MenuState.DEFAULT_PRIORITY, b.priority or MenuState.DEFAULT_PRIORITY
         if pa ~= pb then return pa < pb end
         return (a._order or 0) < (b._order or 0)
     end)
+
+    menu._filteredCache = result
+    menu._filteredDirty = false
     return result
 end
 
@@ -178,7 +202,7 @@ function MenuState.moveFocus(menu, dir)
     for i = 1, count do
         local idx = ((cur - 1 + dir * i) % count) + 1
         local item = items[idx]
-        if item.type ~= 'separator' then
+        if item.type ~= 'separator' and not resolve(item.disabled, false) then
             menu.focusedId = item.id
             return item.id
         end
@@ -318,6 +342,13 @@ function MenuState.patchItem(menuId, itemId, changes)
     end
 
     for k, v in pairs(changes) do item[k] = v end
+
+    if changes.visible ~= nil or changes.priority ~= nil then
+        invalidateFilterCache(menu)
+        if type(changes.visible) == 'function' then
+            menu._hasDynamicVisibility = true
+        end
+    end
 
     if menuStack[#menuStack] ~= menuId then return end
 

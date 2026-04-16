@@ -26,14 +26,11 @@ local log = Logger.create('tLib/serversettings')
 
 ServerSettings = {}
 
---- Deep merge one level: nested tables get their keys merged, scalars overwrite.
-local function deepMergeOne(target, source)
+--- Recursively merge source into target. Nested tables are merged, scalars overwrite.
+local function deepMerge(target, source)
     for k, v in pairs(source) do
         if type(v) == "table" and type(target[k]) == "table" then
-            -- Non-empty table: merge keys
-            for sk, sv in pairs(v) do
-                target[k][sk] = sv
-            end
+            deepMerge(target[k], v)
         else
             target[k] = v
         end
@@ -134,7 +131,7 @@ function ServerSettings.create(opts)
     --- Deep merge changes into settings, save, and broadcast.
     function inst:merge(changes)
         if type(changes) ~= "table" then return end
-        deepMergeOne(settings, changes)
+        deepMerge(settings, changes)
         saveToFile()
         inst:broadcast()
     end
@@ -177,7 +174,7 @@ function ServerSettings.create(opts)
     if saveEvent then
         Permission.registerAdminEvent(saveEvent, function(src, changes)
             if type(changes) ~= "table" then return end
-            deepMergeOne(settings, changes)
+            deepMerge(settings, changes)
             saveToFile()
             log("Server settings updated by player " .. src, 3)
             inst:broadcast()
