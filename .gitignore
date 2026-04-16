@@ -5,9 +5,11 @@ node_modules/
 dist/
 ts/src/build/
 scripts/
-ui/build/
+ui/index.html
+ui/assets/
 server/bundle.js
 *.zip
+todo.txt
 
 # Assets (external dependencies, installed separately)
 assets/

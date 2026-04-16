@@ -1,7 +1,7 @@
 -- player input: key binds, input blocking, input mode query
 
-_tLibUIFocused  = false
-_tLibNUIFocused = false
+_TLIB_UI_FOCUSED  = false
+_TLIB_NUI_FOCUSED = false
 
 local log       = Logger.create('tLib/adapter/player')
 
@@ -114,10 +114,13 @@ elseif _TLIB_IS_FIVEM then
     -- Camera / look controls.
     local _lookControls = { 1, 2, 3, 4, 220, 221 }
 
-    -- Single shared thread — only burns CPU when at least one flag is set.
-    Platform.createThread(function()
-        while true do
-            if Platform._blockMove or Platform._blockLook then
+    local _blockThreadRunning = false
+
+    local function ensureBlockThread()
+        if _blockThreadRunning then return end
+        _blockThreadRunning = true
+        Platform.createThread(function()
+            while Platform._blockMove or Platform._blockLook do
                 Platform.wait(0)
                 if Platform._blockMove then
                     for _, ctrl in ipairs(_moveControls) do
@@ -129,18 +132,19 @@ elseif _TLIB_IS_FIVEM then
                         DisableControlAction(0, ctrl, true)
                     end
                 end
-            else
-                Platform.wait(100)
             end
-        end
-    end)
+            _blockThreadRunning = false
+        end)
+    end
 
     function Platform.setIgnoreMoveInput(state)
         Platform._blockMove = state == true
+        if state then ensureBlockThread() end
     end
 
     function Platform.setIgnoreLookInput(state)
         Platform._blockLook = state == true
+        if state then ensureBlockThread() end
     end
 else
     Platform.setIgnoreMoveInput = Platform._stub('setIgnoreMoveInput')
@@ -152,7 +156,7 @@ end
 
 if _TLIB_IS_HELIX then
     function Platform.getInputMode()
-        return _tLibUIFocused and 1 or 0
+        return _TLIB_UI_FOCUSED and 1 or 0
     end
 elseif _TLIB_IS_FIVEM then
     function Platform.getInputMode()
@@ -161,7 +165,7 @@ elseif _TLIB_IS_FIVEM then
         --   • the game's pause menu is open
         -- This ensures navigation.lua's blocked() correctly suppresses menu
         -- keys while a dialog (or any other tLib UI) owns the cursor.
-        if _tLibNUIFocused then return 1 end
+        if _TLIB_NUI_FOCUSED then return 1 end
         if IsPauseMenuActive and IsPauseMenuActive() then return 1 end
         return 0
     end

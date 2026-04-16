@@ -95,6 +95,10 @@ for i = 1, GetNumResourceMetadata(resourceName, 'tlib_module') do
 end
 
 -- check if consumer requires a minimum tLib version
+
+-- Duplicated from imports/versioncheck/server.lua. Cannot be shared because
+-- this file runs in consumer resource VMs (via shared_scripts '@tLib/imports.lua'),
+-- while versioncheck runs inside tLib's own VM.
 local function parseVer(s)
     if not s then return { 0, 0, 0 } end
     s = s:gsub("^v", "")

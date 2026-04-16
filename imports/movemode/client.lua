@@ -60,9 +60,9 @@ function movemode.create(opts)
 
     --- Save position to KVP.
     function inst:savePosition(right, bottom, scale)
-        if right then position.right = right end
-        if bottom then position.bottom = bottom end
-        if scale then position.scale = math.max(range[1], math.min(range[2], scale)) end
+        if right ~= nil then position.right = right end
+        if bottom ~= nil then position.bottom = bottom end
+        if scale ~= nil then position.scale = math.max(range[1], math.min(range[2], scale)) end
         kvp.setFloat(keys.right,  position.right)
         kvp.setFloat(keys.bottom, position.bottom)
         kvp.setFloat(keys.scale,  position.scale)
@@ -84,13 +84,14 @@ function movemode.create(opts)
     --- Enter move mode (enables NUI cursor).
     function inst:enter()
         active = true
-        SetNuiFocus(true, true)
+        -- SetNuiFocus is FiveM-only; guard for Helix where the native doesn't exist.
+        if SetNuiFocus then SetNuiFocus(true, true) end
     end
 
     --- Exit move mode (disables NUI cursor).
     function inst:exit()
         active = false
-        SetNuiFocus(false, false)
+        if SetNuiFocus then SetNuiFocus(false, false) end
     end
 
     --- Toggle move mode.

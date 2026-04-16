@@ -11,6 +11,10 @@ exports("RegisterManifestSibling", (key: string) => {
   if (!siblings.includes(key)) siblings.push(key);
 });
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // adds a metadata line to fxmanifest if it's not already there
 exports(
   "AppendToManifest",
@@ -32,7 +36,7 @@ exports(
       if (content.includes(line)) return true;
 
       // Key exists but points to a different file — update in place
-      const keyPattern = new RegExp(`^${metadataKey}\\s+['"].+['"]`, "m");
+      const keyPattern = new RegExp(`^${escapeRegExp(metadataKey)}\\s+['"].+['"]`, "m");
       if (keyPattern.test(content)) {
         content = content.replace(keyPattern, line);
         fs.writeFileSync(manifestPath, content, "utf8");
@@ -42,7 +46,7 @@ exports(
       // Look for a sibling key to append after, so related keys stay grouped
       for (const sibling of siblings) {
         if (sibling === metadataKey) continue;
-        const sibPattern = new RegExp(`^(${sibling}\\s+['"].+['"].*)$`, "m");
+        const sibPattern = new RegExp(`^(${escapeRegExp(sibling)}\\s+['"].+['"].*)$`, "m");
         const match = content.match(sibPattern);
         if (match) {
           content = content.replace(sibPattern, `$1\n${line}`);

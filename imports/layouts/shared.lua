@@ -31,6 +31,10 @@ function layouts.scan(basePath, matchFile, resourceName)
 
     local result = {}
 
+    if not basePath:match("^[%w%-%_/\\%.]+$") then
+        return {}
+    end
+
     -- Try io.popen (server-side directory listing)
     local resourcePath = GetResourcePath(resourceName)
     if resourcePath then
@@ -87,7 +91,9 @@ function layouts.loadTemplate(basePath, layoutName, fileName, vars, resourceName
     if not content then return nil end
 
     for key, value in pairs(vars) do
-        content = content:gsub("{{" .. key .. "}}", tostring(value))
+        local escaped_key = key:gsub("([%%%.%+%-%*%?%[%]%^%$%(%)%{%}])", "%%%1")
+        local escaped_value = tostring(value):gsub("%%", "%%%%")
+        content = content:gsub("{{" .. escaped_key .. "}}", escaped_value)
     end
     return content
 end

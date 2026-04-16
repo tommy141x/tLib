@@ -17,6 +17,18 @@ local VALID_FIELD_TYPES = {
     button   = true,
 }
 
+local function validateOptions(f)
+    local opts = {}
+    if type(f.options) == 'table' then
+        for _, opt in ipairs(f.options) do
+            if type(opt) == 'table' and type(opt.value) == 'string' and type(opt.label) == 'string' then
+                table.insert(opts, { value = opt.value, label = opt.label })
+            end
+        end
+    end
+    return opts
+end
+
 local function serialiseField(f)
     if type(f) ~= 'table' then return nil end
 
@@ -52,30 +64,8 @@ local function serialiseField(f)
             s.min = type(f.min) == 'number' and f.min or nil
             s.max = type(f.max) == 'number' and f.max or nil
         end
-    elseif fieldType == 'dropdown' then
-        -- Native <select> dropdown — same data shape as select/radio
-        local opts = {}
-        if type(f.options) == 'table' then
-            for _, opt in ipairs(f.options) do
-                if type(opt) == 'table' and type(opt.value) == 'string' and type(opt.label) == 'string' then
-                    table.insert(opts, { value = opt.value, label = opt.label })
-                end
-            end
-        end
-        s.options      = opts
-        s.placeholder  = type(f.placeholder) == 'string' and f.placeholder or nil
-        s.defaultValue = type(f.defaultValue) == 'string' and f.defaultValue or nil
-    elseif fieldType == 'select' or fieldType == 'radio' then
-        -- options must be an array of { value, label } tables
-        local opts = {}
-        if type(f.options) == 'table' then
-            for _, opt in ipairs(f.options) do
-                if type(opt) == 'table' and type(opt.value) == 'string' and type(opt.label) == 'string' then
-                    table.insert(opts, { value = opt.value, label = opt.label })
-                end
-            end
-        end
-        s.options      = opts
+    elseif fieldType == 'dropdown' or fieldType == 'select' or fieldType == 'radio' then
+        s.options      = validateOptions(f)
         s.placeholder  = type(f.placeholder) == 'string' and f.placeholder or nil
         s.defaultValue = type(f.defaultValue) == 'string' and f.defaultValue or nil
     elseif fieldType == 'slider' then
@@ -298,6 +288,14 @@ function DialogExports.register()
         cbs.onCancel     = onCancel or opts.onCancel or nil
         cbs.onChange      = opts.onChange or nil
         cbs.onButtonClick = opts.onButtonClick or nil
+
+        -- Only one dialog can be visible at a time. Clean up any leftover callbacks
+        -- from a previous dialog that was never properly closed (e.g. NUI crash).
+        for prevId, _ in pairs(_dialogCallbacks) do
+            if prevId ~= id then
+                _dialogCallbacks[prevId] = nil
+            end
+        end
 
         if cbs.onSubmit or cbs.onCancel or cbs.onChange or cbs.onButtonClick then
             _dialogCallbacks[id] = cbs

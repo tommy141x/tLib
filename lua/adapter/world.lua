@@ -3,20 +3,20 @@
 
 local log = Logger.create('tLib/adapter/world')
 
-local _warnedOnce = {}
-local function _warnOnce(key, msg)
-    if not _warnedOnce[key] then
-        _warnedOnce[key] = true
-        log(msg, 3)
-    end
-end
+local _warnOnce = Utils.warnOnce
 
 -- Accepts either a plain {x,y,z} table, a FiveM vector3, or a Helix Vector
 -- and always returns a plain Lua table with lowercase x/y/z keys.
 
+-- On FiveM, GetEntityCoords returns a vector3 that already has .x/.y/.z,
+-- so skip the table copy when the input is usable as-is. Helix vectors use
+-- uppercase X/Y/Z and need normalization into a plain table.
 local function _toCoordTable(v)
     if type(v) ~= 'table' and type(v) ~= 'userdata' then
         return { x = 0, y = 0, z = 0 }
+    end
+    if _TLIB_IS_FIVEM and v.x ~= nil then
+        return v
     end
     return {
         x = v.x or v.X or 0,
@@ -420,7 +420,7 @@ elseif _TLIB_IS_FIVEM then
         -- Fallback: request collision load then retry.
         RequestCollisionAtCoord(x, y)
         local tries = 0
-        while tries < 30 do
+        while tries < 10 do
             Citizen.Wait(100)
             found, groundZ = GetGroundZFor_3dCoord(x, y, 1000.0, false)
             if found then return groundZ end

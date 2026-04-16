@@ -695,7 +695,3 @@ function Http.fetch(opts, callback)
         sendAndReceive(conn, request, sockmod, deadline, callback)
     end)
 end
-
-function Http.registerExports()
-    -- Export registration moved to lua/adapter/utils.lua.
-end

@@ -13,5 +13,8 @@ function Menu.init(ui)
     MenuState.setUI(ui)
     MenuNavigation.init(ui)
     MenuExports.register()
-    MenuState.markReady()
+    -- markReady is intentionally NOT called here. The NUI page may not have
+    -- loaded yet; client.lua defers the call until Platform.onNUIReady fires
+    -- so that consumer resources cannot open menus before the JS listeners
+    -- are active and messages would be silently lost.
 end

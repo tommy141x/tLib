@@ -8,7 +8,7 @@ local resolve = MenuUtils.resolve
 local function applyOpts(item, opts)
     if type(opts) ~= 'table' then return end
     if opts.visible ~= nil then item.visible = opts.visible end
-    if opts.priority ~= nil then item.priority = tonumber(opts.priority) or 500 end
+    if opts.priority ~= nil then item.priority = tonumber(opts.priority) or MenuState.DEFAULT_PRIORITY end
     if opts.disabled ~= nil then item.disabled = opts.disabled end
     if opts.rightLabel ~= nil then item.rightLabel = opts.rightLabel end
     if opts.icon ~= nil then item.icon = opts.icon end
@@ -18,7 +18,7 @@ end
 local function applyBaseOpts(item, opts)
     if type(opts) ~= 'table' then return end
     if opts.visible ~= nil then item.visible = opts.visible end
-    if opts.priority ~= nil then item.priority = tonumber(opts.priority) or 500 end
+    if opts.priority ~= nil then item.priority = tonumber(opts.priority) or MenuState.DEFAULT_PRIORITY end
 end
 
 -- Used by both the individual Add* exports and BatchUpdate so item construction
@@ -149,7 +149,7 @@ local function setPriorityImpl(menuId, itemId, priority)
         log('SetItemPriority: unknown itemId ' .. tostring(itemId) .. ' in menu ' .. tostring(menuId), 4)
         return false
     end
-    item.priority = tonumber(priority) or 500
+    item.priority = tonumber(priority) or MenuState.DEFAULT_PRIORITY
     Platform.TriggerEvent('tLib:item:updated', menuId, itemId, { priority = item.priority })
     MenuState.refreshMenu(menuId)
     return true
@@ -497,7 +497,7 @@ function MenuExports.register()
         local lowest = math.huge
         for _, it in ipairs(menu.items) do
             if it.id ~= itemId then
-                local p = it.priority or 500
+                local p = it.priority or MenuState.DEFAULT_PRIORITY
                 if p < lowest then lowest = p end
             end
         end
@@ -522,7 +522,7 @@ function MenuExports.register()
         local highest = -math.huge
         for _, it in ipairs(menu.items) do
             if it.id ~= itemId then
-                local p = it.priority or 500
+                local p = it.priority or MenuState.DEFAULT_PRIORITY
                 if p > highest then highest = p end
             end
         end

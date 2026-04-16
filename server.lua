@@ -3,13 +3,13 @@ Permission.registerExports()
 ServerSettings.registerExports()
 exports('HasLoaded', function() return true end)
 
-Platform.onShutdown(function()
-end)
-
 -- `ensure [folder]` can start dependents before tLib is ready.
--- track which ones died, restart them once we're up.
+-- track which ones died during boot, restart them once we're up.
 local _failedDependents = {}
-AddEventHandler('onResourceStop', function(res)
+local _booting = true
+
+local _bootHandler = AddEventHandler('onResourceStop', function(res)
+    if not _booting then return end
     if res ~= GetCurrentResourceName() then
         local n = GetNumResourceMetadata(res, 'dependency')
         for d = 0, n - 1 do
@@ -29,6 +29,8 @@ CreateThread(function()
         end
     end
     _failedDependents = {}
+    _booting = false
+    RemoveEventHandler(_bootHandler)
 end)
 
 -- tlib_min_version warnings from consumers
