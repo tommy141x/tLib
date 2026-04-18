@@ -27,6 +27,35 @@ end
 
 local context = IsDuplicityVersion() and 'server' or 'client'
 
+-- Enforce tlib_min_version *before* anything touches tlib, so an outdated
+-- tLib produces a clear "update tLib" message instead of a cryptic
+-- "No such export X" when a module added in a later tLib version is used.
+-- Duplicated from imports/versioncheck/server.lua because this file runs
+-- in consumer resource VMs, while versioncheck runs inside tLib's own VM.
+local function parseVer(s)
+    if not s then return { 0, 0, 0 } end
+    s = s:gsub('^v', '')
+    local parts = {}
+    for n in s:gmatch('%d+') do parts[#parts + 1] = tonumber(n) end
+    while #parts < 3 do parts[#parts + 1] = 0 end
+    return parts
+end
+
+local requiredVersion = GetResourceMetadata(resourceName, 'tlib_min_version', 0)
+if requiredVersion and requiredVersion ~= '' then
+    local tlibVersion = GetResourceMetadata(tLibName, 'version', 0) or '0.0.0'
+    local req, cur = parseVer(requiredVersion), parseVer(tlibVersion)
+    local outdated = false
+    for i = 1, 3 do
+        if cur[i] < req[i] then outdated = true; break
+        elseif cur[i] > req[i] then break end
+    end
+    if outdated then
+        error(('\n^1[%s] requires tLib v%s or newer — installed tLib is v%s. Update tLib.^0')
+            :format(resourceName, requiredVersion, tlibVersion), 0)
+    end
+end
+
 local function loadModule(self, module)
     local dir = ('imports/%s'):format(module)
     local chunk = LoadResourceFile(tLibName, ('%s/%s.lua'):format(dir, context))
@@ -94,36 +123,3 @@ for i = 1, GetNumResourceMetadata(resourceName, 'tlib_module') do
     end
 end
 
--- check if consumer requires a minimum tLib version
-
--- Duplicated from imports/versioncheck/server.lua. Cannot be shared because
--- this file runs in consumer resource VMs (via shared_scripts '@tLib/imports.lua'),
--- while versioncheck runs inside tLib's own VM.
-local function parseVer(s)
-    if not s then return { 0, 0, 0 } end
-    s = s:gsub("^v", "")
-    local parts = {}
-    for n in s:gmatch("%d+") do parts[#parts + 1] = tonumber(n) end
-    while #parts < 3 do parts[#parts + 1] = 0 end
-    return parts
-end
-
-local requiredVersion = GetResourceMetadata(resourceName, 'tlib_min_version', 0)
-if requiredVersion and requiredVersion ~= '' then
-    local tlibVersion = GetResourceMetadata(tLibName, 'version', 0) or '0.0.0'
-    local req = parseVer(requiredVersion)
-    local cur = parseVer(tlibVersion)
-    local outdated = false
-    for i = 1, 3 do
-        if cur[i] < req[i] then outdated = true; break
-        elseif cur[i] > req[i] then break end
-    end
-    if outdated then
-        if IsDuplicityVersion() then
-            TriggerEvent('tlib:vcWarning', resourceName .. ' requires tLib v' .. requiredVersion .. '+ (found v' .. tlibVersion .. ')')
-        else
-            print(('\n^1[%s] requires tLib v%s or newer (found v%s)^0'):format(
-                resourceName, requiredVersion, tlibVersion))
-        end
-    end
-end

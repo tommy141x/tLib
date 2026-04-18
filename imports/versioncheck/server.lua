@@ -243,6 +243,26 @@ local function stripV(s)
     return s:gsub('^v', '')
 end
 
+-- Strip the markdown that commonly appears in changelog bodies so it reads
+-- cleanly inside the console box:
+--   **text**       → text                      (bold markers, paired or unpaired)
+--   [text](url)    → text (see link below)     (url collected for printing outside the box)
+-- Seen URLs are deduplicated against `urlSet` so repeated links don't print twice.
+local function stripChangelogMarkdown(line, collectedUrls, urlSet)
+    -- Convert links first so brackets inside link text don't confuse the bold
+    -- pass. Unpaired `**` at the start of a line (common when authors forget
+    -- the closing marker) is also stripped.
+    line = line:gsub('%[(.-)%]%((.-)%)', function(text, url)
+        if url and url ~= '' and not urlSet[url] then
+            urlSet[url] = true
+            collectedUrls[#collectedUrls + 1] = url
+        end
+        return text .. ' (see link below)'
+    end)
+    line = line:gsub('%*%*', '')
+    return line
+end
+
 -- wait for startup noise to settle before printing boxes
 local SETTLE_MS  = 1000
 local _settled   = false
@@ -319,14 +339,18 @@ local function buildOutput(opts, release, infoValues)
     local contentLines = {}
     local lines = contentLines
     local urls = {}
+    local urlSet = {}
     if not release or not release.version then
         lines[#lines + 1] = color .. '  Version:  ' .. GREY .. 'v' .. stripV(current)
         lines[#lines + 1] = '^1  Status:   Could not check for updates'
     elseif isOutdated(current, release.version) then
         local versionLine = color .. '  Version:  ' .. GREY .. 'v' .. stripV(current) .. ' ' .. color .. '→ ' .. color .. 'v' .. stripV(release.version)
-        if release.url then
+        if release.url and release.url ~= '' then
             versionLine = versionLine .. ' ' .. GREY .. '(see link below)'
-            urls[#urls + 1] = release.url
+            if not urlSet[release.url] then
+                urlSet[release.url] = true
+                urls[#urls + 1] = release.url
+            end
         end
         lines[#lines + 1] = versionLine
     else
@@ -375,10 +399,11 @@ local function buildOutput(opts, release, infoValues)
     if release and release.changelog and release.changelog ~= '' and isOutdated(current, release.version) then
         lines[#lines + 1] = ''
         for line in release.changelog:gmatch('[^\r\n]+') do
-            if line:match('^%s*%d+/%d+/%d+') or line:match('^%s*v%d') then
-                lines[#lines + 1] = color .. '  ' .. line
+            local clean = stripChangelogMarkdown(line, urls, urlSet)
+            if clean:match('^%s*%d+/%d+/%d+') or clean:match('^%s*v%d') then
+                lines[#lines + 1] = color .. '  ' .. clean
             else
-                lines[#lines + 1] = GREY .. '  ' .. line
+                lines[#lines + 1] = GREY .. '  ' .. clean
             end
         end
     end

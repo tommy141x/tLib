@@ -24,8 +24,13 @@ local function httpGet(url, timeoutMs)
 end
 
 local function extractPort(url)
-    local port = url:match(':(%d+)')
-    return port and tonumber(port) or nil
+    -- Skip the protocol's colon (https://), match port after host
+    local port = url:match('//[^/]*:(%d+)')
+    if port then return tonumber(port) end
+    -- Default ports for known protocols
+    if url:match('^https://') then return 443 end
+    if url:match('^http://') then return 80 end
+    return nil
 end
 
 local function substituteVars(msg, url)
@@ -35,9 +40,10 @@ local function substituteVars(msg, url)
 end
 
 local function runSteps(url, steps, timeout)
+    local base = url:gsub('/$', '')
     local results = {}
     for i, step in ipairs(steps) do
-        local checkUrl = url .. (step.path or '/')
+        local checkUrl = base .. (step.path or '/')
         local resp = httpGet(checkUrl, timeout)
 
         local passed = false
