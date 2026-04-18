@@ -3,7 +3,7 @@ name: Sync Docs to Main Docs Repo
 on:
   push:
     branches:
-      - master # Change to 'master' if needed
+      - main
     paths:
       - "docs/**"
 
