@@ -4,7 +4,7 @@ lua54 'yes'
 
 author 'Tommy Johnston'
 description 'tLib — shared UI and utility library (FiveM/Helix)'
-version '0.3'
+version '0.4'
 
 shared_scripts {
     'lua/adapter/init.lua',

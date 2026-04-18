@@ -33,12 +33,6 @@ CreateThread(function()
     RemoveEventHandler(_bootHandler)
 end)
 
--- tlib_min_version warnings from consumers
-local _tlibWarnings = {}
-AddEventHandler('tlib:vcWarning', function(msg)
-    _tlibWarnings[#_tlibWarnings + 1] = msg
-end)
-
 local vc = load(LoadResourceFile(GetCurrentResourceName(), 'imports/versioncheck/server.lua'), '@@tLib/imports/versioncheck/server.lua')()
 
 vc({
@@ -46,17 +40,4 @@ vc({
     current = GetResourceMetadata(GetCurrentResourceName(), 'version', 0),
     author  = 'TIMMYG Studios',
     fetch   = vc.github('tommy141x/tLib'),
-    info    = {
-        { key = 'Warnings', color = '^3' },
-    },
-    beforePrint = function(infoValues)
-        if #_tlibWarnings > 0 then
-            for _, entry in ipairs(infoValues) do
-                if entry.key == 'Warnings' then
-                    entry.value = table.concat(_tlibWarnings, '\n')
-                    break
-                end
-            end
-        end
-    end,
 })
