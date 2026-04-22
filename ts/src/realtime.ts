@@ -457,7 +457,7 @@ export function createRealtimeClient(): RealtimeClient {
     reconnectAttempt += 1;
     const min = opts.reconnectMinMs ?? 1_000;
     const max = opts.reconnectMaxMs ?? 30_000;
-    const delay = Math.min(max, min * Math.pow(2, reconnectAttempt - 1));
+    const delay = Math.min(max, min * 2 ** (reconnectAttempt - 1));
     reconnectTimer = setTimeout(async () => {
       if (manuallyDisconnected) return;
       try {
@@ -504,9 +504,10 @@ export function createRealtimeClient(): RealtimeClient {
   function publish(roomId: string, payload: ArrayBufferView | ArrayBuffer): void {
     if (!ws || ws.readyState !== WebSocket.OPEN || state !== "open") return;
     if (!rooms.has(roomId)) return; // server would silently drop anyway
-    const bytes = payload instanceof ArrayBuffer
-      ? new Uint8Array(payload)
-      : new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+    const bytes =
+      payload instanceof ArrayBuffer
+        ? new Uint8Array(payload)
+        : new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
     try {
       const frame = encodePublishBytes(roomId, bytes);
       ws.send(frame);

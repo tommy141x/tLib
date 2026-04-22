@@ -30,12 +30,7 @@ export interface UiManifest {
   readonly required?: readonly string[];
 }
 
-export type StateDef =
-  | BoolState
-  | NumberState
-  | StringState
-  | EnumState
-  | ColorState;
+export type StateDef = BoolState | NumberState | StringState | EnumState | ColorState;
 
 export interface BoolState {
   readonly kind: "boolean";
@@ -130,7 +125,7 @@ export function stateDefault(def: StateDef): unknown {
     case "boolean":
       return def.default ?? false;
     case "number":
-      return def.default ?? (def.min ?? 0);
+      return def.default ?? def.min ?? 0;
     case "string":
       return def.default ?? "";
     case "enum":
@@ -142,7 +137,7 @@ export function stateDefault(def: StateDef): unknown {
 
 export function applyPreset(
   base: Record<string, unknown>,
-  preset: PresetDef,
+  preset: PresetDef
 ): Record<string, unknown> {
   const next: Record<string, unknown> = structuredClone(base);
   for (const [key, value] of Object.entries(preset.state)) {

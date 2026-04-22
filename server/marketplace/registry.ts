@@ -3,32 +3,32 @@
 // of <type> and they should land under <installPath> in my resource folder."
 
 export interface InstallTarget {
-	/** Resource name that registered the type — owns the install path. */
-	resourceName: string;
-	/** Asset type identifier (e.g. 'ui-radio', 'ui-tels-hud', 'tone'). */
-	type: string;
-	/** Directory, relative to the resource root, where items land. */
-	installPath: string;
+  /** Resource name that registered the type — owns the install path. */
+  resourceName: string;
+  /** Asset type identifier (e.g. 'ui-radio', 'ui-tels-hud', 'tone'). */
+  type: string;
+  /** Directory, relative to the resource root, where items land. */
+  installPath: string;
 }
 
 const registry = new Map<string, InstallTarget>();
 
 /** Register a type. Last-writer-wins if two resources claim the same type. */
 export function register(target: InstallTarget): void {
-	registry.set(target.type, target);
+  registry.set(target.type, target);
 }
 
 /** Remove all types owned by a resource — called on resource stop. */
 export function unregisterResource(resourceName: string): void {
-	for (const [type, target] of registry) {
-		if (target.resourceName === resourceName) registry.delete(type);
-	}
+  for (const [type, target] of registry) {
+    if (target.resourceName === resourceName) registry.delete(type);
+  }
 }
 
 export function get(type: string): InstallTarget | null {
-	return registry.get(type) ?? null;
+  return registry.get(type) ?? null;
 }
 
 export function list(): InstallTarget[] {
-	return Array.from(registry.values());
+  return Array.from(registry.values());
 }

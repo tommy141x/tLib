@@ -58,7 +58,6 @@ end
 
 function platform.resolveNetworkId(netId)
     if not netId or netId == 0 then return nil end
-    if not NetworkDoesNetworkIdExist(netId) then return nil end
     local ok, ent = pcall(NetworkGetEntityFromNetworkId, netId)
     if not ok or not ent or ent == 0 then return nil end
     return ent
@@ -66,7 +65,8 @@ end
 
 function platform.isNetworkIdValid(netId)
     if not netId or netId == 0 then return false end
-    return NetworkDoesNetworkIdExist(netId) == true
+    local ok, ent = pcall(NetworkGetEntityFromNetworkId, netId)
+    return ok and ent ~= nil and ent ~= 0
 end
 
 function platform.getEntityCoords(entity)
