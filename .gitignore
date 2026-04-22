@@ -2,14 +2,19 @@
 node_modules/
 
 # Build outputs
-dist/
+dist/*
 ts/src/build/
-scripts/
+scripts/*
 ui/index.html
 ui/assets/
 server/bundle.js
 *.zip
 todo.txt
+
+# Source scripts + externally-consumed build artifacts need to be tracked
+# so consumers (tMarketplace worker) can pull files without cloning and
+# building tLib from scratch.
+!scripts/prod.ts
 
 # Assets (external dependencies, installed separately)
 assets/

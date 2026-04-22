@@ -5,9 +5,27 @@ _TLIB_NUI_FOCUSED = false
 
 local log       = Logger.create('tLib/adapter/player')
 
+-- cb accepts either:
+--   • function            — fires on eventType ('Pressed' default, 'Released' opt-in)
+--   • {press, release}    — registers both handlers under one key mapping
+local function _normalizePair(cb, eventType)
+    if type(cb) == 'table' then
+        return cb.press or cb.onPress or cb[1],
+               cb.release or cb.onRelease or cb[2]
+    end
+    if eventType == 'Released' then
+        return nil, cb
+    end
+    return cb, nil
+end
+
 if _TLIB_IS_HELIX then
-    function Platform.bindKey(key, cb, eventType, bindingId)
-        Input.BindKey(key, cb, eventType or 'Pressed')
+    -- bindingId + label are accepted for API symmetry but ignored — Helix's
+    -- Input.BindKey has no GTA-settings-menu concept to label.
+    function Platform.bindKey(key, cb, eventType, bindingId, label)
+        local pressCb, releaseCb = _normalizePair(cb, eventType)
+        if pressCb   then Input.BindKey(key, pressCb,   'Pressed')  end
+        if releaseCb then Input.BindKey(key, releaseCb, 'Released') end
     end
 elseif _TLIB_IS_FIVEM then
     -- Maps common Helix key names → FiveM default keyboard key strings for
@@ -44,8 +62,8 @@ elseif _TLIB_IS_FIVEM then
     -- key is bound more than once (e.g. two listeners on 'Enter').
     local _bindCount    = {}
 
-    function Platform.bindKey(key, cb, eventType, bindingId)
-        local et = eventType or 'Pressed'
+    function Platform.bindKey(key, cb, eventType, bindingId, label)
+        local pressCb, releaseCb = _normalizePair(cb, eventType)
         local token
 
         if type(bindingId) == 'string' and bindingId ~= '' then
@@ -64,24 +82,29 @@ elseif _TLIB_IS_FIVEM then
             token           = count == 1 and base or (base .. '_' .. count)
         end
 
-        -- Label shown in GTA V Settings > Controls > FiveM.
-        local label = token:gsub('_', ' ')
+        -- Label shown in GTA V Settings > Controls > FiveM. Explicit label
+        -- preserves formatting (e.g. "ELS: Toggle Lights") — otherwise fall
+        -- back to a humanised token ("lbar_toggle" → "lbar toggle").
+        local displayLabel = (type(label) == 'string' and label ~= '' and label)
+            or token:gsub('_', ' ')
 
-        if et == 'Released' then
-            -- RegisterKeyMapping fires '+token' on key-down and '-token' on
-            -- key-up. For a Released binding we want the '-token' callback.
-            RegisterCommand('-' .. token, function() cb() end, false)
-            -- No-op '+token' so the engine has a matched pair.
-            RegisterCommand('+' .. token, function() end, false)
-        else
-            -- Pressed (default): fire on '+token' (key-down).
-            RegisterCommand('+' .. token, function() cb() end, false)
-            -- No-op '-token' for key-up.
-            RegisterCommand('-' .. token, function() end, false)
-        end
+        -- RegisterKeyMapping fires '+token' on key-down and '-token' on key-up.
+        -- Register whichever callbacks the caller supplied; a missing one
+        -- becomes a no-op so the engine always has a matched pair.
+        RegisterCommand('+' .. token, function()
+            if pressCb then pressCb() end
+        end, false)
+        RegisterCommand('-' .. token, function()
+            if releaseCb then releaseCb() end
+        end, false)
 
-        local defaultKey = _keyDefaults[key] or ''
-        RegisterKeyMapping('+' .. token, label, 'keyboard', defaultKey)
+        -- If `key` is a Helix-style name (Up, Enter, ...), translate it to the
+        -- FiveM token. Otherwise assume the caller passed a FiveM name already
+        -- (Q, NUMPAD_8, LMENU, ...) and use it verbatim — previously unknown
+        -- keys fell through to an empty default, silently breaking tELS-style
+        -- per-key mappings that need a concrete binding out of the box.
+        local defaultKey = _keyDefaults[key] or key or ''
+        RegisterKeyMapping('+' .. token, displayLabel, 'keyboard', defaultKey)
     end
 else
     Platform.bindKey = Platform._stub('bindKey')

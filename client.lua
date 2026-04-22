@@ -51,4 +51,4 @@ Platform.onNUIReady(function()
     MenuState.markReady()
 end)
 
-exports('HasLoaded', function() return _hasLoaded end)
+Platform.wrapExport('tLib', 'HasLoaded', function() return _hasLoaded end)

@@ -1,4 +1,5 @@
 import Dialog from "@/components/Dialog";
+import MarketplacePanel from "@/components/MarketplacePanel";
 import Menu from "@/components/Menu";
 import Toast from "@/components/Toast";
 
@@ -10,6 +11,7 @@ export default function App() {
     <>
       <Menu />
       <Dialog />
+      <MarketplacePanel />
       <Toast />
     </>
   );

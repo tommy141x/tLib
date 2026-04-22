@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { installMarketplace } from "./marketplace/index";
 import { installRealtime } from "./realtime/index";
 
 declare function GetResourcePath(resourceName: string): string | null;
@@ -9,6 +10,10 @@ declare function exports(name: string, fn: (...args: unknown[]) => unknown): voi
 // resource actually uses one of the rt* APIs — tLib stays a pure library
 // until someone needs the transport.
 installRealtime();
+
+// Register marketplace exports. Same opt-in gate — only consumer resources
+// declaring `tlib_module { 'marketplace' }` wake the module up.
+installMarketplace();
 
 // sibling keys so new manifest lines get grouped near related ones
 const siblings: string[] = [];

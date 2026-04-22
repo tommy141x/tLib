@@ -1,7 +1,7 @@
 Discovery.registerExports()
 Permission.registerExports()
 ServerSettings.registerExports()
-exports('HasLoaded', function() return true end)
+Platform.wrapExport('tLib', 'HasLoaded', function() return true end)
 
 -- `ensure [folder]` can start dependents before tLib is ready.
 -- track which ones died during boot, restart them once we're up.

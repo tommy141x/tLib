@@ -42,24 +42,59 @@ interface DialogField {
   row?: string;
   /** Flex behavior in a row: "shrink" = only as wide as content, default = flex-1 */
   flex?: "shrink";
+  /** Tab id — fields with the same `tab` value render under that tab */
+  tab?: string;
+}
+
+interface DialogTab {
+  id: string;
+  label: string;
+  icon?: string;
 }
 
 interface DialogData {
   id: string;
   title: string;
   description?: string;
-  size: "sm" | "md" | "lg";
+  size: "sm" | "md" | "lg" | "xl";
   submitLabel?: string;
   cancelLabel?: string;
   theme?: string;
   fields: DialogField[];
+  tabs?: DialogTab[];
 }
 
-const SIZE_W: Record<string, string> = { sm: "280px", md: "320px", lg: "400px" };
+const SIZE_W: Record<string, string> = {
+  sm: "280px",
+  md: "320px",
+  lg: "400px",
+  xl: "720px",
+};
+
+/** Resolve the tab list: explicit tabs from Lua win, otherwise derive from fields. */
+function effectiveTabs(d: DialogData): DialogTab[] | null {
+  if (d.tabs && d.tabs.length > 0) return d.tabs;
+  const seen = new Set<string>();
+  const derived: DialogTab[] = [];
+  for (const f of d.fields) {
+    if (f.tab && !seen.has(f.tab)) {
+      seen.add(f.tab);
+      derived.push({ id: f.tab, label: f.tab });
+    }
+  }
+  return derived.length > 0 ? derived : null;
+}
+
+/** Fields shown under the given tab. Fields without a `tab` attach to the first tab. */
+function fieldsForTab(d: DialogData, tabs: DialogTab[], tabId: string): DialogField[] {
+  const isFirst = tabs[0]?.id === tabId;
+  return d.fields.filter((f) => f.tab === tabId || (!f.tab && isFirst));
+}
 
 export default function Dialog() {
   const [dialog, setDialog] = createSignal<DialogData | null>(null);
   const [values, setValues] = createSignal<Record<string, string | number | boolean>>({});
+  const [activeTab, setActiveTab] = createSignal<string | null>(null);
   let panelRef: HTMLDivElement | undefined;
 
   onNuiEvent<DialogData>("showDialog", (data) => {
@@ -78,6 +113,8 @@ export default function Dialog() {
     }
     setValues(init);
     setOffset({ x: 0, y: 0 });
+    const tabs = effectiveTabs(data);
+    setActiveTab(tabs ? tabs[0].id : null);
     setDialog(data);
     if (panelRef && data.theme) applyScopedTheme(data.theme, panelRef);
   });
@@ -105,7 +142,16 @@ export default function Dialog() {
       }
     }
     setValues(init);
-    setDialog({ ...d, fields: data.fields });
+    const nextDialog = { ...d, fields: data.fields };
+    setDialog(nextDialog);
+    // Re-sync activeTab if the current one no longer exists in the new field set.
+    const tabs = effectiveTabs(nextDialog);
+    const current = activeTab();
+    if (tabs && !tabs.some((t) => t.id === current)) {
+      setActiveTab(tabs[0].id);
+    } else if (!tabs) {
+      setActiveTab(null);
+    }
   });
 
   onNuiEvent<{
@@ -224,6 +270,9 @@ export default function Dialog() {
             style={{
               width: SIZE_W[d().size] ?? SIZE_W.md,
               "max-height": "85vh",
+              // xl dialogs are typically tabbed admin panels — give them a proper rectangular feel
+              // so sparse tabs don't collapse the dialog vertically.
+              ...(d().size === "xl" ? { "min-height": "480px" } : {}),
               transform: `translate(${offset().x}px, ${offset().y}px)`,
             }}
             onClick={(e) => e.stopPropagation()}
@@ -245,67 +294,130 @@ export default function Dialog() {
               </button>
             </div>
 
-            {/* Body */}
-            <div class="flex flex-col gap-4 p-3 overflow-y-auto settings-scroll">
-              <For each={groupFieldsByRow(d().fields)}>
-                {(group, gIdx) => {
-                  const firstField = group[0];
-                  const prevGroup = () =>
-                    gIdx() > 0 ? groupFieldsByRow(d().fields)[gIdx() - 1] : null;
-                  const prevSection = () => prevGroup()?.[0]?.section;
-                  const showSep = () => firstField.section && firstField.section !== prevSection();
-                  const showSection = () =>
-                    firstField.section && firstField.section !== prevSection();
-                  const isRow = group.length > 1;
-
-                  return (
-                    <>
-                      <Show when={showSep() && gIdx() > 0}>
-                        <div class="settings-sep" />
-                      </Show>
-                      <Show when={showSection()}>
-                        <span class="text-[9px] font-mono text-[hsl(var(--muted-foreground)/0.5)] uppercase tracking-wide">
-                          {firstField.section}
-                        </span>
-                      </Show>
-                      {isRow ? (
-                        <div class="flex gap-2 items-stretch">
-                          <For each={group}>
-                            {(field) => (
-                              <div
-                                class="flex flex-col justify-end"
-                                classList={{
-                                  "flex-1 min-w-0": field.flex !== "shrink",
-                                  "shrink-0": field.flex === "shrink",
-                                }}
-                              >
-                                <FieldRenderer
-                                  field={field}
-                                  values={values}
-                                  updateField={updateField}
-                                  onButtonClick={onButtonClick}
-                                />
-                              </div>
-                            )}
-                          </For>
-                        </div>
-                      ) : (
-                        <FieldRenderer
-                          field={firstField}
+            {/* Body — tabbed layout when tabs exist, flat list otherwise */}
+            <Show
+              when={(() => {
+                const tabs = effectiveTabs(d());
+                return tabs && tabs.length > 0 ? tabs : null;
+              })()}
+              fallback={
+                <div class="flex flex-col gap-4 p-3 overflow-y-auto settings-scroll">
+                  <FieldGroups
+                    fields={d().fields}
+                    values={values}
+                    updateField={updateField}
+                    onButtonClick={onButtonClick}
+                  />
+                </div>
+              }
+            >
+              {(tabs) => (
+                <div class="flex flex-row min-h-0 flex-1 overflow-hidden">
+                  {/* Left tab rail */}
+                  <div
+                    class="flex flex-col gap-0.5 border-r border-[hsl(var(--border)/0.6)] p-2 overflow-y-auto settings-scroll shrink-0"
+                    style={{ width: "160px" }}
+                  >
+                    <For each={tabs()}>
+                      {(tab) => (
+                        <button
+                          class="text-left px-2 py-1 text-[10px] font-mono rounded transition-colors"
+                          classList={{
+                            "bg-primary text-primary-foreground": activeTab() === tab.id,
+                            "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))]":
+                              activeTab() !== tab.id,
+                          }}
+                          onClick={() => setActiveTab(tab.id)}
+                        >
+                          {tab.label}
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                  {/* Right content pane */}
+                  <div class="flex-1 flex flex-col gap-4 p-3 overflow-y-auto settings-scroll min-w-0">
+                    <Show when={activeTab()}>
+                      {(tabId) => (
+                        <FieldGroups
+                          fields={fieldsForTab(d(), tabs(), tabId())}
                           values={values}
                           updateField={updateField}
                           onButtonClick={onButtonClick}
                         />
                       )}
-                    </>
-                  );
-                }}
-              </For>
-            </div>
+                    </Show>
+                  </div>
+                </div>
+              )}
+            </Show>
           </div>
         </div>
       )}
     </Show>
+  );
+}
+
+/** Renders a set of fields with row + section grouping applied. */
+function FieldGroups(props: {
+  fields: DialogField[];
+  values: () => Record<string, string | number | boolean>;
+  updateField: (id: string, value: string | number | boolean) => void;
+  onButtonClick: (id: string) => void;
+}) {
+  const groups = () => groupFieldsByRow(props.fields);
+  return (
+    <For each={groups()}>
+      {(group, gIdx) => {
+        const firstField = group[0];
+        const prevGroup = () => (gIdx() > 0 ? groups()[gIdx() - 1] : null);
+        const prevSection = () => prevGroup()?.[0]?.section;
+        const showSep = () => firstField.section && firstField.section !== prevSection();
+        const showSection = () => firstField.section && firstField.section !== prevSection();
+        const isRow = group.length > 1;
+
+        return (
+          <>
+            <Show when={showSep() && gIdx() > 0}>
+              <div class="settings-sep" />
+            </Show>
+            <Show when={showSection()}>
+              <span class="text-[9px] font-mono text-[hsl(var(--muted-foreground)/0.5)] uppercase tracking-wide">
+                {firstField.section}
+              </span>
+            </Show>
+            {isRow ? (
+              <div class="flex gap-2 items-stretch">
+                <For each={group}>
+                  {(field) => (
+                    <div
+                      class="flex flex-col justify-end"
+                      classList={{
+                        "flex-1 min-w-0": field.flex !== "shrink",
+                        "shrink-0": field.flex === "shrink",
+                      }}
+                    >
+                      <FieldRenderer
+                        field={field}
+                        values={props.values}
+                        updateField={props.updateField}
+                        onButtonClick={props.onButtonClick}
+                      />
+                    </div>
+                  )}
+                </For>
+              </div>
+            ) : (
+              <FieldRenderer
+                field={firstField}
+                values={props.values}
+                updateField={props.updateField}
+                onButtonClick={props.onButtonClick}
+              />
+            )}
+          </>
+        );
+      }}
+    </For>
   );
 }
 

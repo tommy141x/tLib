@@ -9,6 +9,9 @@
 // module is generic — it doesn't know or care about channels, alerts, or
 // permissions. It just relays JSON envelopes both ways.
 
+import http from "node:http";
+import https from "node:https";
+import { URL } from "node:url";
 import WebSocket from "ws";
 import { fEmit, fOn } from "./fivem";
 
@@ -131,17 +134,55 @@ export class ControlClient {
 		}
 	}
 
-	private async fetchToken(): Promise<TokenResponse> {
-		const res = await fetch(this.cfg.tokenEndpoint, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ license: this.cfg.license }),
+	private fetchToken(): Promise<TokenResponse> {
+		// CFX server sandbox has no global `fetch` and exposes natives
+		// inconsistently — fall back to Node's http/https which `ws` already
+		// depends on.
+		return new Promise((resolve) => {
+			let url: URL;
+			try {
+				url = new URL(this.cfg.tokenEndpoint);
+			} catch (err) {
+				resolve({ ok: false, error: `bad endpoint: ${err instanceof Error ? err.message : err}` });
+				return;
+			}
+			const body = JSON.stringify({ license: this.cfg.license });
+			const lib = url.protocol === "https:" ? https : http;
+			const req = lib.request(
+				{
+					method: "POST",
+					hostname: url.hostname,
+					port: url.port || (url.protocol === "https:" ? 443 : 80),
+					path: `${url.pathname}${url.search}`,
+					headers: {
+						"Content-Type": "application/json",
+						"Content-Length": Buffer.byteLength(body),
+					},
+				},
+				(res) => {
+					const chunks: Buffer[] = [];
+					res.on("data", (c: Buffer) => chunks.push(c));
+					res.on("end", () => {
+						const text = Buffer.concat(chunks).toString("utf8");
+						const status = res.statusCode ?? 0;
+						if (status < 200 || status >= 300) {
+							resolve({ ok: false, error: `HTTP ${status}: ${text.slice(0, 120)}` });
+							return;
+						}
+						try {
+							resolve(JSON.parse(text) as TokenResponse);
+						} catch (err) {
+							resolve({ ok: false, error: `bad json: ${err instanceof Error ? err.message : err}` });
+						}
+					});
+				},
+			);
+			req.on("error", (err) => {
+				resolve({ ok: false, error: err.message });
+			});
+			req.write(body);
+			req.end();
 		});
-		if (!res.ok) {
-			const text = await res.text().catch(() => "");
-			return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 120)}` };
-		}
-		return (await res.json()) as TokenResponse;
 	}
 
 	private attachHandlers(): void {
