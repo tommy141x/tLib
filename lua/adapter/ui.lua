@@ -26,6 +26,11 @@ if _TLIB_IS_HELIX then
         if ui then ui:SetInputMode(mode) end
     end
 
+    -- Helix WebUI owns its own cursor; there is no separate "keep game input"
+    -- mode. Setting input mode 1 already gives the UI focus without freezing
+    -- the game. No-op by design.
+    function Platform.setKeepInputActive(ui, state) end
+
     function Platform.destroyUI(ui)
         if ui then ui:Destroy() end
     end
@@ -124,7 +129,18 @@ elseif _TLIB_IS_FIVEM then
             SetNuiFocus(true, true)
         else
             SetNuiFocus(false, false)
+            -- Clear keep-input too, so a prior setKeepInputActive(true) doesn't
+            -- leak gameplay-input-during-UI behaviour into the next focus cycle.
+            SetNuiFocusKeepInput(false)
         end
+    end
+
+    -- Lets the game receive input (movement, driving, chat) while the NUI
+    -- cursor is still visible and interactive. Callers pair this with
+    -- DisableControlAction for controls they want suppressed during UI focus
+    -- (attack, look, weapon-wheel, etc.). No-op if focus hasn't been granted.
+    function Platform.setKeepInputActive(ui, state)
+        SetNuiFocusKeepInput(state == true)
     end
 
     function Platform.destroyUI(ui)
@@ -133,12 +149,13 @@ elseif _TLIB_IS_FIVEM then
         SendNUIMessage({ type = '_tlib_destroy' })
     end
 else
-    Platform.createUI       = Platform._stub('createUI')
-    Platform.sendUIEvent    = Platform._stub('sendUIEvent')
-    Platform.onUIEvent      = Platform._stub('onUIEvent')
-    Platform.bringUIToFront = Platform._stub('bringUIToFront')
-    Platform.setInputMode   = Platform._stub('setInputMode')
-    Platform.destroyUI      = Platform._stub('destroyUI')
-    Platform.isNUIReady     = function() return false end
-    Platform.onNUIReady     = Platform._stub('onNUIReady')
+    Platform.createUI          = Platform._stub('createUI')
+    Platform.sendUIEvent       = Platform._stub('sendUIEvent')
+    Platform.onUIEvent         = Platform._stub('onUIEvent')
+    Platform.bringUIToFront    = Platform._stub('bringUIToFront')
+    Platform.setInputMode      = Platform._stub('setInputMode')
+    Platform.setKeepInputActive = Platform._stub('setKeepInputActive')
+    Platform.destroyUI         = Platform._stub('destroyUI')
+    Platform.isNUIReady        = function() return false end
+    Platform.onNUIReady        = Platform._stub('onNUIReady')
 end

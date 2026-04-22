@@ -9,6 +9,7 @@
     "./gizmo": "./src/gizmo/index.ts",
     "./move-mode": "./src/move-mode.ts",
     "./hud-template": "./src/hud-template.ts",
+    "./ui-manifest": "./src/ui-manifest.ts",
     "./admin-ui": "./src/admin-ui/index.tsx"
   },
   "peerDependencies": {

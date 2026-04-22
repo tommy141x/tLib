@@ -54,6 +54,7 @@ local function serialiseField(f)
         section     = type(f.section) == 'string' and f.section or nil,
         row         = type(f.row) == 'string' and f.row or nil,
         flex        = type(f.flex) == 'string' and f.flex or nil,
+        tab         = type(f.tab) == 'string' and f.tab or nil,
     }
 
     if fieldType == 'text' or fieldType == 'number' or
@@ -92,13 +93,33 @@ local function serialiseDialog(id, opts)
     end
 
     local size = type(opts.size) == 'string' and opts.size or 'md'
-    if size ~= 'sm' and size ~= 'md' and size ~= 'lg' then size = 'md' end
+    if size ~= 'sm' and size ~= 'md' and size ~= 'lg' and size ~= 'xl' then size = 'md' end
+
+    -- Tab metadata (optional). When provided, fields.tab values are matched
+    -- against tab ids to group fields under a left-rail tab navigation.
+    -- If fields declare tab values but opts.tabs is omitted, tabs are derived
+    -- from first-occurrence order with id === label.
+    local tabs = nil
+    if type(opts.tabs) == 'table' then
+        tabs = {}
+        for _, t in ipairs(opts.tabs) do
+            if type(t) == 'table' and type(t.id) == 'string' and t.id ~= '' then
+                table.insert(tabs, {
+                    id    = t.id,
+                    label = type(t.label) == 'string' and t.label or t.id,
+                    icon  = type(t.icon) == 'string' and t.icon or nil,
+                })
+            end
+        end
+        if #tabs == 0 then tabs = nil end
+    end
 
     return {
         id          = id,
         title       = type(opts.title) == 'string' and opts.title or 'Dialog',
         description = type(opts.description) == 'string' and opts.description or nil,
         fields      = fields,
+        tabs        = tabs,
         submitLabel = type(opts.submitLabel) == 'string' and opts.submitLabel or nil,
         cancelLabel = type(opts.cancelLabel) == 'string' and opts.cancelLabel or nil,
         size        = size,
@@ -210,10 +231,16 @@ function DialogExports.register()
     --     description  string | nil    Optional subheading shown below the title.
     --     submitLabel  string | nil    Override the submit button label (default "Submit").
     --     cancelLabel  string | nil    Override the cancel button label (default "Cancel").
-    --     size         string | nil    "sm" | "md" | "lg" (default "md").
+    --     size         string | nil    "sm" | "md" | "lg" | "xl" (default "md").
+    --                                  "xl" opens a wider, rectangular dialog suited for tabs.
     --     theme        string | nil    Id of a registered tLib theme to scope this dialog's
     --                                  appearance. Only this dialog is affected — other open
     --                                  UI elements keep their own themes.
+    --     tabs         table[] | nil   Optional tab metadata. When set, fields declaring a
+    --                                  matching `tab` value are grouped under a left-rail
+    --                                  tab navigation. Entries: { id, label?, icon? }.
+    --                                  If omitted and fields declare `tab`, tabs are derived
+    --                                  from first-occurrence order.
     --     fields       table[]         Array of field definition tables.
     --
     --   Field definition (all fields share these base keys):

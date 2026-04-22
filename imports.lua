@@ -27,6 +27,17 @@ end
 
 local context = IsDuplicityVersion() and 'server' or 'client'
 
+-- Apply CFX-idiom polyfills (Citizen, CreateThread, Wait, GetGameTimer) in
+-- the consumer VM on Helix so existing FiveM-pattern code keeps running
+-- without per-resource changes. Self-contained — does not require Platform.
+do
+    local polyfill = LoadResourceFile(tLibName, 'lua/adapter/polyfill.lua')
+    if polyfill then
+        local fn, err = load(polyfill, '@@tLib/lua/adapter/polyfill.lua')
+        if fn then pcall(fn) end
+    end
+end
+
 -- Enforce tlib_min_version *before* anything touches tlib, so an outdated
 -- tLib produces a clear "update tLib" message instead of a cryptic
 -- "No such export X" when a module added in a later tLib version is used.

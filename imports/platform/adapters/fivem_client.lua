@@ -233,6 +233,25 @@ function platform.releaseCursor()
     SetNuiFocus(false, false)
 end
 
+-- NUI focus with mode-level control. Mode 1 = cursor visible + UI input;
+-- mode 0 = cursor hidden, game input. Mirrors Platform.setInputMode in the
+-- tLib VM so consumer code can call the same name either side.
+function platform.setInputMode(mode)
+    if mode == 1 then
+        SetNuiFocus(true, true)
+    else
+        SetNuiFocus(false, false)
+        SetNuiFocusKeepInput(false)
+    end
+end
+
+-- Keeps gameplay input live while the NUI cursor is visible. Consumers pair
+-- this with DisableControlAction for the specific controls they want to
+-- suppress (attack/look/etc.) during UI focus.
+function platform.setKeepInputActive(state)
+    SetNuiFocusKeepInput(state == true)
+end
+
 function platform.releaseCursorSuppressPause()
     SetNuiFocusKeepInput(false)
     SetNuiFocus(false, false)
@@ -265,6 +284,147 @@ end
 
 function platform.getResourceId()
     return GetCurrentResourceName()
+end
+
+-- Register an export under the current resource. `resource` is accepted for
+-- API symmetry with the Helix 3-arg form but ignored on FiveM — `exports(name, fn)`
+-- always targets the calling resource.
+function platform.wrapExport(resource, name, fn)
+    exports(name, fn)
+end
+
+-- ─── Key bindings ────────────────────────────────────────────────────
+-- Thin FiveM wrapper over RegisterCommand + RegisterKeyMapping. The Helix
+-- adapter has a matching signature that hooks Input.BindKey instead.
+-- cb can be a function (defaults to 'Pressed') or {press=fn, release=fn}.
+
+do
+    local _resourceName = GetCurrentResourceName()
+    local _bindCount    = {}
+
+    local function cmdName(key)
+        return (_resourceName .. '_key_' .. tostring(key)):gsub('[^%w_]', '_')
+    end
+
+    local function normalizePair(cb, eventType)
+        if type(cb) == 'table' then
+            return cb.press or cb.onPress or cb[1],
+                   cb.release or cb.onRelease or cb[2]
+        end
+        if eventType == 'Released' then return nil, cb end
+        return cb, nil
+    end
+
+    function platform.bindKey(key, cb, eventType, bindingId, label)
+        local pressCb, releaseCb = normalizePair(cb, eventType)
+        local token
+
+        if type(bindingId) == 'string' and bindingId ~= '' then
+            token = bindingId:gsub('[^%w_]', '_')
+        else
+            local count     = (_bindCount[key] or 0) + 1
+            _bindCount[key] = count
+            local base      = cmdName(key)
+            token           = count == 1 and base or (base .. '_' .. count)
+        end
+
+        local displayLabel = (type(label) == 'string' and label ~= '' and label)
+            or token:gsub('_', ' ')
+
+        RegisterCommand('+' .. token, function()
+            if pressCb then pressCb() end
+        end, false)
+        RegisterCommand('-' .. token, function()
+            if releaseCb then releaseCb() end
+        end, false)
+
+        RegisterKeyMapping('+' .. token, displayLabel, 'keyboard', key or '')
+    end
+end
+
+-- ─── Voice backend (pma-voice on FiveM) ─────────────────────────────
+-- Per-consumer probe so each resource gets its own availability callbacks.
+
+do
+    platform.voice = {}
+
+    local _ready           = false
+    local _backend         = 'none'
+    local _availabilityCbs = {}
+
+    local function fireAvailability()
+        for i = 1, #_availabilityCbs do
+            pcall(_availabilityCbs[i], _ready, _backend)
+        end
+    end
+
+    local function setReady(state, backend)
+        if _ready == state and _backend == backend then return end
+        _ready = state
+        _backend = backend
+        fireAvailability()
+    end
+
+    local function probePma()
+        if GetResourceState('pma-voice') ~= 'started' then return false end
+        local exp = exports['pma-voice']
+        if not exp then return false end
+        local ok, has = pcall(function()
+            return exp.overrideProximityRange ~= nil
+                and exp.clearProximityOverride ~= nil
+        end)
+        return ok and has == true
+    end
+
+    local function refresh()
+        if probePma() then setReady(true, 'pma-voice') else setReady(false, 'none') end
+    end
+
+    AddEventHandler('onClientResourceStart', function(res)
+        if res == 'pma-voice' then refresh() end
+    end)
+    AddEventHandler('onClientResourceStop', function(res)
+        if res == 'pma-voice' then refresh() end
+    end)
+
+    -- Initial probe deferred so pma-voice finishes init when both resources
+    -- start in the same tick.
+    Citizen.CreateThread(function()
+        Citizen.Wait(750)
+        refresh()
+    end)
+
+    function platform.voice.isAvailable() return _ready end
+    function platform.voice.backend()     return _backend end
+
+    function platform.voice.onAvailabilityChanged(cb)
+        if type(cb) ~= 'function' then return end
+        _availabilityCbs[#_availabilityCbs + 1] = cb
+        pcall(cb, _ready, _backend)  -- seed with current state
+    end
+
+    function platform.voice.overrideProximityRange(metres, lockCycle)
+        if not _ready or _backend ~= 'pma-voice' then return false end
+        local ok = pcall(function()
+            exports['pma-voice']:overrideProximityRange(metres + 0.0, lockCycle == true)
+        end)
+        return ok
+    end
+
+    function platform.voice.clearProximityOverride()
+        if not _ready or _backend ~= 'pma-voice' then return end
+        pcall(function() exports['pma-voice']:clearProximityOverride() end)
+    end
+
+    function platform.voice.setSubmixForServerId(serverId, submixHandle)
+        if type(MumbleSetSubmixForServerId) ~= 'function' then return end
+        pcall(MumbleSetSubmixForServerId, serverId, submixHandle)
+    end
+
+    function platform.voice.setAudioInputIntent(intent)
+        if type(MumbleSetAudioInputIntent) ~= 'function' then return end
+        pcall(MumbleSetAudioInputIntent, intent)
+    end
 end
 
 return platform
