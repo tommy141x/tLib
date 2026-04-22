@@ -6,9 +6,7 @@ runProd(
   {
     name: "tLib",
     root: join(import.meta.dir, ".."),
-    uiBuilds: [
-      { source: "ui/src", label: "Building UI and server bundle" },
-    ],
+    uiBuilds: [{ source: "ui/src", label: "Building UI and server bundle" }],
     include: [
       "fxmanifest.lua",
       "client.lua",
@@ -24,5 +22,5 @@ runProd(
       "server/bundle.js",
     ],
   },
-  AdmZip,
+  AdmZip
 );

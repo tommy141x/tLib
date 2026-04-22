@@ -306,10 +306,7 @@ function ItemCard(props: {
           onClick={props.onInstall}
           title={s().state === "done" && !s().ok ? (s() as { error?: string }).error : undefined}
         >
-          <Show
-            when={s().state === "installing"}
-            fallback={<IconDownload class="w-3 h-3" />}
-          >
+          <Show when={s().state === "installing"} fallback={<IconDownload class="w-3 h-3" />}>
             <IconLoaderCircle class="w-3 h-3 animate-spin" />
           </Show>
           {buttonLabel()}

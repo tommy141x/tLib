@@ -15,67 +15,71 @@ const DEFAULT_PORT = 30125;
 const DEFAULT_HOST = "0.0.0.0";
 
 export interface RealtimeConfig {
-	host: string;
-	port: number;
-	publicUrlOverride: string | null;
-	authTimeoutMs: number;
-	tokenTtlMs: number;
-	maxSessionsPerPlayer: number;
-	maxRoomsPerSession: number;
-	maxPayloadBytes: number;
-	rateLimit: {
-		binFramesPerSec: number;
-		binBurst: number;
-		eventsPerSec: number;
-		eventsBurst: number;
-	};
+  host: string;
+  port: number;
+  publicUrlOverride: string | null;
+  authTimeoutMs: number;
+  tokenTtlMs: number;
+  maxSessionsPerPlayer: number;
+  maxRoomsPerSession: number;
+  maxPayloadBytes: number;
+  rateLimit: {
+    binFramesPerSec: number;
+    binBurst: number;
+    eventsPerSec: number;
+    eventsBurst: number;
+  };
 }
 
 export function resolveConfig(): RealtimeConfig {
-	const port = intConvar("tlib_realtime_port", DEFAULT_PORT);
-	const host = strConvar("tlib_realtime_host", DEFAULT_HOST);
-	const publicUrlOverride = strConvar("tlib_realtime_public_url", "") || null;
-	return {
-		host,
-		port,
-		publicUrlOverride,
-		authTimeoutMs: 10_000,
-		tokenTtlMs: 60_000,
-		maxSessionsPerPlayer: 2,
-		maxRoomsPerSession: 128,
-		maxPayloadBytes: 64 * 1024,
-		rateLimit: {
-			binFramesPerSec: 120,
-			binBurst: 240,
-			eventsPerSec: 20,
-			eventsBurst: 60,
-		},
-	};
+  const port = intConvar("tlib_realtime_port", DEFAULT_PORT);
+  const host = strConvar("tlib_realtime_host", DEFAULT_HOST);
+  const publicUrlOverride = strConvar("tlib_realtime_public_url", "") || null;
+  return {
+    host,
+    port,
+    publicUrlOverride,
+    authTimeoutMs: 10_000,
+    tokenTtlMs: 60_000,
+    maxSessionsPerPlayer: 2,
+    maxRoomsPerSession: 128,
+    maxPayloadBytes: 64 * 1024,
+    rateLimit: {
+      binFramesPerSec: 120,
+      binBurst: 240,
+      eventsPerSec: 20,
+      eventsBurst: 60,
+    },
+  };
 }
 
 // Public WS URL handed to clients.
 // Priority: explicit override > resolved public IP > localhost.
-export function composeWsUrl(override: string | null, publicIp: string | null, port: number): string {
-	if (override && override.length > 0) return override;
-	const host = publicIp ?? "localhost";
-	return `ws://${host}:${port}`;
+export function composeWsUrl(
+  override: string | null,
+  publicIp: string | null,
+  port: number
+): string {
+  if (override && override.length > 0) return override;
+  const host = publicIp ?? "localhost";
+  return `ws://${host}:${port}`;
 }
 
 function intConvar(name: string, fallback: number): number {
-	try {
-		const raw = fGetConvar(name, "");
-		if (!raw) return fallback;
-		const n = Number.parseInt(raw, 10);
-		return Number.isFinite(n) && n > 0 ? n : fallback;
-	} catch {
-		return fallback;
-	}
+  try {
+    const raw = fGetConvar(name, "");
+    if (!raw) return fallback;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function strConvar(name: string, fallback: string): string {
-	try {
-		return fGetConvar(name, fallback);
-	} catch {
-		return fallback;
-	}
+  try {
+    return fGetConvar(name, fallback);
+  } catch {
+    return fallback;
+  }
 }

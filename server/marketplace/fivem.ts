@@ -14,16 +14,16 @@ type GetNumResourceMetadataFn = (resource: string, key: string) => number;
 type GetResourceMetadataFn = (resource: string, key: string, index: number) => string | null;
 
 const g = globalThis as unknown as {
-	exports: ExportsFn;
-	emit: EmitFn;
-	on: OnFn;
-	GetConvar: GetConvarFn;
-	GetCurrentResourceName: GetCurrentResourceNameFn;
-	GetResourcePath: GetResourcePathFn;
-	GetNumResources: GetNumResourcesFn;
-	GetResourceByFindIndex: GetResourceByFindIndexFn;
-	GetNumResourceMetadata: GetNumResourceMetadataFn;
-	GetResourceMetadata: GetResourceMetadataFn;
+  exports: ExportsFn;
+  emit: EmitFn;
+  on: OnFn;
+  GetConvar: GetConvarFn;
+  GetCurrentResourceName: GetCurrentResourceNameFn;
+  GetResourcePath: GetResourcePathFn;
+  GetNumResources: GetNumResourcesFn;
+  GetResourceByFindIndex: GetResourceByFindIndexFn;
+  GetNumResourceMetadata: GetNumResourceMetadataFn;
+  GetResourceMetadata: GetResourceMetadataFn;
 };
 
 export const fExports: ExportsFn = g.exports;
