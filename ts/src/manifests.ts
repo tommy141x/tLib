@@ -6,16 +6,18 @@ import type { UiManifest } from "./ui-manifest";
 
 const uiRadioManifest: UiManifest = {
   schemaVersion: 1,
-  type: "ui-radio",
+  type: "tRadio",
   label: "Radio Skin",
   states: {
     ln01: { kind: "string", label: "Display Line 1", default: "CH 01", maxLength: 32 },
     ln02: { kind: "string", label: "Display Line 2", default: "CITY PD", maxLength: 32 },
     time: { kind: "string", label: "Clock", default: "12:34" },
 
-    "leds.power": { kind: "boolean", label: "Power LED", default: true },
-    "leds.connected": { kind: "boolean", label: "Connected LED", default: true },
-    "leds.transmit": { kind: "boolean", label: "Transmit LED", default: false },
+    "leds.power":     { kind: "boolean", label: "Power LED",     default: true,  hidden: true },
+    "leds.connected": { kind: "boolean", label: "Connected LED", default: true,  hidden: true },
+    "leds.transmit":  { kind: "boolean", label: "Transmit LED",  default: false, hidden: true },
+
+    led: { kind: "color", label: "LED", default: { r: 0, g: 255, b: 0, a: 1 } },
 
     signal: {
       kind: "enum",
@@ -30,26 +32,53 @@ const uiRadioManifest: UiManifest = {
       default: "4",
     },
 
-    gps: { kind: "boolean", label: "GPS Indicator", default: false },
+    gps: { kind: "boolean", label: "GPS Indicator", default: true },
     scan: { kind: "boolean", label: "Scan Indicator", default: false },
     trunk: { kind: "boolean", label: "Trunk Indicator", default: false },
     warn: { kind: "boolean", label: "Warn Indicator", default: false },
 
-    alertVisible: { kind: "boolean", label: "Alert Visible", default: false },
-    alertMessage: { kind: "string", label: "Alert Message", default: "EMERGENCY" },
+    alertVisible: { kind: "boolean", label: "Alert", default: false, previewBackground: "#cc0000" },
+    alertMessage: { kind: "string", label: "Alert Message", default: "EMERGENCY", hidden: true },
+
+    btn01: { kind: "string", label: "Zone Button",    default: "ZN", hidden: true },
+    btn02: { kind: "string", label: "Channel Button", default: "CH", hidden: true },
+    btn03: { kind: "string", label: "Status Button",  default: "ST", hidden: true },
+    btn04: { kind: "string", label: "Button 4",       default: "",   hidden: true },
+    btn05: { kind: "string", label: "Button 5",       default: "",   hidden: true },
 
     theme: { kind: "enum", label: "Theme", values: ["Dark", "Light"], default: "Dark" },
   },
   events: {
-    power: { label: "Power button" },
-    channel_up: { label: "Channel up" },
-    channel_down: { label: "Channel down" },
-    volume_up: { label: "Volume up" },
-    volume_down: { label: "Volume down" },
-    ptt: { label: "Push-to-talk" },
-    menu: { label: "Menu" },
-    scan: { label: "Scan toggle" },
+    // Global
+    power:     { label: "Power" },
+    close:     { label: "Close" },
     emergency: { label: "Emergency" },
+    // Soft buttons
+    btn1: { label: "Button 1 (ZN — opens zone page)" },
+    btn2: { label: "Button 2 (CH — opens channel/select)" },
+    btn3: { label: "Button 3 (ST — opens settings)" },
+    btn4: { label: "Button 4" },
+    btn5: { label: "Button 5" },
+    // Navigation
+    home:  { label: "Home / back" },
+    up:    { label: "Up" },
+    down:  { label: "Down" },
+    left:  { label: "Left" },
+    right: { label: "Right" },
+    // Channel / zone knobs
+    channelUp:   { label: "Channel up" },
+    channelDown: { label: "Channel down" },
+    zoneUp:      { label: "Zone up" },
+    zoneDown:    { label: "Zone down" },
+    // Volume / settings shortcuts (fire via setting:key:dir)
+    "setting:volume:up":       { label: "Voice volume up" },
+    "setting:volume:down":     { label: "Voice volume down" },
+    "setting:toneVolume:up":   { label: "SFX volume up" },
+    "setting:toneVolume:down": { label: "SFX volume down" },
+    "setting:volume3D:up":     { label: "3D volume up" },
+    "setting:volume3D:down":   { label: "3D volume down" },
+    "setting:style:up":        { label: "Style next" },
+    "setting:style:down":      { label: "Style prev" },
   },
   presets: {
     idle: {
@@ -62,7 +91,7 @@ const uiRadioManifest: UiManifest = {
         "leds.transmit": false,
         signal: "4",
         battery: "4",
-        gps: false,
+        gps: true,
         scan: false,
         trunk: false,
         warn: false,
@@ -73,12 +102,13 @@ const uiRadioManifest: UiManifest = {
       label: "Transmitting",
       state: {
         ln01: "CH 01",
-        ln02: "TX",
+        ln02: "TX: X-141",
         "leds.power": true,
         "leds.connected": true,
         "leds.transmit": true,
         signal: "5",
         battery: "3",
+        gps: true,
       },
     },
     emergency: {
@@ -92,6 +122,7 @@ const uiRadioManifest: UiManifest = {
         warn: true,
         alertVisible: true,
         alertMessage: "EMERGENCY",
+        gps: true,
       },
     },
     low_battery: {
@@ -103,6 +134,7 @@ const uiRadioManifest: UiManifest = {
         "leds.connected": true,
         signal: "2",
         battery: "1",
+        gps: true,
       },
     },
     disconnected: {
@@ -114,15 +146,16 @@ const uiRadioManifest: UiManifest = {
         "leds.connected": false,
         signal: "hidden",
         battery: "3",
+        gps: true,
       },
     },
   },
-  required: ["leds.power"],
+  required: [],
 };
 
 const uiTelsHudManifest: UiManifest = {
   schemaVersion: 1,
-  type: "ui-tels-hud",
+  type: "tELS",
   label: "tELS HUD Layout",
   states: {
     inVehicle: { kind: "boolean", label: "In Vehicle", default: true },
@@ -205,6 +238,6 @@ const uiTelsHudManifest: UiManifest = {
 };
 
 export const manifests: Record<string, UiManifest> = {
-  "ui-radio": uiRadioManifest,
-  "ui-tels-hud": uiTelsHudManifest,
+  tRadio: uiRadioManifest,
+  tELS: uiTelsHudManifest,
 };

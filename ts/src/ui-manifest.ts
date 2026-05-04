@@ -8,7 +8,7 @@
 //     what they are allowed to SetHudState with.
 //
 // tLib owns ONLY the generic types + a mutable runtime registry. Concrete
-// manifests (ui-radio, ui-tels-hud, …) live in their consumer resources and
+// manifests (tRadio, tELS, …) live in their consumer resources and
 // call registerUiManifest at boot. Studio iterates the registry via
 // listUiManifests() — it never compile-time imports specific manifests.
 //
@@ -36,6 +36,9 @@ export interface BoolState {
   readonly kind: "boolean";
   readonly label?: string;
   readonly default?: boolean;
+  readonly hidden?: boolean;
+  /** Canvas preview background shown on elements gated by this key when the state is truthy. */
+  readonly previewBackground?: string;
 }
 
 export interface NumberState {
@@ -46,6 +49,7 @@ export interface NumberState {
   readonly max?: number;
   readonly step?: number;
   readonly unit?: string;
+  readonly hidden?: boolean;
 }
 
 export interface StringState {
@@ -54,6 +58,7 @@ export interface StringState {
   readonly default?: string;
   readonly placeholder?: string;
   readonly maxLength?: number;
+  readonly hidden?: boolean;
 }
 
 export interface EnumState {
@@ -61,12 +66,14 @@ export interface EnumState {
   readonly label?: string;
   readonly values: readonly string[];
   readonly default?: string;
+  readonly hidden?: boolean;
 }
 
 export interface ColorState {
   readonly kind: "color";
   readonly label?: string;
   readonly default?: RgbaLiteral;
+  readonly hidden?: boolean;
 }
 
 export interface RgbaLiteral {

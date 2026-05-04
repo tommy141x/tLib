@@ -105,9 +105,11 @@ local function serialiseDialog(id, opts)
         for _, t in ipairs(opts.tabs) do
             if type(t) == 'table' and type(t.id) == 'string' and t.id ~= '' then
                 table.insert(tabs, {
-                    id    = t.id,
-                    label = type(t.label) == 'string' and t.label or t.id,
-                    icon  = type(t.icon) == 'string' and t.icon or nil,
+                    id        = t.id,
+                    label     = type(t.label) == 'string' and t.label or t.id,
+                    icon      = type(t.icon) == 'string' and t.icon or nil,
+                    action    = t.action == true or nil,
+                    separator = t.separator == true or nil,
                 })
             end
         end

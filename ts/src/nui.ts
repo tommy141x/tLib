@@ -46,6 +46,8 @@ export async function fetchNui<T = unknown>(
 //   { type: string, ... }              — destroyUI etc.
 export function onNuiEvent<T = unknown>(action: string, handler: (data: T) => void): () => void {
   const listener = (event: MessageEvent) => {
+    if (!event.data || typeof event.data !== "object") return;
+    if (typeof event.data.type !== "string" && typeof event.data.name !== "string" && typeof event.data.action !== "string") return;
     const msg = event.data;
     if (!msg) return;
     if (msg.name === action) {
@@ -62,6 +64,8 @@ export function onNuiEvent<T = unknown>(action: string, handler: (data: T) => vo
 
 export function onAnyNuiEvent(handler: (action: string, data: unknown) => void): () => void {
   const listener = (event: MessageEvent) => {
+    if (!event.data || typeof event.data !== "object") return;
+    if (typeof event.data.type !== "string" && typeof event.data.name !== "string" && typeof event.data.action !== "string") return;
     const msg = event.data;
     if (!msg) return;
     if (msg.name) {

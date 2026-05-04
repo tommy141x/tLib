@@ -10,7 +10,8 @@
     "./move-mode": "./src/move-mode.ts",
     "./hud-template": "./src/hud-template.ts",
     "./ui-manifest": "./src/ui-manifest.ts",
-    "./admin-ui": "./src/admin-ui/index.tsx"
+    "./admin-ui": "./src/admin-ui/index.tsx",
+    "./marketplace/agent": "./src/marketplace/agent.ts"
   },
   "peerDependencies": {
     "three": ">=0.150.0",

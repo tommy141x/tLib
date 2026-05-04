@@ -89,6 +89,32 @@ export class HudBinder {
     return { keys: [...keys], subNames };
   }
 
+  fitText(): void {
+    const doc = this.root.ownerDocument;
+    const win = doc?.defaultView;
+    if (!win || !doc.body) return;
+    const probe = doc.createElement("span");
+    probe.style.cssText = "position:fixed;top:-9999px;left:-9999px;white-space:nowrap;visibility:hidden;pointer-events:none;";
+    doc.body.appendChild(probe);
+    for (const el of Array.from(this.root.querySelectorAll<HTMLElement>("[data-fit-max]"))) {
+      const span = el.querySelector<HTMLElement>("span");
+      const text = span?.textContent ?? "";
+      const max = parseFloat(el.getAttribute("data-fit-max") ?? "") || 14;
+      if (!span || !text) { el.style.fontSize = max + "px"; continue; }
+      const cw = el.offsetWidth;
+      if (cw <= 0) continue;
+      const cs = win.getComputedStyle(span);
+      probe.style.fontSize = max + "px";
+      probe.style.fontFamily = cs.fontFamily;
+      probe.style.fontWeight = cs.fontWeight;
+      probe.style.letterSpacing = cs.letterSpacing;
+      probe.textContent = text;
+      const sw = probe.offsetWidth;
+      el.style.fontSize = sw > cw && sw > 0 ? Math.max(1, Math.floor(max * cw / sw)) + "px" : max + "px";
+    }
+    doc.body.removeChild(probe);
+  }
+
   update(newState: Record<string, unknown>): void {
     this.state = newState;
 
@@ -155,10 +181,27 @@ export class HudBinder {
         }
       }
     }
+
+    // Theme — toggle .theme-dark on the root element
+    const themeVal = this.state["theme"];
+    if (themeVal !== undefined) {
+      this.root.classList.toggle("theme-dark", themeVal === "Dark");
+    }
+
+    // Fit-text — deferred so layout is settled
+    const doc = this.root.ownerDocument;
+    const win = doc?.defaultView;
+    if (win && this.root.querySelector("[data-fit-max]")) {
+      win.requestAnimationFrame(() => this.fitText());
+    }
   }
 
   getState(): Record<string, unknown> {
     return this.state;
+  }
+
+  getRoot(): HTMLElement {
+    return this.root;
   }
 
   // supports dot paths like "leds.R1"

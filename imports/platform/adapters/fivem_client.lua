@@ -93,6 +93,7 @@ function platform.getRemotePlayerPosition(serverId)
 end
 
 function platform.getNetworkEntityPosition(networkId)
+    if type(NetworkDoesNetworkIdExist) ~= "function" then return nil end
     if not NetworkDoesNetworkIdExist(networkId) then return nil end
     local entity = NetworkGetEntityFromNetworkId(networkId)
     if not entity or entity == 0 or not DoesEntityExist(entity) then return nil end
@@ -101,7 +102,8 @@ function platform.getNetworkEntityPosition(networkId)
 end
 
 function platform.isNetworkIdValid(netId)
-    return NetworkDoesNetworkIdExist(netId)
+    if type(NetworkDoesNetworkIdExist) ~= "function" then return false end
+    return NetworkDoesNetworkIdExist(netId) == true
 end
 
 function platform.isEntityValid(handle)

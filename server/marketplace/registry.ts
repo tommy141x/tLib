@@ -13,9 +13,16 @@ export interface InstallTarget {
 
 const registry = new Map<string, InstallTarget>();
 
-/** Register a type. Last-writer-wins if two resources claim the same type. */
+/** Register a type scoped to its resource. Two different resources can both register 'ui'. */
 export function register(target: InstallTarget): void {
-  registry.set(target.type, target);
+  const key = target.resourceName + ":" + target.type;
+  const existing = registry.get(key);
+  if (existing && existing.installPath !== target.installPath) {
+    console.warn(
+      `[tLib/marketplace] "${key}" re-registered with different installPath — last-writer-wins`
+    );
+  }
+  registry.set(key, target);
 }
 
 /** Remove all types owned by a resource — called on resource stop. */
@@ -25,8 +32,8 @@ export function unregisterResource(resourceName: string): void {
   }
 }
 
-export function get(type: string): InstallTarget | null {
-  return registry.get(type) ?? null;
+export function get(resourceName: string, type: string): InstallTarget | null {
+  return registry.get(resourceName + ":" + type) ?? null;
 }
 
 export function list(): InstallTarget[] {
