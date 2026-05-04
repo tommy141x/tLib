@@ -4,7 +4,50 @@
 
 import { createHash } from "node:crypto";
 import { resolveConfig } from "./config";
-import { fGetConvar } from "./fivem";
+import { fGetConvar, fPerformHttpRequest } from "./fivem";
+
+interface SimpleResponse {
+  ok: boolean;
+  status: number;
+  headers: { get(name: string): string | null };
+  json(): Promise<unknown>;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+function nodeRequest(
+  url: string,
+  headers: Record<string, string>,
+  timeoutMs: number
+): Promise<SimpleResponse> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+    fPerformHttpRequest(
+      url,
+      (statusCode, body, responseHeaders) => {
+        clearTimeout(timer);
+        const lowerHeaders: Record<string, string> = {};
+        for (const [k, v] of Object.entries(responseHeaders ?? {})) {
+          lowerHeaders[k.toLowerCase()] = v;
+        }
+        resolve({
+          ok: statusCode >= 200 && statusCode < 300,
+          status: statusCode,
+          headers: { get: (name: string) => lowerHeaders[name.toLowerCase()] ?? null },
+          json: () => Promise.resolve(JSON.parse(body) as unknown),
+          arrayBuffer: () => {
+            const buf = Buffer.from(body, "binary");
+            return Promise.resolve(
+              buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+            );
+          },
+        });
+      },
+      "GET",
+      "",
+      headers
+    );
+  });
+}
 
 /**
  * Item shapes must match the contract in `marketplace/API.md` on the website
@@ -70,16 +113,10 @@ function buildHeaders(extra?: Record<string, string>): Record<string, string> {
 
 async function fetchWithTimeout(
   url: string,
-  init: RequestInit,
+  headers: Record<string, string>,
   timeoutMs: number
-): Promise<Response> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+): Promise<SimpleResponse> {
+  return nodeRequest(url, headers, timeoutMs);
 }
 
 /** Parse a marketplace error response body into a typed error. */
@@ -113,7 +150,7 @@ export async function listItems(
   if (params.cursor) qs.set("cursor", params.cursor);
   if (params.limit) qs.set("limit", String(params.limit));
   const url = `${cfg.apiBase}/items${qs.toString() ? `?${qs}` : ""}`;
-  const resp = await fetchWithTimeout(url, { headers: buildHeaders() }, cfg.installTimeoutMs);
+  const resp = await fetchWithTimeout(url, buildHeaders(), cfg.installTimeoutMs);
   if (!resp.ok) throw await toMarketplaceError(resp);
   return (await resp.json()) as { items: MarketplaceItem[]; nextCursor: string | null };
 }
@@ -121,7 +158,7 @@ export async function listItems(
 export async function getItem(slug: string): Promise<MarketplaceItemDetail> {
   const cfg = resolveConfig();
   const url = `${cfg.apiBase}/items/${encodeURIComponent(slug)}`;
-  const resp = await fetchWithTimeout(url, { headers: buildHeaders() }, cfg.installTimeoutMs);
+  const resp = await fetchWithTimeout(url, buildHeaders(), cfg.installTimeoutMs);
   if (!resp.ok) throw await toMarketplaceError(resp);
   return (await resp.json()) as MarketplaceItemDetail;
 }
@@ -152,10 +189,7 @@ export async function downloadBundle(slug: string, version: string): Promise<Bun
   const url = `${cfg.apiBase}/items/${encodeURIComponent(slug)}/download${qs.toString() ? `?${qs}` : ""}`;
   const resp = await fetchWithTimeout(
     url,
-    {
-      headers: buildHeaders({ Accept: "application/octet-stream,application/zip" }),
-      redirect: "follow",
-    },
+    buildHeaders({ Accept: "application/octet-stream,application/zip" }),
     cfg.installTimeoutMs
   );
   if (!resp.ok) throw await toMarketplaceError(resp);

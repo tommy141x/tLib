@@ -12,6 +12,13 @@ type GetNumResourcesFn = () => number;
 type GetResourceByFindIndexFn = (index: number) => string | null;
 type GetNumResourceMetadataFn = (resource: string, key: string) => number;
 type GetResourceMetadataFn = (resource: string, key: string, index: number) => string | null;
+type PerformHttpRequestFn = (
+  url: string,
+  callback: (statusCode: number, body: string, headers: Record<string, string>) => void,
+  method: string,
+  data: string,
+  headers: Record<string, string>
+) => void;
 
 const g = globalThis as unknown as {
   exports: ExportsFn;
@@ -24,6 +31,7 @@ const g = globalThis as unknown as {
   GetResourceByFindIndex: GetResourceByFindIndexFn;
   GetNumResourceMetadata: GetNumResourceMetadataFn;
   GetResourceMetadata: GetResourceMetadataFn;
+  PerformHttpRequest: PerformHttpRequestFn;
 };
 
 export const fExports: ExportsFn = g.exports;
@@ -36,3 +44,4 @@ export const fGetNumResources: GetNumResourcesFn = g.GetNumResources;
 export const fGetResourceByFindIndex: GetResourceByFindIndexFn = g.GetResourceByFindIndex;
 export const fGetNumResourceMetadata: GetNumResourceMetadataFn = g.GetNumResourceMetadata;
 export const fGetResourceMetadata: GetResourceMetadataFn = g.GetResourceMetadata;
+export const fPerformHttpRequest: PerformHttpRequestFn = g.PerformHttpRequest;

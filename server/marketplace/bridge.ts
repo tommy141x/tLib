@@ -6,9 +6,10 @@
 // Async exports take a Lua callback as their final argument rather than
 // returning a Promise — Lua consumers shouldn't need to await userdata.
 
-import { getItem, listItems } from "./api";
-import { fExports } from "./fivem";
-import { installItem } from "./installer";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fExports, fGetCurrentResourceName, fGetResourcePath } from "./fivem";
+import { installFromData, uninstallItem } from "./installer";
 import { list as listTargets, register as registerTarget, unregisterResource } from "./registry";
 
 let installed = false;
@@ -51,48 +52,39 @@ export function registerBridge(): void {
   // Synchronously returns a JSON string of registered types, for diagnostics.
   fExports("mpListTypes", () => JSON.stringify(listTargets()));
 
-  // Async: browse items. Invokes cb(jsonString). On error cb({ ok: false, error }).
-  // paramsJson is a JSON string with optional { type, search, cursor, limit }.
-  fExports("mpList", (paramsJson: unknown, cb: unknown) => {
-    const callback = safeCallback(cb);
-    if (!callback) return;
-    const params = typeof paramsJson === "string" && paramsJson ? safeParse(paramsJson) : {};
-    listItems(params)
-      .then((r) => callback(JSON.stringify({ ok: true, data: r })))
-      .catch((e) => callback(errorPayload(e)));
+  // Sync: Lua writes the downloaded zip to a temp file (bypassing the
+  // Lua→JS binary string encoding issue), Node.js reads it from disk.
+  // tmpRelPath is relative to the tLib resource root (e.g. '.tmp/install-x.zip').
+  fExports("mpInstallFromFile", (resourceName: unknown, type: unknown, slug: unknown, tmpRelPath: unknown, expectedHash: unknown, expectedSize: unknown) => {
+    if (typeof resourceName !== "string" || !resourceName) return JSON.stringify({ ok: false, error: "resourceName required" });
+    if (typeof type !== "string" || !type) return JSON.stringify({ ok: false, error: "type required" });
+    if (typeof slug !== "string" || !slug) return JSON.stringify({ ok: false, error: "slug required" });
+    if (typeof tmpRelPath !== "string" || !tmpRelPath) return JSON.stringify({ ok: false, error: "tmpRelPath required" });
+
+    const tLibRoot = fGetResourcePath(fGetCurrentResourceName());
+    if (!tLibRoot) return JSON.stringify({ ok: false, error: "could not resolve tLib resource path" });
+
+    const fullPath = path.join(tLibRoot, tmpRelPath);
+    let buf: Buffer;
+    try {
+      buf = fs.readFileSync(fullPath);
+    } catch (err) {
+      return JSON.stringify({ ok: false, error: `could not read temp file: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      try { fs.unlinkSync(fullPath); } catch { /* best-effort cleanup */ }
+    }
+
+    const hash = typeof expectedHash === "string" ? expectedHash : "";
+    const size = typeof expectedSize === "number" ? expectedSize : 0;
+    return JSON.stringify(installFromData(resourceName, type, slug, buf, hash, size));
   });
 
-  fExports("mpGetItem", (slug: unknown, cb: unknown) => {
-    const callback = safeCallback(cb);
-    if (!callback) return;
-    if (typeof slug !== "string" || !slug) {
-      callback(errorPayload(new Error("slug required")));
-      return;
-    }
-    getItem(slug)
-      .then((r) => callback(JSON.stringify({ ok: true, data: r })))
-      .catch((e) => callback(errorPayload(e)));
-  });
-
-  // Async: download + install. Callback receives JSON of InstallOutcome.
-  fExports("mpInstall", (type: unknown, slug: unknown, version: unknown, cb: unknown) => {
-    const callback = safeCallback(cb);
-    if (!callback) return;
-    if (typeof type !== "string") {
-      callback(JSON.stringify({ ok: false, error: "type required" }));
-      return;
-    }
-    if (typeof slug !== "string") {
-      callback(JSON.stringify({ ok: false, error: "slug required" }));
-      return;
-    }
-    if (typeof version !== "string") {
-      callback(JSON.stringify({ ok: false, error: "version required" }));
-      return;
-    }
-    installItem(type, slug, version)
-      .then((outcome) => callback(JSON.stringify(outcome)))
-      .catch((e) => callback(errorPayload(e)));
+  // Sync: delete installed files for a slug. Returns JSON of UninstallOutcome.
+  fExports("mpUninstall", (resourceName: unknown, type: unknown, slug: unknown) => {
+    if (typeof resourceName !== "string" || !resourceName) return JSON.stringify({ ok: false, error: "resourceName required" });
+    if (typeof type !== "string") return JSON.stringify({ ok: false, error: "type required" });
+    if (typeof slug !== "string") return JSON.stringify({ ok: false, error: "slug required" });
+    return JSON.stringify(uninstallItem(resourceName, type, slug));
   });
 }
 

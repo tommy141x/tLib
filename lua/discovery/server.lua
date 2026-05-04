@@ -440,7 +440,13 @@ function Discovery.create(opts)
             if not checkPerm(src) then return end
             model = resolveModel(model)
             inst:saveModelConfig(model, config)
-            if afterSave then afterSave(model, config) end
+            if afterSave then
+                local ok, err = pcall(afterSave, model, config)
+                if not ok then
+                    print("[tLib/discovery] afterSave ERROR for '" .. tostring(model) .. "': " .. tostring(err))
+                    print(debug.traceback())
+                end
+            end
             broadcast()
         end)
 

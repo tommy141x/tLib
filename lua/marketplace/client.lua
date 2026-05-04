@@ -32,11 +32,26 @@ local function registerExports()
         -- Strip trailing slashes so the NUI can append paths without duplication.
         baseUrl = baseUrl:gsub('/+$', '')
 
+        local resource       = type(opts.resource)       == 'string' and opts.resource       or nil
+        local initialTab     = type(opts.initialTab)     == 'string' and opts.initialTab     or nil
+        local installedSlugs = type(opts.installedSlugs) == 'table'  and opts.installedSlugs or nil
+        local installedLayouts = type(opts.installedLayouts) == 'table' and opts.installedLayouts or nil
+        local installedSounds  = type(opts.installedSounds)  == 'table' and opts.installedSounds  or nil
+        local previewFn      = type(opts.previewFn)      == 'string' and opts.previewFn      or nil
+        local previewState   = type(opts.previewState)   == 'table'  and opts.previewState   or nil
+
         SendNUIMessage({
             action = 'openMarketplace',
             data = {
-                type    = type(opts.type) == 'string' and opts.type or nil,
-                baseUrl = baseUrl,
+                resource         = resource,
+                initialTab       = initialTab,
+                type             = type(opts.type) == 'string' and opts.type or nil,
+                baseUrl          = baseUrl,
+                installedSlugs   = installedSlugs,
+                installedLayouts = installedLayouts,
+                installedSounds  = installedSounds,
+                previewFn        = previewFn,
+                previewState     = previewState,
             },
         })
         SetNuiFocus(true, true)
@@ -58,10 +73,21 @@ end)
 RegisterNUICallback('marketplaceInstall', function(data, cb)
     cb(1)
     if type(data) ~= 'table' then return end
-    if type(data.type) ~= 'string' or type(data.slug) ~= 'string' or type(data.version) ~= 'string' then
+    if type(data.resource) ~= 'string' or type(data.type) ~= 'string' or type(data.slug) ~= 'string' then
+        print('[tLib/marketplace] marketplaceInstall NUI callback: bad data - ' .. json.encode(data or {}))
         return
     end
-    TriggerServerEvent('tlib:marketplace:install', data.type, data.slug, data.version)
+    local version = type(data.version) == 'string' and data.version or ''
+    print('[tLib/marketplace] marketplaceInstall NUI callback: firing server event type=' .. data.type .. ' slug=' .. data.slug .. ' version=' .. version)
+    TriggerServerEvent('tlib:marketplace:install', data.resource or '', data.type, data.slug, version)
+end)
+
+-- NUI → Lua: uninstall a specific item. Forwarded to server for ACE + delete.
+RegisterNUICallback('marketplaceUninstall', function(data, cb)
+    cb(1)
+    if type(data) ~= 'table' then return end
+    if type(data.type) ~= 'string' or type(data.slug) ~= 'string' then return end
+    TriggerServerEvent('tlib:marketplace:uninstall', data.resource or '', data.type, data.slug)
 end)
 
 -- Server → client install result — relay to NUI so the panel can update.
@@ -71,6 +97,19 @@ RegisterNetEvent('tlib:marketplace:installResult', function(result)
         log(('installed "%s" → %s'):format(tostring(result.slug), tostring(result.installedAt)), 2)
     else
         log(('install failed for "%s": %s'):format(
+            tostring(result and result.slug or '?'),
+            tostring(result and result.error or 'unknown')
+        ), 3)
+    end
+end)
+
+-- Server → client uninstall result — relay to NUI so the panel can update.
+RegisterNetEvent('tlib:marketplace:uninstallResult', function(result)
+    SendNUIMessage({ action = 'marketplaceUninstallResult', data = result })
+    if type(result) == 'table' and result.ok then
+        log(('uninstalled "%s"'):format(tostring(result.slug)), 2)
+    else
+        log(('uninstall failed for "%s": %s'):format(
             tostring(result and result.slug or '?'),
             tostring(result and result.error or 'unknown')
         ), 3)

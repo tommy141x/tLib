@@ -50,6 +50,10 @@ interface DialogTab {
   id: string;
   label: string;
   icon?: string;
+  /** Fires onButtonClick(tab.id) on click instead of switching content pane. */
+  action?: boolean;
+  /** Renders a thin divider above this tab in the rail. */
+  separator?: boolean;
 }
 
 interface DialogData {
@@ -320,17 +324,31 @@ export default function Dialog() {
                   >
                     <For each={tabs()}>
                       {(tab) => (
-                        <button
-                          class="text-left px-2 py-1 text-[10px] font-mono rounded transition-colors"
-                          classList={{
-                            "bg-primary text-primary-foreground": activeTab() === tab.id,
-                            "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))]":
-                              activeTab() !== tab.id,
-                          }}
-                          onClick={() => setActiveTab(tab.id)}
-                        >
-                          {tab.label}
-                        </button>
+                        <>
+                          <Show when={tab.separator}>
+                            <div class="h-px bg-[hsl(var(--border)/0.6)] my-0.5" />
+                          </Show>
+                          <button
+                            class="text-left px-2 py-1 text-[10px] font-mono rounded transition-colors flex items-center justify-between"
+                            classList={{
+                              "bg-primary text-primary-foreground": !tab.action && activeTab() === tab.id,
+                              "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))]":
+                                tab.action || activeTab() !== tab.id,
+                            }}
+                            onClick={() => {
+                              if (tab.action) {
+                                onButtonClick(tab.id);
+                              } else {
+                                setActiveTab(tab.id);
+                              }
+                            }}
+                          >
+                            <span>{tab.label}</span>
+                            <Show when={tab.action}>
+                              <span class="opacity-40 text-[8px]">→</span>
+                            </Show>
+                          </button>
+                        </>
                       )}
                     </For>
                   </div>

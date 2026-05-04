@@ -2,7 +2,7 @@ fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'
 
-author 'Tommy Johnston'
+author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM/Helix)'
 version '0.5'
 
@@ -48,6 +48,7 @@ server_scripts {
     'lua/permission/server.lua',
     'lua/serversettings/server.lua',
     'lua/marketplace/server.lua',
+    'lua/community-configs/server.lua',
     'server.lua',
 }
 

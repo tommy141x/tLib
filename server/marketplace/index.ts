@@ -1,10 +1,7 @@
 // Marketplace module entry. Mirrors realtime/index.ts — tLib boots a
 // passive scanner that only wires the bridge if a consumer resource
-// declares `tlib_module { 'marketplace' }` in its fxmanifest.
-//
-// No HTTP is made until a consumer actually calls an mp* export. The bridge
-// registration itself is cheap (just `exports(...)` calls) so even if we wire
-// eagerly the cost is negligible.
+// declares `tlib_module { 'marketplace' }` (singular) or includes
+// 'marketplace' in `tlib_modules { ... }` (plural array) in its fxmanifest.
 
 import { registerBridge } from "./bridge";
 import {
@@ -19,16 +16,24 @@ import { unregisterResource } from "./registry";
 
 const MODULE_NAME = "marketplace";
 
+/** Check both `tlib_module` (singular) and `tlib_modules` (plural array). */
+function resourceRequestsMarketplace(res: string): boolean {
+  for (const key of ["tlib_module", "tlib_modules"]) {
+    const count = fGetNumResourceMetadata(res, key);
+    for (let j = 0; j < count; j++) {
+      if (fGetResourceMetadata(res, key, j) === MODULE_NAME) return true;
+    }
+  }
+  return false;
+}
+
 function anyResourceRequests(): boolean {
   const self = fGetCurrentResourceName();
   const n = fGetNumResources();
   for (let i = 0; i < n; i++) {
     const res = fGetResourceByFindIndex(i);
     if (!res || res === self) continue;
-    const count = fGetNumResourceMetadata(res, "tlib_module");
-    for (let j = 0; j < count; j++) {
-      if (fGetResourceMetadata(res, "tlib_module", j) === MODULE_NAME) return true;
-    }
+    if (resourceRequestsMarketplace(res)) return true;
   }
   return false;
 }
@@ -49,8 +54,8 @@ function install(): void {
 
 /**
  * Called once from server/main.ts. No-op unless a consumer resource opts in
- * via `tlib_module { 'marketplace' }`. Hot-attach on later resource starts
- * mirrors the realtime module.
+ * via `tlib_module { 'marketplace' }` or `tlib_modules { ..., 'marketplace', ... }`.
+ * Hot-attach on later resource starts mirrors the realtime module.
  */
 export function installMarketplace(): void {
   if (anyResourceRequests()) {
@@ -62,12 +67,8 @@ export function installMarketplace(): void {
     if (installed || typeof started !== "string") return;
     const self = fGetCurrentResourceName();
     if (started === self) return;
-    const count = fGetNumResourceMetadata(started, "tlib_module");
-    for (let j = 0; j < count; j++) {
-      if (fGetResourceMetadata(started, "tlib_module", j) === MODULE_NAME) {
-        install();
-        return;
-      }
+    if (resourceRequestsMarketplace(started)) {
+      install();
     }
   });
 }
