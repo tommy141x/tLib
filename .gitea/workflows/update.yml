@@ -1,0 +1,15 @@
+name: Version Notify
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  notify:
+    uses: TIMMYG-Studios/workflows/.gitea/workflows/update.yml@main
+    with:
+      product_name: tLib
+      discord_channel_id: "1365876003142107139"
+      role_id: "1481706150851379252"
+    secrets: inherit
