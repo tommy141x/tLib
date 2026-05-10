@@ -3,7 +3,7 @@ node_modules/
 
 # Build outputs
 dist/*
-ts/src/build/
+ts/src/build/obfuscate.ts
 scripts/*
 ui/index.html
 ui/assets/
