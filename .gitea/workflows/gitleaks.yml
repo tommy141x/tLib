@@ -1,0 +1,16 @@
+name: Gitleaks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 0"
+
+jobs:
+  scan:
+    uses: TIMMYG-Studios/workflows/.gitea/workflows/gitleaks.yml@main
+    with:
+      before: ${{ github.event.before }}
+      sha: ${{ github.sha }}
+    secrets: inherit

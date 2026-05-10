@@ -1,6 +1,6 @@
 // Thin wrapper over the marketplace HTTP API.
-// All endpoints are public, no auth. Rate-limited server-side by IP +
-// X-FiveM-Server header which we derive from sv_licenseKey.
+// Downloads are authenticated via a shared secret embedded in this bundle.
+// Rate-limited server-side by IP + X-FiveM-Server header derived from sv_licenseKey.
 
 import { createHash } from "node:crypto";
 import { resolveConfig } from "./config";
@@ -90,6 +90,11 @@ export class MarketplaceError extends Error {
   }
 }
 
+// Shared secret embedded at build time. Must match MARKETPLACE_RESOURCE_SECRET
+// on the Cloudflare Worker. Allows in-game servers to download marketplace
+// bundles without a user session while keeping direct browser access gated.
+const _RS = "tgmp-7c4a2f19d83e6b05a91f0c47e2d85b3a";
+
 let cachedServerId: string | null = null;
 
 /** Derive a stable server identifier for rate-limit keying. */
@@ -150,7 +155,7 @@ export async function listItems(
   if (params.cursor) qs.set("cursor", params.cursor);
   if (params.limit) qs.set("limit", String(params.limit));
   const url = `${cfg.apiBase}/items${qs.toString() ? `?${qs}` : ""}`;
-  const resp = await fetchWithTimeout(url, buildHeaders(), cfg.installTimeoutMs);
+  const resp = await fetchWithTimeout(url, buildHeaders({ "X-Resource-Secret": _RS }), cfg.installTimeoutMs);
   if (!resp.ok) throw await toMarketplaceError(resp);
   return (await resp.json()) as { items: MarketplaceItem[]; nextCursor: string | null };
 }
@@ -158,7 +163,7 @@ export async function listItems(
 export async function getItem(slug: string): Promise<MarketplaceItemDetail> {
   const cfg = resolveConfig();
   const url = `${cfg.apiBase}/items/${encodeURIComponent(slug)}`;
-  const resp = await fetchWithTimeout(url, buildHeaders(), cfg.installTimeoutMs);
+  const resp = await fetchWithTimeout(url, buildHeaders({ "X-Resource-Secret": _RS }), cfg.installTimeoutMs);
   if (!resp.ok) throw await toMarketplaceError(resp);
   return (await resp.json()) as MarketplaceItemDetail;
 }
@@ -189,7 +194,7 @@ export async function downloadBundle(slug: string, version: string): Promise<Bun
   const url = `${cfg.apiBase}/items/${encodeURIComponent(slug)}/download${qs.toString() ? `?${qs}` : ""}`;
   const resp = await fetchWithTimeout(
     url,
-    buildHeaders({ Accept: "application/octet-stream,application/zip" }),
+    buildHeaders({ Accept: "application/octet-stream,application/zip", "X-Resource-Secret": _RS }),
     cfg.installTimeoutMs
   );
   if (!resp.ok) throw await toMarketplaceError(resp);

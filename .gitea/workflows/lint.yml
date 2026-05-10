@@ -1,0 +1,10 @@
+name: Lint & Typecheck
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    uses: TIMMYG-Studios/workflows/.gitea/workflows/lint.yml@main
+    secrets: inherit
