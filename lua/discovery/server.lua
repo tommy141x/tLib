@@ -141,6 +141,22 @@ function Discovery.create(opts)
         configs = c
     end
 
+    -- Returns only locally-owned configs (no external sources), _local flag stripped.
+    -- Use this when the caller's resource will handle the actual file write.
+    function inst:getLocalConfigs()
+        local result = {}
+        for model, cfg in pairs(configs) do
+            if not externalSources[model] then
+                local copy = {}
+                for k, v in pairs(cfg) do
+                    if k ~= "_local" then copy[k] = v end
+                end
+                result[model] = copy
+            end
+        end
+        return result
+    end
+
     function inst:getExternalSource(model)
         model = resolveModel(model)
         return externalSources[model]
@@ -166,6 +182,7 @@ function Discovery.create(opts)
 
     function inst:saveLocal(filePath)
         filePath = filePath or localFile
+        log("[" .. tag .. "] saveLocal: resource='" .. tostring(ownerResource) .. "' file='" .. tostring(filePath) .. "' section='" .. tostring(localSection) .. "'", 1)
         local localOnly = {}
         for model, cfg in pairs(configs) do
             if not externalSources[model] or configs[model]._local then
@@ -176,14 +193,22 @@ function Discovery.create(opts)
                 localOnly[model] = copy
             end
         end
+        local modelList = {}
+        for k in pairs(localOnly) do modelList[#modelList + 1] = tostring(k) end
+        log("[" .. tag .. "] saveLocal: writing " .. #modelList .. " model(s): " .. table.concat(modelList, ", "), 1)
         if localSection then
             -- Merge into the existing file so sibling sections are preserved
             local raw = _loadFile(ownerResource, filePath)
+            log("[" .. tag .. "] saveLocal: read existing file — " .. (raw and (tostring(#raw) .. " bytes") or "nil/empty"), 1)
             local fileData = (raw and raw ~= "") and json.decode(raw) or {}
             fileData[localSection] = localOnly
-            _saveFile(ownerResource, filePath, json.encode(fileData))
+            local encoded = json.encode(fileData)
+            _saveFile(ownerResource, filePath, encoded)
+            log("[" .. tag .. "] saveLocal: wrote " .. tostring(#encoded) .. " bytes to " .. ownerResource .. "/" .. filePath, 1)
         else
-            _saveFile(ownerResource, filePath, json.encode(localOnly))
+            local encoded = json.encode(localOnly)
+            _saveFile(ownerResource, filePath, encoded)
+            log("[" .. tag .. "] saveLocal: wrote " .. tostring(#encoded) .. " bytes to " .. ownerResource .. "/" .. filePath, 1)
         end
     end
 
@@ -259,7 +284,9 @@ function Discovery.create(opts)
             log("[" .. tag .. "] Saved '" .. model .. "' → " .. ext.resource .. "/" .. ext.filePath, 2)
         else
             config._local = true
-            inst:saveLocal()
+            if not opts.skipAutoSave then
+                inst:saveLocal()
+            end
             log("[" .. tag .. "] Saved '" .. model .. "' → local", 2)
         end
     end
@@ -275,7 +302,9 @@ function Discovery.create(opts)
             externalSources[model] = nil
         end
         configs[model] = nil
-        inst:saveLocal()
+        if not opts.skipAutoSave then
+            inst:saveLocal()
+        end
     end
 
     function inst:getExportTargets()
@@ -411,8 +440,6 @@ function Discovery.create(opts)
         local sourceInfoEv  = opts.sourceInfoEvent or (prefix .. ":externalSourceInfo")
         local targetsEv     = opts.exportTargetsEvent or (prefix .. ":exportTargets")
         local permCheck     = opts.permissionCheck
-        local afterSave     = opts.afterSave
-        local afterRemove   = opts.afterRemove
 
         local function broadcast()
             Platform.TriggerClientEvent(receiveEv, -1, configs)
@@ -440,13 +467,7 @@ function Discovery.create(opts)
             if not checkPerm(src) then return end
             model = resolveModel(model)
             inst:saveModelConfig(model, config)
-            if afterSave then
-                local ok, err = pcall(afterSave, model, config)
-                if not ok then
-                    print("[tLib/discovery] afterSave ERROR for '" .. tostring(model) .. "': " .. tostring(err))
-                    print(debug.traceback())
-                end
-            end
+            TriggerEvent(metadataKey .. ":afterSave", model)
             broadcast()
         end)
 
@@ -457,7 +478,7 @@ function Discovery.create(opts)
             model = resolveModel(model)
             if not configs[model] then return end
             inst:removeModelConfig(model)
-            if afterRemove then afterRemove(model) end
+            TriggerEvent(metadataKey .. ":afterRemove", model)
             broadcast()
             log("[" .. tag .. "] " .. src .. " removed config for '" .. model .. "'", 2)
         end)
@@ -518,9 +539,16 @@ end
 
 function Discovery.registerExports()
     Platform.export('tLib', 'CreateDiscovery', function(opts)
-        -- capture caller at export time so discovery reads/writes the right resource
+        -- GetInvokingResource() returns nil when called at module init time (top-level
+        -- script execution), so callers must pass resourceName = GetCurrentResourceName()
+        -- explicitly. Warn loudly here so the misconfiguration is obvious.
         if not opts.resourceName then
             opts.resourceName = GetInvokingResource()
+            if not opts.resourceName or opts.resourceName == '' then
+                log('[Discovery] WARNING: resourceName not set and GetInvokingResource() returned nil. '
+                    .. 'Pass resourceName = GetCurrentResourceName() in your CreateDiscovery opts. '
+                    .. 'Defaulting to tLib — file I/O will target the wrong resource!', 1)
+            end
         end
         return Discovery.create(opts)
     end)

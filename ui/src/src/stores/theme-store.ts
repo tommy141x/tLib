@@ -55,11 +55,9 @@ onNuiEvent<{ id: string }>("removeTheme", (data) => {
   themes.delete(data.id);
   if (activeThemeId === data.id) {
     activeThemeId = "";
-    applyTheme("");
   }
 });
 
 onNuiEvent<{ id: string }>("setTheme", (data) => {
   activeThemeId = data.id;
-  applyTheme(data.id);
 });
