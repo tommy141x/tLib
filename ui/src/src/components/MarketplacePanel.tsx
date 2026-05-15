@@ -42,6 +42,7 @@ interface MarketplaceItem {
   size_bytes: number;
   downloads: number;
   created_at: string;
+  preview_waveform?: number[] | null;
 }
 
 interface InstalledSound {
@@ -692,14 +693,54 @@ function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
         </button>
 
         <div class="flex-1 min-w-0">
-          <div
-            class="mb-1.5 h-1 rounded-full bg-[hsl(var(--border)/0.8)] cursor-pointer"
-            onClick={seek}
-          >
-            <div
-              class="h-full rounded-full bg-[hsl(var(--primary))] transition-[width]"
-              style={{ width: `${(progress() * 100).toFixed(1)}%` }}
-            />
+          <div class="mb-1.5 cursor-pointer" onClick={seek}>
+            <Show
+              when={(props.item.preview_waveform?.length ?? 0) > 0}
+              fallback={
+                <div class="h-1 rounded-full bg-[hsl(var(--border)/0.8)]">
+                  <div
+                    class="h-full rounded-full bg-[hsl(var(--primary))] transition-[width]"
+                    style={{ width: `${(progress() * 100).toFixed(1)}%` }}
+                  />
+                </div>
+              }
+            >
+              {() => {
+                const peaks = props.item.preview_waveform!;
+                const n = peaks.length;
+                return (
+                  <svg
+                    viewBox={`0 0 ${n} 1`}
+                    preserveAspectRatio="none"
+                    style={{ height: "32px", width: "100%", display: "block" }}
+                  >
+                    <defs>
+                      <clipPath id="mp-wf-played">
+                        <rect x="0" y="0" width={n * progress()} height="1" />
+                      </clipPath>
+                    </defs>
+                    <For each={peaks}>
+                      {(peak, i) => {
+                        const x = i() + 0.2;
+                        const h = Math.max(0.04, peak * 0.9);
+                        const y = (1 - h) / 2;
+                        return <rect x={x} y={y} width={0.6} height={h} rx={0.04} fill="rgba(255,255,255,0.12)" />;
+                      }}
+                    </For>
+                    <g clip-path="url(#mp-wf-played)">
+                      <For each={peaks}>
+                        {(peak, i) => {
+                          const x = i() + 0.2;
+                          const h = Math.max(0.04, peak * 0.9);
+                          const y = (1 - h) / 2;
+                          return <rect x={x} y={y} width={0.6} height={h} rx={0.04} fill="hsl(var(--primary))" />;
+                        }}
+                      </For>
+                    </g>
+                  </svg>
+                );
+              }}
+            </Show>
           </div>
           <div class="flex justify-between text-[9px] font-mono text-[hsl(var(--muted-foreground)/0.5)]">
             <span>{fmtTime(elapsed())}</span>

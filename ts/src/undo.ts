@@ -54,6 +54,7 @@ function commitBatch(): void {
   if (undoStack.length > MAX_HISTORY) undoStack.shift();
   redoStack = [];
   pendingBatch = null;
+  emitChange();
 }
 
 // call before mutating. calling again with same label extends the batch
@@ -95,6 +96,7 @@ export function undo(): void {
   if (!entry) return;
   restoreStores(entry.before);
   redoStack.push(entry);
+  emitChange();
 }
 
 export function redo(): void {
@@ -102,6 +104,7 @@ export function redo(): void {
   if (!entry) return;
   restoreStores(entry.after);
   undoStack.push(entry);
+  emitChange();
 }
 
 // call on editor open/close/save
@@ -109,6 +112,7 @@ export function clearHistory(): void {
   undoStack = [];
   redoStack = [];
   pendingBatch = null;
+  emitChange();
 }
 
 export function canUndo(): boolean {
@@ -116,4 +120,22 @@ export function canUndo(): boolean {
 }
 export function canRedo(): boolean {
   return redoStack.length > 0;
+}
+
+// ── History change listeners ──────────────────────────────────────────────
+type HistoryChangeListener = (dirty: boolean) => void;
+const historyListeners: HistoryChangeListener[] = [];
+
+/** Subscribe to undo history changes. Returns an unsubscribe function. */
+export function onHistoryChange(listener: HistoryChangeListener): () => void {
+  historyListeners.push(listener);
+  return () => {
+    const i = historyListeners.indexOf(listener);
+    if (i >= 0) historyListeners.splice(i, 1);
+  };
+}
+
+function emitChange(): void {
+  const dirty = canUndo();
+  for (const fn of historyListeners) fn(dirty);
 }

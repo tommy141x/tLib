@@ -4,7 +4,7 @@ lua54 'yes'
 
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM/Helix)'
-version '0.5'
+version '0.6'
 
 shared_scripts {
     'lua/adapter/init.lua',
