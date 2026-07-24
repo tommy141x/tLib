@@ -1,5 +1,13 @@
 name: Docs Sync
 
+# Mirrors tLib's docs into the live site repo (TIMMYG-Studios/panel = timmygstudios.com).
+# Self-contained (see tRadio): the shared reusable workflow is served stale by act_runner's
+# ref cache, so inlining the steps is the reliable path.
+#
+# Split casing in panel (pre-existing, kept to avoid breaking live URLs):
+#   docs   -> src/content/docs/tlib   (lowercase; the /docs/tlib/* URL)
+#   assets -> public/assets/tLib      (tLib currently has no doc media; step is a no-op then)
+
 on:
   push:
     branches: [main]
@@ -7,8 +15,57 @@ on:
   workflow_dispatch:
 
 jobs:
-  sync:
-    uses: TIMMYG-Studios/workflows/.gitea/workflows/docs.yml@main
-    with:
-      docs_slug: tLib
-    secrets: inherit
+  sync-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tLib (source)
+        uses: https://github.com/actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Checkout panel (docs target)
+        uses: https://github.com/actions/checkout@v4
+        with:
+          repository: TIMMYG-Studios/panel
+          token: ${{ secrets.REPO_TOKEN }}
+          path: panel
+          fetch-depth: 1
+
+      - name: Sync documentation + media
+        env:
+          DOCS_DIR: tlib
+          ASSET_DIR: tLib
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          mkdir -p "panel/src/content/docs/$DOCS_DIR"
+          rm -rf "panel/src/content/docs/$DOCS_DIR"/*
+          cp docs/content/*.mdx "panel/src/content/docs/$DOCS_DIR/"
+
+          # Overlay-copy media only (never wipe) — assets dir is shared with the software page.
+          if [ -d docs/public ] && [ -n "$(ls -A docs/public 2>/dev/null)" ]; then
+            mkdir -p "panel/public/assets/$ASSET_DIR"
+            cp -r docs/public/. "panel/public/assets/$ASSET_DIR/"
+          fi
+
+      - name: Commit + push to panel
+        env:
+          DOCS_DIR: tlib
+          ASSET_DIR: tLib
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          cd panel
+          git config user.name "Gitea Actions Bot"
+          git config user.email "actions@gitea.local"
+
+          git add "src/content/docs/$DOCS_DIR/"
+          [ -d "public/assets/$ASSET_DIR" ] && git add "public/assets/$ASSET_DIR/" || true
+
+          if git diff --staged --quiet; then
+            echo "No documentation changes to sync."
+          else
+            git commit -m "docs(tLib): sync from source ($ACTOR@${SHA:0:7})"
+            git push
+          fi

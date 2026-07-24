@@ -1,68 +1,66 @@
 ---
-title: Exports
-description: All tLib Lua exports — menus, dialogs, toasts, themes, logger, HTTP, and permissions.
-icon: Code
-badges:
-  - text: "Lua Exports"
-    variant: "default"
+title: "Exports"
+description: "All tLib Lua exports — menus, dialogs, toasts, themes, logger, HTTP, and permissions."
+order: 2
+group: "tLib"
 ---
 
 All exports are called via `exports['tLib']:FunctionName(...)`.
 
 ---
 
-## Menu System [!toc]
+## Menu System
 
 A full NUI menu system with submenus, item types, and dynamic updates.
 
-### Lifecycle [!toc]
+### Lifecycle
 
-| Export | Description |
-|--------|-------------|
+| Export                                                       | Description                                       |
+| ------------------------------------------------------------ | ------------------------------------------------- |
 | `CreateMenu(menuId, title, subtitle, onOpen, onClose, opts)` | Create a new menu. Returns the resolved `menuId`. |
-| `OpenMenu(menuId)` | Open a menu. |
-| `CloseMenu(menuId)` | Close a specific menu. |
-| `CloseAll()` | Close all open menus. |
-| `DeleteMenu(menuId)` | Remove a menu entirely. |
-| `ClearMenu(menuId)` | Remove all items from a menu. |
-| `CheckMenu(menuId)` | Returns `true` if the menu exists. |
-| `IsOpen()` | Returns `true` if any menu is open. |
+| `OpenMenu(menuId)`                                           | Open a menu.                                      |
+| `CloseMenu(menuId)`                                          | Close a specific menu.                            |
+| `CloseAll()`                                                 | Close all open menus.                             |
+| `DeleteMenu(menuId)`                                         | Remove a menu entirely.                           |
+| `ClearMenu(menuId)`                                          | Remove all items from a menu.                     |
+| `CheckMenu(menuId)`                                          | Returns `true` if the menu exists.                |
+| `IsOpen()`                                                   | Returns `true` if any menu is open.               |
 
-### Item Types [!toc]
+### Item Types
 
-| Export | Description |
-|--------|-------------|
-| `AddButton(menuId, itemId, label, description, onSelect, opts)` | Add a button item. |
-| `AddCheckbox(menuId, itemId, label, description, checked, onToggle, opts)` | Add a checkbox item. |
-| `AddSlider(menuId, itemId, label, description, min, max, value, step, onChange, onSelect, opts)` | Add a slider item. |
-| `AddList(menuId, itemId, label, description, values, index, onChange, onSelect, opts)` | Add a list selector item. |
-| `AddSpacer(menuId, itemId, label, description, opts)` | Add a non-interactive spacer. |
-| `AddSubmenuButton(menuId, itemId, submenuId, label, description, onSelect, opts)` | Add a button that opens a submenu. |
+| Export                                                                                           | Description                        |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| `AddButton(menuId, itemId, label, description, onSelect, opts)`                                  | Add a button item.                 |
+| `AddCheckbox(menuId, itemId, label, description, checked, onToggle, opts)`                       | Add a checkbox item.               |
+| `AddSlider(menuId, itemId, label, description, min, max, value, step, onChange, onSelect, opts)` | Add a slider item.                 |
+| `AddList(menuId, itemId, label, description, values, index, onChange, onSelect, opts)`           | Add a list selector item.          |
+| `AddSpacer(menuId, itemId, label, description, opts)`                                            | Add a non-interactive spacer.      |
+| `AddSubmenuButton(menuId, itemId, submenuId, label, description, onSelect, opts)`                | Add a button that opens a submenu. |
 
-### Mutation [!toc]
+### Mutation
 
-| Export | Description |
-|--------|-------------|
-| `UpdateMenu(menuId, changes)` | Merge top-level menu fields (title, subtitle, banner, position, size, etc). |
-| `SetMenuTitle(menuId, title)` | Update the menu title. |
-| `SetMenuSubtitle(menuId, subtitle)` | Update the menu subtitle. |
-| `SetMenuBanner(menuId, banner)` | Update the menu banner image. |
-| `SetMenuLayout(menuId, position, size)` | Update position and size. |
-| `RefreshMenu(menuId)` | Push pending item changes to the UI. Call after batched `Add*` calls. |
+| Export                                  | Description                                                                 |
+| --------------------------------------- | --------------------------------------------------------------------------- |
+| `UpdateMenu(menuId, changes)`           | Merge top-level menu fields (title, subtitle, banner, position, size, etc). |
+| `SetMenuTitle(menuId, title)`           | Update the menu title.                                                      |
+| `SetMenuSubtitle(menuId, subtitle)`     | Update the menu subtitle.                                                   |
+| `SetMenuBanner(menuId, banner)`         | Update the menu banner image.                                               |
+| `SetMenuLayout(menuId, position, size)` | Update position and size.                                                   |
+| `RefreshMenu(menuId)`                   | Push pending item changes to the UI. Call after batched `Add*` calls.       |
 
-### CreateMenu Options [!toc]
+### CreateMenu Options
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `position` | `string` | `"top-left"`, `"top-center"`, `"bottom-right"`, etc. |
-| `size` | `string` | `"sm"`, `"md"`, or `"lg"` |
-| `banner` | `string\|function` | URL displayed above the title. |
-| `blockInput` | `boolean` | Block player movement and camera while open. |
-| `inheritLayout` | `boolean` | Inherit position/size from parent when opened as a submenu. |
-| `theme` | `string` | Id of a registered tLib theme. |
-| `itemHeight` | `number` | Fixed row height in pixels (default: `40`). |
+| Key             | Type               | Description                                                 |
+| --------------- | ------------------ | ----------------------------------------------------------- |
+| `position`      | `string`           | `"top-left"`, `"top-center"`, `"bottom-right"`, etc.        |
+| `size`          | `string`           | `"sm"`, `"md"`, or `"lg"`                                   |
+| `banner`        | `string\|function` | URL displayed above the title.                              |
+| `blockInput`    | `boolean`          | Block player movement and camera while open.                |
+| `inheritLayout` | `boolean`          | Inherit position/size from parent when opened as a submenu. |
+| `theme`         | `string`           | Id of a registered tLib theme.                              |
+| `itemHeight`    | `number`           | Fixed row height in pixels (default: `40`).                 |
 
-### Example [!toc]
+### Example
 
 ```lua
 local menuId = exports['tLib']:CreateMenu('demo', 'Demo Menu', 'Pick an option', nil, nil, {
@@ -88,47 +86,47 @@ exports['tLib']:OpenMenu(menuId)
 
 ---
 
-## Dialog System [!toc]
+## Dialog System
 
 Modal form dialogs with multiple field types. Results are delivered via events.
 
-### Exports [!toc]
+### Exports
 
-| Export | Description |
-|--------|-------------|
-| `ShowDialog(id, opts)` | Open a dialog. Returns the resolved dialog `id`. |
-| `CloseDialog(id)` | Close an open dialog (fires the cancelled event). |
+| Export                 | Description                                       |
+| ---------------------- | ------------------------------------------------- |
+| `ShowDialog(id, opts)` | Open a dialog. Returns the resolved dialog `id`.  |
+| `CloseDialog(id)`      | Close an open dialog (fires the cancelled event). |
 
-### ShowDialog Options [!toc]
+### ShowDialog Options
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `title` | `string` | Dialog heading. |
-| `description` | `string` | Optional subheading. |
-| `submitLabel` | `string` | Submit button label (default `"Submit"`). |
-| `cancelLabel` | `string` | Cancel button label (default `"Cancel"`). |
-| `size` | `string` | `"sm"`, `"md"`, or `"lg"` (default `"md"`). |
-| `theme` | `string` | Id of a registered tLib theme. |
-| `fields` | `table[]` | Array of field definitions. |
+| Key           | Type      | Description                                 |
+| ------------- | --------- | ------------------------------------------- |
+| `title`       | `string`  | Dialog heading.                             |
+| `description` | `string`  | Optional subheading.                        |
+| `submitLabel` | `string`  | Submit button label (default `"Submit"`).   |
+| `cancelLabel` | `string`  | Cancel button label (default `"Cancel"`).   |
+| `size`        | `string`  | `"sm"`, `"md"`, or `"lg"` (default `"md"`). |
+| `theme`       | `string`  | Id of a registered tLib theme.              |
+| `fields`      | `table[]` | Array of field definitions.                 |
 
-### Field Types [!toc]
+### Field Types
 
-| Type | Extra Keys |
-|------|------------|
-| `text`, `number`, `password`, `textarea` | `placeholder`, `defaultValue`, `min`/`max` (number only) |
-| `select`, `radio` | `options` (`{ value, label }[]`), `placeholder`, `defaultValue` |
-| `slider` | `min`, `max`, `step`, `defaultValue` |
-| `checkbox` | `defaultValue` (boolean) |
+| Type                                     | Extra Keys                                                      |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| `text`, `number`, `password`, `textarea` | `placeholder`, `defaultValue`, `min`/`max` (number only)        |
+| `select`, `radio`                        | `options` (`{ value, label }[]`), `placeholder`, `defaultValue` |
+| `slider`                                 | `min`, `max`, `step`, `defaultValue`                            |
+| `checkbox`                               | `defaultValue` (boolean)                                        |
 
 All fields share: `id` (required), `type`, `label`, `description`, `required`, `disabled`.
 
-### Events [!toc]
+### Events
 
 - `tLib:dialog:opened` — `(dialogId)`
 - `tLib:dialog:submitted` — `(dialogId, values)` — `values` is a table keyed by field `id`.
 - `tLib:dialog:cancelled` — `(dialogId)`
 
-### Example [!toc]
+### Example
 
 ```lua
 local dialogId = exports['tLib']:ShowDialog('my_dialog', {
@@ -152,37 +150,37 @@ end)
 
 ---
 
-## Toast / Notification System [!toc]
+## Toast / Notification System
 
 Lightweight toast notifications that stack in the corner of the screen.
 
-### Exports [!toc]
+### Exports
 
-| Export | Description |
-|--------|-------------|
+| Export                                                          | Description                              |
+| --------------------------------------------------------------- | ---------------------------------------- |
 | `ShowToast(id, toastType, title, description, duration, theme)` | Show a toast. Returns the resolved `id`. |
-| `UpdateToast(id, changes)` | Update a live toast in place. |
-| `DismissToast(id)` | Dismiss a single toast. |
-| `DismissAll()` | Dismiss all visible toasts. |
+| `UpdateToast(id, changes)`                                      | Update a live toast in place.            |
+| `DismissToast(id)`                                              | Dismiss a single toast.                  |
+| `DismissAll()`                                                  | Dismiss all visible toasts.              |
 
-### Toast Types [!toc]
+### Toast Types
 
-| Type | Default Duration |
-|------|-----------------|
-| `success` | 4000 ms |
-| `error` | 6000 ms |
-| `warning` | 5000 ms |
-| `info` | 4000 ms |
+| Type      | Default Duration                        |
+| --------- | --------------------------------------- |
+| `success` | 4000 ms                                 |
+| `error`   | 6000 ms                                 |
+| `warning` | 5000 ms                                 |
+| `info`    | 4000 ms                                 |
 | `loading` | Persistent (until dismissed or updated) |
 
-### Events [!toc]
+### Events
 
 - `tLib:toast:shown` — `(id, toastType, title)`
 - `tLib:toast:updated` — `(id, patch)`
 - `tLib:toast:dismissed` — `(id)`
 - `tLib:toast:dismissedAll`
 
-### Example [!toc]
+### Example
 
 ```lua
 -- Simple notification
@@ -196,32 +194,32 @@ exports['tLib']:UpdateToast(toastId, { type = 'success', title = 'Done', descrip
 
 ---
 
-## Theme System [!toc]
+## Theme System
 
 Register and apply CSS variable-based themes, scoped globally or per-component.
 
-### Exports [!toc]
+### Exports
 
-| Export | Description |
-|--------|-------------|
-| `AddTheme(id, opts)` | Register a new theme. Returns `true` on success. |
-| `RemoveTheme(id)` | Unregister a theme. Returns `true` if it existed. |
-| `SetTheme(id)` | Apply a theme globally. Pass `""` to clear. |
-| `GetTheme(id)` | Returns a copy of a theme definition, or `nil`. |
-| `GetThemes()` | Returns all registered themes keyed by id. |
+| Export               | Description                                       |
+| -------------------- | ------------------------------------------------- |
+| `AddTheme(id, opts)` | Register a new theme. Returns `true` on success.  |
+| `RemoveTheme(id)`    | Unregister a theme. Returns `true` if it existed. |
+| `SetTheme(id)`       | Apply a theme globally. Pass `""` to clear.       |
+| `GetTheme(id)`       | Returns a copy of a theme definition, or `nil`.   |
+| `GetThemes()`        | Returns all registered themes keyed by id.        |
 
-### AddTheme Options [!toc]
+### AddTheme Options
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `name` | `string` | Human-readable display name. |
-| `description` | `string` | Optional description. |
-| `cssVars` | `table` | CSS variable name → value map. Keys must not include the leading `--`. |
-| `extends` | `string` | Id of another theme to inherit from. |
-| `font` | `string` | Font-family string (sets `--font-sans`). |
-| `fontSize` | `string` | Base font-size percentage, e.g. `"87.5%"`. |
+| Key           | Type     | Description                                                            |
+| ------------- | -------- | ---------------------------------------------------------------------- |
+| `name`        | `string` | Human-readable display name.                                           |
+| `description` | `string` | Optional description.                                                  |
+| `cssVars`     | `table`  | CSS variable name → value map. Keys must not include the leading `--`. |
+| `extends`     | `string` | Id of another theme to inherit from.                                   |
+| `font`        | `string` | Font-family string (sets `--font-sans`).                               |
+| `fontSize`    | `string` | Base font-size percentage, e.g. `"87.5%"`.                             |
 
-### Events [!toc]
+### Events
 
 - `tLib:theme:added` — `(id)`
 - `tLib:theme:removed` — `(id)`
@@ -229,14 +227,14 @@ Register and apply CSS variable-based themes, scoped globally or per-component.
 
 ---
 
-## Logger [!toc]
+## Logger
 
 Structured console logger with level filtering. Available on both client and server.
 
-| Export | Description |
-|--------|-------------|
+| Export                | Description                                                          |
+| --------------------- | -------------------------------------------------------------------- |
 | `Log(loggerId, args)` | Format and filter a log line. Returns the formatted string or `nil`. |
-| `SetLogLevel(level)` | Set the global minimum log level (`1`–`4`). |
+| `SetLogLevel(level)`  | Set the global minimum log level (`1`–`4`).                          |
 
 Levels: `1` = DEBUG, `2` = INFO, `3` = WARN, `4` = ERROR
 
@@ -253,24 +251,24 @@ log('Something went wrong', 4) -- ERROR
 
 ---
 
-## HTTP Helper [!toc]
+## HTTP Helper
 
 Non-blocking HTTP/HTTPS client.
 
-| Export | Description |
-|--------|-------------|
+| Export                  | Description           |
+| ----------------------- | --------------------- |
 | `Fetch(opts, callback)` | Make an HTTP request. |
 
-### Fetch Options [!toc]
+### Fetch Options
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `url` | `string` | Full URL including scheme. Required. |
-| `method` | `string` | HTTP method (default `"GET"`). |
-| `headers` | `table` | Request headers. |
-| `body` | `string` | Request body. |
-| `timeout` | `number` | Timeout in seconds (default `10`). |
-| `verify` | `boolean` | Verify TLS certificate (default `false`). |
+| Key       | Type      | Description                               |
+| --------- | --------- | ----------------------------------------- |
+| `url`     | `string`  | Full URL including scheme. Required.      |
+| `method`  | `string`  | HTTP method (default `"GET"`).            |
+| `headers` | `table`   | Request headers.                          |
+| `body`    | `string`  | Request body.                             |
+| `timeout` | `number`  | Timeout in seconds (default `10`).        |
+| `verify`  | `boolean` | Verify TLS certificate (default `false`). |
 
 Callback: `function(err, statusCode, body)` — on success `err` is `nil`.
 
@@ -287,20 +285,16 @@ exports['tLib']:Fetch({
 end)
 ```
 
-<Callout type="info">
-  HTTPS requires LuaSec. HTTP/2 is not supported.
-</Callout>
+<Callout type="info">HTTPS requires LuaSec. HTTP/2 is not supported.</Callout>
 
 ---
 
-## Permission System [!toc]
+## Permission System
 
 Admin permission caching with level-based access.
 
-| Export | Description |
-|--------|-------------|
-| `IsAdmin()` | Returns `true` if the player is an admin. |
-| `GetPermissionLevel()` | Returns permission level: `0` = none, `1` = admin, `2` = superadmin. |
-| `RefreshAdminPermission()` | Refresh the cached admin permission. |
-
-
+| Export                     | Description                                                          |
+| -------------------------- | -------------------------------------------------------------------- |
+| `IsAdmin()`                | Returns `true` if the player is an admin.                            |
+| `GetPermissionLevel()`     | Returns permission level: `0` = none, `1` = admin, `2` = superadmin. |
+| `RefreshAdminPermission()` | Refresh the cached admin permission.                                 |

@@ -1,20 +1,16 @@
 ---
-title: Import Modules
-description: Lightweight Lua modules that load on demand — coords, kvp, settings, movemode, and layouts.
-icon: Package
-badges:
-  - text: "Lua Modules"
-    variant: "default"
+title: "Import Modules"
+description: "Lightweight Lua modules that load on demand — coords, kvp, settings, movemode, and layouts."
+order: 3
+group: "tLib"
 ---
 
 Import modules are lightweight Lua modules that your resource declares in `fxmanifest.lua` and accesses via the `tlib` global. They load on demand — only when first accessed.
 
 ## Setup
 
-```lua title="fxmanifest.lua"
-dependencies { 'tLib' }
-shared_scripts { '@tLib/imports.lua' }
-tlib_modules { 'coords', 'kvp', 'settings', 'movemode', 'layouts' }
+```lua
+title="fxmanifest.lua" dependencies { 'tLib' } shared_scripts { '@tLib/imports.lua' } tlib_modules { 'coords', 'kvp', 'settings', 'movemode', 'layouts' }
 ```
 
 Then in your scripts:
@@ -26,17 +22,17 @@ local settings = tlib.settings
 
 ---
 
-## coords [!toc]
+## coords
 
 Vehicle coordinate math helpers for transforming positions between local and world space.
 
-| Function | Description |
-|----------|-------------|
-| `Coords.localToWorld(right, fwd, up, pos, lx, ly, lz)` | Vehicle-local → world position. |
-| `Coords.worldToLocal(right, fwd, up, pos, wx, wy, wz)` | World → vehicle-local position. |
-| `Coords.buildBoneRotMatrix(rx, ry, rz)` | Build world-space rotation matrix from bone angles (ZXY order). |
-| `Coords.boneLocalToWorld(...)` | Bone-relative → world position. |
-| `Coords.worldToBoneLocal(...)` | World → bone-relative position. |
+| Function                                               | Description                                                     |
+| ------------------------------------------------------ | --------------------------------------------------------------- |
+| `Coords.localToWorld(right, fwd, up, pos, lx, ly, lz)` | Vehicle-local → world position.                                 |
+| `Coords.worldToLocal(right, fwd, up, pos, wx, wy, wz)` | World → vehicle-local position.                                 |
+| `Coords.buildBoneRotMatrix(rx, ry, rz)`                | Build world-space rotation matrix from bone angles (ZXY order). |
+| `Coords.boneLocalToWorld(...)`                         | Bone-relative → world position.                                 |
+| `Coords.worldToBoneLocal(...)`                         | World → bone-relative position.                                 |
 
 ```lua
 local Coords = tlib.coords
@@ -51,39 +47,39 @@ local wx, wy, wz = Coords.localToWorld(right, fwd, up, pos, 0.5, 1.0, 0.0)
 
 ---
 
-## kvp [!toc]
+## kvp
 
 Typed KVP wrapper with automatic community-server prefixing. Each server gets isolated storage via `tlib_community_id` or `sv_projectName`.
 
-### Typed Getters / Setters [!toc]
+### Typed Getters / Setters
 
-| Function | Description |
-|----------|-------------|
-| `kvp.getString(key, default)` | Get a string value. |
-| `kvp.getFloat(key, default)` | Get a float value. |
-| `kvp.getInt(key, default)` | Get an integer value. |
-| `kvp.getBool(key, default)` | Get a boolean value. |
-| `kvp.getJson(key, default)` | Get a JSON-decoded value. |
-| `kvp.setString(key, value)` | Set a string value. |
-| `kvp.setFloat(key, value)` | Set a float value. |
-| `kvp.setInt(key, value)` | Set an integer value. |
-| `kvp.setBool(key, value)` | Set a boolean value. |
-| `kvp.setJson(key, value)` | Set a JSON-encoded value. |
+| Function                      | Description               |
+| ----------------------------- | ------------------------- |
+| `kvp.getString(key, default)` | Get a string value.       |
+| `kvp.getFloat(key, default)`  | Get a float value.        |
+| `kvp.getInt(key, default)`    | Get an integer value.     |
+| `kvp.getBool(key, default)`   | Get a boolean value.      |
+| `kvp.getJson(key, default)`   | Get a JSON-decoded value. |
+| `kvp.setString(key, value)`   | Set a string value.       |
+| `kvp.setFloat(key, value)`    | Set a float value.        |
+| `kvp.setInt(key, value)`      | Set an integer value.     |
+| `kvp.setBool(key, value)`     | Set a boolean value.      |
+| `kvp.setJson(key, value)`     | Set a JSON-encoded value. |
 
-### Auto-Detect [!toc]
+### Auto-Detect
 
-| Function | Description |
-|----------|-------------|
-| `kvp.get(key, default)` | Auto-detect type on read. |
-| `kvp.set(key, value)` | Auto-detect type on write. |
+| Function                | Description                |
+| ----------------------- | -------------------------- |
+| `kvp.get(key, default)` | Auto-detect type on read.  |
+| `kvp.set(key, value)`   | Auto-detect type on write. |
 
-### Utilities [!toc]
+### Utilities
 
-| Function | Description |
-|----------|-------------|
-| `kvp.has(key)` | Returns `true` if the key exists. |
-| `kvp.delete(key)` | Delete a key. |
-| `kvp.key(key)` | Returns the full prefixed key string. |
+| Function          | Description                           |
+| ----------------- | ------------------------------------- |
+| `kvp.has(key)`    | Returns `true` if the key exists.     |
+| `kvp.delete(key)` | Delete a key.                         |
+| `kvp.key(key)`    | Returns the full prefixed key string. |
 
 ```lua
 local kvp = tlib.kvp
@@ -97,18 +93,18 @@ local loadout = kvp.getJson('loadout', {})
 
 ---
 
-## settings [!toc]
+## settings
 
 Typed settings store backed by KVP. Supports default values, user-set tracking, and server-pushed defaults.
 
-| Function | Description |
-|----------|-------------|
-| `settings.create(defs)` | Create a store from a definition array `{ key, type, default }[]`. |
-| `store:get(key)` | Get a setting value. |
-| `store:set(key, value)` | Set a setting value (persisted to KVP). |
-| `store:isUserSet(key)` | `true` if the player explicitly set this value. |
-| `store:applyDefaults(table)` | Apply server defaults only to keys the player hasn't set. |
-| `store:reset(key)` | Reset to default and remove from KVP. |
+| Function                     | Description                                                        |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `settings.create(defs)`      | Create a store from a definition array `{ key, type, default }[]`. |
+| `store:get(key)`             | Get a setting value.                                               |
+| `store:set(key, value)`      | Set a setting value (persisted to KVP).                            |
+| `store:isUserSet(key)`       | `true` if the player explicitly set this value.                    |
+| `store:applyDefaults(table)` | Apply server defaults only to keys the player hasn't set.          |
+| `store:reset(key)`           | Reset to default and remove from KVP.                              |
 
 ```lua
 local settings = tlib.settings
@@ -127,19 +123,19 @@ store:reset('volume')              -- Back to 0.8
 
 ---
 
-## movemode [!toc]
+## movemode
 
 Drag-to-reposition handler for NUI HUDs. Manages NUI focus, drag tracking, and KVP persistence of position and scale.
 
-| Function | Description |
-|----------|-------------|
-| `movemode.create(opts)` | Create an instance with `{ keys, defaults, scaleRange }`. |
-| `instance:load()` | Restore position from KVP. |
-| `instance:getPosition()` | Returns `{ right, bottom, scale }`. |
-| `instance:savePosition(right, bottom, scale)` | Persist position to KVP. |
-| `instance:enter()` | Enter move mode (enables NUI focus and drag). |
-| `instance:exit()` | Exit move mode. |
-| `instance:toggle()` | Toggle move mode. |
+| Function                                      | Description                                               |
+| --------------------------------------------- | --------------------------------------------------------- |
+| `movemode.create(opts)`                       | Create an instance with `{ keys, defaults, scaleRange }`. |
+| `instance:load()`                             | Restore position from KVP.                                |
+| `instance:getPosition()`                      | Returns `{ right, bottom, scale }`.                       |
+| `instance:savePosition(right, bottom, scale)` | Persist position to KVP.                                  |
+| `instance:enter()`                            | Enter move mode (enables NUI focus and drag).             |
+| `instance:exit()`                             | Exit move mode.                                           |
+| `instance:toggle()`                           | Toggle move mode.                                         |
 
 ```lua
 local movemode = tlib.movemode
@@ -156,16 +152,16 @@ local pos = mover:getPosition()
 
 ---
 
-## layouts [!toc]
+## layouts
 
 Server-side layout discovery and file loading with template variable substitution.
 
-| Function | Description |
-|----------|-------------|
-| `layouts.scan(basePath, matchFile, resourceName?)` | Scan a directory for layout folders. |
-| `layouts.load(basePath, layoutName, fileName, resourceName?)` | Load a layout file's contents. |
+| Function                                                                    | Description                              |
+| --------------------------------------------------------------------------- | ---------------------------------------- |
+| `layouts.scan(basePath, matchFile, resourceName?)`                          | Scan a directory for layout folders.     |
+| `layouts.load(basePath, layoutName, fileName, resourceName?)`               | Load a layout file's contents.           |
 | `layouts.loadTemplate(basePath, layoutName, fileName, vars, resourceName?)` | Load and replace `{{KEY}}` placeholders. |
-| `layouts.clearCache()` | Clear the scan cache. |
+| `layouts.clearCache()`                                                      | Clear the scan cache.                    |
 
 ```lua
 local layouts = tlib.layouts
