@@ -364,3 +364,45 @@ describe("trailing slash", () => {
     expect(await res.json()).toMatchObject({ path: "/app" });
   });
 });
+
+// An app whose entry point is not its root — PocketBase serves nothing at "/"
+// and its admin UI at "/_/", so without this the bare mount returns the
+// upstream's own 404 and reads like a broken router.
+describe("index path", () => {
+  test("redirects the bare mount to the declared entry point", async () => {
+    mountProxy({ stripPrefix: true, index: "/_/" });
+    const res = await get("/app");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/app/_/");
+  });
+
+  test("redirects the mount root too, which the hub links to", async () => {
+    mountProxy({ stripPrefix: true, index: "/_/" });
+    const res = await get("/app/");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/app/_/");
+  });
+
+  test("carries the query string", async () => {
+    mountProxy({ stripPrefix: true, index: "/_/" });
+    const res = await get("/app/?a=1&b=2");
+    expect(res.headers.get("location")).toBe("/app/_/?a=1&b=2");
+  });
+
+  test("does not intercept anything below the mount", async () => {
+    mountProxy({ stripPrefix: true, index: "/_/" });
+    expect((await get("/app/api/health")).status).toBe(200);
+  });
+
+  test("applies without stripPrefix, where there is no slash redirect to hide it", async () => {
+    mountProxy({ index: "/_/" });
+    expect((await get("/app")).headers.get("location")).toBe("/app/_/");
+  });
+
+  // Without an index the bare mount keeps the 301-to-slash behaviour.
+  test("is inert when no index was declared", async () => {
+    mountProxy({ stripPrefix: true });
+    expect((await get("/app")).status).toBe(301);
+    expect((await get("/app/")).status).toBe(200);
+  });
+});

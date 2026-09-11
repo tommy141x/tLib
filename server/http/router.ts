@@ -92,6 +92,17 @@ export class Router {
       return;
     }
 
+    // An app whose entry point is not its root declares where to go — e.g.
+    // PocketBase, which serves nothing at "/" and its admin UI at "/_/", so
+    // visiting the bare mount otherwise returns a JSON 404 that reads like the
+    // router is broken. 302, not 301: the entry point is the app's to change,
+    // and a cached permanent redirect would outlive the decision.
+    if (mount.index && (pathname === mount.mount || pathname === `${mount.mount}/`)) {
+      res.writeHead(302, { location: `${mount.mount}${mount.index}${search}` });
+      res.end();
+      return;
+    }
+
     // `/db` and `/db/` are the same resource, but only the second lets a
     // browser resolve the app's relative URLs correctly. Redirect rather than
     // serve the index from a path the page's own links are relative to.

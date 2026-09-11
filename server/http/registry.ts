@@ -44,6 +44,15 @@ export type Mount = {
   listed: boolean;
   /** Owning resource, for onResourceStop cleanup. */
   resourceName: string;
+  /**
+   * Where the bare mount should land, relative to it — e.g. "/_/" for
+   * PocketBase, whose admin UI is not at its root.
+   *
+   * Without this, visiting the mount hands the upstream a request for "/" and
+   * the operator sees whatever it says about an empty root, which for
+   * PocketBase is a bare JSON 404 that reads like the router is broken.
+   */
+  index?: string;
 } & (ProxyMount | InProcessMount);
 
 export type RegisterResult = { ok: true; mount: Mount } | { ok: false; error: string };
@@ -94,7 +103,15 @@ export function register(input: Mount): RegisterResult {
     }
   }
 
-  const normalized: Mount = { ...input, mount };
+  // The index is concatenated onto the mount and handed straight to the browser
+  // in a Location, so a caller-supplied "//evil.example.com" or "/../x" would be
+  // an open redirect. Require a single-slash-rooted, traversal-free path.
+  const index = normalizeIndex(input.index);
+  if (index === null) {
+    return { ok: false, error: `invalid index path '${String(input.index)}'` };
+  }
+
+  const normalized: Mount = { ...input, mount, index };
   mounts.set(mount, normalized);
   return { ok: true, mount: normalized };
 }
@@ -127,6 +144,29 @@ export function list(): Mount[] {
 
 export function listed(): Mount[] {
   return list().filter((m) => m.listed);
+}
+
+/**
+ * Validate an optional index path.
+ *
+ * Returns the normalized path, or `undefined` when none was given. `null`
+ * means the caller supplied something unusable — rejected rather than
+ * silently dropped, so a typo surfaces at registration instead of becoming a
+ * confusing redirect later.
+ *
+ * "//host" and "/\host" are protocol-relative and would leave the server
+ * entirely; ".." could climb out of the mount into another one.
+ */
+function normalizeIndex(raw: unknown): string | null | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  if (typeof raw !== "string") return null;
+  if (!raw.startsWith("/")) return null;
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return null;
+  if (raw.split("/").includes("..")) return null;
+  // No query or fragment: this is a path within the mount, and letting one in
+  // would collide with the query the router carries through the redirect.
+  if (/[?#]/.test(raw)) return null;
+  return raw;
 }
 
 /** Test seam — drops all mounts. */

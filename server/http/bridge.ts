@@ -50,6 +50,7 @@ export function registerBridge(cfg: HttpConfig, log: Log): void {
       upstream: { host: str(opts.host) || "127.0.0.1", port },
       stripPrefix: bool(opts.stripPrefix, false),
       websocket: bool(opts.websocket, false),
+      index: str(opts.index) || undefined,
     };
 
     const result = register(descriptor);

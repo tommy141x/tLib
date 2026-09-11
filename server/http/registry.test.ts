@@ -145,3 +145,53 @@ describe("listed", () => {
     expect(match("/db")?.id).toBe("db");
   });
 });
+
+// The index is concatenated onto the mount and handed to the browser in a
+// Location header, so an unvalidated one is an open redirect.
+describe("index validation", () => {
+  test("accepts a rooted path", () => {
+    const r = register(proxyMount({ index: "/_/" }));
+    expect(r.ok && r.mount.index).toBe("/_/");
+  });
+
+  test("is undefined when not supplied", () => {
+    const r = register(proxyMount());
+    expect(r.ok && r.mount.index).toBeUndefined();
+  });
+
+  test("treats an empty string as absent", () => {
+    const r = register(proxyMount({ index: "" }));
+    expect(r.ok && r.mount.index).toBeUndefined();
+  });
+
+  test("rejects a protocol-relative path — it would leave the server", () => {
+    for (const index of ["//evil.example.com", "/\\evil.example.com"]) {
+      const r = register(proxyMount({ index }));
+      expect(r.ok).toBe(false);
+      clear();
+    }
+  });
+
+  test("rejects traversal out of the mount", () => {
+    expect(register(proxyMount({ index: "/../other" })).ok).toBe(false);
+  });
+
+  test("rejects an unrooted path", () => {
+    expect(register(proxyMount({ index: "_/" })).ok).toBe(false);
+  });
+
+  test("rejects an absolute URL", () => {
+    expect(register(proxyMount({ index: "https://evil.example.com" })).ok).toBe(false);
+  });
+
+  // The router appends the request's own query after the index.
+  test("rejects a query or fragment", () => {
+    expect(register(proxyMount({ index: "/_/?a=1" })).ok).toBe(false);
+    clear();
+    expect(register(proxyMount({ index: "/_/#x" })).ok).toBe(false);
+  });
+
+  test("rejects a non-string", () => {
+    expect(register(proxyMount({ index: 42 })).ok).toBe(false);
+  });
+});
