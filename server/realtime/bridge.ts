@@ -23,6 +23,8 @@
 //   - AddEventHandler's __tlib:rt:* for async pushes
 //   - presents tlib.realtime:* as pure import-style API
 
+import { resolveConfig as resolveHttpConfig } from "../http/config";
+import { REALTIME_MOUNT } from "../http/constants";
 import { composeWsUrl, type RealtimeConfig } from "./config";
 import { getControl, startControl, stopControl } from "./control";
 import { fEmit, fExports } from "./fivem";
@@ -34,7 +36,9 @@ const EVT_DISCONNECT = "__tlib:rt:disconnect";
 const EVT_EVENT = "__tlib:rt:event";
 
 export function registerBridge(getServer: () => RealtimeServer, cfg: RealtimeConfig): void {
-  const currentWsUrl = () => composeWsUrl(cfg.publicUrlOverride, getCachedIP(), cfg.port);
+  // The port is the router's now, not realtime's — see server/http/config.ts.
+  const routerPort = () => resolveHttpConfig().port;
+  const currentWsUrl = () => composeWsUrl(cfg.publicUrlOverride, getCachedIP(), routerPort());
 
   // ---- exports ----
   // Each of these triggers WS server startup via getServer() on first call,
@@ -91,7 +95,10 @@ export function registerBridge(getServer: () => RealtimeServer, cfg: RealtimeCon
 
   fExports("rtStats", () => getServer().stats());
 
-  fExports("rtConnectionInfo", () => ({ wsUrl: currentWsUrl(), port: cfg.port, host: cfg.host }));
+  fExports("rtConnectionInfo", () => {
+    const http = resolveHttpConfig();
+    return { wsUrl: currentWsUrl(), port: http.port, host: http.host, mount: REALTIME_MOUNT };
+  });
 
   // ── control client (outbound to CF brain) ────────────────────────────
 

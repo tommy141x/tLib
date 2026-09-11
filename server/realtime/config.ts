@@ -1,22 +1,20 @@
 // config.ts — realtime transport configuration.
 //
+// Realtime no longer owns a socket. It is a mount on tLib's router (`/rt`,
+// see server/http/mounts.ts), so the listen port and bind address are the
+// router's — `tlib_http_port` / `tlib_http_host`. The old `tlib_realtime_port`
+// and `tlib_realtime_host` convars are gone; setting them now does nothing.
+//
 // tLib has no config file. Deployment-specific values come from FiveM convars,
-// read at boot. No convars set = production defaults (port 30125, ipify-resolved
-// public IP). Developers doing local testing set them in their own server.cfg.
+// read at boot.
 //
 // convars:
-//   setr tlib_realtime_port        30125                    # listen port
-//   setr tlib_realtime_host        "0.0.0.0"                # bind address
-//   setr tlib_realtime_public_url  "ws://localhost:7777"    # override the URL handed to clients
+//   setr tlib_realtime_public_url  "ws://host:7777/rt"   # override the URL handed to clients
 
+import { REALTIME_MOUNT } from "../http/constants";
 import { fGetConvar } from "./fivem";
 
-const DEFAULT_PORT = 30125;
-const DEFAULT_HOST = "0.0.0.0";
-
 export interface RealtimeConfig {
-  host: string;
-  port: number;
   publicUrlOverride: string | null;
   authTimeoutMs: number;
   tokenTtlMs: number;
@@ -32,13 +30,8 @@ export interface RealtimeConfig {
 }
 
 export function resolveConfig(): RealtimeConfig {
-  const port = intConvar("tlib_realtime_port", DEFAULT_PORT);
-  const host = strConvar("tlib_realtime_host", DEFAULT_HOST);
-  const publicUrlOverride = strConvar("tlib_realtime_public_url", "") || null;
   return {
-    host,
-    port,
-    publicUrlOverride,
+    publicUrlOverride: strConvar("tlib_realtime_public_url", "") || null,
     authTimeoutMs: 10_000,
     tokenTtlMs: 60_000,
     maxSessionsPerPlayer: 2,
@@ -53,7 +46,8 @@ export function resolveConfig(): RealtimeConfig {
   };
 }
 
-// Public WS URL handed to clients.
+// Public WS URL handed to clients — now the router's origin plus the realtime
+// mount, e.g. ws://1.2.3.4:7777/rt.
 // Priority: explicit override > resolved public IP > localhost.
 export function composeWsUrl(
   override: string | null,
@@ -62,18 +56,7 @@ export function composeWsUrl(
 ): string {
   if (override && override.length > 0) return override;
   const host = publicIp ?? "localhost";
-  return `ws://${host}:${port}`;
-}
-
-function intConvar(name: string, fallback: number): number {
-  try {
-    const raw = fGetConvar(name, "");
-    if (!raw) return fallback;
-    const n = Number.parseInt(raw, 10);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
-  } catch {
-    return fallback;
-  }
+  return `ws://${host}:${port}${REALTIME_MOUNT}`;
 }
 
 function strConvar(name: string, fallback: string): string {

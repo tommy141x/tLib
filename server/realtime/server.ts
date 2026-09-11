@@ -6,6 +6,8 @@
 //   protocol codec  (wire format)
 //   bridge hooks    (events out to Lua consumers)
 
+import type { IncomingMessage } from "node:http";
+import type { Duplex } from "node:stream";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { RealtimeConfig } from "./config";
 import {
@@ -64,19 +66,17 @@ export class RealtimeServer {
 
   // ---- lifecycle ----
 
+  // Binds NO port. tLib owns exactly one external socket — the router in
+  // server/http — and realtime is one mount on it (`/rt`). The router calls
+  // handleUpgrade() below for upgrades on that path.
   start(): void {
     if (this.wss) return;
     this.wss = new WebSocketServer({
-      host: this.cfg.host,
-      port: this.cfg.port,
+      noServer: true,
       maxPayload: this.cfg.maxPayloadBytes + 4096, // room id + overhead
       // no permessage-deflate — voice-like binary is not compressible and the CPU
       // cost is real at 50Hz per talker. consumers can re-enable if they need it.
       perMessageDeflate: false,
-    });
-
-    this.wss.on("listening", () => {
-      this.log("info", `listening on ${this.cfg.host}:${this.cfg.port}`);
     });
 
     this.wss.on("error", (err) => {
@@ -87,6 +87,20 @@ export class RealtimeServer {
       const addr = req.socket.remoteAddress ?? "?";
       const session = this.sessions.create(ws, addr);
       this.attach(session, ws);
+    });
+  }
+
+  /**
+   * Complete a WebSocket handshake handed over by the router.
+   * `start()` must already have run — getOrStart() guarantees that.
+   */
+  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    if (!this.wss) {
+      socket.destroy();
+      return;
+    }
+    this.wss.handleUpgrade(req, socket, head, (ws) => {
+      this.wss?.emit("connection", ws, req);
     });
   }
 

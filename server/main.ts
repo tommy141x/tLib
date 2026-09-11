@@ -1,14 +1,21 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { installHttp } from "./http/index";
 import { installMarketplace } from "./marketplace/index";
 import { installRealtime } from "./realtime/index";
 
 declare function GetResourcePath(resourceName: string): string | null;
 declare function exports(name: string, fn: (...args: unknown[]) => unknown): void;
 
-// Register realtime exports. The WS server only opens a port once a consumer
-// resource actually uses one of the rt* APIs — tLib stays a pure library
-// until someone needs the transport.
+// Start the router. This is tLib's ONE external port — every web surface any
+// resource exposes is a mount on it. Binds eagerly, unlike realtime and like
+// marketplace, because a consumer resource's Lua can call RegisterWebApp
+// before tLib's own onResourceStart handler runs.
+installHttp();
+
+// Register realtime exports. Realtime no longer owns a socket — it is a mount
+// on the router at /rt (see http/mounts.ts). The session and room machinery
+// is still built lazily, on the first actual connection.
 installRealtime();
 
 // Register marketplace exports. Same opt-in gate — only consumer resources

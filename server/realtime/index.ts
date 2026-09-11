@@ -5,6 +5,7 @@
 // pure library until a resource actually declares `tlib_module { 'realtime' }`
 // and uses it.
 
+import { resolveConfig as resolveHttpConfig } from "../http/config";
 import { makeEmitHooks, registerBridge } from "./bridge";
 import { composeWsUrl, resolveConfig } from "./config";
 import {
@@ -42,8 +43,9 @@ export function getOrStart(): RealtimeServer {
   if (cfg.publicUrlOverride) {
     log("info", `public url (override): ${cfg.publicUrlOverride}`);
   } else {
+    const port = resolveHttpConfig().port;
     resolvePublicIP().then((ip) => {
-      if (ip) log("info", `public url: ${composeWsUrl(null, ip, cfg.port)}`);
+      if (ip) log("info", `public url: ${composeWsUrl(null, ip, port)}`);
       else log("warn", "could not resolve public IP; clients will receive ws://localhost");
     });
   }
