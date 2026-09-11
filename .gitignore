@@ -15,6 +15,9 @@ todo.txt
 # so consumers (tMarketplace worker) can pull files without cloning and
 # building tLib from scratch.
 !scripts/prod.ts
+# The hub's icon set is a checked-in generated file; keep the generator with it,
+# or regenerating means reconstructing how it was made.
+!scripts/build-icons.ts
 
 # Assets (external dependencies, installed separately)
 assets/

@@ -135,19 +135,13 @@ export class Router {
   }
 
   /**
-   * The hub index — or a redirect straight to the only thing there is.
-   * A chooser with one choice is friction, not navigation.
+   * The hub index — the portal, always. It is the front door of the server's
+   * one public port, so it shows what is there even when that is a single app:
+   * a redirect would make the port look like it belongs to whichever resource
+   * happened to register first.
    */
   private serveHub(res: ServerResponse): void {
-    const visible = listed();
-
-    if (visible.length === 1) {
-      res.writeHead(302, { location: `${visible[0].mount}/` });
-      res.end();
-      return;
-    }
-
-    this.sendHtml(res, 200, renderIndex(visible, this.serverName()));
+    this.sendHtml(res, 200, renderIndex(listed(), this.serverName()));
   }
 
   // ---- upgrade path ----

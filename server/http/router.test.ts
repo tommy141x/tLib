@@ -125,11 +125,40 @@ describe("hub", () => {
     expect(await res.text()).toContain("No web resources are registered");
   });
 
-  test("redirects to the only listed mount rather than showing a chooser", async () => {
+  test("shows the portal even with a single mount, never a redirect", async () => {
     mountProxy();
     const res = await get("/");
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/app/");
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('href="/app/"');
+    expect(body).toContain("App");
+  });
+
+  test("renders the card's icon, description and accent", async () => {
+    mountProxy({
+      icon: "database",
+      description: "The server's data",
+      accent: "#4F8EF7",
+    });
+    const body = await (await get("/")).text();
+    expect(body).toContain("--accent:#4f8ef7");
+    expect(body).toContain("The server&#39;s data");
+    expect(body).toContain("<svg");
+  });
+
+  test("falls back to the mount path when no description is given", async () => {
+    mountProxy();
+    const body = await (await get("/")).text();
+    expect(body).toContain('class="path">/app<');
+  });
+
+  test("drops presentation a resource got wrong without losing the card", async () => {
+    mountProxy({ icon: "not-a-real-icon", accent: "red; background:url(x)" });
+    const body = await (await get("/")).text();
+    expect(body).toContain('href="/app/"');
+    expect(body).not.toContain("background:url");
+    // No style attribute at all — the card falls back to the sheet's default.
+    expect(body).not.toContain('<a class="card" href="/app/" style=');
   });
 
   test("lists mounts when there is more than one", async () => {

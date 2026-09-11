@@ -9,7 +9,12 @@
 //     host       = '127.0.0.1',          -- optional, must be loopback
 //     stripPrefix= false,                -- true if you cannot emit the prefix
 //     websocket  = true,                 -- forward WS upgrades
+//     index      = '/_/',                -- optional, where the bare mount lands
+//     -- Hub card. All optional; a bad value costs the decoration, not the mount.
 //     title      = 'Dispatch',           -- shown on the hub
+//     icon       = 'radio-tower',        -- any Lucide icon name
+//     description= 'Radio and dispatch', -- one line under the title
+//     accent     = '#4f8ef7',            -- #rgb or #rrggbb
 //     listed     = true,                 -- false hides it from the hub index
 //   })
 //
@@ -51,6 +56,11 @@ export function registerBridge(cfg: HttpConfig, log: Log): void {
       stripPrefix: bool(opts.stripPrefix, false),
       websocket: bool(opts.websocket, false),
       index: str(opts.index) || undefined,
+      // Hub presentation. All three are validated in the registry and dropped
+      // rather than rejected if unusable — see register().
+      icon: str(opts.icon) || undefined,
+      description: str(opts.description) || undefined,
+      accent: str(opts.accent) || undefined,
     };
 
     const result = register(descriptor);

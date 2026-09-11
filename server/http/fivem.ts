@@ -17,6 +17,7 @@ type OnFn = (event: string, handler: (...args: unknown[]) => void) => void;
 type GetConvarFn = (name: string, defaultValue: string) => string;
 type GetCurrentResourceNameFn = () => string;
 type GetInvokingResourceFn = () => string | null;
+type GetResourcePathFn = (resourceName: string) => string | null;
 
 const g = globalThis as unknown as {
   exports: ExportsFn;
@@ -25,6 +26,7 @@ const g = globalThis as unknown as {
   GetConvar: GetConvarFn;
   GetCurrentResourceName: GetCurrentResourceNameFn;
   GetInvokingResource: GetInvokingResourceFn;
+  GetResourcePath: GetResourcePathFn;
 };
 
 export const fExports: ExportsFn = g.exports;
@@ -33,3 +35,4 @@ export const fOn: OnFn = g.on;
 export const fGetConvar: GetConvarFn = g.GetConvar;
 export const fGetCurrentResourceName: GetCurrentResourceNameFn = g.GetCurrentResourceName;
 export const fGetInvokingResource: GetInvokingResourceFn = g.GetInvokingResource;
+export const fGetResourcePath: GetResourcePathFn = g.GetResourcePath;

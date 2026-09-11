@@ -195,3 +195,65 @@ describe("index validation", () => {
     expect(register(proxyMount({ index: 42 })).ok).toBe(false);
   });
 });
+
+// Presentation is cosmetic. Nothing here may ever fail a registration — a
+// mistyped colour must cost the card its accent, not the operator their panel.
+describe("hub presentation", () => {
+  test("keeps a known icon and drops an unknown one", () => {
+    const good = register(proxyMount({ icon: "database" }));
+    expect(good.ok && good.mount.icon).toBe("database");
+    clear();
+    const bad = register(proxyMount({ icon: "definitely-not-an-icon" }));
+    expect(bad.ok).toBe(true);
+    expect(bad.ok && bad.mount.icon).toBeUndefined();
+  });
+
+  test("rejects an icon name that could not be a lookup key", () => {
+    for (const icon of ["../../etc/passwd", "<svg onload=x>", 42, "Database"]) {
+      const r = register(proxyMount({ icon }));
+      expect(r.ok && r.mount.icon).toBeUndefined();
+      clear();
+    }
+  });
+
+  // The accent lands in a style attribute, so it is matched, not escaped.
+  test("accepts #rgb and #rrggbb, normalized to lowercase", () => {
+    const short = register(proxyMount({ accent: "#ABC" }));
+    expect(short.ok && short.mount.accent).toBe("#abc");
+    clear();
+    const long = register(proxyMount({ accent: "  #4F8EF7 " }));
+    expect(long.ok && long.mount.accent).toBe("#4f8ef7");
+  });
+
+  test("drops anything that is not a plain hex colour", () => {
+    for (const accent of [
+      "red",
+      "rgb(1,2,3)",
+      "var(--x)",
+      "#abc; background:url(//evil)",
+      "#12345",
+      7,
+    ]) {
+      const r = register(proxyMount({ accent }));
+      expect(r.ok).toBe(true);
+      expect(r.ok && r.mount.accent).toBeUndefined();
+      clear();
+    }
+  });
+
+  test("collapses whitespace in the description and drops an empty one", () => {
+    const r = register(proxyMount({ description: "  two   lines\nhere  " }));
+    expect(r.ok && r.mount.description).toBe("two lines here");
+    clear();
+    expect(register(proxyMount({ description: "   " })).ok && true).toBe(true);
+    clear();
+    const blank = register(proxyMount({ description: "\n\t " }));
+    expect(blank.ok && blank.mount.description).toBeUndefined();
+  });
+
+  test("caps a long description so it cannot wreck the card grid", () => {
+    const r = register(proxyMount({ description: "x".repeat(400) }));
+    expect(r.ok && r.mount.description?.length).toBe(120);
+    expect(r.ok && r.mount.description?.endsWith("…")).toBe(true);
+  });
+});

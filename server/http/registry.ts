@@ -53,9 +53,17 @@ export type Mount = {
    * PocketBase is a bare JSON 404 that reads like the router is broken.
    */
   index?: string;
+  /** Lucide icon name for the hub card, e.g. "database". */
+  icon?: string;
+  /** One line under the title on the hub card. */
+  description?: string;
+  /** `#rgb`/`#rrggbb` accent for the card. */
+  accent?: string;
 } & (ProxyMount | InProcessMount);
 
 export type RegisterResult = { ok: true; mount: Mount } | { ok: false; error: string };
+
+import { isKnownIcon } from "./icons";
 
 const mounts = new Map<string, Mount>();
 
@@ -111,7 +119,16 @@ export function register(input: Mount): RegisterResult {
     return { ok: false, error: `invalid index path '${String(input.index)}'` };
   }
 
-  const normalized: Mount = { ...input, mount, index };
+  // Presentation is cosmetic: a bad value loses the decoration, never the
+  // mount. Losing your dispatch panel over a mistyped colour would be absurd.
+  const normalized: Mount = {
+    ...input,
+    mount,
+    index,
+    icon: isKnownIcon(input.icon) ? input.icon : undefined,
+    description: normalizeDescription(input.description),
+    accent: normalizeAccent(input.accent),
+  };
   mounts.set(mount, normalized);
   return { ok: true, mount: normalized };
 }
@@ -167,6 +184,32 @@ function normalizeIndex(raw: unknown): string | null | undefined {
   // would collide with the query the router carries through the redirect.
   if (/[?#]/.test(raw)) return null;
   return raw;
+}
+
+/**
+ * An accent colour, or undefined.
+ *
+ * This value is interpolated into a `style` attribute, so it is matched
+ * against a strict hex pattern rather than escaped. Anything else — a CSS
+ * function, a var(), a stray `;` opening a second declaration — is dropped.
+ */
+function normalizeAccent(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const s = raw.trim();
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(s) ? s.toLowerCase() : undefined;
+}
+
+/**
+ * A one-line description, trimmed and length-capped.
+ *
+ * Capped because the hub is a fixed-width card grid and an essay would wreck
+ * it; escaped at render, not here, so the stored value stays the real text.
+ */
+function normalizeDescription(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const s = raw.replace(/\s+/g, " ").trim();
+  if (!s) return undefined;
+  return s.length > 120 ? `${s.slice(0, 119)}…` : s;
 }
 
 /** Test seam — drops all mounts. */
