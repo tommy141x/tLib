@@ -5,7 +5,11 @@
 //   exports['tLib']:RegisterWebApp({
 //     id         = 'radio',              -- stable identifier
 //     mount      = '/dispatch',          -- path prefix to serve it under
-//     port       = Config.serverPort,    -- YOUR loopback listen port
+//     port       = 54231,                -- YOUR loopback listen port. Read it
+//                                        -- back off your own listener; do not
+//                                        -- ask the operator for it. tLib's
+//                                        -- tlib_http_port is the only port
+//                                        -- anyone should have to set.
 //     host       = '127.0.0.1',          -- optional, must be loopback
 //     stripPrefix= false,                -- true if you cannot emit the prefix
 //     websocket  = true,                 -- forward WS upgrades
