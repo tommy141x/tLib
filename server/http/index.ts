@@ -11,7 +11,7 @@
 
 import { resolvePublicIP } from "../realtime/public-ip";
 import { registerBridge } from "./bridge";
-import { resolveConfig } from "./config";
+import { composeHttpUrl, resolveConfig } from "./config";
 import { fGetConvar, fGetCurrentResourceName, fOn } from "./fivem";
 import { registerInProcess } from "./mounts";
 import { unregisterResource } from "./registry";
@@ -56,15 +56,26 @@ export function installHttp(): void {
   // tLib's own in-process mounts (realtime at /rt).
   registerInProcess(log);
 
-  // Resolve the advertised URL in the background — a mount registered before
-  // this lands simply reports the localhost form, which is cosmetic.
+  // Always log the COMPOSED url, never the convar: the convar takes shorthand
+  // ("fivem.example.com"), and the operator needs to see what tLib made of it
+  // to catch a wrong guess without having to reason about the rules.
   if (cfg.publicUrlOverride) {
-    log("info", `hub: ${cfg.publicUrlOverride}`);
+    log("info", `hub: ${composeHttpUrl(cfg.publicUrlOverride, null, cfg.port)}`);
   } else {
+    // Detection runs in the background — a mount registered before it lands
+    // reports the localhost form, which is cosmetic.
     resolvePublicIP().then((ip) => {
-      if (ip) log("info", `hub: http://${ip}:${cfg.port}`);
-      else
-        log("warn", `could not resolve public IP; hub advertised as http://localhost:${cfg.port}`);
+      const url = composeHttpUrl(null, ip, cfg.port);
+      if (ip) {
+        log("info", `hub: ${url}`);
+      } else {
+        log(
+          "warn",
+          `could not resolve this server's public IP, so clients are being told ` +
+            `'${url}', which only works on this machine. Set tlib_http_public_url ` +
+            `to your server's address or domain.`
+        );
+      }
     });
   }
 

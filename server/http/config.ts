@@ -4,9 +4,15 @@
 // read at boot.
 //
 // convars:
-//   setr tlib_http_port        7777              # the one external port
-//   setr tlib_http_host        "0.0.0.0"         # bind address
-//   setr tlib_http_public_url  "http://x:7777"   # override the URL handed to clients
+//   setr tlib_http_port        7777        # the one external port
+//   setr tlib_http_host        "0.0.0.0"   # bind address
+//   setr tlib_http_public_url  ""          # the address clients should use
+//
+// tlib_http_public_url is the one operators actually have to think about: the
+// router binds a port but cannot know what address reaches it from outside.
+// It takes shorthand — "localhost", "192.168.8.141:8080",
+// "fivem.example.com" — and completes it. Unset auto-detects the public IP.
+// public-url.ts documents the inference rules.
 //
 // The default port is 7777 — tRadio's historical port. tRadio v7 is a hard
 // cutover, so every existing customer already has 7777 open in their firewall
@@ -15,6 +21,7 @@
 // through over Discord.
 
 import { fGetConvar } from "./fivem";
+import { resolvePublicUrl } from "./public-url";
 
 const DEFAULT_PORT = 7777;
 const DEFAULT_HOST = "0.0.0.0";
@@ -41,16 +48,17 @@ export function resolveConfig(): HttpConfig {
 
 /**
  * Public base URL for the router.
- * Priority: explicit override > resolved public IP > localhost.
+ *
+ * The convar is shorthand-friendly — "localhost", "1.2.3.4:8080" and
+ * "fivem.example.com" are all accepted and completed into a full URL. See
+ * public-url.ts for the inference rules and why they are what they are.
  */
 export function composeHttpUrl(
   override: string | null,
   publicIp: string | null,
   port: number
 ): string {
-  if (override && override.length > 0) return override.replace(/\/+$/, "");
-  const host = publicIp ?? "localhost";
-  return `http://${host}:${port}`;
+  return resolvePublicUrl(override, publicIp, port).base;
 }
 
 function intConvar(name: string, fallback: number): number {
