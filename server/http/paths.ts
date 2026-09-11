@@ -15,7 +15,11 @@
  * - resolves `.` and `..` segments, clamping at the root so `..` can never
  *   escape above `/`
  * - collapses repeated slashes
- * - always returns a leading `/`, and never a trailing one except for root
+ * - always returns a leading `/`
+ * - PRESERVES a trailing slash. A proxy must not invent one or drop one:
+ *   upstreams distinguish `/_` from `/_/` (PocketBase 307s between them, so
+ *   dropping it makes the rewritten Location a redirect loop), and browsers
+ *   resolve relative URLs against it.
  *
  * Returns `null` if the input is not a usable path.
  */
@@ -33,6 +37,10 @@ export function normalizePath(raw: string): string | null {
 
   if (!p.startsWith("/")) p = "/" + p;
 
+  // A path ending in a separator, `.` or `..` denotes a directory, so the
+  // canonical form keeps the trailing slash.
+  const trailing = /(?:\/|\/\.|\/\.\.)$/.test(p);
+
   const out: string[] = [];
   for (const seg of p.split("/")) {
     if (seg === "" || seg === ".") continue;
@@ -43,7 +51,8 @@ export function normalizePath(raw: string): string | null {
     out.push(seg);
   }
 
-  return "/" + out.join("/");
+  if (out.length === 0) return "/";
+  return "/" + out.join("/") + (trailing ? "/" : "");
 }
 
 /**
@@ -55,7 +64,8 @@ export function normalizeMount(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const n = normalizePath(raw);
   if (n === null || n === "/") return null;
-  return n;
+  // Mounts are prefixes, never directories: `/db/` and `/db` are one mount.
+  return n.endsWith("/") ? n.slice(0, -1) : n;
 }
 
 /**

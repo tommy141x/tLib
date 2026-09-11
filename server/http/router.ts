@@ -92,6 +92,17 @@ export class Router {
       return;
     }
 
+    // `/db` and `/db/` are the same resource, but only the second lets a
+    // browser resolve the app's relative URLs correctly. Redirect rather than
+    // serve the index from a path the page's own links are relative to.
+    // Only when we strip: an un-stripped upstream sees the path verbatim and
+    // gets to make this call itself.
+    if (pathname === mount.mount && mount.kind === "proxy" && mount.stripPrefix) {
+      res.writeHead(301, { location: `${mount.mount}/${search}` });
+      res.end();
+      return;
+    }
+
     if (mount.kind === "inprocess") {
       if (!mount.onRequest) {
         this.sendHtml(res, 502, badGatewayPage(mount));

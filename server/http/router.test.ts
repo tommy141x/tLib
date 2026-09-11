@@ -326,3 +326,41 @@ describe("security", () => {
     expect(body.path).toBe("/deep");
   });
 });
+
+describe("trailing slash", () => {
+  test("forwards the client's trailing slash verbatim", async () => {
+    mountProxy({ stripPrefix: true });
+    const res = await get("/app/sub/");
+    expect(await res.json()).toMatchObject({ path: "/sub/" });
+  });
+
+  test("does not invent a trailing slash", async () => {
+    mountProxy({ stripPrefix: true });
+    const res = await get("/app/sub");
+    expect(await res.json()).toMatchObject({ path: "/sub" });
+  });
+
+  // Without this the upstream serves its index at /app, and every relative URL
+  // on that page resolves against / instead of /app/.
+  test("redirects the bare mount to the mount root when stripping", async () => {
+    mountProxy({ stripPrefix: true });
+    const res = await get("/app");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("/app/");
+  });
+
+  test("carries the query string through that redirect", async () => {
+    mountProxy({ stripPrefix: true });
+    const res = await get("/app?a=1");
+    expect(res.headers.get("location")).toBe("/app/?a=1");
+  });
+
+  // Not stripping means the upstream sees the path untouched and owns the
+  // decision, so the router must stay out of it.
+  test("leaves the bare mount alone when not stripping", async () => {
+    mountProxy({ stripPrefix: false });
+    const res = await get("/app");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ path: "/app" });
+  });
+});

@@ -100,3 +100,53 @@ describe("forwardPath", () => {
     expect(forwardPath("/db", "/db", true)).toBe("/");
   });
 });
+
+// Regression: the trailing slash is load-bearing for a proxy. Dropping it made
+// PocketBase 307 /_ -> /_/ forever, because the rewritten Location pointed at
+// the path we had just normalized back to /_.
+describe("trailing slash", () => {
+  test("is preserved", () => {
+    expect(normalizePath("/db/_/")).toBe("/db/_/");
+  });
+
+  test("is preserved through slash collapsing", () => {
+    expect(normalizePath("/db//_//")).toBe("/db/_/");
+  });
+
+  test("is implied by a trailing '.'", () => {
+    expect(normalizePath("/db/_/.")).toBe("/db/_/");
+  });
+
+  test("is implied by a trailing '..'", () => {
+    expect(normalizePath("/db/_/..")).toBe("/db/");
+  });
+
+  test("is not invented where the client sent none", () => {
+    expect(normalizePath("/db/_")).toBe("/db/_");
+  });
+
+  test("still resolves traversal", () => {
+    expect(normalizePath("/db/../../etc/")).toBe("/etc/");
+  });
+
+  test("root stays root", () => {
+    expect(normalizePath("/")).toBe("/");
+    expect(normalizePath("/..")).toBe("/");
+  });
+
+  test("is stripped from a mount, which is a prefix and not a directory", () => {
+    expect(normalizeMount("/db/")).toBe("/db");
+    expect(normalizeMount("/")).toBeNull();
+  });
+
+  test("survives forwarding", () => {
+    expect(forwardPath("/db/_/", "/db", true)).toBe("/_/");
+    expect(forwardPath("/db/", "/db", true)).toBe("/");
+    expect(forwardPath("/db/_/", "/db", false)).toBe("/db/_/");
+  });
+
+  test("matches under a mount", () => {
+    expect(isUnder("/db/", "/db")).toBe(true);
+    expect(isUnder("/dbx/", "/db")).toBe(false);
+  });
+});
