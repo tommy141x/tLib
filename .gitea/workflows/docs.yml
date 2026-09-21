@@ -1,10 +1,10 @@
 name: Docs Sync
 
-# Mirrors tLib's docs into the live site repo (TIMMYG-Studios/panel = timmygstudios.com).
+# Mirrors tLib's docs into the live site repo (TIMMYG-Studios/tWeb = timmygstudios.com).
 # Self-contained (see tRadio): the shared reusable workflow is served stale by act_runner's
 # ref cache, so inlining the steps is the reliable path.
 #
-# Split casing in panel (pre-existing, kept to avoid breaking live URLs):
+# Split casing in tWeb (pre-existing, kept to avoid breaking live URLs):
 #   docs   -> src/content/docs/tlib   (lowercase; the /docs/tlib/* URL)
 #   assets -> public/assets/tLib      (tLib currently has no doc media; step is a no-op then)
 
@@ -23,12 +23,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Checkout panel (docs target)
+      - name: Checkout tWeb (docs target)
         uses: https://github.com/actions/checkout@v4
         with:
-          repository: TIMMYG-Studios/panel
+          repository: TIMMYG-Studios/tWeb
           token: ${{ secrets.REPO_TOKEN }}
-          path: panel
+          path: tWeb
           fetch-depth: 1
 
       - name: Sync documentation + media
@@ -39,24 +39,24 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
-          mkdir -p "panel/src/content/docs/$DOCS_DIR"
-          rm -rf "panel/src/content/docs/$DOCS_DIR"/*
-          cp docs/content/*.mdx "panel/src/content/docs/$DOCS_DIR/"
+          mkdir -p "tWeb/src/content/docs/$DOCS_DIR"
+          rm -rf "tWeb/src/content/docs/$DOCS_DIR"/*
+          cp docs/content/*.mdx "tWeb/src/content/docs/$DOCS_DIR/"
 
           # Overlay-copy media only (never wipe) — assets dir is shared with the software page.
           if [ -d docs/public ] && [ -n "$(ls -A docs/public 2>/dev/null)" ]; then
-            mkdir -p "panel/public/assets/$ASSET_DIR"
-            cp -r docs/public/. "panel/public/assets/$ASSET_DIR/"
+            mkdir -p "tWeb/public/assets/$ASSET_DIR"
+            cp -r docs/public/. "tWeb/public/assets/$ASSET_DIR/"
           fi
 
-      - name: Commit + push to panel
+      - name: Commit + push to tWeb
         env:
           DOCS_DIR: tlib
           ASSET_DIR: tLib
           SHA: ${{ github.sha }}
           ACTOR: ${{ github.actor }}
         run: |
-          cd panel
+          cd tWeb
           git config user.name "Gitea Actions Bot"
           git config user.email "actions@gitea.local"
 
