@@ -1,28 +1,39 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { installHttp } from "./http/index";
-import { installMarketplace } from "./marketplace/index";
-import { installRealtime } from "./realtime/index";
+import { installCommunityConfigs } from "./lib/community-configs/index";
+import { installHttp } from "./lib/http/index";
+import { installInference } from "./lib/inference/index";
+import { installMarketplace } from "./lib/marketplace/index";
+import { installRealtime } from "./lib/realtime/index";
 
 declare function GetResourcePath(resourceName: string): string | null;
 declare function exports(name: string, fn: (...args: unknown[]) => unknown): void;
 
-// Start the router. This is tLib's ONE external port — every web surface any
-// resource exposes is a mount on it. Binds eagerly, unlike realtime and like
-// marketplace, because a consumer resource's Lua can call RegisterWebApp
-// before tLib's own onResourceStart handler runs.
+// tLib's one external port; every web surface any resource exposes is a mount on
+// it. Binds eagerly because a consumer's Lua can call RegisterWebApp before
+// tLib's own onResourceStart handler runs.
 installHttp();
 
-// Register realtime exports. Realtime no longer owns a socket — it is a mount
-// on the router at /rt (see http/mounts.ts). The session and room machinery
-// is still built lazily, on the first actual connection.
+// Realtime is a mount on the router at /rt rather than its own socket. Only the
+// exports go up here; sessions and rooms are built on the first connection.
 installRealtime();
 
-// Register marketplace exports. Same opt-in gate — only consumer resources
-// declaring `tlib_module { 'marketplace' }` wake the module up.
+// Opt-in: only a resource declaring `tlib_module { 'marketplace' }` wakes it.
 installMarketplace();
 
-// sibling keys so new manifest lines get grouped near related ones
+// The `cc*` exports behind server/sv_community_configs.lua. Eager for the same
+// reason as the marketplace: a consumer's Lua may call them immediately. It is
+// registered separately from the marketplace because only the PUBLISH path
+// shares its credential — the reads are open, and one module that is half
+// authenticated is a module whose reader assumes the wrong half.
+installCommunityConfigs();
+
+// A table of which resource is already serving which model, so two resources
+// that each ship local inference load one copy between them — plus the spawn
+// host, which starts those engines so `add_unsafe_child_process_permission
+// tLib` is the only line an operator has to write.
+installInference();
+
 const siblings: string[] = [];
 
 exports("RegisterManifestSibling", (key: string) => {
@@ -33,41 +44,91 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// List files in a resource subdirectory — FiveM's Lua runtime has no
-// directory enumeration API, so consumers that need to discover files by
-// pattern (e.g. auto-detected audio tracks) can only probe known names
-// without this. Returns a JSON-encoded string[] of filenames (not full
-// paths); consumers filter by extension themselves.
+type ScanFailure =
+  | "bad-resource"
+  | "bad-subdir"
+  | "no-resource-path"
+  | "missing"
+  | "not-a-directory"
+  | "read-failed";
+
+type ScanResult = { ok: true; entries: string[] } | { ok: false; reason: ScanFailure };
+
+// The one enumeration path. `subdir` is relative to the resource root and must
+// not contain `..`.
 //
-// Usage from Lua:
-//   local names = json.decode(exports.tLib:ListResourceFiles('tAFK', 'audio') or '[]')
-//
-// `subdir` is relative to the resource root and must not contain `..`;
-// returns '[]' on any error (missing dir, traversal attempt, etc.) so callers
-// don't have to branch on success.
-exports("ListResourceFiles", (resourceName: unknown, subdir: unknown): string => {
+// This reports failure rather than flattening it, because the difference
+// matters to a caller reconciling a stored registry against disk: "the folder
+// is empty" means prune everything, "the folder could not be read" means keep
+// what you have. Collapsing the two into an empty list is what let a scan
+// failure look like a deliberate deletion.
+function scanResource(resourceName: unknown, subdir: unknown, want: "file" | "dir"): ScanResult {
+  if (typeof resourceName !== "string" || resourceName.length === 0)
+    return { ok: false, reason: "bad-resource" };
+  const sub = typeof subdir === "string" ? subdir : "";
+  if (sub.includes("..")) return { ok: false, reason: "bad-subdir" };
+
+  const resPath = GetResourcePath(resourceName);
+  if (!resPath) return { ok: false, reason: "no-resource-path" };
+
+  const target = sub ? path.join(resPath, sub) : resPath;
   try {
-    if (typeof resourceName !== "string" || resourceName.length === 0) return "[]";
-    const sub = typeof subdir === "string" ? subdir : "";
-    if (sub.includes("..")) return "[]";
-
-    const resPath = GetResourcePath(resourceName);
-    if (!resPath) return "[]";
-
-    const target = sub ? path.join(resPath, sub) : resPath;
-    if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) return "[]";
-
+    if (!fs.existsSync(target)) return { ok: false, reason: "missing" };
+    if (!fs.statSync(target).isDirectory()) return { ok: false, reason: "not-a-directory" };
     const entries = fs
       .readdirSync(target, { withFileTypes: true })
-      .filter((e) => e.isFile())
+      .filter((e) => (want === "file" ? e.isFile() : e.isDirectory()))
       .map((e) => e.name);
-    return JSON.stringify(entries);
+    return { ok: true, entries };
   } catch {
-    return "[]";
+    return { ok: false, reason: "read-failed" };
   }
+}
+
+// FiveM's Lua runtime has no directory enumeration, so without this a consumer
+// discovering files by pattern can only probe known names:
+//
+//   local names = json.decode(exports.tLib:ListResourceFiles('tAFK', 'audio') or '[]')
+//
+// Returns JSON-encoded filenames, or '[]' on any error, so callers never
+// branch. Prefer ScanResourceFiles where an unreadable folder and an empty one
+// must not be treated alike; this stays for callers that genuinely do not care
+// and for consumers already written against it.
+exports("ListResourceFiles", (resourceName: unknown, subdir: unknown): string => {
+  const result = scanResource(resourceName, subdir, "file");
+  return JSON.stringify(result.ok ? result.entries : []);
 });
 
-// adds a metadata line to fxmanifest if it's not already there
+// The honest counterparts:
+//
+//   local scan = json.decode(exports.tLib:ScanResourceFiles('tAFK', 'audio') or '{}')
+//   if scan and scan.ok then ... end
+//
+// `{ ok = true, entries = { ... } }` or `{ ok = false, reason = '<code>' }`.
+exports("ScanResourceFiles", (resourceName: unknown, subdir: unknown): string =>
+  JSON.stringify(scanResource(resourceName, subdir, "file"))
+);
+
+exports("ScanResourceDirs", (resourceName: unknown, subdir: unknown): string =>
+  JSON.stringify(scanResource(resourceName, subdir, "dir"))
+);
+
+// The directory counterpart. Every consumer that ships "packs" — HUD layouts,
+// skins, sound sets — needs the folder names, and there is no way to get them
+// from inside Lua: io.popen is nil in the server sandbox and io.readdir returns
+// an empty list for every path, including the resource's own root. Measured on
+// a Windows FiveM server, so a scan built on either one silently finds nothing
+// and the consumer falls back to a hardcoded list.
+//
+//   local dirs = json.decode(exports.tLib:ListResourceDirs('tELS', 'layouts') or '[]')
+//
+// Same contract as ListResourceFiles, including the flattened failure; see
+// ScanResourceDirs for the form that distinguishes empty from unreadable.
+exports("ListResourceDirs", (resourceName: unknown, subdir: unknown): string => {
+  const result = scanResource(resourceName, subdir, "dir");
+  return JSON.stringify(result.ok ? result.entries : []);
+});
+
 exports(
   "AppendToManifest",
   (resourceName: string, metadataKey: string, filePath: string): boolean => {
@@ -84,10 +145,9 @@ exports(
       const line = `${metadataKey} '${filePath}'`;
       let content = fs.readFileSync(manifestPath, "utf8");
 
-      // Already present — nothing to do
       if (content.includes(line)) return true;
 
-      // Key exists but points to a different file — update in place
+      // Key exists but points elsewhere: rewrite it in place.
       const keyPattern = new RegExp(`^${escapeRegExp(metadataKey)}\\s+['"].+['"]`, "m");
       if (keyPattern.test(content)) {
         content = content.replace(keyPattern, line);
@@ -95,7 +155,7 @@ exports(
         return true;
       }
 
-      // Look for a sibling key to append after, so related keys stay grouped
+      // Append after a sibling key so related lines stay grouped.
       for (const sibling of siblings) {
         if (sibling === metadataKey) continue;
         const sibPattern = new RegExp(`^(${escapeRegExp(sibling)}\\s+['"].+['"].*)$`, "m");
@@ -107,7 +167,6 @@ exports(
         }
       }
 
-      // No sibling found — append at end of file
       fs.appendFileSync(manifestPath, `\n\n${line}\n`, "utf8");
       return true;
     } catch (e: unknown) {

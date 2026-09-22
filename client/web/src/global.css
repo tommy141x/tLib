@@ -1,0 +1,177 @@
+@import "@unocss/reset/tailwind.css";
+
+/* The one face tLib actually ships, so it is the interface face rather than the
+   menu's alone: --font-sans used to name Inter, which is not on disk and not
+   fetchable, so every dialog and toast on a game client silently fell back to
+   Segoe UI while the menu drew Hanken Grotesk. One shipped face, one fallback
+   chain, and the three surfaces stop disagreeing.
+
+   Self-hosted, never a CDN: the game client may have no internet, and the NUI
+   page is loaded at resource start rather than when the player opens the menu,
+   so the face is resolved from disk long before anything is drawn. Referenced
+   relatively so Vite hashes it into dist/assets and base './' resolves it under
+   nui://; an absolute /fonts/ URL resolves to the resource root and 404s.
+
+   Outside @layer base on purpose: @font-face is not a style rule and carries no
+   specificity, but a layered one is still only honoured while that layer is
+   applied, and this face has to exist for every surface unconditionally. */
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 100 900;
+  /* block, not swap: the block period can never be reached from local disk, and
+     swap would flash an Arial-metric first paint. */
+  font-display: block;
+  src: url("./menu/fonts/hanken-grotesk-latin.woff2") format("woff2");
+}
+
+/* Neutral HUD surfaces. HSL channels are the public dialog/toast theme contract;
+   the menu keeps its separate full-color tokens on .tlib-menu. */
+@layer base {
+  :root {
+    --background: 0 0% 6.67%;
+    --foreground: 0 0% 93.33%;
+    --card: 0 0% 6.67%;
+    --card-foreground: 0 0% 93.33%;
+    --popover: 0 0% 9.8%;
+    --popover-foreground: 0 0% 93.33%;
+    --primary: 211 80% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 93.33%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 214.3 13.7% 70%;
+    --accent: 211 80% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20.39%;
+    --input: 0 0% 9.8%;
+    --ring: 211 80% 55%;
+    /* One knob. Everything else is derived from it so a control, a popover and a
+       panel stay in proportion when a theme moves it. */
+    --radius: 0.625rem;
+    --radius-control: calc(var(--radius) * 0.8);
+    --radius-surface: calc(var(--radius) * 1.4);
+    --radius-tight: calc(var(--radius) * 0.4);
+    /* The shipped face first, then the same fallbacks the menu has always
+       named, so a client that somehow cannot decode the woff2 lands where it
+       used to rather than on a serif. */
+    --font-sans: "Hanken Grotesk", Inter, "Segoe UI", Arial, sans-serif;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  body {
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans);
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.3);
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+/* Compact settings panels — solid surfaces over the native world */
+@layer components {
+  .settings-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) + 2px);
+    box-shadow: none;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: hsl(var(--foreground));
+  }
+
+  .settings-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: hsl(var(--secondary));
+    outline: none;
+    cursor: pointer;
+  }
+  .settings-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    cursor: pointer;
+    box-shadow: 0 0 0 2px hsl(var(--background));
+  }
+  .settings-range::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 0 2px hsl(var(--background));
+  }
+
+  .settings-sep {
+    height: 1px;
+    background: hsl(var(--border) / 0.6);
+  }
+
+  .settings-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .settings-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .settings-scroll::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+  .settings-scroll::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+}

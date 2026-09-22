@@ -1,13 +1,13 @@
 ---
 title: "Installation"
-description: "How to install tLib on your FiveM or Helix server."
+description: "How to install tLib on your FiveM server and depend on it from your own resource."
 order: 1
 group: "tLib"
 ---
 
 ## Prerequisites
 
-- FiveM or Helix server
+- A FiveM server
 
 ---
 
@@ -17,6 +17,9 @@ group: "tLib"
 
 Download the latest release from [GitHub Releases](https://github.com/tommy141x/tLib/releases).
 
+A source checkout is not enough on its own — the release contains the built NUI page and
+server bundle. To work from source, see *Building from source* in the repository README.
+
 ### Extract
 
 Place the `tLib` folder in your server's `resources` directory.
@@ -25,8 +28,8 @@ Place the `tLib` folder in your server's `resources` directory.
 
 Add to your `server.cfg` **before** any resource that depends on it:
 
-```txt
-title="server.cfg" ensure tLib
+```txt title="server.cfg"
+ensure tLib
 ```
 
 </Steps>
@@ -35,32 +38,41 @@ title="server.cfg" ensure tLib
 
 ## Usage in Your Resource
 
-To use tLib as a dependency, add it to your resource's `fxmanifest.lua`:
+Declare the dependency in your resource's `fxmanifest.lua`:
 
-```lua
-title="fxmanifest.lua" dependencies { 'tLib' }
+```lua title="fxmanifest.lua"
+dependencies { 'tLib' }
 ```
 
-### Using Exports
+### Using exports
 
-Call tLib systems directly via exports:
+Call tLib systems directly via exports. Toasts are the shortest thing to prove the install
+with:
 
 ```lua
--- Create and open a menu
-local menuId = exports['tLib']:CreateMenu('my_menu', 'My Menu', 'Subtitle')
-exports['tLib']:AddButton(menuId, 'btn1', 'Click Me', 'A button', function()
-    print('clicked!')
-end)
-exports['tLib']:RefreshMenu(menuId)
-exports['tLib']:OpenMenu(menuId)
+exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctly.')
 ```
 
-### Using Import Modules
+The menu is registered rather than built imperatively — pages are declared on the server and
+handlers on the client. See [Exports](/docs/tlib/exports) and
+[Menu Consumers](/docs/tlib/menu-consumers).
 
-For lightweight modules (coords, kvp, settings, movemode, layouts), declare them in your `fxmanifest.lua` and add the imports script:
+### Using import modules
 
-```lua
-title="fxmanifest.lua" dependencies { 'tLib' } shared_scripts { '@tLib/imports.lua' } tlib_modules { 'kvp', 'settings' }
+For lightweight Lua modules (coords, kvp, settings, layouts), declare them in your
+`fxmanifest.lua` and add the imports script:
+
+```lua title="fxmanifest.lua"
+dependencies { 'tLib' }
+
+shared_scripts {
+    '@tLib/imports.lua',
+}
+
+tlib_modules {
+    'kvp',
+    'settings',
+}
 ```
 
 Then access them via the `tlib` global:

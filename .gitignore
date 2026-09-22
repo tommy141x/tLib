@@ -1,50 +1,51 @@
-# Dependencies
 node_modules/
 
-# Build outputs
-dist/*
-ts/src/build/obfuscate.ts
-scripts/*
-ui/index.html
-ui/assets/
-server/bundle.js
+# Generated output. One root, so a new build artifact never needs a new rule
+# here and can never reach a release by being forgotten.
+.build/
+
+# Fetched at setup, never authored.
+.runtime/
+
+# Built artefacts that must sit at a path the manifest names, so they cannot
+# live under .build/: FiveM resolves ui_page and server_scripts from the
+# resource root.
+client/ui/
+server/dist/
+
+# Pre-migration output paths. Remove once nothing writes to them.
+dist/
 *.zip
-todo.txt
 
-# Source scripts + externally-consumed build artifacts need to be tracked
-# so consumers (tMarketplace worker) can pull files without cloning and
-# building tLib from scratch.
-!scripts/prod.ts
-# The hub's icon set is a checked-in generated file; keep the generator with it,
-# or regenerating means reconstructing how it was made.
-!scripts/build-icons.ts
+# The workshop: reference material and sources used to make what ships.
+/assets/
 
-# Assets (external dependencies, installed separately)
-assets/
+# Private tooling. tLib is a public MIT repo -- the obfuscator is consumed from
+# here by the closed resources but is not published with it.
+shared/ts/build/obfuscate.ts
 
-# Local data files
+# Local state and notes.
 data.json
+docs/todo.md
+CLAUDE.md
+.claude/
+docs/internal/
 
-# Environment files
+# Secrets.
 .env
 .env.local
 .env.*.local
 
-# Logs
+# Logs and editor/OS noise.
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 bun-debug.log*
-
-# OS files
 .DS_Store
 Thumbs.db
-
-# Editor directories
 .vscode/
 .idea/
-
-# Cache
 .cache/
 .vite/
+.tmp/

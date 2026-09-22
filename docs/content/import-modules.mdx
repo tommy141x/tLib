@@ -1,6 +1,6 @@
 ---
 title: "Import Modules"
-description: "Lightweight Lua modules that load on demand — coords, kvp, settings, movemode, and layouts."
+description: "Lightweight Lua modules that load on demand — coords, kvp, settings, and layouts."
 order: 3
 group: "tLib"
 ---
@@ -9,8 +9,19 @@ Import modules are lightweight Lua modules that your resource declares in `fxman
 
 ## Setup
 
-```lua
-title="fxmanifest.lua" dependencies { 'tLib' } shared_scripts { '@tLib/imports.lua' } tlib_modules { 'coords', 'kvp', 'settings', 'movemode', 'layouts' }
+```lua title="fxmanifest.lua"
+dependencies { 'tLib' }
+
+shared_scripts {
+    '@tLib/imports.lua',
+}
+
+tlib_modules {
+    'coords',
+    'kvp',
+    'settings',
+    'layouts',
+}
 ```
 
 Then in your scripts:
@@ -119,35 +130,6 @@ local vol = store:get('volume')    -- 0.8 (default)
 store:set('volume', 0.5)           -- Persisted to KVP
 store:isUserSet('volume')          -- true
 store:reset('volume')              -- Back to 0.8
-```
-
----
-
-## movemode
-
-Drag-to-reposition handler for NUI HUDs. Manages NUI focus, drag tracking, and KVP persistence of position and scale.
-
-| Function                                      | Description                                               |
-| --------------------------------------------- | --------------------------------------------------------- |
-| `movemode.create(opts)`                       | Create an instance with `{ keys, defaults, scaleRange }`. |
-| `instance:load()`                             | Restore position from KVP.                                |
-| `instance:getPosition()`                      | Returns `{ right, bottom, scale }`.                       |
-| `instance:savePosition(right, bottom, scale)` | Persist position to KVP.                                  |
-| `instance:enter()`                            | Enter move mode (enables NUI focus and drag).             |
-| `instance:exit()`                             | Exit move mode.                                           |
-| `instance:toggle()`                           | Toggle move mode.                                         |
-
-```lua
-local movemode = tlib.movemode
-
-local mover = movemode.create({
-    keys = { 'my_hud' },
-    defaults = { right = 50, bottom = 50, scale = 1.0 },
-    scaleRange = { 0.5, 2.0 },
-})
-
-mover:load()
-local pos = mover:getPosition()
 ```
 
 ---

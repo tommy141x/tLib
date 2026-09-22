@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "visible": true,
+  "menuId": "main",
+  "menus": [
+    {
+      "id": "main",
+      "title": "Menu",
+      "description": "Development preview. No game state is changed.",
+      "items": [
+        {
+          "id": "example:open",
+          "kind": "submenu",
+          "label": "Example menu",
+          "menu": "example:settings"
+        }
+      ]
+    },
+    {
+      "id": "example:settings",
+      "parent": "main",
+      "title": "Example menu",
+      "description": "A resource supplies its own pages, actions and presentation.",
+      "items": [
+        { "id": "example:action", "kind": "action", "label": "Example action" },
+        { "id": "example:toggle", "kind": "toggle", "label": "Example toggle", "value": false },
+        {
+          "id": "example:choice",
+          "kind": "select",
+          "label": "Example choice",
+          "value": "first",
+          "options": [
+            { "label": "First", "value": "first" },
+            { "label": "Second", "value": "second" }
+          ]
+        },
+        {
+          "id": "example:slider",
+          "kind": "slider",
+          "label": "Example slider",
+          "value": 50,
+          "min": 0,
+          "max": 100,
+          "step": 10
+        },
+        {
+          "id": "example:unavailable",
+          "kind": "action",
+          "label": "Unavailable action",
+          "description": "This example is disabled.",
+          "disabled": true
+        },
+        {
+          "id": "example:confirm",
+          "kind": "action",
+          "label": "Confirm an action",
+          "confirm": "Run this preview action?",
+          "danger": true
+        }
+      ]
+    }
+  ]
+}

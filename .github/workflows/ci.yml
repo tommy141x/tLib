@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun run setup
+
+      - name: Lint and format
+        run: bunx biome ci .
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      # Catches a relative specifier left behind by a move, which only fails at
+      # the moment the module is first loaded and so can pass the suite below.
+      - name: Relative imports resolve
+        run: bun run check:imports
+
+      - name: Test
+        run: bun run test
+
+      - name: Lua suites
+        run: bun run test:lua
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun run setup
+
+      - name: Build
+        run: bun run build
+
+      - name: Verify the three runtime artifacts exist
+        run: |
+          set -euo pipefail
+          for f in client/ui/index.html client/ui/assets/hud-layout.js server/dist/bundle.js; do
+            [ -s "$f" ] || { echo "missing or empty: $f"; exit 1; }
+          done

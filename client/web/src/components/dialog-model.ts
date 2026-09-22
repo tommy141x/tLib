@@ -1,0 +1,112 @@
+export type DialogValue = string | number | boolean;
+export type DialogValues = Record<string, DialogValue>;
+export interface DialogField {
+  id: string;
+  type:
+    | "text"
+    | "number"
+    | "password"
+    | "textarea"
+    | "select"
+    | "dropdown"
+    | "radio"
+    | "slider"
+    | "checkbox"
+    | "button";
+  label: string;
+  description?: string;
+  required?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
+  defaultValue?: DialogValue;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: { value: string; label: string }[];
+  variant?: "default" | "primary" | "destructive";
+  section?: string;
+  row?: string;
+  flex?: "shrink";
+  tab?: string;
+}
+export interface DialogTab {
+  id: string;
+  label: string;
+  icon?: string;
+  action?: boolean;
+  separator?: boolean;
+}
+export interface DialogData {
+  id: string;
+  instance?: number;
+  title: string;
+  description?: string;
+  size: "sm" | "md" | "lg" | "xl";
+  submitLabel?: string;
+  cancelLabel?: string;
+  theme?: string;
+  fields: DialogField[];
+  tabs?: DialogTab[];
+}
+export function matchesDialog(dialog: DialogData | null, id: string, instance?: number) {
+  return !!dialog && dialog.id === id && dialog.instance === instance;
+}
+export function initialValues(fields: DialogField[], previous: DialogValues = {}): DialogValues {
+  return Object.fromEntries(
+    fields
+      .filter((field) => field.type !== "button")
+      .map((field) => {
+        const value = Object.hasOwn(previous, field.id)
+          ? previous[field.id]
+          : (field.defaultValue ??
+            (field.type === "checkbox" ? false : field.type === "slider" ? (field.min ?? 0) : ""));
+        // Lua's number control contract is text, including the empty optional value.
+        return [field.id, field.type === "number" ? String(value) : value];
+      })
+  );
+}
+export function fieldError(field: DialogField, value: DialogValue | undefined): string | undefined {
+  if (field.disabled || field.type === "button") return;
+  const empty = value === undefined || value === "";
+  if (empty) return field.required ? `${field.label || "This field"} is required.` : undefined;
+  if (field.type === "checkbox")
+    return typeof value === "boolean" ? undefined : "Choose on or off.";
+  if (field.type === "number" || field.type === "slider") {
+    const number = typeof value === "boolean" || String(value).trim() === "" ? NaN : Number(value);
+    if (!Number.isFinite(number)) return "Enter a valid number.";
+    if (field.min !== undefined && number < field.min) return `Minimum: ${field.min}.`;
+    if (field.max !== undefined && number > field.max) return `Maximum: ${field.max}.`;
+  }
+  if (
+    ["select", "dropdown", "radio"].includes(field.type) &&
+    !field.options?.some((option) => option.value === value)
+  ) {
+    return "Choose an available option.";
+  }
+}
+export function validationErrors(
+  fields: DialogField[],
+  values: DialogValues
+): Record<string, string> {
+  return Object.fromEntries(
+    fields.flatMap((field) => {
+      const error = fieldError(field, values[field.id]);
+      return error ? [[field.id, error]] : [];
+    })
+  );
+}
+export function effectiveTabs(dialog: DialogData): DialogTab[] {
+  if (dialog.tabs?.length) return dialog.tabs;
+  return [...new Set(dialog.fields.flatMap((field) => (field.tab ? [field.tab] : [])))].map(
+    (id) => ({ id, label: id })
+  );
+}
+export function groupFieldsByRow(fields: DialogField[]): DialogField[][] {
+  const groups: DialogField[][] = [];
+  for (const field of fields) {
+    const last = groups.at(-1);
+    if (field.row && last?.[0].row === field.row) last.push(field);
+    else groups.push([field]);
+  }
+  return groups;
+}

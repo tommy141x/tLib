@@ -1,0 +1,214 @@
+/* The vMenu skin: tMenu's original presentation, kept as a switchable test look
+   rather than as the default. Selected per page with `skin = 'vmenu'` on a theme
+   (see branding.ts / shared/lib/menu/schema.lua) and applied through data-skin on the
+   menu root, which is the only thing the markup knows about skins.
+
+   Everything here is an override of the shared default in ../menu.css, and every
+   rule is written against `.tlib-menu[data-skin=vmenu]` so it is strictly heavier
+   than the `:where(.tlib-menu)` rule it replaces; it is also imported after
+   menu.css from Menu.tsx, so order agrees with specificity. Nothing in this file
+   should ever be the answer for the default skin — if a rule belongs to both, it
+   belongs in menu.css. */
+
+/* Source geometry: vMenu draws a 431px-wide menu with 38px rows at 1080p.
+   Every number here is the 1080p number and nothing resolves it against the
+   viewport, because the panel must stay pixel-identical at the resolution it
+   was drawn against. vMenu's scaleform is authored in safe-zone units and the
+   engine redraws it against the backbuffer, so it keeps its share of the
+   screen on a 1440p or 4K client; a panel pinned to 431 device pixels does
+   not — at 2160p it is half the apparent size. The min-height steps at the
+   foot of this file restate these tokens for those clients, the same way the
+   max-height steps already restate them for short ones. */
+.tlib-menu[data-skin="vmenu"] {
+  --menu-width: 431px;
+  --row-height: 38px;
+  --heading-height: 38px;
+  --brand-height: 107px;
+  --brand-font: 43px;
+  --brand-title-font: 34px;
+  --heading-font: 17px;
+  --row-font: 16px;
+  /* A literal, not the shared --radius: this skin is a replica, and a theme that
+     rounds every other tLib surface must not round this one out of fidelity. */
+  --menu-radius: 6px;
+  /* The default skin pushes its chrome bands well below the panel so they read
+     as chrome. The source's bands are the panel's own inset, so the replica
+     keeps the value the two shared before they were split. */
+  --menu-chrome: var(--menu-inset);
+  /* Opaque, unlike the default. The replica is calibrated against a capture of
+     the source panel, and letting the world through would change every colour
+     in it by whatever happens to be on screen. */
+  --menu-panel-bg: var(--panel);
+}
+
+/* The default's lit top edge is a tLib cue, not a vMenu one: the source panel
+   has one flat border on all four sides. */
+.tlib-menu[data-skin="vmenu"] .menu-panel {
+  border-top-color: var(--border);
+}
+
+/* The 107px band with the word centred in it, rather than the default's 46px
+   left-aligned bar. No gutters and no rule beneath it: the banner fills the band
+   edge to edge and the heading below supplies the only border. */
+.tlib-menu[data-skin="vmenu"] .menu-brand {
+  justify-content: center;
+  padding: 0;
+  border-bottom: 0;
+}
+/* Tight tracking at 43px is the source's own look. The word is not clipped here
+   the way the default clips it, because it is centred in a band with no gutter to
+   clip against; only a real source subtitle (.source-title) is bounded, by the
+   close button. */
+.tlib-menu[data-skin="vmenu"] .brand-word {
+  letter-spacing: -2px;
+}
+.tlib-menu[data-skin="vmenu"] .brand-word:not(.source-title) {
+  min-width: auto;
+  overflow: visible;
+  white-space: normal;
+}
+.tlib-menu[data-skin="vmenu"] .close-button {
+  border-radius: 0;
+}
+
+/* A ruled table, not a padded list: rows are full-bleed and square, separated by
+   a hairline, and the selection is the white bar across the whole panel. */
+.tlib-menu[data-skin="vmenu"] .menu-items {
+  padding: 0;
+}
+.tlib-menu[data-skin="vmenu"] .menu-row {
+  border-radius: 0;
+  border-bottom-color: color-mix(in srgb, var(--border) 55%, transparent);
+}
+.tlib-menu[data-skin="vmenu"] .menu-row.is-active {
+  border-bottom-color: transparent;
+}
+.tlib-menu[data-skin="vmenu"] .row-main {
+  padding: 0 12px;
+}
+
+/* vMenu marks a submenu with three chevrons rather than a single arrow, overlapped
+   so they read as one glyph. The default hides all but the last. */
+.tlib-menu[data-skin="vmenu"] .row-chevron svg {
+  margin-right: -6px;
+}
+.tlib-menu[data-skin="vmenu"] .row-chevron svg:last-child {
+  margin-right: 0;
+}
+
+/* The square outline toggle. Checked is left alone deliberately — the shared
+   control already fills with --nui-accent and inverts inside a selected row,
+   which is exactly what the hand-written .toggle.is-on rules used to do — so only
+   the unfilled box differs: an outline in the row's own ink rather than a well. */
+.tlib-menu[data-skin="vmenu"] .toggle.tlib-nui-checkbox-control[data-state="unchecked"] {
+  background: none;
+  border-color: currentColor;
+}
+
+/* vMenu shows stacked up/down chevrons on its own inset strip below the last row. */
+.tlib-menu[data-skin="vmenu"] .scroll-cue {
+  height: 30px;
+  background: var(--menu-inset);
+  color: inherit;
+}
+.tlib-menu[data-skin="vmenu"] .scroll-cue svg {
+  width: 13px;
+  height: 13px;
+  margin: -2px 0;
+}
+
+/* Both confirmation buttons carry the control border in this skin, including the
+   primary one, which the default leaves borderless like .tlib-nui-button. */
+.tlib-menu[data-skin="vmenu"] .dialog-confirm {
+  border-color: var(--menu-control-border);
+}
+
+/* The slider. The shared control is a 17px bordered thumb on a bar that always
+   shows its filled share; the source draws a 15px borderless dot on a bar that is
+   flat unless the row carries an explicit barColor, and this skin is the replica,
+   so it restates the source's geometry rather than inheriting the shared one.
+   Only the painting is restated — the element, its markup and its keyboard
+   behaviour are still NuiRange's.
+   One gradient covers both cases rather than two rules: --nui-range-color is set
+   by NuiRange only when the row actually has a barColor, so falling back to the
+   track's own colour collapses the gradient to a flat bar for every row that does
+   not, which is exactly what the source draws. */
+.tlib-menu[data-skin="vmenu"] .row-slider .tlib-nui-range {
+  background: linear-gradient(
+    to right,
+    var(--nui-range-color, var(--menu-control-border)) var(--nui-range-fill, 0%),
+    var(--menu-control-border) 0
+  );
+}
+/* currentColor, not --nui-accent: the thumb follows the row's own ink, which is
+   what makes it invert with the selection bar and take the barColor that
+   .row-slider sets inline. */
+.tlib-menu[data-skin="vmenu"] .row-slider .tlib-nui-range::-webkit-slider-thumb {
+  width: 15px;
+  height: 15px;
+  border: 0;
+  background: currentColor;
+}
+.tlib-menu[data-skin="vmenu"] .row-slider .tlib-nui-range::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: 0;
+  background: currentColor;
+}
+/* Against the selection bar the unfilled share is a shadow rather than a border. */
+.tlib-menu[data-skin="vmenu"] .menu-row.is-active .row-slider .tlib-nui-range {
+  background: linear-gradient(
+    to right,
+    var(--nui-range-color, #0005) var(--nui-range-fill, 0%),
+    #0005 0
+  );
+}
+
+/* Short viewports, unchanged in effect — the heights and font sizes these used to
+   set inline are now the same tokens the tall steps below restate. */
+@media (max-height: 800px) {
+  .tlib-menu[data-skin="vmenu"] {
+    --row-height: 32px;
+    --brand-height: 80px;
+    --brand-font: 35px;
+  }
+}
+@media (max-height: 650px) {
+  .tlib-menu[data-skin="vmenu"] {
+    --row-height: 28px;
+    --brand-height: 62px;
+    --brand-font: 30px;
+    --row-font: 14px;
+  }
+}
+/* Tall viewports. The first step cannot fire at or below 1080p, so the panel at
+   the resolution vMenu was drawn against is byte-for-byte what it was. Above it
+   the panel keeps roughly the share of screen height it has at 1080p: 1.333x for
+   the 1440p band and 2x for 2160p and beyond, which is what the engine does to
+   the scaleform this menu replaces. It stops at 2x rather than tracking the
+   viewport forever, because past that the rows are large enough that the limit
+   is the player's reading distance, not the backbuffer. */
+@media (min-height: 1200px) {
+  .tlib-menu[data-skin="vmenu"] {
+    --menu-width: 575px;
+    --row-height: 51px;
+    --heading-height: 51px;
+    --brand-height: 143px;
+    --brand-font: 57px;
+    --brand-title-font: 45px;
+    --heading-font: 23px;
+    --row-font: 21px;
+  }
+}
+@media (min-height: 1800px) {
+  .tlib-menu[data-skin="vmenu"] {
+    --menu-width: 862px;
+    --row-height: 76px;
+    --heading-height: 76px;
+    --brand-height: 214px;
+    --brand-font: 86px;
+    --brand-title-font: 68px;
+    --heading-font: 34px;
+    --row-font: 32px;
+  }
+}

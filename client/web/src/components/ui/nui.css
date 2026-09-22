@@ -1,0 +1,512 @@
+/* Scoped HSL aliases preserve public themes and never touch menu full-color tokens. */
+.tlib-nui-surface {
+  --nui-surface: hsl(var(--card));
+  --nui-inset: hsl(var(--input));
+  --nui-text: hsl(var(--foreground));
+  --nui-muted: hsl(var(--muted-foreground));
+  --nui-border: hsl(var(--border));
+  --nui-control-border: color-mix(in srgb, var(--nui-text) 32%, var(--nui-inset));
+  --nui-hover: hsl(var(--secondary));
+  --nui-accent: #eeeeee;
+  --nui-accent-text: #111111;
+  --nui-danger: #ff8585;
+  --nui-radius: var(--radius-control, 0.5rem);
+  --nui-radius-lg: var(--radius-surface, 0.875rem);
+  --nui-radius-sm: var(--radius-tight, 0.25rem);
+  --nui-control-h: 34px;
+  /* Label line-box and the gap under it. Named because a labelless field in a
+     multi-column row has to reproduce exactly this much space to line its
+     control up with the one beside it. */
+  --nui-label-h: 20px;
+  --nui-field-gap: 6px;
+  --nui-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --nui-ease-entrance: cubic-bezier(0.22, 1, 0.36, 1);
+  --nui-rule-x: linear-gradient(
+    90deg,
+    transparent,
+    var(--nui-border) 22%,
+    var(--nui-border) 78%,
+    transparent
+  );
+  --nui-rule-y: linear-gradient(
+    180deg,
+    transparent,
+    var(--nui-border) 22%,
+    var(--nui-border) 78%,
+    transparent
+  );
+  color: var(--nui-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+.tlib-nui-control {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition:
+    background-color 100ms ease-out,
+    border-color 100ms ease-out,
+    box-shadow 100ms ease-out;
+}
+.tlib-nui-control:focus-visible,
+.tlib-nui-control[data-focus-visible] {
+  border-color: var(--nui-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nui-accent) 24%, transparent);
+}
+.tlib-nui-control:disabled,
+.tlib-nui-control[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tlib-nui-control[aria-invalid="true"],
+.tlib-nui-control[data-invalid] {
+  border-color: var(--nui-danger);
+}
+.tlib-nui-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--nui-field-gap, 6px);
+}
+.tlib-nui-label {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: var(--nui-label-h, 20px);
+  color: var(--nui-text);
+}
+.tlib-nui-required {
+  margin-left: 4px;
+  color: var(--nui-muted);
+}
+.tlib-nui-helper,
+.tlib-nui-error {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.tlib-nui-helper {
+  color: var(--nui-muted);
+}
+.tlib-nui-error {
+  color: var(--nui-danger);
+}
+.tlib-nui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--nui-control-h);
+  padding: 0 12px;
+  border-radius: var(--nui-radius);
+  border: 1px solid var(--nui-control-border);
+  background: var(--nui-hover);
+  color: var(--nui-text);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+.tlib-nui-button[data-tone="primary"] {
+  background: var(--nui-accent);
+  color: var(--nui-accent-text);
+  border-color: transparent;
+}
+.tlib-nui-button[data-tone="destructive"] {
+  background: var(--nui-danger);
+  color: var(--nui-accent-text);
+  border-color: transparent;
+}
+.tlib-nui-button:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 999px rgb(127 127 127 / 0.12);
+}
+.tlib-nui-button:active:not(:disabled) {
+  box-shadow: inset 0 0 0 999px rgb(127 127 127 / 0.24);
+}
+.tlib-nui-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: var(--nui-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--nui-control-border);
+  border-radius: var(--nui-radius);
+  background: var(--nui-inset);
+  color: var(--nui-text);
+  font-size: 14px;
+  line-height: 20px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.tlib-nui-input::placeholder {
+  color: var(--nui-muted);
+}
+.tlib-nui-input:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--nui-text) 52%, var(--nui-inset));
+}
+.tlib-nui-textarea {
+  height: auto;
+  min-height: 82px;
+  padding-block: 8px;
+  resize: vertical;
+}
+.tlib-nui-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--nui-control-h);
+  cursor: pointer;
+  position: relative;
+}
+.tlib-nui-checkbox[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tlib-nui-checkbox-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--nui-control-border);
+  border-radius: var(--nui-radius-sm);
+  background: var(--nui-inset);
+}
+.tlib-nui-checkbox-control[data-state="checked"] {
+  background: var(--nui-accent);
+  border-color: var(--nui-accent);
+  color: var(--nui-accent-text);
+}
+.tlib-nui-checkbox-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tlib-nui-checkbox-indicator[hidden] {
+  display: none;
+}
+.tlib-nui-segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tlib-nui-segment {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--nui-control-h);
+  padding: 4px 10px;
+  border: 1px solid var(--nui-control-border);
+  border-radius: var(--nui-radius);
+  background: var(--nui-inset);
+  color: var(--nui-text);
+  cursor: pointer;
+  font-size: 14px;
+}
+.tlib-nui-segment:hover:not([data-disabled]) {
+  background: var(--nui-hover);
+}
+.tlib-nui-segment[data-state="checked"] {
+  background: var(--nui-accent);
+  color: var(--nui-accent-text);
+  border-color: transparent;
+}
+.tlib-nui-select {
+  position: relative;
+}
+.tlib-nui-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.tlib-nui-select-trigger [data-part="value-text"] {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tlib-nui-select-trigger[data-state="open"] {
+  border-color: var(--nui-accent);
+}
+.tlib-nui-select-indicator {
+  color: var(--nui-muted);
+  transition: rotate 120ms var(--nui-ease);
+}
+.tlib-nui-select-indicator[data-state="open"] {
+  rotate: 180deg;
+}
+.tlib-nui-select-positioner {
+  z-index: 10001;
+}
+.tlib-nui-select-content {
+  position: relative;
+  z-index: 10001;
+  max-height: min(240px, var(--available-height, 240px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--nui-text) 22%, var(--nui-border));
+  border-radius: var(--nui-radius-lg);
+  background: var(--nui-surface);
+  outline: none;
+  transform-origin: var(--transform-origin);
+}
+.tlib-nui-select-content[data-state="open"] {
+  animation: tlib-nui-enter 120ms var(--nui-ease);
+}
+.tlib-nui-select-content[data-state="closed"] {
+  animation: tlib-nui-exit 80ms ease-in;
+  pointer-events: none;
+}
+/* Item highlighting is immediate: no transition trail while scanning options. */
+.tlib-nui-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: var(--nui-radius-sm);
+  font-size: 14px;
+  cursor: default;
+  outline: none;
+}
+.tlib-nui-select-item[data-highlighted] {
+  background: var(--nui-hover);
+}
+.tlib-nui-slider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--nui-control-h);
+}
+.tlib-nui-slider-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  height: 30px;
+  touch-action: none;
+  user-select: none;
+}
+.tlib-nui-slider-track {
+  height: 6px;
+  width: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--nui-hover);
+}
+.tlib-nui-slider-range {
+  height: 100%;
+  background: var(--nui-accent);
+}
+.tlib-nui-slider-thumb {
+  height: 17px;
+  width: 17px;
+  border: 1px solid var(--nui-control-border);
+  border-radius: 50%;
+  background: var(--nui-accent);
+  cursor: grab;
+  transition:
+    box-shadow 100ms ease-out,
+    scale 100ms ease-out;
+}
+.tlib-nui-slider-thumb[data-dragging] {
+  scale: 1.1;
+  cursor: grabbing;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nui-accent) 18%, transparent);
+}
+.tlib-nui-slider-value {
+  min-width: 3ch;
+  color: var(--nui-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* A native <input type=range> dressed as the Ark slider above, for the one place
+   that cannot use Ark's: a menu row, where a focusable widget inside the row's
+   own <button> would break server-authoritative keyboard/controller navigation.
+   Every number here is taken from the three rules above it and must stay equal
+   to them — 6px track, 999px radius, --nui-accent range, 17px round thumb — so a
+   slider in a menu and a slider in a dialog are the same object.
+   The track is one gradient rather than a track+range pair because a native
+   range has no range pseudo-element in Chromium; --nui-range-fill is the filled
+   share, written by NuiRange, and --nui-range-color lets a row override just the
+   colour without restating the gradient. Hard stop, no interpolation. */
+.tlib-nui-range {
+  appearance: none;
+  min-width: 0;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    var(--nui-range-color, var(--nui-accent)) var(--nui-range-fill, 0%),
+    var(--nui-hover) 0
+  );
+}
+.tlib-nui-range::-webkit-slider-thumb {
+  appearance: none;
+  box-sizing: border-box;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1px solid var(--nui-control-border);
+  background: var(--nui-range-color, var(--nui-accent));
+}
+.tlib-nui-range::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1px solid var(--nui-control-border);
+  background: var(--nui-range-color, var(--nui-accent));
+}
+.tlib-nui-range:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* Depth without shadows: CEF does not composite them, so a panel is separated
+   from the game behind it by light on its top edge instead — a 1px highlight
+   that fades out toward both corners, as if the surface were catching a light
+   above it. White, never the accent; a coloured bloom is what makes a dark
+   panel read as a template. */
+.tlib-nui-lit {
+  position: relative;
+}
+.tlib-nui-lit::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--nui-text) 20%, transparent) 50%,
+    transparent
+  );
+}
+/* A divider that carries its weight in the middle and releases it at the edges.
+   A 1px line at full strength corner to corner is what makes a dark panel look
+   like a wireframe of itself. `rule` is the standalone <hr>; the `ruled-*`
+   variants draw the same line on an existing box's edge. */
+.tlib-nui-rule {
+  border: 0;
+  height: 1px;
+  background: var(--nui-rule-x);
+}
+.tlib-nui-ruled-t,
+.tlib-nui-ruled-b,
+.tlib-nui-ruled-r {
+  position: relative;
+}
+.tlib-nui-ruled-t::after,
+.tlib-nui-ruled-b::after,
+.tlib-nui-ruled-r::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+.tlib-nui-ruled-t::after,
+.tlib-nui-ruled-b::after {
+  inset-inline: 0;
+  height: 1px;
+  background: var(--nui-rule-x);
+}
+.tlib-nui-ruled-t::after {
+  top: 0;
+}
+.tlib-nui-ruled-b::after {
+  bottom: 0;
+}
+.tlib-nui-ruled-r::after {
+  inset-block: 0;
+  right: 0;
+  width: 1px;
+  background: var(--nui-rule-y);
+}
+.tlib-nui-dialog[data-state="open"] {
+  animation: tlib-nui-rise 180ms var(--nui-ease-entrance);
+}
+.tlib-nui-dialog[data-state="closed"] {
+  animation: tlib-nui-exit 100ms ease-in;
+}
+.tlib-nui-dialog[inert],
+.tlib-nui-dialog-positioner[data-state="closed"] {
+  pointer-events: none !important;
+}
+.tlib-nui-field-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tlib-nui-field-cell {
+  min-width: min(140px, 100%);
+  flex: 1 1 140px;
+}
+.tlib-nui-field-cell[data-shrink="true"] {
+  flex: 0 0 auto;
+}
+/* Buttons and checkboxes render no label, so in a row beside a labelled field
+   flex-start pins them a label-height too high. Reserve the same space the
+   missing label would have taken. Dialog.tsx sets the attribute only when the
+   row actually has a labelled sibling to line up with. */
+.tlib-nui-field-cell[data-labelless="true"] {
+  padding-top: calc(var(--nui-label-h, 20px) + var(--nui-field-gap, 6px));
+}
+/* Individual scale and translate never overwrite the inline `transform` the
+   dialog's drag handler writes. */
+@keyframes tlib-nui-enter {
+  from {
+    opacity: 0;
+    scale: 0.98;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+/* A panel arrives by rising into place rather than growing. Far enough to read
+   as arrival, short enough not to read as travel. */
+@keyframes tlib-nui-rise {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes tlib-nui-exit {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 0.99;
+  }
+}
+@media (forced-colors: active) {
+  .tlib-nui-control:focus-visible,
+  .tlib-nui-control[data-focus-visible] {
+    outline-color: Highlight;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tlib-nui-surface,
+  .tlib-nui-surface *,
+  .tlib-nui-surface *::before,
+  .tlib-nui-surface *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

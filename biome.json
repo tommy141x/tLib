@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -11,9 +11,10 @@
       "**",
       "!**/node_modules",
       "!**/dist",
+      "!**/.build",
       "!**/assets",
-      "!**/ui/assets",
-      "!**/ui/index.html"
+      "!**/client/ui/assets",
+      "!**/client/ui/index.html"
     ]
   },
   "formatter": {
@@ -25,7 +26,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "suspicious": {
         "noExplicitAny": "warn",
         "noArrayIndexKey": "error",
@@ -49,7 +50,9 @@
         "useAltText": "off",
         "noLabelWithoutControl": "off",
         "noStaticElementInteractions": "off",
-        "useKeyWithClickEvents": "off"
+        "useKeyWithClickEvents": "off",
+        "useSemanticElements": "off",
+        "useAriaPropsSupportedByRole": "off"
       }
     }
   },

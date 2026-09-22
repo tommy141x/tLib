@@ -22,7 +22,8 @@ If applicable, add screenshots or server/client console output.
 
 **Environment**
 - tLib version:
-- Framework (ESX / QBCore / Helix / standalone):
+- Framework (ESX / QBCore / standalone):
+- FiveM game build:
 - Server artifacts version:
 
 **Additional context**

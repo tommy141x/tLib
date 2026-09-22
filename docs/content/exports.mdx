@@ -1,132 +1,156 @@
 ---
 title: "Exports"
-description: "All tLib Lua exports — menus, dialogs, toasts, themes, logger, HTTP, and permissions."
+description: "All tLib Lua exports — menus, dialogs, toasts, themes, HUD layout, marketplace, logger, HTTP and permissions."
 order: 2
 group: "tLib"
 ---
 
 All exports are called via `exports['tLib']:FunctionName(...)`.
 
+Exports are registered on the side that owns the state: menu pages and permissions on the
+server, everything that draws on the client. Each section below says which side it is.
+
 ---
 
 ## Menu System
 
-A full NUI menu system with submenus, item types, and dynamic updates.
+**Client and server.** One NUI menu shared by every resource on the server. tLib owns the
+screen, the keyboard and the permission check; a consumer declares pages and handles rows.
 
-### Lifecycle
+Pages are registered on the **server**, because what a player may see is a server decision —
+every open is answered with that player's own ACE-filtered tree. The **client** registers what
+turns that tree into behaviour: handlers, presenters and hooks.
 
-| Export                                                       | Description                                       |
-| ------------------------------------------------------------ | ------------------------------------------------- |
-| `CreateMenu(menuId, title, subtitle, onOpen, onClose, opts)` | Create a new menu. Returns the resolved `menuId`. |
-| `OpenMenu(menuId)`                                           | Open a menu.                                      |
-| `CloseMenu(menuId)`                                          | Close a specific menu.                            |
-| `CloseAll()`                                                 | Close all open menus.                             |
-| `DeleteMenu(menuId)`                                         | Remove a menu entirely.                           |
-| `ClearMenu(menuId)`                                          | Remove all items from a menu.                     |
-| `CheckMenu(menuId)`                                          | Returns `true` if the menu exists.                |
-| `IsOpen()`                                                   | Returns `true` if any menu is open.               |
+Menu IDs are namespaced: every page a resource registers must be `owner:name`. Every export
+takes an optional trailing `declaredOwner`, used only where the platform cannot identify the
+caller. Pass it as its own argument — never as the result of a call in the last argument slot,
+since `f(json.decode(x))` expands to *two* values and the second lands in `declaredOwner`.
 
-### Item Types
+[Developing modular menu resources](/docs/tlib/menu-consumers) walks through a complete
+standalone consumer.
 
-| Export                                                                                           | Description                        |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `AddButton(menuId, itemId, label, description, onSelect, opts)`                                  | Add a button item.                 |
-| `AddCheckbox(menuId, itemId, label, description, checked, onToggle, opts)`                       | Add a checkbox item.               |
-| `AddSlider(menuId, itemId, label, description, min, max, value, step, onChange, onSelect, opts)` | Add a slider item.                 |
-| `AddList(menuId, itemId, label, description, values, index, onChange, onSelect, opts)`           | Add a list selector item.          |
-| `AddSpacer(menuId, itemId, label, description, opts)`                                            | Add a non-interactive spacer.      |
-| `AddSubmenuButton(menuId, itemId, submenuId, label, description, onSelect, opts)`                | Add a button that opens a submenu. |
+### Server — declaring the tree
 
-### Mutation
+| Export | Description |
+| --- | --- |
+| `DefineMenuNamespace(spec)` | Required first. `{ ace, catalog?, order?, capabilities?, theme? }`. `ace` gates the whole namespace. |
+| `RegisterMenuDomains(domains)` | Rate/cooldown domains actions may be assigned to. |
+| `RegisterMenu(menu, definition)` | One page plus its authority. |
+| `UnregisterMenu(menuId)` | Remove a page. |
+| `RegisterMenuAuthority(spec)` / `UnregisterMenuAuthority()` | Answer for rows this resource does not own. |
+| `OnMenuSnapshot(hook)` | Adjust a player's tree as it is built for them. |
+| `RefreshMenus()` | Re-push every open menu. |
 
-| Export                                  | Description                                                                 |
-| --------------------------------------- | --------------------------------------------------------------------------- |
-| `UpdateMenu(menuId, changes)`           | Merge top-level menu fields (title, subtitle, banner, position, size, etc). |
-| `SetMenuTitle(menuId, title)`           | Update the menu title.                                                      |
-| `SetMenuSubtitle(menuId, subtitle)`     | Update the menu subtitle.                                                   |
-| `SetMenuBanner(menuId, banner)`         | Update the menu banner image.                                               |
-| `SetMenuLayout(menuId, position, size)` | Update position and size.                                                   |
-| `RefreshMenu(menuId)`                   | Push pending item changes to the UI. Call after batched `Add*` calls.       |
+`definition` is `{ ace, actions = { [itemId] = { ace, run?, clientAction?, cooldown?, fixedValue?, domain? } }, theme?, rootVisible? }`.
+`rootVisible = false` omits the automatic shared-root link without changing direct access or
+permissions.
 
-### CreateMenu Options
+### Server — changing what is already registered
 
-| Key             | Type               | Description                                                 |
-| --------------- | ------------------ | ----------------------------------------------------------- |
-| `position`      | `string`           | `"top-left"`, `"top-center"`, `"bottom-right"`, etc.        |
-| `size`          | `string`           | `"sm"`, `"md"`, or `"lg"`                                   |
-| `banner`        | `string\|function` | URL displayed above the title.                              |
-| `blockInput`    | `boolean`          | Block player movement and camera while open.                |
-| `inheritLayout` | `boolean`          | Inherit position/size from parent when opened as a submenu. |
-| `theme`         | `string`           | Id of a registered tLib theme.                              |
-| `itemHeight`    | `number`           | Fixed row height in pixels (default: `40`).                 |
+| Export | Description |
+| --- | --- |
+| `PatchMenuItem(menuId, itemId, changes)` | Patch one row. |
+| `PatchMenuAction(itemId, changes)` | Patch one action; finds the page itself. |
+| `SetMenuLinks(menuId, links)` | Replace dynamic submenu rows on a page you own. `{}` removes them. |
+| `SetMenuItemVisible(itemId, visible)` | Show or hide a row. |
+| `SetPlayerMenuOptions(source, itemId, options)` | One player's own choices for a selector. |
+| `SetMenuNamespaceTheme(theme)` / `SetMenuTheme(menuId, theme)` | `nil` clears. |
 
-### Example
+### Client — behaviour
+
+| Export | Description |
+| --- | --- |
+| `RegisterMenuActions(handlers)` | `{ [name] = function(value, context) end }`, installed as one table — all of it or none. |
+| `RegisterMenuCatalogProvider(provider)` | Build this resource's catalog once, off a function that may yield. |
+| `RegisterMenuHooks(spec)` | `{ snapshot, enter, leave, page, selection, close }`. `enter` may refuse a navigation. |
+| `RegisterMenuPresenter(spec)` / `UnregisterMenuPresenter()` | Fill rows in as a page is presented. |
+| `RegisterMenuStrings(dictionaries)` | Translations for this resource's rows. |
+| `ConfigureMenuInterface(spec)` | The root page. One screen, so the last caller wins. |
+| `SetMenuEffect(name, enabled, definition)` | A handler that keeps running after the row was activated, re-checked against the player's grants. |
+| `PublishMenuItem(name, changes)` | Patch a row from the client. |
+| `SetMenuItemState(name, value)` / `GetMenuItemState(name)` | Read and write a row's value. |
+| `ExecuteMenuAction(name, value, context)` | Run an action as if the row was activated. |
+| `OnMenuActionsCleanup(fn)` / `OnMenuActionsPersist(fn)` | Resource-stop hooks. |
+
+### Client — the screen
+
+Unscoped: the screen belongs to the player, not to a resource.
+
+| Export | Description |
+| --- | --- |
+| `OpenMenu(menuId?)` | Re-checks the page against a fresh permission-filtered snapshot. Refuses while a menu is already up. |
+| `CloseMenu()` | The same teardown the close key runs. Does not toggle — closing when nothing is open answers `false, 'Menu is not open'`. |
+| `IsMenuVisible()`, `GetMenuStackIds()` | Current state. |
+| `NavigateMenu(menuId)`, `InvalidateMenuContext()` | Move within the open tree. |
+| `BindMenuKey(menuId)` | Claim a key-binding slot for a page; returns the command it runs under. |
+| `SetMenuLocale(tag)` / `GetMenuLocale()` | Row translation locale. |
+| `SetMenuAnchor(anchor)`, `SetMenuPalettes(value)` | Placement and colour presentation. |
+| `PromptMenuText(title, initial, maximum, context)` | The game's own onscreen keyboard. Only from inside an action handler, whose `context` it needs. |
+
+### A page
 
 ```lua
-local menuId = exports['tLib']:CreateMenu('demo', 'Demo Menu', 'Pick an option', nil, nil, {
-    position = 'top-left',
-    size = 'md',
-})
-
-exports['tLib']:AddButton(menuId, 'greet', 'Say Hello', 'Prints a greeting', function()
-    print('Hello!')
-end)
-
-exports['tLib']:AddCheckbox(menuId, 'toggle', 'Toggle Option', 'On or off', false, function(checked)
-    print('Toggled:', checked)
-end)
-
-exports['tLib']:AddSlider(menuId, 'vol', 'Volume', 'Adjust volume', 0, 100, 50, 1, function(val)
-    print('Volume:', val)
-end)
-
-exports['tLib']:RefreshMenu(menuId)
-exports['tLib']:OpenMenu(menuId)
+{ id = 'myres:tools', title = 'Tools', subtitle = ..., description = ..., parent = ..., items = { ... } }
 ```
+
+### A row
+
+`kind` is one of `action`, `toggle`, `select`, `slider`, `submenu`, `status`.
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `id` | `string` | `owner:name`, and permanent: it is what the server authorizes and what state is stored under. |
+| `label` / `description` | `string` | What the row says, and the line under the panel. |
+| `value` | `boolean\|string\|number` | A toggle's state, a slider's position. |
+| `options` / `index` | `table` / `number` | A selector's choices and which one is current. |
+| `min` / `max` / `step` | `number` | A slider's bounds. |
+| `menu` | `string` | A submenu row's destination page. |
+| `confirm` | `string` | Ask this before the row runs. |
+| `icon` / `rightIcon` / `rightLabel` | `string` | Row decoration. |
 
 ---
 
 ## Dialog System
 
-Modal form dialogs with multiple field types. Results are delivered via events.
+**Client.** Modal form dialogs with multiple field types. Results are delivered via local
+events and via optional inline callbacks — the two are additive, not alternatives.
 
-### Exports
+| Export | Description |
+| --- | --- |
+| `ShowDialog(id, opts)` | Open a dialog. Returns the resolved dialog `id`, or `nil, reason`. |
+| `CloseDialog(id)` | Close an open dialog (fires the cancelled event). |
+| `UpdateDialogField(id, fieldId, changes)` | Patch one field of a live dialog. |
+| `UpdateDialogFields(id, changes)` | Patch several fields at once. |
 
-| Export                 | Description                                       |
-| ---------------------- | ------------------------------------------------- |
-| `ShowDialog(id, opts)` | Open a dialog. Returns the resolved dialog `id`.  |
-| `CloseDialog(id)`      | Close an open dialog (fires the cancelled event). |
+### ShowDialog options
 
-### ShowDialog Options
+| Key | Type | Description |
+| --- | --- | --- |
+| `title` | `string` | Dialog heading. |
+| `description` | `string` | Optional subheading. |
+| `submitLabel` | `string` | Submit button label (default `"Submit"`). |
+| `cancelLabel` | `string` | Cancel button label (default `"Cancel"`). |
+| `size` | `string` | `"sm"`, `"md"` or `"lg"` (default `"md"`). |
+| `theme` | `string` | Id of a registered tLib theme. |
+| `blur` | `boolean` | Blur the scene behind the dialog. |
+| `fields` | `table[]` | Array of field definitions. |
 
-| Key           | Type      | Description                                 |
-| ------------- | --------- | ------------------------------------------- |
-| `title`       | `string`  | Dialog heading.                             |
-| `description` | `string`  | Optional subheading.                        |
-| `submitLabel` | `string`  | Submit button label (default `"Submit"`).   |
-| `cancelLabel` | `string`  | Cancel button label (default `"Cancel"`).   |
-| `size`        | `string`  | `"sm"`, `"md"`, or `"lg"` (default `"md"`). |
-| `theme`       | `string`  | Id of a registered tLib theme.              |
-| `fields`      | `table[]` | Array of field definitions.                 |
+### Field types
 
-### Field Types
-
-| Type                                     | Extra Keys                                                      |
-| ---------------------------------------- | --------------------------------------------------------------- |
-| `text`, `number`, `password`, `textarea` | `placeholder`, `defaultValue`, `min`/`max` (number only)        |
-| `select`, `radio`                        | `options` (`{ value, label }[]`), `placeholder`, `defaultValue` |
-| `slider`                                 | `min`, `max`, `step`, `defaultValue`                            |
-| `checkbox`                               | `defaultValue` (boolean)                                        |
+| Type | Extra keys |
+| --- | --- |
+| `text`, `number`, `password`, `textarea` | `placeholder`, `defaultValue`, `min`/`max` (number only) |
+| `select`, `radio` | `options` (`{ value, label }[]`), `placeholder`, `defaultValue` |
+| `slider` | `min`, `max`, `step`, `defaultValue` |
+| `checkbox` | `defaultValue` (boolean) |
 
 All fields share: `id` (required), `type`, `label`, `description`, `required`, `disabled`.
 
 ### Events
 
 - `tLib:dialog:opened` — `(dialogId)`
-- `tLib:dialog:submitted` — `(dialogId, values)` — `values` is a table keyed by field `id`.
+- `tLib:dialog:submitted` — `(dialogId, values)`, `values` keyed by field `id`
 - `tLib:dialog:cancelled` — `(dialogId)`
-
-### Example
 
 ```lua
 local dialogId = exports['tLib']:ShowDialog('my_dialog', {
@@ -152,43 +176,41 @@ end)
 
 ## Toast / Notification System
 
-Lightweight toast notifications that stack in the corner of the screen.
+**Client.** Non-interactable notifications that stack in a corner of the screen.
 
-### Exports
+| Export | Description |
+| --- | --- |
+| `ShowToast(id, toastType, title, description, duration, theme)` | Show a toast. Returns the resolved `id`, or `nil, reason` at capacity. |
+| `UpdateToast(id, changes)` | Merge changes into a live toast in place. |
+| `DismissToast(id)` | Dismiss a single toast before it expires. |
+| `DismissAll()` | Dismiss the calling resource's visible toasts. |
 
-| Export                                                          | Description                              |
-| --------------------------------------------------------------- | ---------------------------------------- |
-| `ShowToast(id, toastType, title, description, duration, theme)` | Show a toast. Returns the resolved `id`. |
-| `UpdateToast(id, changes)`                                      | Update a live toast in place.            |
-| `DismissToast(id)`                                              | Dismiss a single toast.                  |
-| `DismissAll()`                                                  | Dismiss all visible toasts.              |
+IDs are local to the producing resource: updates and dismissals cannot alter another
+producer's notifications, and stopping a producer removes its persistent cards. A type change
+or `duration = 0` restarts the type default; text- or theme-only updates keep the existing
+deadline. Limits are 32 active per producer and 256 total.
 
-### Toast Types
+### Types and default durations
 
-| Type      | Default Duration                        |
-| --------- | --------------------------------------- |
-| `success` | 4000 ms                                 |
-| `error`   | 6000 ms                                 |
-| `warning` | 5000 ms                                 |
-| `info`    | 4000 ms                                 |
-| `loading` | Persistent (until dismissed or updated) |
+| Type | Duration |
+| --- | --- |
+| `success` | 4000 ms |
+| `error` | 6000 ms |
+| `warning` | 5000 ms |
+| `info` | 4000 ms |
+| `loading` | Persistent until dismissed or updated |
 
 ### Events
 
-- `tLib:toast:shown` — `(id, toastType, title)`
-- `tLib:toast:updated` — `(id, patch)`
-- `tLib:toast:dismissed` — `(id)`
-- `tLib:toast:dismissedAll`
-
-### Example
+- `tLib:toast:shown` — `(id, toastType, title, owner)`
+- `tLib:toast:updated` — `(id, patch, owner)`
+- `tLib:toast:dismissed` — `(id, owner)`
+- `tLib:toast:dismissedAll` — `(owner)`
 
 ```lua
--- Simple notification
 exports['tLib']:ShowToast(nil, 'success', 'Saved', 'Your settings have been saved.')
 
--- Loading toast that resolves
 local toastId = exports['tLib']:ShowToast(nil, 'loading', 'Saving...', 'Please wait.')
--- Later...
 exports['tLib']:UpdateToast(toastId, { type = 'success', title = 'Done', description = 'Save complete.' })
 ```
 
@@ -196,28 +218,27 @@ exports['tLib']:UpdateToast(toastId, { type = 'success', title = 'Done', descrip
 
 ## Theme System
 
-Register and apply CSS variable-based themes, scoped globally or per-component.
+**Client.** CSS variable–based themes, applied globally or scoped to one dialog, toast or
+menu. One theme id themes all three surfaces.
 
-### Exports
+| Export | Description |
+| --- | --- |
+| `AddTheme(id, opts)` | Register a theme, or replace one with the same id. Returns `true` on success. |
+| `RemoveTheme(id)` | Unregister a theme. Returns `true` if it existed. |
+| `SetTheme(id)` | Apply a theme globally. Pass `""` to clear. |
+| `GetTheme(id)` | A copy of one theme definition, or `nil`. |
+| `GetThemes()` | A copy of every registered theme, keyed by id. |
 
-| Export               | Description                                       |
-| -------------------- | ------------------------------------------------- |
-| `AddTheme(id, opts)` | Register a new theme. Returns `true` on success.  |
-| `RemoveTheme(id)`    | Unregister a theme. Returns `true` if it existed. |
-| `SetTheme(id)`       | Apply a theme globally. Pass `""` to clear.       |
-| `GetTheme(id)`       | Returns a copy of a theme definition, or `nil`.   |
-| `GetThemes()`        | Returns all registered themes keyed by id.        |
+### AddTheme options
 
-### AddTheme Options
-
-| Key           | Type     | Description                                                            |
-| ------------- | -------- | ---------------------------------------------------------------------- |
-| `name`        | `string` | Human-readable display name.                                           |
-| `description` | `string` | Optional description.                                                  |
-| `cssVars`     | `table`  | CSS variable name → value map. Keys must not include the leading `--`. |
-| `extends`     | `string` | Id of another theme to inherit from.                                   |
-| `font`        | `string` | Font-family string (sets `--font-sans`).                               |
-| `fontSize`    | `string` | Base font-size percentage, e.g. `"87.5%"`.                             |
+| Key | Type | Description |
+| --- | --- | --- |
+| `name` | `string` | Human-readable display name. |
+| `description` | `string` | Optional description. |
+| `cssVars` | `table` | CSS variable name → value. Keys must **not** include the leading `--`. |
+| `extends` | `string` | Id of another theme to inherit from; these vars overlay it. |
+| `font` | `string` | Font-family string (sets `--font-sans`). |
+| `fontSize` | `string` | Base font-size percentage, e.g. `"87.5%"`. |
 
 ### Events
 
@@ -227,74 +248,165 @@ Register and apply CSS variable-based themes, scoped globally or per-component.
 
 ---
 
+## HUD Layout
+
+**Client.** Registers a resource's on-screen element with the shared HUD editor, so the
+player can move, scale and hide it alongside every other resource's HUD.
+
+| Export | Description |
+| --- | --- |
+| `RegisterHudComponent(id, options, fn)` | Register a draggable component. `fn(layout)` is called whenever its layout changes. |
+| `UnregisterHudComponent(id)` | Remove it again. |
+| `GetHudLayout(id)` | The component's current layout, or `nil`. |
+| `OpenHudEditor(options)` | Open the editor for this resource. `{ demo = true }` adds a sample component. |
+| `CloseHudEditor()` | Close it, if this resource opened it. |
+| `GetHudLayoutCapabilities()` | Feature flags for consumers that support several tLib versions. |
+
+`options` is `{ label, width, height, canHide?, canScale?, minScale?, maxScale?, defaults = { x, y, scale, visible, anchor } }`.
+Layouts persist per server endpoint; without one they are session-only and tLib says so at
+startup.
+
+---
+
+## Marketplace
+
+**Client and server.** The in-game panel for browsing and installing content a resource
+publishes.
+
+| Export | Side | Description |
+| --- | --- | --- |
+| `RegisterMarketplaceType(kind, opts)` | Server | Declare a content type this resource provides. |
+| `OpenMarketplace(opts)` | Client | Open the panel. `{ type = 'ui-radio' }` filters it on open. |
+| `CloseMarketplace()` | Client | Close it. |
+
+---
+
 ## Logger
 
-Structured console logger with level filtering. Available on both client and server.
+**Client and server.** Structured console logger with level filtering.
 
-| Export                | Description                                                          |
-| --------------------- | -------------------------------------------------------------------- |
-| `Log(loggerId, args)` | Format and filter a log line. Returns the formatted string or `nil`. |
-| `SetLogLevel(level)`  | Set the global minimum log level (`1`–`4`).                          |
+| Export | Description |
+| --- | --- |
+| `CreateLogger(loggerId, printFn, opts)` | Returns a log function pinned to a source name. `opts.minLevel` overrides the global level for that logger alone. |
+| `Log(loggerId, args)` | Format and filter one line. Returns the formatted string, or `nil` when filtered or empty. |
+| `SetLogLevel(level)` | Set the global minimum level. |
 
-Levels: `1` = DEBUG, `2` = INFO, `3` = WARN, `4` = ERROR
+Levels: `1` DEBUG, `2` INFO, `3` WARN, `4` ERROR. A trailing number in the arguments is the
+level; everything else is `tostring`'d and joined with spaces.
 
 ```lua
-local log = function(msg, level)
-    local line = exports['tLib']:Log('myresource', { msg, level or 2 })
-    if line then print(line) end
-end
+local log = exports['tLib']:CreateLogger('myresource', print)
+log('Server started')           -- INFO
+log('Debug details', 1)         -- DEBUG
+log('Something went wrong', 4)  -- ERROR
+```
 
-log('Server started')          -- INFO
-log('Debug details', 1)        -- DEBUG
-log('Something went wrong', 4) -- ERROR
+`Log` returns the line and leaves the printing to the caller, for resources that route their
+output somewhere other than the console:
+
+```lua
+local line = exports['tLib']:Log('myresource', { 'Something went wrong', 4 })
+if line then print(line) end
 ```
 
 ---
 
 ## HTTP Helper
 
-Non-blocking HTTP/HTTPS client.
+**Server.** Non-blocking requests through FiveM's native `PerformHttpRequest`. Separate from
+tLib's public HTTP routing hub, which is documented in the README.
 
-| Export                  | Description           |
-| ----------------------- | --------------------- |
-| `Fetch(opts, callback)` | Make an HTTP request. |
+| Export | Description |
+| --- | --- |
+| `Fetch(opts, callback)` | Make an HTTP or HTTPS request. |
 
-### Fetch Options
+### Fetch options
 
-| Key       | Type      | Description                               |
-| --------- | --------- | ----------------------------------------- |
-| `url`     | `string`  | Full URL including scheme. Required.      |
-| `method`  | `string`  | HTTP method (default `"GET"`).            |
-| `headers` | `table`   | Request headers.                          |
-| `body`    | `string`  | Request body.                             |
-| `timeout` | `number`  | Timeout in seconds (default `10`).        |
-| `verify`  | `boolean` | Verify TLS certificate (default `false`). |
+| Key | Type | Description |
+| --- | --- | --- |
+| `url` | `string` | Required. Full URL including scheme. |
+| `method` | `string` | HTTP method (default `"GET"`). |
+| `headers` | `table` | Request headers as a key/value table. |
+| `body` | `string` | Request body. |
 
-Callback: `function(err, statusCode, body)` — on success `err` is `nil`.
+Redirects are followed. There are no timeout or TLS-verification options: the native's
+behaviour is used as-is.
+
+**Callback:** `function(statusCode, body, headers, errorData)` — the native's response
+arguments, forwarded unchanged. An HTTP error status is still a delivered response, so check
+the status rather than assuming success.
 
 ```lua
-exports['tLib']:Fetch({
-    url = 'https://httpbin.org/get',
-    method = 'GET',
-}, function(err, status, body)
-    if err then
-        print('Error:', err)
-    else
-        print('Status:', status, 'Body:', body)
-    end
-end)
+exports['tLib']:Fetch({ url = 'https://example.com/api', method = 'GET' },
+    function(status, body, headers, err)
+        if status ~= 200 then
+            print('Request failed:', status, err)
+            return
+        end
+        print('Body:', body)
+    end)
 ```
-
-<Callout type="info">HTTPS requires LuaSec. HTTP/2 is not supported.</Callout>
 
 ---
 
-## Permission System
+## Permissions
 
-Admin permission caching with level-based access.
+**Client and server.** Admin levels are `0` none, `1` admin (`tlib.admin`), `2` superadmin
+(`tlib.superadmin`).
 
-| Export                     | Description                                                          |
-| -------------------------- | -------------------------------------------------------------------- |
-| `IsAdmin()`                | Returns `true` if the player is an admin.                            |
-| `GetPermissionLevel()`     | Returns permission level: `0` = none, `1` = admin, `2` = superadmin. |
-| `RefreshAdminPermission()` | Refresh the cached admin permission.                                 |
+| Export | Side | Description |
+| --- | --- | --- |
+| `IsAdmin()` | Client | `true` if the local player is at least admin. |
+| `GetPermissionLevel()` | Client | The local player's cached level. |
+| `RefreshAdminPermission()` | Client | Re-ask the server. |
+| `IsPlayerAdmin(playerId)` | Server | `true` if that player is at least admin. |
+| `GetPlayerLevel(playerId)` | Server | That player's numeric level. |
+| `HasPermission(source, key)` | Server | Check one arbitrary permission key. |
+| `RegisterAdminEvent(eventName, handler)` | Server | Register a net event that only fires for admins. Denied attempts are logged. |
+| `RegisterPermissionResolver(fn)` | Server | Replace ACE checks with a framework's own permission system. |
+
+---
+
+## Local inference
+
+**Server.** For resources that ship their own model runtime. Everything crosses as a JSON
+string, and an empty string is the universal "no".
+
+| Export | Description |
+| --- | --- |
+| `InferenceAdvertise(json)` | Register an engine you started: `{ capability, workload, url, model }`. Returns a handle. The URL must be on `127.0.0.1`. |
+| `InferenceLookup(capability, workload)` | An engine another resource already has up for the same weights, or `''`. Never returns your own. |
+| `InferenceWithdraw(handle)` | Drop one of your own advertisements. A resource's entries are dropped for it when it stops. |
+| `InferenceList()` | Everything registered, for diagnostics. |
+| `InferenceServe(json)` | Start a long-lived process: `{ key, binary, args, cwd, env }`. Returns `{ pid }` or `{ error }`. Starting the same key twice returns the first pid. |
+| `InferenceOutput(key, since)` | `{ lines, next, alive, code }` — what that process has printed since your cursor. |
+| `InferenceUnserve(key)` | Stop it. |
+| `InferenceRun(json)` | A one-shot process, with an optional `stdin` string. Returns `{ job }`. |
+| `InferenceJob(id)` | `{ state, code, error }`. Reading a finished job forgets it. |
+
+The spawning exports exist so one line covers a box running several resources that ship
+inference:
+
+```cfg
+add_unsafe_child_process_permission tLib
+```
+
+`binary` and `cwd` are relative to **your** resource, and a path that resolves — symlinks
+included — outside it is refused. tLib holding the permission does not make it a way to run
+arbitrary programs. Processes are killed when the resource that asked for them stops.
+
+---
+
+## Utilities
+
+| Export | Side | Description |
+| --- | --- | --- |
+| `GenerateId()` | Both | A unique id string, the same generator tLib uses for dialogs and toasts. |
+| `Platform()` | Client | tLib's platform adapter, as a table of callable references. |
+| `CreateDiscovery(opts)` | Server | Scan resources for tagged config files, load and save them, and pick up resources that start late. |
+| `CreateServerSettings(opts)` | Server | Admin-configurable settings for one resource, persisted to a JSON file inside it. |
+| `CommunityConfigsImport(...)` / `CommunityConfigsUpload(...)` | Server | Proxy for the community configs API, so a consumer neither repeats the HTTP boilerplate nor sees the server hash. |
+
+`CreateDiscovery` must be given `resourceName = GetCurrentResourceName()` when it is called at
+module init time: `GetInvokingResource()` returns `nil` during top-level script execution, and
+without the name the file I/O targets tLib instead of the caller.

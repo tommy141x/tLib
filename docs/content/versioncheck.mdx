@@ -1,0 +1,91 @@
+---
+title: "Version Check"
+description: "Startup version checks, changelogs, banners and resource status lines."
+order: 5
+group: "tLib"
+---
+
+Consumers import `@tLib/imports.lua` and call `tlib.versioncheck` on the server.
+Declare `versioncheck` in `tlib_modules` to load it before startup status events.
+
+```lua
+local current = GetResourceMetadata(GetCurrentResourceName(), 'version', 0)
+tlib.versioncheck({
+    name = 'MyResource',
+    current = current,
+    fetch = tlib.versioncheck.github('owner/repository'),
+    info = {
+        { key = 'Status', event = 'myresource:startupStatus', required = true },
+    },
+})
+```
+
+Providers return `{ version, changelog, url }`, `nil` on failure, or
+`{ status = 'Update check not run' }` for a deliberately unavailable check.
+Unavailable checks must not return the installed version and claim it is current.
+`github(nil)` makes no request and reports that the repository is not configured.
+
+`tlib.versioncheck.studios(product, current)` uses the TIMMYG Studios product
+changelog API, with an eight-second timeout. tAFK and tELS use this provider.
+tRadio retains its cached JS provider because it also feeds its panel API, and
+passes the result to the same Lua display through `radio:vcInfo:version`.
+tLib checks `tommy141x/tLib` on GitHub. tDB's GitHub repository is intentionally
+unset in `utils/version.lua` until publication; PocketBase binary updates are separate.
+
+## Branding
+
+Generated ASCII art, custom `banner` art, and `versioncheck.lean()` are available
+only when the **calling resource's manifest** contains an author entry equal to
+`TIMMYG Studios` (case-insensitive, surrounding whitespace ignored). Both repeated
+`author` metadata and `authors` lists are recognized. For example:
+
+```lua
+author 'Another contributor'
+author 'TIMMYG Studios'
+```
+
+All five studio resources declare the studio explicitly. The caller's folder name,
+`opts.name`, and `opts.author` do not grant banner eligibility. Other consumers still
+get a plain-name status box with version, diagnostics and update links. This is a
+branding convention, not proof of authenticity; manifests are editable.
+
+### One rule, two callers
+
+The rule lives in `shared/sh_branding.lua` as `StudioBranding.isStudioResource(resource)`
+and is deliberately dependency-free, so both callers run that same file rather than a
+copy of it:
+
+- **The banner**, from `shared/imports/versioncheck/server.lua`, which runs in the *consumer's*
+  VM and pulls the file in with `LoadResourceFile` — the same mechanism
+  `shared/imports/menu/shared.lua` uses for `shared/lib/menu/schema.lua`. It reads from disk, so it
+  does not depend on tLib having started.
+- **The menu registry's limit exemption**, through `Platform.isStudioResource` (a thin
+  wrapper in `shared/lib/adapter/lifecycle.lua`), which exempts a studio resource from the
+  per-owner registration *counts* in `server/lib/menu/registry.lua`. Those counts are courtesy
+  guardrails against wire cost; the real ceiling is `snapshotTransport` in
+  `shared/lib/menu/schema.lua`.
+
+Because it is branding policy and not an authenticity boundary, nothing downstream may
+use it to decide who is *allowed* to do something — that is what ACEs are for. The
+exemption grants room, never authority; `tests/lua/registry-limits.lua` pins that
+distinction by asserting schema validation, duplicate/cross-owner refusal and every ACE
+check still behave identically for a trusted owner.
+
+If the file is listed in neither `shared_scripts` nor `files` in `fxmanifest.lua`, one
+of the two callers silently loses the rule. Both entries are required.
+
+## Regression tests
+
+From tLib, with the five sibling resources checked out:
+
+```sh
+bunx --bun --package fengari-node-cli fengari scripts/run-lua-suite.lua tests/lua/versioncheck.lua
+# The other caller of the same branding rule:
+bunx --bun --package fengari-node-cli fengari scripts/run-lua-suite.lua tests/lua/registry-limits.lua
+bun test server/versioncheck-provider.test.ts
+# Or include them in the complete regression gate:
+bun run check:regression
+```
+
+This executes the actual Lua checker in a Lua VM with mocked FiveM metadata,
+events, HTTP callbacks and scheduling; no live FiveM server or credentials are used.

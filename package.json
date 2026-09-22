@@ -1,57 +1,33 @@
 {
   "name": "tlib",
-  "version": "1.0.0",
-  "license": "UNLICENSED",
+  "version": "0.6.0",
+  "license": "MIT",
   "private": true,
+  "description": "Shared UI and utility library for FiveM resources",
   "scripts": {
-    "build": "cd ui/src && bun run build",
-    "dev": "cd ui/src && bunx vp dev",
+    "build": "cd client/web && bun run build",
+    "dev": "cd client/web && bunx vp dev",
     "prod": "bun run scripts/prod.ts",
-    "setup": "bun install && cd ui/src && bun install",
+    "setup": "bun install && cd client/web && bun install",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
     "format": "biome format --write .",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "test": "bun test server/"
+    "test": "bun test",
+    "test:lua": "bun run scripts/test-lua.ts",
+    "typecheck": "bunx tsc --noEmit -p client/web/tsconfig.json",
+    "check:imports": "bun run scripts/check-relative-imports.ts",
+    "check:regression": "bun run typecheck && bun run check:imports && bun run test && bun run test:lua",
+    "verify": "bun run lint && bun run check:regression && bun run build"
   },
   "dependencies": {
     "ws": "^8.20.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.15",
+    "@biomejs/biome": "^2.5.14",
     "@types/adm-zip": "^0.5.8",
     "@types/ws": "^8.18.1",
-    "adm-zip": "^0.5.17"
-  },
-  "client": [
-    "lua/adapter/init.lua",
-    "lua/utils/logger.lua",
-    "lua/adapter/core.lua",
-    "lua/coords/shared.lua",
-    "lua/adapter/player.lua",
-    "lua/theme/exports.lua",
-    "lua/theme/client.lua",
-    "lua/menu/state.lua",
-    "lua/menu/actions.lua",
-    "lua/menu/navigation.lua",
-    "lua/menu/exports.lua",
-    "lua/menu/client.lua",
-    "lua/toast/exports.lua",
-    "lua/toast/client.lua",
-    "lua/dialog/state.lua",
-    "lua/dialog/exports.lua",
-    "lua/dialog/client.lua",
-    "client.lua"
-  ],
-  "server": [
-    "lua/adapter/init.lua",
-    "lua/utils/logger.lua",
-    "lua/adapter/core.lua",
-    "lua/coords/shared.lua",
-    "lua/adapter/helix/http.lua",
-    "lua/adapter/utils.lua",
-    "lua/discovery/server.lua",
-    "server.lua"
-  ]
+    "adm-zip": "^0.6.1"
+  }
 }

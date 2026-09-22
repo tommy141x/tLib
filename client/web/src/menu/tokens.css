@@ -1,0 +1,93 @@
+/* Two groups of tokens, not interchangeable:
+
+   1. The public theme tokens (--panel, --text, --selected, …) a server owner
+      sets. These are complete CSS colours, not the shadcn HSL channel triples
+      the dialog and toast are built on. Menu.tsx's theme effect bridges the two
+      directions; never wrap one of these in hsl().
+   2. The geometry of the DEFAULT skin. The vMenu replica's geometry is in
+      skins/vmenu.css and overrides this; nothing here is vMenu's.
+
+   Everything outside the geometry block applies to both skins. */
+.tlib-menu {
+  /* Aliases the interface face rather than naming one, so a theme `font`
+     override — written to both --font-sans and --font as inline styles on this
+     element — reaches the menu under either name. */
+  --font: var(--font-sans, "Hanken Grotesk", Inter, "Segoe UI", Arial, sans-serif);
+  /* Set to 0 for a zero-animation build. Needed because CEF reports
+     prefers-reduced-motion as no-preference whatever the host OS says. */
+  --motion: 1;
+  --accent: #eeeeee;
+  --text: #eeeeee;
+  --muted: #aaaaaa;
+  --panel: #171717;
+  --border: #343434;
+  --selected: #eeeeee;
+  --selected-ink: #111111;
+  /* Enough of the world to know it is there, not enough to read through. The
+     rows have no fill of their own, so this alpha is what a row sits on, and
+     88% left a bright daytime street legible straight through the list. */
+  --menu-panel-bg: color-mix(in srgb, var(--panel) 94%, transparent);
+  /* The three fills below are scrims — a wash over whatever is behind them —
+     rather than opaque mixes of --panel, because over a translucent panel an
+     opaque band is a hole in the transparency. Composited over the stock
+     --panel each is the exact colour the opaque mix it replaced produced, so
+     nothing moves on an opaque theme. */
+  --menu-inset: color-mix(in srgb, #000 18%, transparent);
+  /* The chrome bands — brand bar, heading, description, footer — against the row
+     body. A separate token from --menu-inset, which is a sunken well for a
+     control: two different jobs that happened to share one value, and sharing it
+     is what made four stacked bands read as one. vMenu restores the old value. */
+  --menu-chrome: color-mix(in srgb, #000 45%, transparent);
+  --menu-hover: color-mix(in srgb, var(--text) 8%, transparent);
+  --menu-control-border: color-mix(in srgb, var(--text) 32%, var(--panel));
+  --menu-danger: #ff8585;
+  /* The shared control radius, so a menu row's checkbox and a dialog's are the
+     same shape. */
+  --menu-radius: var(--radius-control, 0.5rem);
+
+  /* Default-skin geometry, sized against the shared surfaces rather than vMenu's
+     scaleform: --menu-width is the dialog's `md` width and --row-height is
+     --nui-control-h. Fixed pixels and no viewport scaling for the same reason
+     the dialog and toast are fixed — this is chrome beside the game, not a
+     scaleform the engine redraws against the backbuffer. The vMenu skin keeps
+     its own 1080p-calibrated numbers; fidelity is the point of that skin. */
+  --menu-width: 360px;
+  --row-height: 34px;
+  --heading-height: 38px;
+  /* A brand bar, not a brand band: one line at the dialog header's size, with
+     its 12px gutters. */
+  --brand-height: 46px;
+  --brand-font: 16px;
+  --brand-title-font: 16px;
+  --heading-font: 15px;
+  --row-font: 14px;
+  --safe-top: 3vh;
+  --safe-left: 1.5vw;
+
+  /* .tlib-nui-surface derives its --nui-* tokens from shadcn HSL channels, which
+     the menu cannot wear because its own --border and --muted are colours. The
+     same contract is restated from the menu's colours instead, so a shared
+     component class renders correctly inside a row and follows the menu's theme.
+
+     Being stylesheet rules, these lose to the inline styles applyScopedTheme
+     writes — which is what makes a theme authoritative, and what lets one theme
+     id style a menu, a dialog and a toast identically. */
+  --nui-surface: var(--panel);
+  --nui-inset: var(--menu-inset);
+  --nui-text: var(--text);
+  --nui-muted: var(--muted);
+  --nui-border: var(--border);
+  --nui-control-border: var(--menu-control-border);
+  --nui-hover: var(--menu-hover);
+  --nui-accent: var(--selected);
+  --nui-accent-text: var(--selected-ink);
+  --nui-danger: var(--menu-danger);
+  --nui-radius: var(--menu-radius);
+  --nui-radius-lg: var(--radius-surface, 0.875rem);
+  --nui-radius-sm: var(--radius-tight, 0.25rem);
+  /* Not --row-height: this is a free-standing control, and a row is a row.
+     Nothing reads it today; it exists so a shared class that does cannot fall
+     back to an undefined token. */
+  --nui-control-h: 34px;
+  --nui-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}

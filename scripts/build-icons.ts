@@ -1,5 +1,5 @@
 /**
- * Generate server/http/icons.json from the Lucide set.
+ * Generate server/lib/http/icons.json from the Lucide set.
  *
  * The hub renders an icon per registered app, chosen by name at runtime, so
  * tLib cannot know at build time which ones it needs — it ships the whole set.
@@ -15,8 +15,8 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-const SRC = "./ui/src/node_modules/@iconify/json/json/lucide.json";
-const OUT = "./server/http/icons.json";
+const SRC = "./client/web/node_modules/@iconify/json/json/lucide.json";
+const OUT = "./server/lib/http/icons.json";
 
 /** The attribute string every Lucide element repeats. Hoisted to the <svg>. */
 const PRESENTATION =

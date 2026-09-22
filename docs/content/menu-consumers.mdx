@@ -1,0 +1,160 @@
+---
+title: "Menu Consumers"
+description: "Building a standalone resource on the shared menu engine — ownership, lifecycle, host slots and placement."
+order: 4
+group: "tLib"
+---
+
+## Ownership
+
+- **tLib:** schema, rendering, navigation, authority, dispatch, state/effects and reusable adapters.
+- **Consumer:** feature behavior, menu declarations, configuration, commands and its own state.
+- **Optional host:** public slots, placement policy, allowlists and ordering. Hosting does not make it the engine.
+
+Do not call another consumer's private functions, inject its actions, or configure the shared
+screen from every plugin. ConfigureMenuInterface is shared player UI policy, not plugin branding.
+Use namespace/page themes for a consumer's visual identity.
+
+## Minimal standalone consumer
+
+Manifest:
+
+```lua
+fx_version 'cerulean'
+game 'gta5'
+dependency 'tLib'
+tlib_min_version '0.6'
+shared_script '@tLib/imports.lua'
+server_script 'server.lua'
+client_script 'client.lua'
+```
+
+Server:
+
+```lua
+local owner, menu = GetCurrentResourceName(), exports['tLib']
+local lifecycle = tlib.lifecycle
+assert(type(lifecycle) == 'table' and lifecycle.version == 1, 'Update tLib: lifecycle API v1 required')
+lifecycle.watch({ resource = 'tLib', install = function(ctx)
+    ctx.once('namespace', function()
+        return menu:DefineMenuNamespace({ ace = 'mytools.use' })
+    end)
+    ctx.once('page', function()
+        return menu:RegisterMenu({
+            id = owner .. ':tools', title = 'Tools', parent = 'main',
+            items = {{ id = owner .. ':hello', label = 'Hello', kind = 'action' }},
+        }, {
+            ace = 'mytools.use', rootVisible = true,
+            actions = { [owner .. ':hello'] = { ace = 'mytools.use', clientAction = 'hello' } },
+        })
+    end)
+end })
+```
+
+Client:
+
+```lua
+local owner, menu = GetCurrentResourceName(), exports['tLib']
+local lifecycle = tlib.lifecycle
+assert(type(lifecycle) == 'table' and lifecycle.version == 1, 'Update tLib: lifecycle API v1 required')
+local registration = lifecycle.watch({ resource = 'tLib', install = function(ctx)
+    ctx.once('actions', function()
+        return menu:RegisterMenuActions({ hello = function()
+            menu:ShowToast('hello', 'info', 'Tools', 'Hello!')
+        end })
+    end)
+end })
+RegisterCommand('mytools', function()
+    if not registration.ready() then return end
+    local ok, reason = menu:OpenMenu(owner .. ':tools')
+    if not ok then print(reason) end
+end, false)
+```
+
+The server still checks the namespace, page and action ACE. A command/keybinding opens a
+page; it is not a substitute for authorization. Grant `mytools.use` to the desired group.
+Decode data into locals before passing it as an export's last argument: multi-return Lua
+functions can accidentally fill an export's optional declaredOwner parameter.
+
+## Shared lifecycle adapter (API v1)
+
+`tlib.lifecycle.watch({resource, install, cleanup?, readyEvent?})` runs in the consumer VM,
+so its subscriptions survive a dependency restart. It returns:
+
+- `ready()` — registration completed for the current dependency generation.
+- `retry()` — request a new bounded attempt if not already busy/ready.
+- `invalidate()` — cancel pending work, clear step checkpoints, invoke cleanup.
+- `dispose()` — invalidate and release event subscriptions, idempotently.
+
+It watches the correct server/client resource events, waits a scheduler tick before
+registration, retries up to 300 times with 100ms waits, and reports the actual last error.
+There is no indefinite idle loop. `readyEvent`, when supplied, must carry the dependency's
+resource name as its first argument; unrelated events are ignored. No network event is registered.
+
+`install(ctx)` should throw on failure. `ctx.once(name, fn)` requires `fn` to return
+`true` (or `false, reason` to fail), and skips successful steps on later attempts in the
+same generation. Use one step per non-idempotent registration operation. On dependency
+stop, all steps reset. Duplicate resource-start/readiness events do not reinstall.
+`ctx.isActive()` lets yielding setup code check its lifetime.
+
+This is **not a transaction or automatic rollback of arbitrary side effects**. Successful
+registration steps remain until the dependency removes them or the owner stops. `cleanup`
+must be idempotent and restore consumer-owned native state; do not assume the stopped
+dependency's exports are available. An exhausted registration can retry on a later readiness
+event or explicit retry. Avoid native gameplay effects in registration; use authorized actions
+and SetMenuEffect for ongoing behavior and revocation cleanup.
+
+The import versions identify this source contract; the resource's baseline version 0.6 alone
+does not identify every local API addition. Deploy matching tLib source and imports. No UI
+build is required for these Lua APIs, but reload resources to run changed Lua files.
+
+## Optional host (API v1)
+
+Any server resource can expose navigation slots using `tlib.menuhost`:
+
+```lua
+local host = tlib.menuhost
+assert(type(host) == 'table' and host.version == 1, 'Update tLib: menu host API v1 required')
+host.install({
+    ['tools.extensions'] = {
+        menu = GetCurrentResourceName() .. ':tools',
+        enabled = true,
+        -- resources = { somePlugin = true },
+        -- order = { ['somePlugin:entry'] = 10 },
+    },
+})
+```
+
+Install once after declaring the host's pages. This exposes **host-scoped server exports**
+`RegisterPluginMenu({id, slot, menu, label, description?})` and `UnregisterPluginMenu(id)`.
+The adapter calls tLib's owner-only SetMenuLinks from the host VM. It never grants another
+resource authority to replace host actions. Readiness is `tlib:menu:hostReady(hostResource)`.
+
+A plugin can watch its configured host with the lifecycle adapter and call RegisterPluginMenu
+in a checkpointed step after registering its own target page. Same owner/ID replaces its
+existing link, so retrying is safe. Only the calling resource's namespace may be targeted.
+Host policy controls allowed callers and ordering; player permissions are independently
+checked by tLib. The host adapter composes slots sharing a page. Do not also write that
+page's dynamic link collection directly using SetMenuLinks.
+
+When the engine restarts, consumers must recreate their own pages and host links. Invalidate
+the host-link watcher when engine registrations are lost, then retry it after the page has
+registered. tCinematic's server/main.lua is the complete working example of this dependency
+relationship. A host adapter does not itself recreate the host's built-in features.
+
+## Placement is not permission ancestry
+
+`RegisterMenu(page, {ace, actions, rootVisible = false})` suppresses only the automatic
+shared-root link. It does not hide the page from authorized direct access, host links or
+search, and it does not change any permission. Omit the option or use true for a root entry.
+Keep an independently usable page parented to `main`; parenting it to a host page also
+makes that host's ancestor permissions mandatory, including for direct command access.
+
+## Verification and deployment
+
+- Pure Lua suites test schemas, ownership, exact rows, filtering and transport.
+- Consumer mocks test native state cleanup and lifecycle transitions, not visual correctness.
+- In-game checks must cover initial startup, dependency restarts, late host availability,
+  permission loss, direct access, root-hidden navigation and NUI focus.
+- Refresh resource discovery before authorized reload/start operations. Source edits alone
+  do not update running resources. Do not infer live success from mocked tests.

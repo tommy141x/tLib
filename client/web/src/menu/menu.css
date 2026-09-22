@@ -1,0 +1,920 @@
+@import url("./tokens.css");
+
+/* The DEFAULT skin, plus the parts both skins share. The vMenu replica is a set
+   of overrides in skins/vmenu.css, imported after this one from Menu.tsx; a rule
+   specific to that replica does not belong here. */
+
+:where(.tlib-menu) * {
+  box-sizing: border-box;
+}
+.tlib-menu {
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+:where(.tlib-menu) button,
+:where(.tlib-menu) input {
+  font: inherit;
+}
+:where(.tlib-menu) button {
+  cursor: pointer;
+  color: inherit;
+  border: 0;
+  background: none;
+  touch-action: manipulation;
+}
+:where(.tlib-menu) button:disabled {
+  cursor: not-allowed;
+}
+:where(.tlib-menu) button:focus-visible,
+:where(.tlib-menu) input:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -3px;
+}
+:where(.tlib-menu) .menu-panel {
+  color-scheme: dark;
+  position: absolute;
+  top: var(--safe-top);
+  left: var(--safe-left);
+  width: min(var(--menu-width), calc(100vw - 2 * var(--safe-left)));
+  max-height: calc(100vh - 2 * var(--safe-top));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  outline: none;
+  background: var(--menu-panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--menu-radius);
+  /* Light on the top edge, not a drop shadow: CEF composites no shadow, so the
+     `0 8px 24px` this used to carry was the panel's only separation cue and it
+     never painted. A brighter top border is the same idea — a surface catching
+     a light above it — in a property that renders. It is a border rather than a
+     positioned hairline because the panel scrolls, and an absolutely positioned
+     ::before would scroll away with the rows. */
+  border-top-color: color-mix(in srgb, var(--text) 20%, var(--border));
+}
+/* A brand bar rather than a brand band: one line on the same 12px gutter as
+   .menu-heading and the dialog header. The vMenu skin restores the centred
+   107px band. */
+:where(.tlib-menu) .menu-brand {
+  position: relative;
+  overflow: hidden;
+  height: var(--brand-height);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--menu-chrome);
+  border-bottom: 1px solid var(--border);
+  color: var(--brand-ink, inherit);
+}
+/* --brand-from/--brand-to are written onto the panel by App from a validated
+   #rrggbb accent, so with nothing configured — or a value the validator
+   rejected — these rules never match and the default header stands. */
+:where(.tlib-menu) .menu-panel.has-accent .menu-brand {
+  background: linear-gradient(110deg, var(--brand-from), var(--brand-to));
+}
+/* Behind the word and the close button, both positioned and so painting over it.
+   cover, not contain: this fills the header band the way the source sprite does,
+   and letterboxing would show the gradient through in two strips. */
+:where(.tlib-menu) .brand-banner {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Upright: the variable Hanken Grotesk face has no italic, and a synthesised
+   oblique looks visibly wrong at these sizes. */
+:where(.tlib-menu) .brand-word {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--brand-font);
+  font-weight: 600;
+}
+/* The close button sits 5px off the right edge and is 28px wide, so the word may
+   not come within 38px of it. Measured on the vMenu band, where the word is
+   centred: at 90% a real source subtitle ran 11.4px under the button. */
+:where(.tlib-menu) .brand-word.source-title {
+  max-width: calc(100% - 76px);
+  font-size: var(--brand-title-font);
+}
+:where(.tlib-menu) .close-button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--menu-radius);
+}
+:where(.tlib-menu) .close-button svg {
+  width: 20px;
+  height: 20px;
+}
+:where(.tlib-menu) .close-button:hover {
+  background: #0004;
+}
+:where(.tlib-menu) .menu-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--heading-height);
+  padding: 0 12px;
+  background: var(--menu-chrome);
+  border-bottom: 1px solid var(--border);
+}
+:where(.tlib-menu) .back-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  padding: 0;
+  margin-left: -6px;
+}
+:where(.tlib-menu) .back-button svg {
+  width: 20px;
+  height: 20px;
+}
+:where(.tlib-menu) h1 {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--heading-font);
+  font-weight: 500;
+  margin: 0;
+}
+:where(.tlib-menu) .item-count {
+  flex-shrink: 0;
+  font-size: var(--heading-font);
+  font-variant-numeric: tabular-nums;
+}
+:where(.tlib-menu) .search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+/* .tlib-nui-input's look restated against the menu's own tokens: the class
+   carries .tlib-nui-surface's HSL-derived values and this element lives in the
+   full-colour space. */
+:where(.tlib-menu) .search-wrap input {
+  min-width: 0;
+  width: 100%;
+  color: var(--text);
+  background: var(--menu-inset);
+  border: 1px solid var(--menu-control-border);
+  border-radius: var(--menu-radius);
+  padding: 0 10px;
+  font-size: 14px;
+  height: var(--nui-control-h);
+}
+:where(.tlib-menu) .search-wrap input::placeholder {
+  color: var(--muted);
+}
+:where(.tlib-menu) kbd {
+  display: inline-block;
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 17px;
+  min-width: 17px;
+  text-align: center;
+  color: var(--text);
+  background: var(--menu-inset);
+  border: 1px solid var(--menu-control-border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+/* A padded list rather than a ruled table, matching how a dialog's lists read.
+   The divider stays full width but transparent so a row is the same height with
+   and without it, and a skin that wants ruling back only colours it in. */
+:where(.tlib-menu) .menu-items {
+  padding: 4px;
+}
+:where(.tlib-menu) .menu-row {
+  position: relative;
+  height: var(--row-height);
+  display: flex;
+  align-items: stretch;
+  border-radius: var(--menu-radius);
+  border-bottom: 1px solid transparent;
+}
+/* The ruling the transparent divider above was always left open for. Both menus
+   this one is measured against separate every row this way; without it a list of
+   labels floats on the panel with nothing to tell one row from the next. Soft,
+   because at full --border strength a dark panel reads as a wireframe of
+   itself. The last row rules against the panel edge instead.
+
+   Drawn in --text rather than --border: a dark hairline needs the panel behind
+   it to stay dark, and this panel lets the world through, so over a bright
+   scene a dimmed --border lands on the same value the lifted panel does and the
+   ruling disappears. A light hairline is the lit-edge cue used everywhere else
+   here and it holds against anything. */
+:where(.tlib-menu[data-skin="default"]) .menu-row {
+  border-bottom-color: color-mix(in srgb, var(--text) 9%, transparent);
+}
+:where(.tlib-menu[data-skin="default"]) .menu-row:last-child {
+  border-bottom-color: transparent;
+}
+:where(.tlib-menu) .menu-row.is-active {
+  background: var(--selected);
+  color: var(--selected-ink);
+  border-bottom-color: transparent;
+}
+/* A bar at the row's leading edge, in the 4px gutter .menu-items already has, so
+   the selection reads as a position rather than a swipe across the label.
+   --accent rather than --selected-ink: with the stock theme the two are the same
+   white, so the rail merges into the slab and the selection simply runs to the
+   panel edge — which is what both reference menus do. Set an accent and the same
+   rule becomes menuv's coloured bar, with no second code path. */
+:where(.tlib-menu[data-skin="default"]) .menu-row.is-active::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: var(--menu-radius) 0 0 var(--menu-radius);
+  background: var(--accent);
+}
+:where(.tlib-menu) .menu-row.is-active button:focus-visible {
+  outline-color: currentColor;
+}
+:where(.tlib-menu) .row-main {
+  padding: 0 10px;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: var(--row-font);
+}
+/* The label claims the slack so space-between cannot centre it between an icon
+   and a right-hand mark. */
+:where(.tlib-menu) .row-label {
+  flex: 1;
+  min-width: 0;
+}
+/* The row renders three chevrons in both skins — the skin switch is a stylesheet
+   and the row must not know which skin it is in — and the default hides all but
+   the last. The vMenu skin shows all three, overlapped. */
+:where(.tlib-menu) .row-chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+:where(.tlib-menu) .row-chevron svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 3;
+}
+:where(.tlib-menu[data-skin="default"]) .row-chevron svg:not(:last-child) {
+  display: none;
+}
+:where(.tlib-menu) .action-mark {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 15px;
+}
+:where(.tlib-menu) .action-mark svg {
+  width: 14px;
+  height: 14px;
+}
+:where(.tlib-menu) .menu-row.is-disabled .row-main {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+:where(.tlib-menu) .menu-row.is-disabled.is-active .row-main {
+  color: color-mix(in srgb, var(--selected-ink) 65%, var(--selected));
+}
+/* 45%, the slider's share, not 57%: at 57% the value block outweighed the label
+   245.7px to 165.3px, truncating a 23-character label while its option kept room
+   for 36. padding-right 4 rather than 5 puts the chevron on the same 10px gutter
+   as .row-chevron, .toggle and .action-mark. */
+:where(.tlib-menu) .row-choice {
+  display: flex;
+  align-items: stretch;
+  max-width: 45%;
+  padding-right: 4px;
+}
+:where(.tlib-menu) .row-choice button {
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-size: 22px;
+}
+:where(.tlib-menu) .row-choice button svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.5;
+}
+:where(.tlib-menu) .row-choice .choice-value {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:where(.tlib-menu) .row-choice button:disabled {
+  opacity: 0.6;
+}
+:where(.tlib-menu) .row-slider {
+  width: 45%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 4px;
+}
+/* The slider is .tlib-nui-range from components/ui/nui.css. Only the readout is
+   restated: the shared one is muted grey, right beside a dialog label and wrong
+   on a selected row, where the row's own ink is what is legible. */
+:where(.tlib-menu) .row-slider .tlib-nui-slider-value {
+  color: inherit;
+  font-size: 13px;
+}
+:where(.tlib-menu) .toggle {
+  flex-shrink: 0;
+}
+:where(.tlib-menu) .description-panel {
+  margin-top: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  background: var(--menu-chrome);
+  border-top: 1px solid var(--border);
+}
+/* The two surfaces that are allowed to be more than one line, and therefore the
+   only two where a ~n~ from the wire should become an actual break. */
+:where(.tlib-menu) .description-panel p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+:where(.tlib-menu) .menu-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--menu-chrome);
+  color: var(--muted);
+  font-size: 12px;
+}
+:where(.tlib-menu) .menu-footer > span {
+  white-space: nowrap;
+}
+:where(.tlib-menu) .menu-footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  font-size: inherit;
+}
+:where(.tlib-menu) .menu-footer button svg {
+  width: 11px;
+  height: 11px;
+}
+:where(.tlib-menu) .menu-footer kbd {
+  margin-right: 3px;
+}
+:where(.tlib-menu) .notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  background: var(--menu-hover);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+:where(.tlib-menu) .notice svg {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+}
+:where(.tlib-menu) .notice-error {
+  background: color-mix(in srgb, var(--menu-danger) 12%, transparent);
+  color: var(--menu-danger);
+}
+:where(.tlib-menu) .empty-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 10px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+:where(.tlib-menu) .empty-state svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+/* The window indicator stays rendered in both skins: its aria-label is what
+   announces "showing 5-13 of 40", and display:none would take that with it. */
+:where(.tlib-menu) .scroll-cue {
+  height: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: var(--muted);
+}
+/* No negative margin here: vMenu's -2px overlaps the pair into one tight glyph,
+   which at this size collapses into a diamond. */
+:where(.tlib-menu) .scroll-cue svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 3;
+  margin: 0;
+}
+/* A confirmation owns the panel, so nothing behind it scrolls out from under the
+   shade. */
+:where(.tlib-menu) .menu-panel.is-blocked {
+  overflow: hidden;
+}
+/* Anchors: nine classes that rewrite the panel's insets and nothing else. All
+   measure off --safe-top/--safe-left rather than the viewport edge, and none
+   relaxes max-height, so a centred or bottom-hung panel keeps at least that
+   inset above it at every resolution.
+   Centring uses `translate` rather than a transform because .menu-panel's entry
+   animation owns `transform`: a centring transform would become the implicit
+   to-keyframe of tlibmenu-in-down and the panel would fly in from its uncentred
+   position. */
+:where(.tlib-menu) .menu-panel.align-top-left {
+  top: var(--safe-top);
+  left: var(--safe-left);
+  right: auto;
+  bottom: auto;
+}
+:where(.tlib-menu) .menu-panel.align-top-center {
+  top: var(--safe-top);
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  translate: -50% 0;
+}
+:where(.tlib-menu) .menu-panel.align-top-right {
+  top: var(--safe-top);
+  left: auto;
+  right: var(--safe-left);
+  bottom: auto;
+}
+:where(.tlib-menu) .menu-panel.align-middle-left {
+  top: 50%;
+  left: var(--safe-left);
+  right: auto;
+  bottom: auto;
+  translate: 0 -50%;
+}
+:where(.tlib-menu) .menu-panel.align-middle-center {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  translate: -50% -50%;
+}
+:where(.tlib-menu) .menu-panel.align-middle-right {
+  top: 50%;
+  left: auto;
+  right: var(--safe-left);
+  bottom: auto;
+  translate: 0 -50%;
+}
+:where(.tlib-menu) .menu-panel.align-bottom-left {
+  top: auto;
+  left: var(--safe-left);
+  right: auto;
+  bottom: var(--safe-top);
+}
+:where(.tlib-menu) .menu-panel.align-bottom-center {
+  top: auto;
+  left: 50%;
+  right: auto;
+  bottom: var(--safe-top);
+  translate: -50% 0;
+}
+:where(.tlib-menu) .menu-panel.align-bottom-right {
+  top: auto;
+  left: auto;
+  right: var(--safe-left);
+  bottom: var(--safe-top);
+}
+/* Hide, not close: the panel stays mounted with its box, scroll offset and
+   whatever the player had in progress. visibility rather than display because
+   display:none destroys and rebuilds the layout box — all nine rows — on every
+   pause-menu toggle, where this is a paint-only change. pointer-events because a
+   merely invisible panel would still take the preview cursor's clicks. */
+:where(.tlib-menu) .menu-panel.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* The one fill that stays fully opaque: it covers the menu to ask a question,
+   and a translucent prompt over a translucent panel over the world is three
+   layers of text to read through. */
+:where(.tlib-menu) .confirmation-shade {
+  position: absolute;
+  inset: 0;
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  z-index: 2;
+}
+:where(.tlib-menu) .confirmation {
+  width: 100%;
+}
+:where(.tlib-menu) .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+:where(.tlib-menu) .eyebrow svg {
+  width: 14px;
+  height: 14px;
+}
+:where(.tlib-menu) .confirmation h2 {
+  font-size: 21px;
+  margin: 12px 0;
+  font-weight: 500;
+}
+:where(.tlib-menu) .confirmation p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+  white-space: pre-line;
+}
+/* .tlib-nui-button restated against the menu's tokens. */
+:where(.tlib-menu) .dialog-cancel,
+:where(.tlib-menu) .dialog-confirm {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--nui-control-h);
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--menu-radius);
+  border: 1px solid var(--menu-control-border);
+}
+:where(.tlib-menu) .dialog-cancel svg,
+:where(.tlib-menu) .dialog-confirm svg {
+  width: 15px;
+  height: 15px;
+}
+:where(.tlib-menu) .dialog-cancel {
+  background: var(--menu-hover);
+  color: var(--text);
+}
+:where(.tlib-menu) .dialog-confirm {
+  background: var(--selected);
+  color: var(--selected-ink);
+  border-color: transparent;
+}
+:where(.tlib-menu) .status-dot,
+:where(.tlib-menu) .pending-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+:where(.tlib-menu) .pending-dot {
+  margin-left: auto;
+}
+:where(.tlib-menu) .preview-world {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 75% 25%, #31575b66 0%, transparent 50%),
+    linear-gradient(150deg, #151f28, #111a21 60%, #263639);
+  z-index: -1;
+}
+:where(.tlib-menu) .preview-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(#93b2b108 1px, transparent 1px),
+    linear-gradient(90deg, #93b2b108 1px, transparent 1px);
+  background-size: 70px 70px;
+  transform: perspective(600px) rotateX(45deg) scale(2);
+}
+:where(.tlib-menu) .preview-world > span {
+  position: absolute;
+  bottom: 34px;
+  right: 34px;
+  color: #a4b5b8;
+  font-size: 9px;
+  letter-spacing: 3px;
+}
+:where(.tlib-menu) .preview-badge {
+  position: fixed;
+  top: 22px;
+  right: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #a4b5b8;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+}
+:where(.tlib-menu) .preview-badge button {
+  border: 1px solid #ffffff40;
+  padding: 8px 12px;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+/* The default skin does not grow with a tall viewport — it is chrome beside the
+   game, like the dialog and the toast — but it does have to fit a short one:
+   nine rows plus a header, a description and a footer. */
+@media (max-height: 800px) {
+  .tlib-menu[data-skin="default"] {
+    --row-height: 30px;
+    --brand-height: 40px;
+  }
+}
+@media (max-height: 650px) {
+  .tlib-menu[data-skin="default"] {
+    --row-height: 27px;
+    --brand-height: 36px;
+    --heading-height: 32px;
+    --row-font: 13px;
+  }
+}
+@media (max-width: 600px) {
+  :where(.tlib-menu) .preview-badge {
+    display: none;
+  }
+}
+
+/* nowrap alone makes the right label's min-content width its whole string, so it
+   gives nothing back and the label — the only item with min-width:0 — is crushed
+   to a measured 0px while a 26-character right label keeps 171px. Half the row is
+   the most a value may take from the thing it is a value of. */
+:where(.tlib-menu) .row-right-label {
+  margin-left: auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+:where(.tlib-menu) .row-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+:where(.tlib-menu) .menu-row.is-danger:not(.is-disabled) .row-main {
+  color: var(--menu-danger);
+}
+:where(.tlib-menu) .menu-row.is-danger.is-active:not(.is-disabled) .row-main {
+  color: #a31919;
+}
+/* A group heading is a row like any other: one line inside the fixed row height,
+   clipped rather than allowed to grow it. */
+:where(.tlib-menu) .row-status {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+:where(.tlib-menu) .vehicle-stats {
+  padding: 8px 10px;
+  background: var(--menu-chrome);
+}
+:where(.tlib-menu) .vehicle-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 22px;
+  font-size: 13px;
+}
+:where(.tlib-menu) .vehicle-stat > span {
+  width: 110px;
+}
+/* Plain divs rather than <meter>: `appearance: none` tears down the meter shadow
+   DOM in this CEF build, so every bar draws as an empty track with correct values
+   and invisible fill, and dropping it brings back the unthemeable native green
+   bar. A track plus a fill is the only shape that is neither. */
+:where(.tlib-menu) .vehicle-stat .stat-bar {
+  flex: 1;
+  height: 8px;
+  background: #ffffff40;
+  overflow: hidden;
+}
+:where(.tlib-menu) .vehicle-stat .stat-fill {
+  height: 100%;
+  background: white;
+}
+
+/* MenuAPI DrawColorAndOpacityPanel. The source draws these as a scaleform whose
+   swatch geometry lives in the asset, so the arrangement here is this engine's:
+   all 64 swatches at once, eight rows, current one boxed. */
+:where(.tlib-menu) .swatch-panel {
+  padding: 8px 10px;
+  background: var(--menu-chrome);
+}
+:where(.tlib-menu) .opacity-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 22px;
+  font-size: 13px;
+}
+:where(.tlib-menu) .opacity-bar > span:first-child {
+  width: 110px;
+}
+/* Same shadow-DOM problem as .vehicle-stat above; same fix. */
+:where(.tlib-menu) .opacity-bar .stat-bar {
+  flex: 1;
+  height: 8px;
+  background: #ffffff40;
+  overflow: hidden;
+}
+:where(.tlib-menu) .opacity-bar .stat-fill {
+  height: 100%;
+  background: white;
+}
+:where(.tlib-menu) .opacity-value {
+  width: 42px;
+  text-align: right;
+}
+:where(.tlib-menu) .swatches {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+}
+:where(.tlib-menu) .swatch {
+  height: 14px;
+  outline: 1px solid #00000080;
+  outline-offset: -1px;
+}
+:where(.tlib-menu) .swatch.is-current {
+  outline: 2px solid #ffffff;
+  outline-offset: -1px;
+}
+
+/* Motion: transform and opacity only, so everything below is GPU-composited.
+   Nothing here sits on the row-navigation path — client/input.lua repeats a held
+   key every 25-200ms and an animation would never finish before the next step —
+   so the row highlight, choice values, slider fill and icon swaps are instant,
+   and no layout property is animated. --motion is the kill switch that actually
+   reaches a player, since CEF reports prefers-reduced-motion as no-preference
+   whatever the host OS says. */
+@keyframes tlibmenu-in-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+}
+@keyframes tlibmenu-in-down {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -4px, 0);
+  }
+}
+@keyframes tlibmenu-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes tlibmenu-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes tlibmenu-sweep {
+  from {
+    transform: translate3d(-100%, 0, 0);
+  }
+  to {
+    transform: translate3d(400%, 0, 0);
+  }
+}
+
+/* Enter only: the panel unmounts synchronously on hide, and holding it mounted
+   for an exit animation would leave the menu on screen after it is gone. */
+:where(.tlib-menu) .menu-panel {
+  animation: tlibmenu-in-down calc(120ms * var(--motion, 1)) cubic-bezier(0.2, 0, 0, 1) both;
+}
+/* Mounted once per confirmation, so neither can re-trigger under rapid input. */
+:where(.tlib-menu) .confirmation-shade {
+  animation: tlibmenu-fade calc(100ms * var(--motion, 1)) linear both;
+}
+:where(.tlib-menu) .confirmation {
+  animation: tlibmenu-in-up calc(140ms * var(--motion, 1)) cubic-bezier(0.2, 0, 0, 1) both;
+}
+/* The notice appears unannounced near the panel's bottom edge and self-dismisses
+   on a timer; it is at its final height from the first frame. */
+:where(.tlib-menu) .notice {
+  animation: tlibmenu-in-down calc(120ms * var(--motion, 1)) cubic-bezier(0.2, 0, 0, 1) both;
+}
+/* Runs only while that row's own request is genuinely in flight. */
+:where(.tlib-menu) .is-pending .action-mark svg {
+  animation: tlibmenu-spin calc(1000ms * var(--motion, 1)) linear infinite;
+  transform-origin: 50% 50%;
+}
+/* Shown only after a page has taken longer than 120ms to open. */
+:where(.tlib-menu) .loading-bar {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  background: #0006;
+}
+:where(.tlib-menu) .loading-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 25%;
+  background: var(--accent);
+  animation: tlibmenu-sweep calc(900ms * var(--motion, 1)) ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.tlib-menu) .menu-panel,
+  :where(.tlib-menu) .confirmation-shade,
+  :where(.tlib-menu) .confirmation,
+  :where(.tlib-menu) .notice,
+  :where(.tlib-menu) .action-mark svg,
+  :where(.tlib-menu) .loading-bar::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Do not add .tlib-nui-surface here: its --border/--muted aliases are HSL
+   channels. tokens.css restates the --nui-* contract from the menu's own colours
+   instead, which is what lets the shared controls render in a row. */
+:where(.tlib-menu) .menu-row:not(.is-active):not(.is-disabled):not(.is-pending):hover {
+  background: var(--menu-hover);
+}
+:where(.tlib-menu) .row-main[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+:where(.tlib-menu) .is-pending .row-main {
+  cursor: progress;
+}
+:where(.tlib-menu) .is-pending {
+  box-shadow: inset 3px 0 currentColor;
+}
+/* The highlighted row's background IS the accent, so inside it the accent and its
+   ink swap — a checked box that stayed --selected on a --selected bar would be
+   invisible. Flipping the tokens rather than special-casing the control makes
+   anything shared that lands in a row legible for free. --nui-inset goes
+   transparent and --nui-control-border to the row's ink because on a filled bar
+   the unchecked box is an outline, not a well. */
+:where(.tlib-menu) .menu-row.is-active {
+  --nui-accent: var(--selected-ink);
+  --nui-accent-text: var(--selected);
+  --nui-inset: transparent;
+  --nui-control-border: currentColor;
+  --nui-hover: #00000055;
+}
+:where(.tlib-menu) .row-choice button:not(:disabled):hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+:where(.tlib-menu) .back-button:hover,
+:where(.tlib-menu) .menu-footer button:hover {
+  background: var(--menu-hover);
+}
+:where(.tlib-menu) .dialog-cancel:hover,
+:where(.tlib-menu) .dialog-confirm:hover {
+  box-shadow: inset 0 0 0 999px #8882;
+}
+:where(.tlib-menu) .row-status {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+:where(.tlib-menu) .item-count {
+  color: var(--muted);
+  font-size: 13px;
+}
