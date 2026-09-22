@@ -38,6 +38,15 @@ export {
   writeContactSheet,
 } from "./hud-gallery.ts";
 export { checkLicenseCompliance } from "./license.ts";
+export type { ManifestCoverage } from "./manifest-coverage.ts";
+export {
+  assertManifestOnDisk,
+  assertManifestStaged,
+  manifestCoverage,
+  manifestCoverageOnDisk,
+  stagedPrefix,
+  stripLuaComments,
+} from "./manifest-coverage.ts";
 export type {
   MarketplaceReleaseMetadata,
   MarketplaceReleaseMetadataOptions,
