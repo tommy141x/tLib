@@ -3,8 +3,9 @@
  * Zero npm dependencies — AdmZip is passed by the caller.
  */
 
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { assertManifestStaged } from "./manifest-coverage.ts";
 
 export function step(label: string) {
   console.log(`\n→ ${label}`);
@@ -131,6 +132,15 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
   }
 
   assertProductionFiles(root, config.requiredFiles ?? []);
+
+  // Both directions of the allowlist, the way every sibling resource's prod.ts
+  // does it by hand. stageFiles throws on an included path that has stopped
+  // existing; this throws on a path fxmanifest.lua declares that nobody added
+  // to `include`. Without it the release is missing a file the resource will
+  // demand at start, and the build reports success -- the failure surfaces on a
+  // customer's server, not here.
+  assertManifestStaged(readFileSync(join(root, "fxmanifest.lua"), "utf8"), include);
+
   // Everything generated lands under one root, so .gitignore needs a single
   // rule and a new artifact can never reach a release by being forgotten.
   const dist = join(root, ".build", "dist");

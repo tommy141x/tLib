@@ -1,0 +1,366 @@
+/* Marketplace only. Shared tokens/controls stay owned by nui.css. */
+.mp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.4);
+}
+.mp-panel {
+  display: flex;
+  flex-direction: column;
+  width: 960px;
+  height: 650px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 40px);
+  overflow: hidden;
+  pointer-events: auto;
+  background: var(--nui-surface);
+  border: 1px solid var(--nui-border);
+  border-radius: var(--radius-surface, 0.875rem);
+  line-height: 1.5;
+  animation: mp-enter 140ms ease-out;
+}
+/* The browsing UI's own root. It has two hosts — the .mp-panel modal above and
+   the .mp-embed dialog tab below — so every rule that scopes a control to "the
+   marketplace" names .mp-root, never .mp-panel. Getting that wrong is silent:
+   the control renders, just with none of its marketplace styling. */
+.mp-root {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.mp-panel > .mp-root {
+  height: 100%;
+}
+.mp-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid var(--nui-border);
+}
+.mp-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.mp-resource {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border: 1px solid var(--nui-border);
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--nui-muted);
+}
+.mp-toolbar {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 300px;
+  gap: 10px;
+}
+.mp-search {
+  position: relative;
+  min-width: 100px;
+  flex: 1;
+}
+.mp-search .tlib-nui-input {
+  padding-left: 34px;
+}
+.mp-search-icon {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--nui-muted);
+  pointer-events: none;
+}
+.mp-sort {
+  flex: 0 0 174px;
+}
+.mp-root .mp-close {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 34px;
+  padding: 0;
+  background: transparent;
+}
+.mp-root svg {
+  flex-shrink: 0;
+}
+.mp-root button svg,
+.mp-title > svg {
+  width: 16px;
+  height: 16px;
+}
+.mp-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--nui-border);
+}
+.mp-root .mp-tab {
+  background: transparent;
+  color: var(--nui-muted);
+  border-color: transparent;
+}
+.mp-root .mp-tab[aria-pressed="true"] {
+  color: var(--nui-text);
+  background: var(--nui-hover);
+  border-color: var(--nui-control-border);
+}
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.mp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--nui-border);
+  border-radius: calc(var(--nui-radius) + 2px);
+  background: var(--nui-inset);
+}
+.mp-card:hover {
+  border-color: var(--nui-control-border);
+}
+.mp-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+}
+.mp-card-footer > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.mp-card p {
+  overflow-wrap: anywhere;
+}
+.mp-root .mp-action {
+  flex-shrink: 0;
+  padding-inline: 9px;
+}
+.mp-root .mp-delete {
+  color: var(--nui-danger);
+  background: transparent;
+}
+.mp-pagination {
+  position: sticky;
+  bottom: -12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px -12px -12px;
+  padding: 12px;
+  background: var(--nui-surface);
+  border-top: 1px solid var(--nui-border);
+  color: var(--nui-muted);
+}
+.mp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 160px;
+  height: calc(100% - 68px);
+  color: var(--nui-muted);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.mp-error-banner {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--nui-border);
+  color: var(--nui-danger);
+}
+.mp-error-banner > span {
+  min-width: 0;
+  max-height: 80px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.mp-inline-error {
+  color: var(--nui-danger);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.mp-inspection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--nui-border);
+  border-radius: var(--nui-radius);
+  font-size: 14px;
+}
+.mp-inspection p,
+.mp-inspection-note {
+  color: var(--nui-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.mp-root .mp-inspect {
+  align-self: flex-start;
+}
+.mp-preview-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.mp-preview-header > .truncate {
+  max-width: 40%;
+}
+/* ── Colour that used to live inline in the TSX ───────────────────────────
+   These components are meant to be mounted inside a host resource's own
+   editor chrome, so they must not name a host token. They used to: the TSX
+   carried `text-[hsl(var(--muted-foreground))]` and friends, which renders
+   only because tLib's own tokens happen to be bare HSL triplets. Mount the
+   same component where tokens hold complete colours — tRadio's admin builds
+   UnoCSS with colorSyntax: "value" — and `hsl(#1a1a1a)` is invalid, so the
+   declaration is dropped and the text falls back to whatever it inherited.
+   Everything below goes through --nui-*, which is the documented seam a host
+   overrides. No rule here may reference a token outside that set. */
+.mp-muted {
+  color: var(--nui-muted);
+}
+.mp-fg {
+  color: var(--nui-text);
+}
+/* The hairline between the Back button and the title. --nui-rule-y is the
+   house idiom for a vertical divider: it carries its weight in the middle and
+   releases it at the ends rather than ruling a hard line. */
+.mp-sep {
+  background: var(--nui-rule-y);
+}
+/* The sound-preview card. A sunken panel is exactly what --nui-inset names,
+   so it replaces the old one-off --secondary tint. */
+.mp-audio {
+  border: 1px solid var(--nui-border);
+  background: var(--nui-inset);
+}
+/* The audio scrub bar is the same object as .tlib-nui-slider-track/-range — a
+   filled share of a rounded track — so it uses the same two tokens. The fill
+   was --primary, which is stock *blue*: it ignored a registered theme accent
+   and clashed with every other control, all of which are neutral until a theme
+   registers one. See applyNuiTheme in components/ui/nui-theme.ts. */
+.mp-scrub {
+  background: var(--nui-hover);
+}
+.mp-scrub-fill {
+  background: var(--nui-accent);
+}
+/* Mounted inside a tLib dialog tab panel. The dialog already supplies the
+   surface, the border, the padding and the close affordance, so the embed
+   drops all four and only keeps the internal rules between its own sections.
+   min() rather than a height media query on purpose: CEF 103 does not parse
+   `@media (height >= …)` and drops the whole block without a word. */
+.mp-embed {
+  min-height: min(420px, 50vh);
+  line-height: 1.5;
+}
+.mp-embed .mp-header {
+  padding: 0 0 12px;
+}
+.mp-embed .mp-tabs {
+  padding: 10px 0;
+}
+.mp-embed .mp-error-banner {
+  padding: 10px 0;
+}
+/* The dialog is 760px at size "xl", so three columns would be ~230px cards.
+   The viewport-width query further down cannot see that, because it measures
+   the game window and not this container. */
+.mp-embed .mp-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@keyframes mp-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 1000px) {
+  .mp-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mp-header {
+    gap: 10px;
+    padding: 12px;
+  }
+  .mp-title {
+    flex: 1;
+  }
+  .mp-toolbar {
+    flex-basis: 100%;
+    order: 3;
+  }
+  .mp-tabs {
+    padding: 8px 12px;
+  }
+}
+@media (max-width: 560px) {
+  .mp-panel {
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+  .mp-grid,
+  .mp-embed .mp-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mp-toolbar {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .mp-sort {
+    flex-basis: 160px;
+  }
+  .mp-resource {
+    max-width: 140px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mp-root,
+  .mp-root * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

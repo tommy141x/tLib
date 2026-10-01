@@ -1,0 +1,132 @@
+import { cn } from "@tlib/shared/cn";
+import { cva, type VariantProps } from "class-variance-authority";
+import type { Component, JSX } from "solid-js";
+import { splitProps } from "solid-js";
+
+/**
+ * ⚠️ `elevated` no longer elevates, and `default` and `elevated` now resolve to the
+ * same classes.
+ *
+ * Every `shadow-*` in `shared/ts/ui/*` was stripped, here and in badge, switch,
+ * hover-card, color-picker and select. FiveM's CEF does not composite a blurred
+ * drop shadow usefully: it costs a compositor pass — over a moving 3D scene, in the
+ * overlay case — and puts nothing on the screen. The variants below were therefore
+ * already visually identical at runtime; removing the classes only makes that
+ * legible in the source. `shadow-none` on `outlined`/`ghost` went with them: it was
+ * cancelling a shadow that no longer exists.
+ *
+ * If a card needs to read as raised, separate it with `--border`, which is above
+ * every fill on the elevation ladder and composites. See `.panel` in
+ * `shared/css/surface.css` for the recipe, and the ladder at the bottom of
+ * `shared/css/theme-tokens.css` for why NOT to reach for a lighter `--card`.
+ *
+ * `elevated` is kept as a name rather than deleted so no consumer's call site
+ * breaks; it is now an alias.
+ */
+const cardVariants = cva("rounded-lg text-card-foreground", {
+  variants: {
+    variant: {
+      default: "bg-card",
+      elevated: "bg-card",
+      outlined: "bg-card border-2 border-primary",
+      interactive: "bg-card hover:border-accent transition-all cursor-pointer",
+      ghost: "bg-transparent border border-border",
+    },
+  },
+  defaultVariants: {
+    variant: "default",
+  },
+});
+
+export interface CardProps {
+  children?: JSX.Element;
+  variant?: VariantProps<typeof cardVariants>["variant"];
+  class?: string;
+}
+
+export const Card: Component<CardProps> = (props) => {
+  const [local, variantProps, others] = splitProps(props, ["children", "class"], ["variant"]);
+
+  return (
+    <div class={cn(cardVariants({ variant: variantProps.variant }), local.class)} {...others}>
+      {local.children}
+    </div>
+  );
+};
+
+export interface CardTitleProps {
+  children?: JSX.Element;
+  class?: string;
+}
+
+export const CardTitle: Component<CardTitleProps> = (props) => {
+  const [local, others] = splitProps(props, ["children", "class"]);
+
+  return (
+    <h3 class={cn("text-2xl font-semibold leading-none tracking-tight", local.class)} {...others}>
+      {local.children}
+    </h3>
+  );
+};
+
+export interface CardDescriptionProps {
+  children?: JSX.Element;
+  class?: string;
+}
+
+export const CardDescription: Component<CardDescriptionProps> = (props) => {
+  const [local, others] = splitProps(props, ["children", "class"]);
+
+  return (
+    <p class={cn("text-sm text-muted-foreground", local.class)} {...others}>
+      {local.children}
+    </p>
+  );
+};
+
+export interface CardContentProps {
+  children?: JSX.Element;
+  class?: string;
+}
+
+export const CardContent: Component<CardContentProps> = (props) => {
+  const [local, others] = splitProps(props, ["children", "class"]);
+
+  return (
+    <div class={cn("p-6 pt-0", local.class)} {...others}>
+      {local.children}
+    </div>
+  );
+};
+
+export interface CardHeaderProps {
+  children?: JSX.Element;
+  class?: string;
+}
+
+export const CardHeader: Component<CardHeaderProps> = (props) => {
+  const [local, others] = splitProps(props, ["children", "class"]);
+
+  return (
+    <div class={cn("flex flex-col space-y-1.5 p-6", local.class)} {...others}>
+      {local.children}
+    </div>
+  );
+};
+
+export interface CardFooterProps {
+  children?: JSX.Element;
+  class?: string;
+}
+
+export const CardFooter: Component<CardFooterProps> = (props) => {
+  const [local, others] = splitProps(props, ["children", "class"]);
+
+  return (
+    <div class={cn("flex items-center p-6 pt-0", local.class)} {...others}>
+      {local.children}
+    </div>
+  );
+};
+
+export default Card;

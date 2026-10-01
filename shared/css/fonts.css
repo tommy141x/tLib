@@ -1,0 +1,122 @@
+/* ---------------------------------------------------------------------------
+   The editor faces — Inter and JetBrains Mono, self-hosted, shipped ONCE.
+
+   ── Why this file exists ────────────────────────────────────────────────────
+
+   These four woff2 files were on disk three times: `tELS/client/web/src/assets/
+   fonts`, `tUnit/client/web/src/assets/fonts`, and now here. The two copies were
+   byte-identical (sha256-verified when this file was written) and their two
+   `@font-face` blocks were the same block, one copied from the other with a
+   comment saying so. Shipping them from tLib is the point of tLib.
+
+   ── Why tLib ALSO self-hosts Hanken Grotesk, and this does not replace it ───
+
+   `client/web/src/menu/fonts/hanken-grotesk-latin.woff2` is tLib's own NUI menu
+   face and is still in use there. It is a different product surface — a menu a
+   player sees — from the dense editor chrome these two are for. Nothing here
+   removes or supersedes it.
+
+   ── The tokens are HERE, not in theme-tokens.css ────────────────────────────
+
+   `--font-sans` and `--font-mono` are declared below, alongside the `@font-face`
+   rules that put the faces on disk, and deliberately NOT in theme-tokens.css.
+   That file's own header explains why it refuses them: a `--font-sans` naming a
+   face that is not shipped in the consuming bundle resolves to nothing and the
+   element silently falls back. Here the token and the file travel together, so
+   importing this cannot leave a token dangling.
+
+   Point your UnoCSS `theme.fontFamily` at the TOKENS, never at the face names:
+
+       fontFamily: { sans: ["var(--font-sans)"], mono: ["var(--font-mono)"] }
+
+   That is what stops an element styled by a `font-sans` utility and one styled by
+   a hand-written `font-family` rule resolving to different stacks.
+
+   ── How to consume ─────────────────────────────────────────────────────────
+
+       @import "@tlib/shared/css/fonts.css";
+
+   from a bundle that aliases `@tlib/shared` at `tLib/shared/ts` (every consumer
+   here does; see `shared/ts/css/fonts.css`, the one-line shim that makes the
+   package-relative specifier resolve). The bundler rebases the `url()`s below and
+   emits the four woff2 into the CONSUMER's own asset directory, which is what has
+   to happen: fxmanifest.lua globs only its own resource, so a font left behind in
+   tLib would 404 at runtime with no error anywhere but the network panel.
+
+   VERIFY THAT, do not assume it: after a build, `client/ui/assets` in the consumer
+   must contain four `.woff2`. An @import that fails to resolve is a WARNING in
+   Vite, not an error, and the build still exits 0.
+
+   ── Not fetched from Google ────────────────────────────────────────────────
+
+   A NUI page renders in CEF 103 on the resource's own origin and has no route to
+   the internet. A `fonts.gstatic.com` <link> fails SILENTLY there and the UI drops
+   to a system face — which is what every "the font looks bad" report has actually
+   been.
+
+   The unicode-range values are Google's own, kept verbatim so a page still
+   downloads only the subset it needs.
+
+   Fonts are SIL Open Font License 1.1. Redistribution is permitted; the licence
+   files must travel with the woff2 — they are in ./fonts alongside them, and a
+   consumer that vendors these files must carry them too.
+   --------------------------------------------------------------------------- */
+
+/* Inter 100 900 — latin-ext */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/inter-100-900-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* Inter 100 900 — latin */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/inter-100-900-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* JetBrains Mono 100 800 — latin-ext */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("./fonts/jetbrains-mono-100-800-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* JetBrains Mono 100 800 — latin */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("./fonts/jetbrains-mono-100-800-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* A BARE `:root`, deliberately, and never inside `@layer base`. This file is
+   unlayered and in the cascade an unlayered declaration beats a layered one
+   regardless of source order — the trap theme-tokens.css documents having cost
+   tELS and tAFK their whole override block. */
+:root {
+  --font-sans: Inter, "Segoe UI", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}

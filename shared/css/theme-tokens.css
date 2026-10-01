@@ -1,0 +1,159 @@
+/*
+ * The tLib surface theme, as the one file every resource's NUI imports.
+ *
+ * ── Why this is not just tLib's own :root block ─────────────────────────────
+ *
+ * It used to be. tLib declared these tokens inline in `client/web/src/global.css`
+ * and every other resource hand-copied the same token NAMES with its own VALUES,
+ * so the shared `admin-ui` controls — `AdminToggle`, `AdminSlider`, `AdminPanel`,
+ * all of which style themselves from `hsl(var(--card))` and friends — rendered a
+ * different colour in each host. tELS had drifted to a blue-tinted palette
+ * (`--background: 225 8% 12%` against tLib's `0 0% 6.67%`, `--secondary` off by
+ * a full 11% lightness) while sharing tLib's components, so the same control was
+ * grey in a tLib dialog and blue in the tELS editor. Nothing was broken; the two
+ * were simply maintained apart and had no reason to converge again.
+ *
+ * Importing this file is what makes a later change here reach every consumer,
+ * which is the whole point: a theme tweak in tLib should not need a matching
+ * commit in each resource to take effect.
+ *
+ * ── What deliberately is NOT here ───────────────────────────────────────────
+ *
+ * `--font-sans`. A face has to be SHIPPED to resolve — tLib self-hosts Hanken
+ * Grotesk, tELS self-hosts Inter — and a shared value would name a file that is
+ * only on disk in one of them. Each resource sets its own, next to its own
+ * `@font-face`.
+ *
+ * Anything resource-specific: tELS's gizmo axis and LED-side colours have no
+ * meaning in a tLib dialog and stay in tELS's `global.css`.
+ *
+ * ── Overriding ──────────────────────────────────────────────────────────────
+ *
+ * Declare the token again AFTER the import, in a BARE `:root { … }`. Keep the
+ * overrides few and comment why each one exists, or the drift this file removes
+ * comes straight back.
+ *
+ * ⚠️ NOT inside `@layer base`, and this is the trap. This file is unlayered, and
+ * in the cascade an unlayered declaration beats a layered one REGARDLESS of source
+ * order — so a token re-declared inside `@layer base { :root { … } }` is silently
+ * ignored and the value here wins.
+ *
+ * This is measured, not theoretical. On 2026-09-22 both consumers had the layered
+ * form and both were losing every override:
+ *
+ *   tELS  --background: 0 0% 3.5%  → rendered 0 0% 6.67%   (shell == card: the
+ *         --radius:     0.375rem   → rendered 0.625rem      "one flat sheet" its
+ *                                                           own comment warns of)
+ *   tAFK  --radius:     0.375rem   → rendered 0.625rem
+ *
+ * What hides it: a token this file does NOT declare (`--font-sans`, a resource's
+ * own semantic colours) applies either way, because there is nothing to lose the
+ * cascade to. So the override block looks like it works — the half of it that
+ * collides with a shared token is the half that quietly does nothing.
+ *
+ * An earlier version of this comment asserted the opposite ("still wins on source
+ * order"). It was wrong, and it is what caused both bugs. Do not reinstate it.
+ */
+
+:root {
+  --background: 0 0% 6.67%;
+  --foreground: 0 0% 93.33%;
+  --card: 0 0% 6.67%;
+  --card-foreground: 0 0% 93.33%;
+  --popover: 0 0% 9.8%;
+  --popover-foreground: 0 0% 93.33%;
+  --primary: 211 80% 55%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 15%;
+  --secondary-foreground: 0 0% 93.33%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 214.3 13.7% 70%;
+  --accent: 211 80% 55%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 62% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 20.39%;
+  --input: 0 0% 9.8%;
+  --ring: 211 80% 55%;
+
+  /* One knob. Everything else is derived from it so a control, a popover and a
+     panel stay in proportion when a consumer moves it — which is the supported
+     way to be less rounded than tLib without forking the scale. */
+  --radius: 0.625rem;
+  --radius-control: calc(var(--radius) * 0.8);
+  --radius-surface: calc(var(--radius) * 1.4);
+  --radius-tight: calc(var(--radius) * 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE ELEVATION LADDER — read this before you touch a surface token
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The four surface tokens above are not four independent colours. They are four
+ * RUNGS, and every component in `shared/ts/ui/*` and `shared/ts/admin-ui` is
+ * written assuming the order:
+ *
+ *     --background 6.67%  ≤  --card 6.67%  <  --input 9.8%  <  --border 20.39%
+ *                                              = --popover 9.8%
+ *
+ *   --background   the page/dialog shell, the floor
+ *   --card         a panel standing on the floor
+ *   --input        a control recessed INTO a panel; also --popover, the floating
+ *                  surface, because a dropdown is "one rung above the panel"
+ *   --border       the edge of any of the above
+ *
+ * A tLib control fills itself with `bg-input` and draws its edge with
+ * `border-input` or `border-border`. So if `--card` ever rises ABOVE `--input`,
+ * every field and every `border-input` edge in the product becomes DARKER than
+ * the panel it sits on. That reads as black outlines drawn around things. It has
+ * happened twice — once in tELS, once in tUnit — and nothing warns you, because
+ * each token on its own still looks like a reasonable colour.
+ *
+ * ── The trap, stated precisely ──────────────────────────────────────────────
+ *
+ * The ladder assumes a PAGE SHELL. A resource whose NUI page is opaque (tELS: a
+ * full-screen editor) has `--background` painted behind everything, so `--card`
+ * separates from it visually and the ladder reads correctly. tELS keeps it by
+ * lowering `--background` to 3.5% — moving the BOTTOM rung, which is safe.
+ *
+ * An OVERLAY resource — a transparent page drawn over the running game, like
+ * tUnit — has no shell. `--background` is never painted, so a `--card` panel has
+ * nothing to separate from except the moving 3D scene, and it reads flat. The
+ * instinct is to raise `--card`. That is the inversion. DO NOT DO IT.
+ *
+ * ── The supported fix: `.tlib-overlay` ──────────────────────────────────────
+ *
+ * Put `class="tlib-overlay"` on the root element of the overlay (or on <html> /
+ * #root). It re-declares the WHOLE ladder one step brighter, in order, so every
+ * rung keeps its relationship to the rungs either side. Because it is a scope and
+ * not a `:root` override, tLib's own components inside it read the shifted values
+ * — which is what you want, they are all in the overlay — and nothing outside it
+ * changes.
+ *
+ * THE RULE, and it is the only one: never re-declare ONE of
+ * `--background / --card / --input / --popover / --border` on its own. Move the
+ * ladder or move nothing. If you need a surface to separate from the one behind
+ * it, use `--border`, which is above every fill and cannot invert anything.
+ *
+ * This is enforced, not merely documented: `tests/unit/theme-ladder.test.ts`
+ * parses this file and fails if any palette block here breaks the ordering.
+ * Adding a block below without keeping the order will fail `bun test` in tLib.
+ */
+.tlib-overlay {
+  /* Still the floor, and still never painted — an overlay page is transparent.
+     It is declared so that a tLib component which does reach for `bg-background`
+     (hover-card, the old select) lands below `--card` rather than on top of it. */
+  --background: 0 0% 7%;
+  --card: 0 0% 10.5%;
+  --card-foreground: 0 0% 93.33%;
+  /* One rung above --card, as in the base palette. A control recessed into an
+     overlay panel, and the floating surface a dropdown opens onto. */
+  --input: 0 0% 14%;
+  --popover: 0 0% 14%;
+  --popover-foreground: 0 0% 93.33%;
+  --secondary: 0 0% 18.5%;
+  --muted: 0 0% 16%;
+  /* Above every fill. This is the rung that does the separating over a moving
+     scene — an overlay panel earns its edge here, not by getting lighter. */
+  --border: 0 0% 27%;
+}

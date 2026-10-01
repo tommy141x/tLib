@@ -33,8 +33,17 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanLayout } from "../hud-layout-scan.ts";
 import { buildHudPreviewScript } from "../hud-preview-script.ts";
@@ -42,9 +51,9 @@ import { applyPreset, defaultStateFromManifest, type UiManifest } from "../ui-ma
 
 /** One named situation to render each layout in. */
 export interface GalleryState {
-  /** Filename-safe id; becomes `<layout>/<id>.png`. */
+  /** Filename-safe id; becomes the `<layout>--<id>.png` suffix. */
   id: string;
-  /** Human label for the contact sheet. */
+  /** Human label, for the log line. */
   label: string;
   state: Record<string, unknown>;
 }
@@ -52,14 +61,27 @@ export interface GalleryState {
 export interface HudGalleryOptions {
   /** Directory holding one folder per layout, each with a `ui.html`. */
   layoutsDir: string;
-  /** Where the PNGs and the contact sheet go. Existing output for the same layouts is replaced. */
+  /** Where the PNGs go, flat. Existing shots of the same layouts are replaced. */
   outDir: string;
   /** Declaration namespace: `"radar"` reads `data-radar-width`. tELS and tDetector use `"radio"`. */
   prefix: string;
   /** Situations to render. Usually `statesFromManifest(theResourcesManifest)`. */
   states: GalleryState[];
-  /** Title for the contact sheet. */
-  title?: string;
+  /**
+   * Global update function a layout installs for itself, e.g. `"__telsLayoutUpdate"` — the same
+   * value the marketplace panel is given as `previewFn`.
+   *
+   * Leave it unset for layouts that are purely declarative. Set it and the preview calls that
+   * function INSTEAD of the declarative pass, exactly as the in-game preview does.
+   *
+   * This defaulted to null and had no way to be set, which made the gallery quietly wrong for
+   * every layout that draws anything imperatively: tELS's WCC and WCC2 build their siren-tone
+   * keys, LED bar and stage slider in script, so the shots came out with blank keys, a dead bar
+   * and the slider pinned at zero in EVERY state. Nothing failed — the declarative attributes
+   * on the same page painted correctly, so the pictures looked like a finished device with dead
+   * controls rather than like a half-rendered one.
+   */
+  previewFn?: string;
   deviceClasses?: readonly string[];
   defaultDeviceClass?: string;
   /**
@@ -101,7 +123,6 @@ export interface GalleryResult {
   /** Shots whose Chromium invocation failed. Empty on a clean run. */
   failed: GalleryShot[];
   chromium: string | null;
-  sheet: string | null;
 }
 
 /**
@@ -238,6 +259,7 @@ function page(opts: {
   width: number;
   height: number;
   background: string | null;
+  previewFn?: string;
 }): string {
   // The layout's own <img src="…"> are relative to its folder, so the base href has to point
   // there and not at the directory these pages are written into.
@@ -248,7 +270,7 @@ function page(opts: {
   html,body{margin:0;padding:0;background:${bg};}
   body{display:flex;align-items:center;justify-content:center;width:${opts.width}px;height:${opts.height}px;overflow:hidden;}
 </style>
-</head><body>${opts.ui}${buildHudPreviewScript(null, opts.state)}</body></html>`;
+</head><body>${opts.ui}${buildHudPreviewScript(opts.previewFn ?? null, opts.state)}</body></html>`;
 }
 
 export function renderHudGallery(opts: HudGalleryOptions): GalleryResult {
@@ -263,9 +285,10 @@ export function renderHudGallery(opts: HudGalleryOptions): GalleryResult {
   if (layouts.length === 0) throw new Error(`no layouts with a ui.html under ${opts.layoutsDir}`);
   if (opts.states.length === 0) throw new Error("no states to render");
 
-  const pagesDir = join(opts.outDir, ".pages");
-  rmSync(pagesDir, { recursive: true, force: true });
-  mkdirSync(pagesDir, { recursive: true });
+  // The staging HTML lives outside the gallery: `outDir` is a folder of pictures to look through,
+  // and a `.pages` directory of scaffolding sitting in it is noise in every file browser.
+  const pagesDir = mkdtempSync(join(tmpdir(), "hud-gallery-"));
+  mkdirSync(opts.outDir, { recursive: true });
 
   const shots: GalleryShot[] = [];
   for (const layout of layouts) {
@@ -283,18 +306,27 @@ export function renderHudGallery(opts: HudGalleryOptions): GalleryResult {
 
     // Replace this layout's previous shots rather than the whole output folder: `outDir`
     // comes from the command line and wiping an arbitrary directory is not this script's job.
-    const layoutOut = join(opts.outDir, layout);
-    rmSync(layoutOut, { recursive: true, force: true });
-    mkdirSync(layoutOut, { recursive: true });
+    // Flat output means the sweep is by filename prefix rather than by removing a subfolder —
+    // without it a renamed state would leave its old PNG sitting there looking current.
+    for (const name of readdirSync(opts.outDir)) {
+      if (name.startsWith(`${layout}--`) && name.endsWith(".png")) {
+        unlinkSync(join(opts.outDir, name));
+      }
+    }
+    // This gallery used to write `<layout>/<state>.png` under an index.html contact sheet. A
+    // folder left from that layout still holds a full set of plausible-looking shots, and the
+    // sheet still opens and still renders them, so both outlive the format that made them.
+    rmSync(join(opts.outDir, layout), { recursive: true, force: true });
+    rmSync(join(opts.outDir, "index.html"), { force: true });
 
     for (const state of opts.states) {
-      const html = page({ ui, layoutDir, state: state.state, width, height, background });
+      const html = page({ ui, layoutDir, state: state.state, width, height, background, previewFn: opts.previewFn });
       writeFileSync(join(pagesDir, `${layout}.${state.id}.html`), html);
       shots.push({
         layout,
         state: state.id,
         label: state.label,
-        file: join(layoutOut, `${state.id}.png`),
+        file: join(opts.outDir, `${layout}--${state.id}.png`),
         width,
         height,
       });
@@ -329,6 +361,16 @@ export function renderHudGallery(opts: HudGalleryOptions): GalleryResult {
           `--default-background-color=${background === null ? "00000000" : "ffffffff"}`,
           `--force-device-scale-factor=${scale}`,
           `--window-size=${shot.width},${shot.height}`,
+          // A layout's own update function is installed and invoked on a timer (the preview
+          // script waits 50ms and then retries, because the layout may register late). Plain
+          // `--screenshot` captures at load and would race it — sometimes catching the page
+          // before it has painted, which is indistinguishable from a layout that drew nothing.
+          // Virtual time runs those timers to completion first, deterministically.
+          //
+          // Only passed when there IS such a function: it also fast-forwards CSS animations,
+          // so adding it unconditionally would change the output of every purely declarative
+          // layout that already renders correctly.
+          ...(opts.previewFn ? ["--virtual-time-budget=5000"] : []),
           `--screenshot=${dest}`,
           src,
         ],
@@ -342,69 +384,9 @@ export function renderHudGallery(opts: HudGalleryOptions): GalleryResult {
       }
     }
     log(`  ${shots.length - failed.length}/${shots.length} shots at ${scale}x`);
+    // Only once the shots are taken — with no Chromium the pages ARE the output.
+    rmSync(pagesDir, { recursive: true, force: true });
   }
 
-  const sheet = writeContactSheet(
-    opts.outDir,
-    opts.title ?? "UI gallery",
-    shots,
-    scale,
-    background
-  );
-  return { outDir: opts.outDir, layouts, shots, failed, chromium, sheet };
-}
-
-/**
- * A single offline page listing every shot, so the folder can be browsed rather than
- * opened one PNG at a time. Checkerboarded, because a transparent shot of a black
- * device on a white page reads as a missing image.
- */
-export function writeContactSheet(
-  outDir: string,
-  title: string,
-  shots: readonly GalleryShot[],
-  scale: number,
-  background: string | null
-): string | null {
-  const written = shots.filter((s) => s.file !== null);
-  if (written.length === 0) return null;
-
-  const byLayout = new Map<string, GalleryShot[]>();
-  for (const shot of written) {
-    const list = byLayout.get(shot.layout) ?? [];
-    list.push(shot);
-    byLayout.set(shot.layout, list);
-  }
-
-  const sections = [...byLayout.entries()].map(([layout, list]) => {
-    const cards = list
-      .map(
-        (s) =>
-          `<figure><img src="./${layout}/${s.state}.png" alt="${layout} ${s.label}" loading="lazy">` +
-          `<figcaption>${s.label}<small>${s.width * scale}×${s.height * scale}</small></figcaption></figure>`
-      )
-      .join("");
-    return `<section><h2>${layout}</h2><div class="grid">${cards}</div></section>`;
-  });
-
-  const html = `<!doctype html><meta charset="utf-8"><title>${title}</title>
-<style>
-  :root{color-scheme:dark}
-  body{margin:0;padding:24px;background:#141414;color:#e6e6e6;font:14px/1.4 system-ui,sans-serif}
-  h1{font-size:18px;margin:0 0 4px}
-  p.meta{margin:0 0 24px;color:#8a8a8a}
-  h2{font-size:15px;margin:32px 0 10px;color:#9ecbff}
-  .grid{display:flex;flex-wrap:wrap;gap:16px}
-  figure{margin:0;background:${background === null ? "repeating-conic-gradient(#2a2a2a 0 25%,#1d1d1d 0 50%) 0 0/20px 20px" : background};border:1px solid #333;border-radius:6px;padding:10px}
-  img{display:block;max-width:520px;height:auto}
-  figcaption{margin-top:8px;color:#cfcfcf;display:flex;justify-content:space-between;gap:12px}
-  small{color:#7a7a7a}
-</style>
-<h1>${title}</h1>
-<p class="meta">${written.length} images · ${byLayout.size} layouts · ${scale}× · ${background === null ? "transparent background" : `background ${background}`}</p>
-${sections.join("\n")}
-`;
-  const file = join(outDir, "index.html");
-  writeFileSync(file, html);
-  return file;
+  return { outDir: opts.outDir, layouts, shots, failed, chromium };
 }

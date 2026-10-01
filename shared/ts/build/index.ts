@@ -19,6 +19,8 @@ export {
   stageFiles,
   step,
 } from "./core.ts";
+export type { DeadClass, DeadClassOptions } from "./dead-classes.ts";
+export { findDeadClasses, formatDeadClasses } from "./dead-classes.ts";
 export type { DevConfig, WatcherDef } from "./dev.ts";
 export { startDevMode } from "./dev.ts";
 export type {
@@ -35,7 +37,6 @@ export {
   parseGalleryCli,
   renderHudGallery,
   statesFromManifest,
-  writeContactSheet,
 } from "./hud-gallery.ts";
 export { checkLicenseCompliance } from "./license.ts";
 export type { ManifestCoverage } from "./manifest-coverage.ts";
@@ -52,6 +53,30 @@ export type {
   MarketplaceReleaseMetadataOptions,
 } from "./marketplace-inventory.ts";
 export { writeMarketplaceReleaseMetadata } from "./marketplace-inventory.ts";
+export type {
+  PropEditorGalleryCli,
+  PropEditorGalleryInit,
+  PropEditorGalleryOptions,
+  PropEditorGalleryResult,
+  PropEditorGalleryShot,
+  PropEditorGalleryStep,
+  PropEditorGalleryView,
+} from "./prop-editor-gallery.ts";
+export {
+  clickTool,
+  EDITOR_UP,
+  ensureNuiBundle,
+  GALLERY_PROP_DATA,
+  GALLERY_VEHICLE_MATRIX,
+  parsePropEditorGalleryCli,
+  PROP_EDITOR_ROOT,
+  renderPropEditorGallery,
+  reportPropEditorGallery,
+  SHARED_PROP_EDITOR_VIEWS,
+  stripPropEditorGalleryArgs,
+  toolActive,
+  toolSelector,
+} from "./prop-editor-gallery.ts";
 export type { StagingConfig } from "./prod.ts";
 export { ProductionStager } from "./prod.ts";
 export type { StandardBuildOptions } from "./resource.ts";
@@ -67,3 +92,9 @@ export {
   throwIfMissed,
   toSemver,
 } from "./version.ts";
+export type {
+  SelfHostWebFontsOptions,
+  SelfHostWebFontsResult,
+  WebFontFamily,
+} from "./web-fonts.ts";
+export { selfHostWebFonts } from "./web-fonts.ts";
