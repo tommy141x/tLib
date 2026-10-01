@@ -5,7 +5,17 @@ lua54 'yes'
 author 'Tommy Johnston'
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM)'
-version '0.6.0'
+-- 0.12.0 adds two things a consumer can need and cannot probe for:
+--   * tLib:HasPermissionBatch — resolves many permission keys in ONE export round trip
+--     (server/lib/adapter/permission.lua). tRadio was making 40+ consecutive export calls
+--     per permission resolution, which a profiler attributed ~5.2 ms to.
+--   * the optional `validate` content contract on a marketplace install target
+--     (shared/ts/marketplace/installer/core.ts), so a consumer can refuse a bundle that is
+--     safe to extract but is not a valid instance of its own item type.
+-- Both are additive — nothing that worked against 0.11.0 behaves differently. The bump
+-- exists so a consumer can PIN them via tlib_min_version, which is what imports.lua's
+-- header calls the real guarantee: a capability probe cannot report its own absence.
+version '0.12.0'
 
 -- Layout note: the top-level folder is the VM a file is loaded into, matching
 -- every other resource here. Where one module spans VMs -- the platform adapter
@@ -27,6 +37,11 @@ shared_scripts {
     -- Before lifecycle.lua, which wraps it as Platform.isStudioResource. Shared
     -- because a consumer VM loads this exact file via shared/imports/versioncheck.
     'shared/sh_branding.lua',
+    -- The one definition of the studio API host and of tmarketplace_base_url's
+    -- normalisation. Shared because client/cl_marketplace.lua, server/
+    -- sv_marketplace.lua and a consumer VM (via shared/imports/versioncheck)
+    -- all need the same answer.
+    'shared/sh_api.lua',
     'shared/lib/adapter/lifecycle.lua',
     'shared/sh_utils.lua',
     'shared/sh_coords.lua',
@@ -67,6 +82,9 @@ client_scripts {
     'client/lib/layout/schema.lua',
     'client/cl_layout.lua',
     'client/cl_marketplace.lua',
+    -- After the adapters and Logger (it uses both), and before cl_main so the
+    -- ReportKeybind export exists by the time a consumer resource starts binding.
+    'client/cl_keybinds.lua',
     'client/cl_main.lua',
 }
 
@@ -74,6 +92,10 @@ server_scripts {
     'server/dist/bundle.js',
     'server/lib/adapter/utils.lua',
     'server/lib/adapter/permission.lua',
+    -- Before sv_permission.lua and sv_marketplace.lua: both consult `Demo`, and
+    -- in demo mode its answer replaces theirs rather than being consulted late.
+    'server/sv_demo.lua',
+    'server/sv_probe_fsperm.lua',
     'server/sv_discovery.lua',
     'server/sv_permission.lua',
     -- Server-only: holds the authority state and the action handlers, neither of
@@ -91,6 +113,8 @@ files {
     'imports.lua',
     -- Read by a consumer's versioncheck module via LoadResourceFile.
     'shared/sh_branding.lua',
+    -- Same: a consumer VM loads this to resolve tmarketplace_base_url.
+    'shared/sh_api.lua',
     'shared/imports/**/*.lua',
     'client/ui/index.html',
     'client/ui/assets/**/*',

@@ -1,6 +1,6 @@
 {
   "name": "tlib",
-  "version": "0.6.0",
+  "version": "0.12.0",
   "license": "MIT",
   "private": true,
   "description": "Shared UI and utility library for FiveM resources",
@@ -8,6 +8,7 @@
     "build": "cd client/web && bun run build",
     "dev": "cd client/web && bunx vp dev",
     "prod": "bun run scripts/prod.ts",
+    "gallery": "bun run scripts/gallery.ts",
     "setup": "bun install && cd client/web && bun install",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
@@ -22,7 +23,7 @@
     "verify": "bun run lint && bun run check:regression && bun run build"
   },
   "dependencies": {
-    "ws": "^8.20.1"
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
