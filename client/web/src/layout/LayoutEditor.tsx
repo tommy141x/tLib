@@ -1,5 +1,6 @@
 import { Check, Grip, LayoutDashboard, Redo2, RotateCcw, Undo2, X } from "lucide-solid";
 import {
+  batch,
   createMemo,
   createRenderEffect,
   createSignal,
@@ -14,12 +15,16 @@ import { applyNuiTheme } from "@/components/ui/nui-theme";
 import { fetchNui, onNuiEvent } from "@/lib/nui";
 import ComponentList from "./ComponentList";
 import {
+  type Anchor,
+  anchors,
   buildSnapTargets,
+  clamp,
   type Component,
   type Corner,
   constrainLayout,
   type Layout,
   layoutRect,
+  MAX_OFFSET,
   moveLayout,
   placeRect,
   reanchor,
@@ -152,6 +157,9 @@ export default function LayoutEditor() {
   }
   /** Commit every in-progress gesture before doing something discrete. */
   function settle() {
+    // The frame queued by the last pointermove is part of the gesture being
+    // settled; dropping it would silently lose up to one frame of the drag.
+    flushPointerMove();
     endGesture();
     flushWheel();
   }
@@ -167,14 +175,51 @@ export default function LayoutEditor() {
     if (!component.canHide) return;
     change(component, { ...current(component), visible: !current(component).visible });
   }
+  /**
+   * The factory placement for one component, sanitised. `defaults` crosses the
+   * NUI boundary as JSON and a consumer can register a component whose defaults
+   * predate a schema change, so nothing here may assume the fields are usable:
+   * anything non-finite or out of range falls back to a centred, visible widget,
+   * and `update()` clamps whatever survives. Reset is the safety net, so it is
+   * the one path that must not be able to produce an unreachable widget.
+   */
+  function factory(component: Component): Layout {
+    const d = (component.defaults ?? {}) as Partial<Layout>;
+    const now = current(component);
+    const number = (value: unknown, fallback: number) =>
+      typeof value === "number" && Number.isFinite(value)
+        ? clamp(value, -MAX_OFFSET, MAX_OFFSET)
+        : fallback;
+    const scale =
+      typeof d.scale === "number" && Number.isFinite(d.scale)
+        ? clamp(d.scale, component.minScale, component.maxScale)
+        : clamp(1, component.minScale, component.maxScale);
+    return {
+      x: number(d.x, 0),
+      y: number(d.y, 0),
+      scale: component.canScale ? scale : now.scale,
+      visible: component.canHide ? d.visible !== false : now.visible,
+      anchor: anchors.includes(d.anchor as Anchor) ? (d.anchor as Anchor) : "center",
+    };
+  }
   function resetSelected() {
     const component = active();
     if (!component) return;
-    change(component, {
-      ...component.defaults,
-      scale: component.canScale ? component.defaults.scale : current(component).scale,
-      visible: component.canHide ? component.defaults.visible : current(component).visible,
-    });
+    change(component, factory(component));
+  }
+  /** Every component at once, for when more than one has been lost. History is
+   *  per component, so this pushes one undo entry per component that moved. */
+  function resetAll() {
+    if (finishing()) return;
+    settle();
+    const before = new Map(components().map((c) => [c.key, current(c)]));
+    for (const component of components()) update(component.key, factory(component));
+    for (const component of components()) {
+      const was = before.get(component.key);
+      const now = layouts[component.key];
+      if (was && now && !sameLayout(was, now)) history.record(component.key, was, now);
+    }
+    tick();
   }
   function travel(direction: "undo" | "redo") {
     if (finishing()) return;
@@ -239,43 +284,97 @@ export default function LayoutEditor() {
       )
     );
   }
-  function pointerMove(event: PointerEvent) {
-    if (panelGesture?.pointer === event.pointerId) {
+  // ── Pointer move, one application per animation frame ────────────────────
+  //
+  // `pointermove` fires well above the frame rate — a 1000 Hz mouse delivers a
+  // coalesced burst per frame at best and several events per frame at worst — and
+  // every application writes a store path, which Solid turns straight into a DOM
+  // style write. PreviewChannel already coalesced the NUI post (the expensive
+  // half); this coalesces the DOM half, so both ends of a drag do exactly one
+  // unit of work per frame. Same contract as shared/ts/camera-drag.ts.
+  //
+  // The delta stays in CLIENT coordinates, unlike camera-drag's `movementX`. That
+  // module drives a camera, where there is nothing under the cursor to stay under
+  // and a stall at the screen edge is the whole bug. This is direct manipulation:
+  // the outline has to stay under the pointer, and `clientX - downX` against the
+  // rect captured at pointerdown IS the 1:1 guarantee — accumulating `movementX`
+  // would let the outline drift out from under the cursor every time the clamp
+  // refuses a frame. Nothing in the loop reads layout, so there is no reflow:
+  // `gesture.before`, `snapTargets` and `viewport()` are all captured up front.
+  let moveFrame = 0;
+  let pendingMove: { x: number; y: number; alt: boolean } | undefined;
+  let pendingPanel: { x: number; y: number } | undefined;
+  function applyPointerMove() {
+    moveFrame = 0;
+    const panelTo = pendingPanel;
+    const move = pendingMove;
+    pendingPanel = undefined;
+    pendingMove = undefined;
+    if (panelTo && panelGesture) {
       setPanelPosition(
         clampPanel({
-          x: panelGesture.left + event.clientX - panelGesture.x,
-          y: panelGesture.top + event.clientY - panelGesture.y,
+          x: panelGesture.left + panelTo.x - panelGesture.x,
+          y: panelGesture.top + panelTo.y - panelGesture.y,
         })
       );
-      return;
     }
-    if (!gesture || gesture.pointer !== event.pointerId || finishing()) return;
-    const component = index().get(gesture.key);
+    // Captured once: `gesture` is mutable module-scope state and narrowing it
+    // across the closure below is what forced the non-null assertions.
+    const held = gesture;
+    if (!move || !held || finishing()) return;
+    const component = index().get(held.key);
     if (!component) return;
-    const dx = event.clientX - gesture.x,
-      dy = event.clientY - gesture.y;
-    if (gesture.corner) {
-      update(
-        component.key,
-        resizeLayout(component, gesture.before, viewport(), gesture.corner, dx, dy)
-      );
-      setScalingKey(component.key);
+    const dx = move.x - held.x,
+      dy = move.y - held.y;
+    const corner = held.corner;
+    if (corner) {
+      batch(() => {
+        update(component.key, resizeLayout(component, held.before, viewport(), corner, dx, dy));
+        setScalingKey(component.key);
+      });
       return;
     }
-    const start = layoutRect(component, gesture.before, viewport());
+    const start = layoutRect(component, held.before, viewport());
     let left = start.left + dx,
       top = start.top + dy;
     // Alt suspends snapping for the frames it is held, rather than being a mode.
-    if (event.altKey) setGuides({});
-    else if (snapTargets) {
+    let snapGuides: { x?: number; y?: number } = {};
+    if (!move.alt && snapTargets) {
       const snap = resolveSnap({ ...start, left, top }, snapTargets);
       left += snap.dx;
       top += snap.dy;
-      setGuides(snap.guides);
+      snapGuides = snap.guides;
     }
-    update(component.key, placeRect(gesture.before, { ...start, left, top }, viewport()));
+    const placed = placeRect(held.before, { ...start, left, top }, viewport());
+    // One update pass for the guides and the placement together, so the frame
+    // cannot paint a guide line against the previous position.
+    batch(() => {
+      setGuides(snapGuides);
+      update(component.key, placed);
+    });
+  }
+  function queuePointerMove() {
+    if (!moveFrame) moveFrame = requestAnimationFrame(applyPointerMove);
+  }
+  /** Apply whatever is queued right now. Release must not drop the last frame. */
+  function flushPointerMove() {
+    if (!moveFrame) return;
+    cancelAnimationFrame(moveFrame);
+    applyPointerMove();
+  }
+  function pointerMove(event: PointerEvent) {
+    if (panelGesture?.pointer === event.pointerId) {
+      pendingPanel = { x: event.clientX, y: event.clientY };
+      queuePointerMove();
+      return;
+    }
+    if (!gesture || gesture.pointer !== event.pointerId || finishing()) return;
+    pendingMove = { x: event.clientX, y: event.clientY, alt: event.altKey };
+    queuePointerMove();
   }
   function pointerUp(event: PointerEvent) {
+    if (panelGesture?.pointer === event.pointerId || gesture?.pointer === event.pointerId)
+      flushPointerMove();
     if (panelGesture?.pointer === event.pointerId) endPanelDrag();
     if (gesture?.pointer === event.pointerId) {
       setScalingKey("");
@@ -283,6 +382,14 @@ export default function LayoutEditor() {
     }
   }
   function pointerCancel(event: PointerEvent) {
+    // A cancelled gesture is discarded wholesale, so the queued frame is dropped
+    // rather than flushed — applying it would be a move the player took back.
+    if (moveFrame) {
+      cancelAnimationFrame(moveFrame);
+      moveFrame = 0;
+      pendingMove = undefined;
+      pendingPanel = undefined;
+    }
     if (panelGesture?.pointer === event.pointerId) endPanelDrag();
     if (gesture?.pointer === event.pointerId) {
       setScalingKey("");
@@ -432,6 +539,10 @@ export default function LayoutEditor() {
     endPanelDrag();
     panelObserver?.disconnect();
     panelObserver = undefined;
+    if (moveFrame) cancelAnimationFrame(moveFrame);
+    moveFrame = 0;
+    pendingMove = undefined;
+    pendingPanel = undefined;
     gesture = undefined;
     wheel = undefined;
     snapTargets = undefined;
@@ -677,6 +788,15 @@ export default function LayoutEditor() {
               >
                 <RotateCcw aria-hidden="true" />
                 Reset this
+              </NuiButton>
+              <NuiButton
+                class="tlib-layout__reset tlib-layout__reset-all"
+                disabled={finishing() || !components().length}
+                title="Restore every component's default placement (undo available)"
+                onClick={resetAll}
+              >
+                <RotateCcw aria-hidden="true" />
+                Reset all
               </NuiButton>
             </div>
           </div>

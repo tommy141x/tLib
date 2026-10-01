@@ -1,5 +1,3 @@
-import type { ClassValue } from "clsx";
-import clsx from "clsx";
 import type { Component, JSX } from "solid-js";
 import {
   createContext,
@@ -11,12 +9,8 @@ import {
   splitProps,
   useContext,
 } from "solid-js";
-import { unoMerge } from "unocss-merge";
 import IconCheck from "~icons/lucide/check";
-
-function cn(...classLists: ClassValue[]) {
-  return unoMerge(clsx(classLists));
-}
+import { cn } from "@tlib/shared/cn";
 
 export interface ThemeVars {
   [key: string]: string;
@@ -71,7 +65,7 @@ export const ThemeProvider: Component<ThemeProviderProps> = (props) => {
 
   // Start on the default: reading storage here would mismatch the server render.
   const [theme, setThemeState] = createSignal<string>(
-    config.defaultTheme || config.themes[0]?.id || ""
+    config.defaultTheme || config.themes[0]?.id || "",
   );
   const [mounted, setMounted] = createSignal(false);
 
@@ -278,7 +272,7 @@ export const ThemeSwitcher: Component<ThemeSwitcherProps> = (props) => {
                   "hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isActive
                     ? "border-primary bg-primary/5"
-                    : "border-border bg-card hover:border-primary/50"
+                    : "border-border bg-card hover:border-primary/50",
                 )}
                 aria-label={`Select ${themeDef.name} theme`}
                 aria-pressed={isActive}

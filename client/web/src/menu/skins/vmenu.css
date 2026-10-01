@@ -76,9 +76,14 @@
 .tlib-menu[data-skin="vmenu"] .menu-items {
   padding: 0;
 }
+/* The hairline is a softened --border, and this skin's panel is opaque, so 55%
+   alpha over --border-raw composites to precisely the old mix with transparent.
+   It has to be written this way round because NUI is CEF 103: color-mix() is a
+   Chromium 111 function, CEF invalidates the entire declaration rather than
+   ignoring the function, and the replica's rows went unruled. */
 .tlib-menu[data-skin="vmenu"] .menu-row {
   border-radius: 0;
-  border-bottom-color: color-mix(in srgb, var(--border) 55%, transparent);
+  border-bottom-color: hsl(var(--border-raw) / 0.55);
 }
 .tlib-menu[data-skin="vmenu"] .menu-row.is-active {
   border-bottom-color: transparent;

@@ -5,16 +5,10 @@ import type {
 } from "@ark-ui/solid/popover";
 import { Popover as ArkPopover } from "@ark-ui/solid/popover";
 import type { PositioningOptions } from "@zag-js/popper";
-import type { ClassValue } from "clsx";
-import clsx from "clsx";
 import { createSignal, type JSX, mergeProps, Show, splitProps } from "solid-js";
 import { Motion, Presence } from "solid-motionone";
-import { unoMerge } from "unocss-merge";
 import IconX from "~icons/lucide/x";
-
-function cn(...classLists: ClassValue[]) {
-  return unoMerge(clsx(classLists));
-}
+import { cn } from "@tlib/shared/cn";
 
 /**
  * State for a controlled popover.
@@ -110,7 +104,7 @@ export const PopoverContent = (props: PopoverContentProps) => {
                 <ArkPopover.Content
                   class={cn(
                     "z-50 w-72 rounded-lg border border-border bg-popover text-popover-foreground shadow-md outline-none",
-                    local.class
+                    local.class,
                   )}
                   {...others}
                 >
@@ -171,7 +165,7 @@ export const PopoverCloseTrigger = (props: PopoverCloseTriggerProps) => {
     <ArkPopover.CloseTrigger
       class={cn(
         "rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none",
-        local.class
+        local.class,
       )}
       {...others}
     >

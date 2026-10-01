@@ -17,6 +17,17 @@ export interface Component {
   minVisiblePixels?: number;
   minVisibleFraction?: number;
 }
+/**
+ * Everything the placement maths actually reads off a component: its unscaled
+ * size and its visibility floor. A live HUD surface knows all four about itself
+ * without being a registered editor `Component`, and widening the signatures to
+ * this is what lets the drag primitive call the SAME clamp rather than grow a
+ * second one. `Component` satisfies it structurally, so no caller changes.
+ */
+export type Extents = Pick<
+  Component,
+  "width" | "height" | "minVisiblePixels" | "minVisibleFraction"
+>;
 export interface Viewport {
   width: number;
   height: number;
@@ -107,7 +118,7 @@ export function safezoneRect(viewport: Viewport, scalar: number): Rect {
  * grabbed again, whatever put it where it is — a drag, a resolution change, or a
  * record saved by an older version.
  */
-export function minVisible(component: Component, rect: Rect, viewport: Viewport) {
+export function minVisible(component: Extents, rect: Rect, viewport: Viewport) {
   const pixels = component.minVisiblePixels ?? DEFAULT_MIN_VISIBLE_PIXELS;
   const fraction = component.minVisibleFraction ?? DEFAULT_MIN_VISIBLE_FRACTION;
   const need = (extent: number, size: number) =>
@@ -115,7 +126,7 @@ export function minVisible(component: Component, rect: Rect, viewport: Viewport)
   return { x: need(rect.width, viewport.width), y: need(rect.height, viewport.height) };
 }
 /** Mirrored by HudLayoutSchema.constrain. Applied on drag, scale, nudge, resize and restore. */
-export function constrainLayout(component: Component, layout: Layout, viewport: Viewport): Layout {
+export function constrainLayout(component: Extents, layout: Layout, viewport: Viewport): Layout {
   const rect = layoutRect(component, layout, viewport);
   const need = minVisible(component, rect, viewport);
   const left = clamp(rect.left, need.x - rect.width, viewport.width - need.x);
@@ -184,7 +195,7 @@ export function resolveSnap(
 
 /** Pixel-delta move. Snapping is resolved by the caller so it can draw the guides. */
 export function moveLayout(
-  component: Component,
+  component: Extents,
   layout: Layout,
   viewport: Viewport,
   dx: number,
@@ -252,7 +263,7 @@ export function resizeLayout(
   );
 }
 export function changeAnchor(
-  component: Component,
+  component: Extents,
   layout: Layout,
   viewport: Viewport,
   anchor: Anchor
@@ -274,7 +285,7 @@ export function deriveAnchor(rect: Rect, viewport: Viewport): Anchor {
   return `${cy < 0.5 ? "top" : "bottom"}-${cx < 0.5 ? "left" : "right"}` as Anchor;
 }
 /** Re-anchor without moving, then re-clamp. Used after every placement gesture. */
-export function reanchor(component: Component, layout: Layout, viewport: Viewport): Layout {
+export function reanchor(component: Extents, layout: Layout, viewport: Viewport): Layout {
   const anchor = deriveAnchor(layoutRect(component, layout, viewport), viewport);
   return constrainLayout(component, changeAnchor(component, layout, viewport, anchor), viewport);
 }

@@ -3,8 +3,6 @@ import { Combobox as ArkCombobox, useListCollection } from "@ark-ui/solid/combob
 import { useFilter } from "@ark-ui/solid/locale";
 import { TagsInput as ArkTagsInput } from "@ark-ui/solid/tags-input";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { ClassValue } from "clsx";
-import clsx from "clsx";
 import {
   type Component,
   createMemo,
@@ -17,7 +15,6 @@ import {
   splitProps,
 } from "solid-js";
 import { Portal } from "solid-js/web";
-import { unoMerge } from "unocss-merge";
 import IconAlertCircle from "~icons/lucide/alert-circle";
 import IconCheck from "~icons/lucide/check";
 import IconCheckCircle from "~icons/lucide/check-circle";
@@ -25,10 +22,7 @@ import IconChevronDown from "~icons/lucide/chevron-down";
 import IconEye from "~icons/lucide/eye";
 import IconEyeOff from "~icons/lucide/eye-off";
 import IconX from "~icons/lucide/x";
-
-function cn(...classLists: ClassValue[]) {
-  return unoMerge(clsx(classLists));
-}
+import { cn } from "@tlib/shared/cn";
 
 const inputVariants = cva(
   "flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200 ease-out hover:border-ring/50 focus-visible:border-ring",
@@ -51,7 +45,7 @@ const inputVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
+  },
 );
 
 const tagVariants = cva(
@@ -67,7 +61,7 @@ const tagVariants = cva(
     defaultVariants: {
       size: "default",
     },
-  }
+  },
 );
 
 type InputProps = Omit<
@@ -244,7 +238,7 @@ export const Input = (props: InputProps) => {
                     local.clearable && (context().value.length > 0 || context().inputValue)
                       ? "pr-20"
                       : "pr-10",
-                    local.class
+                    local.class,
                   )}
                   {...others}
                 />
@@ -262,7 +256,7 @@ export const Input = (props: InputProps) => {
               <Portal>
                 <ArkCombobox.Positioner>
                   <Show when={context().open}>
-                    <ArkCombobox.Content class="z-50 min-w-(--reference-width) max-h-[300px] overflow-y-auto rounded-md border border-border bg-background p-1 shadow-md outline-none focus:outline-none focus-visible:outline-none">
+                    <ArkCombobox.Content class="z-50 min-w-[var(--reference-width)] max-h-[300px] overflow-y-auto rounded-md border border-border bg-background p-1 shadow-md outline-none focus:outline-none focus-visible:outline-none">
                       <Show when={collection().items.length === 0}>
                         <div class="px-2 py-6 text-center text-sm text-muted-foreground">
                           No results found
@@ -272,7 +266,7 @@ export const Input = (props: InputProps) => {
                         {(item) => (
                           <ArkCombobox.Item
                             item={item}
-                            class="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
+                            class="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                           >
                             <ArkCombobox.ItemText>{item}</ArkCombobox.ItemText>
                             <Show
@@ -317,7 +311,7 @@ export const Input = (props: InputProps) => {
                       variant: effectiveVariant(),
                       size: local.size,
                     }),
-                    local.class
+                    local.class,
                   )}
                   // biome-ignore lint/suspicious/noExplicitAny: ark-ui type compatibility
                   {...(others as any)}
@@ -353,7 +347,7 @@ export const Input = (props: InputProps) => {
                             variant: effectiveVariant(),
                             size: local.size,
                           }),
-                          local.class
+                          local.class,
                         )}
                       >
                         <Index each={api().value}>
@@ -362,7 +356,7 @@ export const Input = (props: InputProps) => {
                               <ArkTagsInput.ItemPreview
                                 class={cn(
                                   tagVariants({ size: local.size }),
-                                  "data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                                  "data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
                                 )}
                               >
                                 <ArkTagsInput.ItemText class="select-none">
@@ -415,7 +409,7 @@ export const Input = (props: InputProps) => {
                   variant: effectiveVariant(),
                   size: local.size,
                 }),
-                local.class
+                local.class,
               )}
               {...others}
             />
@@ -443,7 +437,7 @@ export const Input = (props: InputProps) => {
             inputVariants({ variant: effectiveVariant(), size: local.size }),
             hasError() && "border-destructive focus-visible:ring-destructive",
             hasSuccess() && "border-green-500 focus-visible:ring-green-500",
-            local.class
+            local.class,
           )}
           {...others}
         />
@@ -467,7 +461,7 @@ export const Input = (props: InputProps) => {
           for={fieldId()}
           class={cn(
             "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
-            wrapperProps.labelClass
+            wrapperProps.labelClass,
           )}
         >
           {wrapperProps.label}

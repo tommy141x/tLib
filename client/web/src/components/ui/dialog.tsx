@@ -1,7 +1,5 @@
 import { Dialog as ArkDialog } from "@ark-ui/solid";
 import type { DialogInteractOutsideEvent } from "@ark-ui/solid/dialog";
-import type { ClassValue } from "clsx";
-import clsx from "clsx";
 import {
   createSignal,
   type JSX,
@@ -12,12 +10,8 @@ import {
 } from "solid-js";
 import { Portal } from "solid-js/web";
 import { Motion, Presence } from "solid-motionone";
-import { unoMerge } from "unocss-merge";
 import IconX from "~icons/lucide/x";
-
-function cn(...classLists: ClassValue[]) {
-  return unoMerge(clsx(classLists));
-}
+import { cn } from "@tlib/shared/cn";
 
 // controlled dialog state — without this SolidStart SSR hydration breaks
 export function createDialogState() {
@@ -130,7 +124,7 @@ export const DialogContent = (props: DialogContentProps) => {
                     <ArkDialog.Content
                       class={cn(
                         "relative w-full max-w-lg rounded-lg bg-background border border-border p-6 shadow-lg",
-                        local.class
+                        local.class,
                       )}
                       {...others}
                     >
@@ -189,7 +183,7 @@ export const DialogCloseTrigger = (props: DialogCloseTriggerProps) => {
     <ArkDialog.CloseTrigger
       class={cn(
         "absolute right-6 top-6 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none",
-        local.class
+        local.class,
       )}
       {...others}
     >

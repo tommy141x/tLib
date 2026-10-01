@@ -92,6 +92,13 @@ function S.component(owner, id, options)
         { x = 0.02, y = 0.02, scale = 1, visible = true, anchor = 'top-left' }
     component.defaults = S.layout(component.defaults, component)
     if not component.defaults then return nil end
+    -- `defaults` is the FACTORY placement -- the thing Reset goes back to -- and
+    -- `layout` is where the widget is right now. They are only the same object for
+    -- a consumer that has nowhere else to keep its placement. A consumer that owns
+    -- its own storage (persist = false) used to have to pass its saved position as
+    -- `defaults`, which made Reset restore the broken position it was being asked
+    -- to escape from. Passing both separates "where it is" from "where it belongs".
+    component.initial = type(options.layout) == 'table' and S.layout(options.layout, component) or nil
     return component
 end
 return S

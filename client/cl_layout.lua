@@ -44,6 +44,14 @@ local function heal(layout, component)
     if not viewport then return layout end
     return S.constrain(layout, component, viewport) or layout
 end
+-- The one place the KVP record is written. Three callers -- editor Save, Reset,
+-- and a live drag -- and they must not be able to disagree about its shape.
+local function writeLayouts(layouts)
+    if not storageKey then return true end
+    local ok, err = pcall(function() SetResourceKvp(storageKey, json.encode({ version = 2, layouts = layouts })) end)
+    if not ok then log('Could not save HUD layout: ' .. tostring(err), 4) end
+    return ok
+end
 local function notify(component, phase)
     local fn = callbacks[component.key]
     if not fn then return end
@@ -84,10 +92,7 @@ local function close(save)
                 nextSaved[key] = saved[key]; count = count + 1
             end
         end
-        if storageKey then
-            local ok, err = pcall(function() SetResourceKvp(storageKey, json.encode({ version = 2, layouts = nextSaved })) end)
-            if not ok then log('Could not save HUD layout: ' .. tostring(err), 4); return false end
-        end
+        if not writeLayouts(nextSaved) then return false end
         saved = nextSaved
         for key, value in pairs(session.draft) do if components[key] then components[key].layout = S.copy(value) end end
     end
@@ -107,6 +112,71 @@ end
 function H.isEditing() return active ~= nil or transitioning end
 function H.close() return close(false) end
 
+-- ── The safety net ──────────────────────────────────────────────────────────
+-- Restore factory placements without needing the editor, because the editor is
+-- the thing you cannot reach once a widget has been lost. Any open session is
+-- discarded first: a draft is never worth more than being able to see your HUD.
+--
+-- `only` is a set of component keys, or nil for every component AND every stored
+-- record, including records belonging to resources that are not running now --
+-- those are exactly the ones nothing else can clean up.
+local function resetLayouts(only)
+    if active or transitioning then close(false) end
+    local touched = {}
+    for _, component in ipairs(sortedComponents()) do
+        if not only or only[component.key] then
+            saved[component.key] = nil
+            -- S.copy of a validated default, then healed against the live
+            -- resolution: the result is sane by construction whatever was stored.
+            component.layout = heal(S.copy(component.defaults), component)
+            touched[#touched + 1] = component
+        end
+    end
+    if only then
+        for key in pairs(only) do saved[key] = nil end
+    else
+        saved = {}
+    end
+    writeLayouts(saved)
+    -- 'commit' and not 'restore': a consumer that keeps its own store has to be
+    -- told to write this down, or its own bad record wins again on the next load.
+    for _, component in ipairs(touched) do notify(component, 'commit') end
+    return #touched
+end
+function H.resetAll() return resetLayouts(nil) end
+
+-- ── Live placement ──────────────────────────────────────────────────────────
+-- A device UI that lets the player drag it by its own background has to write
+-- the result HERE. Keeping its own copy would make a dragged position a
+-- second-class one: not healed on the next resolution change, not cleared by
+-- Reset, and disagreeing with the editor about where the widget is. So this is
+-- the editor's Save for exactly one component -- same validation, same heal,
+-- same KVP record, same 'commit' notification -- and nothing else is offered.
+local function setLayout(key, value)
+    local component = components[key]
+    if not component then return false, 'Unknown HUD component' end
+    -- The editor is a transaction over every component at once; a live write
+    -- landing inside one would be thrown away by Cancel without saying so.
+    if H.isEditing() then return false, 'Close the layout editor first' end
+    local layout = S.layout(value, component)
+    if not layout then return false, 'Invalid layout' end
+    layout = heal(layout, component)
+    if component.persist then
+        local count = 0
+        for _ in pairs(saved) do count = count + 1 end
+        if saved[key] == nil and count >= 256 then return false, 'Saved HUD layout limit reached' end
+        -- Persist BEFORE announcing: a consumer told 'commit' has every right to
+        -- believe the position survives a reload, so a failed write must not
+        -- reach it as success, and must not leave a half-applied record behind.
+        local previous = saved[key]
+        saved[key] = S.copy(layout)
+        if not writeLayouts(saved) then saved[key] = previous; return false, 'Could not save HUD layout' end
+    end
+    component.layout = layout
+    notify(component, 'commit')
+    return true
+end
+
 local function register(name, id, options, fn)
     if H.isEditing() then return false, 'Close the layout editor before registering a component' end
     local component = S.component(name, id, options)
@@ -122,7 +192,13 @@ local function register(name, id, options, fn)
     -- otherwise the retained-record pass would resurrect the old placement.
     -- Disk cleanup remains transactional: only a successful Finish writes KVP.
     if not component.persist then saved[component.key] = nil end
-    component.layout = (component.persist and S.layout(saved[component.key], component)) or S.copy(component.defaults)
+    -- Order: our own record (only when we are the store), then the consumer's
+    -- current placement, then the factory default. Every one of the three is
+    -- validated, so garbage at any step falls through to the next rather than
+    -- being trusted, and the last step cannot fail.
+    component.layout = (component.persist and S.layout(saved[component.key], component))
+        or (component.initial and S.copy(component.initial))
+        or S.copy(component.defaults)
     component.layout = heal(component.layout, component)
     components[component.key], callbacks[component.key] = component, fn
     notify(component, 'restore')
@@ -214,8 +290,14 @@ function H.init(webui)
         -- referenceOffsets marks the v2 unit change: x/y are ratios of a 1080px
         -- reference height, not fractions of the viewport. A consumer that does its
         -- own geometry must check this before trusting a layout it is handed.
+        -- separateDefaults: RegisterHudComponent takes `layout` (where the widget
+        -- is) alongside `defaults` (where Reset puts it back). A consumer that
+        -- owns its storage must pass both, or Reset resets to the saved value.
+        -- liveLayoutWrite: SetHudLayout exists, so a consumer can let the player
+        -- drag its surface directly and still have tLib own the placement.
         return { consumerPersistence = true, minVisibility = true,
-            universalMinVisibility = true, referenceOffsets = true, layoutVersion = 2 }
+            universalMinVisibility = true, referenceOffsets = true, layoutVersion = 2,
+            separateDefaults = true, resetExport = true, liveLayoutWrite = true }
     end)
     Platform.export('tLib', 'RegisterHudComponent', function(id, options, fn)
         local name = owner()
@@ -232,11 +314,28 @@ function H.init(webui)
         local component = name and S.id(id) and components[name .. ':' .. id]
         return component and S.copy(component.layout) or nil
     end)
+    Platform.export('tLib', 'SetHudLayout', function(id, layout)
+        -- An exception inside an export reaches the caller as `undefined`, which
+        -- resurfaces as a JSON parse error at the far end. Never let one out.
+        local name = owner()
+        if not name or not S.id(id) then return false, 'Cannot identify calling resource' end
+        local ok, result, err = pcall(setLayout, name .. ':' .. id, layout)
+        if not ok then return false, tostring(result) end
+        return result == true, err
+    end)
     Platform.export('tLib', 'OpenHudEditor', function(options)
         local name = owner()
         if not name then return false, 'Cannot identify calling resource' end
         if type(options) == 'table' and options.demo == true then addDemo() end
         return open(name)
+    end)
+    Platform.export('tLib', 'ResetHudLayout', function(id)
+        -- No owner check: this is the recovery path, and refusing to un-break a
+        -- HUD because the caller could not be identified helps nobody.
+        local name = owner()
+        if id == nil then return resetLayouts(nil) end
+        if not name or not S.id(id) then return 0 end
+        return resetLayouts({ [name .. ':' .. id] = true })
     end)
     Platform.export('tLib', 'CloseHudEditor', function()
         local name = owner()
@@ -303,8 +402,15 @@ function H.init(webui)
             -- Player escape hatch is intentionally not restricted to the export
             -- owner. F8: tlibhud cancel works even when the browser cannot reply.
             if action == 'cancel' or action == 'close' then close(false); return end
+            -- The unbrick command. Works with the editor shut, with the editor
+            -- wedged open, and with every widget dragged off the screen.
+            if action == 'reset' then
+                local count = resetLayouts(nil)
+                log(('Reset %d HUD component(s) to their default placement and cleared the saved layout.'):format(count), 3)
+                return
+            end
             if action and action ~= 'demo' and action ~= 'open' then
-                log('Usage: /tlibhud [demo|open|cancel] (no arguments toggles; closing discards)', 3)
+                log('Usage: /tlibhud [demo|open|cancel|reset] (no arguments toggles; closing discards; reset restores defaults)', 3)
                 return
             end
             if active and action ~= 'open' then close(false); return end

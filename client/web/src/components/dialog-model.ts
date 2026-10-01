@@ -35,6 +35,18 @@ export interface DialogTab {
   icon?: string;
   action?: boolean;
   separator?: boolean;
+  /**
+   * Render a built-in view in this tab's panel instead of the dialog's fields.
+   *
+   * `"marketplace"` mounts `components/marketplace/MarketplaceBrowser`, fed by
+   * the `marketplaceData` NUI message (`exports.tLib:ProvideMarketplaceData`).
+   * That is how a consumer gets the browser INSIDE its own settings dialog
+   * rather than closing the dialog and opening the standalone modal over it.
+   *
+   * A view tab is a content tab, never an `action` one — `action` is a button
+   * that fires `onButtonClick` and owns no panel.
+   */
+  view?: "marketplace";
 }
 export interface DialogData {
   id: string;
@@ -45,6 +57,13 @@ export interface DialogData {
   submitLabel?: string;
   cancelLabel?: string;
   theme?: string;
+  /**
+   * Discard anything remembered about where this dialog id was last left (see
+   * `dialog-view-state.ts`) and open it at its defaults. Serialised from
+   * `ShowDialog`'s `resetState` option; absent for the overwhelming majority of
+   * opens, which want the restore.
+   */
+  resetState?: boolean;
   fields: DialogField[];
   tabs?: DialogTab[];
 }

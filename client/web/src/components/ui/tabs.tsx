@@ -1,15 +1,9 @@
 import { Tabs as ArkTabs } from "@ark-ui/solid";
 import { animate } from "@motionone/dom";
 import { cva } from "class-variance-authority";
-import type { ClassValue } from "clsx";
-import clsx from "clsx";
 import type { Component, JSX } from "solid-js";
 import { createEffect, createSignal, onCleanup, onMount, splitProps } from "solid-js";
-import { unoMerge } from "unocss-merge";
-
-function cn(...classLists: ClassValue[]) {
-  return unoMerge(clsx(classLists));
-}
+import { cn } from "@tlib/shared/cn";
 
 const tabTriggerVariants = cva(
   "inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-sm font-medium ring-offset-background transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 relative",
@@ -25,7 +19,7 @@ const tabTriggerVariants = cva(
     defaultVariants: {
       variant: "default",
     },
-  }
+  },
 );
 
 const tabListVariants = cva("flex items-center relative", {
@@ -67,8 +61,8 @@ export const Tabs: Component<TabsProps> = (props) => {
     if (!containerRef) return [];
     const allContents = Array.from(
       containerRef.querySelectorAll(
-        "[data-scope='tabs'][data-part='content']"
-      ) as NodeListOf<HTMLElement>
+        "[data-scope='tabs'][data-part='content']",
+      ) as NodeListOf<HTMLElement>,
     );
     return allContents.filter((content) => {
       const closestRoot = content.closest("[data-scope='tabs'][data-part='root']");
@@ -83,7 +77,7 @@ export const Tabs: Component<TabsProps> = (props) => {
     const directContents = getDirectTabContents();
 
     const hiddenStates = new Map<HTMLElement, boolean>(
-      directContents.map((c) => [c, c.hasAttribute("hidden")])
+      directContents.map((c) => [c, c.hasAttribute("hidden")]),
     );
 
     directContents.forEach((content) => {
@@ -171,7 +165,7 @@ export const Tabs: Component<TabsProps> = (props) => {
 
     void containerRef.offsetHeight; // lock in the current height
     const tabsList = containerRef.querySelector(
-      "[data-scope='tabs'][data-part='list']"
+      "[data-scope='tabs'][data-part='list']",
     ) as HTMLElement;
     const tabsListHeight = tabsList ? tabsList.offsetHeight : 0;
 
@@ -225,7 +219,7 @@ export const Tabs: Component<TabsProps> = (props) => {
       const heightAnim = animate(
         containerRef,
         { height: `${targetHeight}px` },
-        { duration: 0.3, easing: [0.16, 1, 0.3, 1] }
+        { duration: 0.3, easing: [0.16, 1, 0.3, 1] },
       );
       currentAnimations.push(heightAnim);
 
@@ -315,7 +309,7 @@ export const TabsContent: Component<TabsContentProps> = (props) => {
       class={cn(
         "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "mt-4",
-        local.class
+        local.class,
       )}
       {...others}
     >
@@ -351,7 +345,7 @@ export const TabsIndicator: Component<
         isUnderline()
           ? "bottom-0 h-0.5 bg-foreground rounded-full"
           : "bg-background shadow-sm rounded-md",
-        local.class
+        local.class,
       )}
       style={{
         left: "var(--left)",

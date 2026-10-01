@@ -164,7 +164,9 @@
   margin: 10px 0 12px;
   text-align: center;
 }
+/* Three controls now, so the row wraps rather than squeezing the labels out. */
 .tlib-layout__actions {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   justify-content: space-between;

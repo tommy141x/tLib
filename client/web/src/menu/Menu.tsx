@@ -108,6 +108,29 @@ export default function Menu() {
   // A theme may supply full menu colors or shared shadcn HSL channels. Only the
   // owner root is adapted, never :root or the shared registry; explicit menu
   // colors win over aliases, and synthesized properties are tracked for removal.
+  //
+  // The tokens whose translucent tints tokens.css writes as `hsl(var(--x-raw) / a)`
+  // — the menu's hover wash, its control border, its hairline rulings, the
+  // vMenu skin's row separator, the shared focus ring. NUI is CEF 103, which
+  // predates color-mix(), so slash-alpha over a bare triplet is the only way to
+  // say "this colour at a% alpha" that the engine will parse at all.
+  //
+  // Which means every one of those tokens needs a partner holding the SAME
+  // colour in unresolved channel form, and a partner cannot be computed from the
+  // colour beside it: once `0 0% 93.33%` has been resolved to `hsl(0 0% 93.33%)`
+  // the channels are gone as far as CSS is concerned, and no function takes them
+  // back out again. That is the whole reason `-raw` partners are hand-written
+  // constants in tokens.css rather than derived there.
+  //
+  // This effect is the last place in the program that still holds the theme's
+  // value BEFORE it is resolved, so it is the only place a themed partner can be
+  // written at all. Skipping it left a themed menu with correct opaque surfaces
+  // and every tint beside them still keyed to stock tLib grey.
+  //
+  // --accent and --muted are absent on purpose: neither has a `-raw` partner in
+  // tokens.css because nothing ever asks for a share of them, and inventing one
+  // here would be a token with no readers.
+  const rawPartners = new Set(["text", "panel", "border", "selected", "selected-ink"]);
   let themeAliases: string[] = [];
   createEffect(() => {
     for (const property of themeAliases) root.style.removeProperty(property);
@@ -119,6 +142,25 @@ export default function Menu() {
         : CSS.supports("color", `hsl(${value})`)
           ? `hsl(${value})`
           : undefined;
+    // The bare HSL triplet inside a theme value, or nothing.
+    //
+    // The one question asked is whether the consumers' own expression parses,
+    // because that is the only property of a partner that matters. Asking it in
+    // exactly the shape tokens.css writes means the check cannot drift from what
+    // is being checked. It is also why the legacy comma form is refused rather
+    // than unwrapped: `hsl(0, 0%, 93% / 0.5)` is invalid CSS, and a partner that
+    // makes its readers drop their declaration is worse than no partner at all.
+    const triplet = (value: string) => {
+      // `hsl(0 0% 93%)` is a triplet wearing a coat; take the coat off. An hsla()
+      // that carries its own alpha fails the test below, correctly — an alpha
+      // inside a partner would multiply against the reader's.
+      const wrapped = /^hsla?\((.*)\)$/.exec(value.trim());
+      const candidate = (wrapped ? wrapped[1]! : value).trim();
+      // var() satisfies CSS.supports() whatever it eventually points at, so a
+      // partner built from one would be a guess about a value not visible here.
+      if (!candidate || candidate.includes("var(")) return undefined;
+      return CSS.supports("color", `hsl(${candidate} / 0.5)`) ? candidate : undefined;
+    };
     const aliases: Record<string, string> = {
       text: "foreground",
       panel: "card",
@@ -140,9 +182,33 @@ export default function Menu() {
       const value =
         token === "muted" && own && !CSS.supports("color", own) && alias ? alias : own || alias;
       const resolved = value && color(value);
+      // Read off the same `value` the line above resolves, not off `resolved`:
+      // that is the point, and one statement later it is too late.
+      const raw = value && rawPartners.has(token) ? triplet(value) : undefined;
       if (resolved) {
         root.style.setProperty(property, resolved);
         if (!own) themeAliases.push(property);
+        const partner = `${property}-raw`;
+        // A hex, a named colour or a comma-form hsl() gets no partner, and that
+        // is deliberate: tokens.css's stock triplet stays in force, so the tint
+        // paints a visible wash in the wrong hue instead of resolving to
+        // `hsl( / 0.32)` and painting nothing. Wrong-hue is a theme the owner can
+        // finish — name the colour as a triplet, or set the partner directly.
+        // Dropped is invisible, and reads as a broken control rather than an
+        // unfinished theme. That failure is the entire class of bug this pass
+        // exists to remove, so it is never the one chosen here.
+        //
+        // An explicitly themed partner wins over a derived one, the same way
+        // `own` wins over `alias` above: the owner stated it, so it is not ours
+        // to overwrite.
+        if (raw && !root.style.getPropertyValue(partner).trim()) {
+          root.style.setProperty(partner, raw);
+          // Tracked for removal even when the theme set the colour itself.
+          // applyScopedTheme only remembers properties a theme actually named,
+          // and this one is synthesized — untracked, it would outlive the theme
+          // that justified it and go on tinting the next one.
+          themeAliases.push(partner);
+        }
       } else if (own) root.style.removeProperty(property);
     }
   });

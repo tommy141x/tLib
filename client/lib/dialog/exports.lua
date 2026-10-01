@@ -100,12 +100,25 @@ local function serialiseDialog(id, opts)
         tabs = {}
         for _, t in ipairs(opts.tabs) do
             if type(t) == 'table' and type(t.id) == 'string' and t.id ~= '' then
+                -- `view` names a built-in panel the page renders in place of this
+                -- tab's fields (see DialogTab.view in client/web/src/components/
+                -- dialog-model.ts). It was missing from this serialiser, so every
+                -- `view` tab a consumer declared reached the page as an ordinary
+                -- content tab and drew an EMPTY panel -- the tab was there, the
+                -- browser was not. Whitelisted rather than passed through: an
+                -- unknown view would fall into the same silent blank panel.
+                local view = t.view == 'marketplace' and t.view or nil
+                if t.view ~= nil and not view then
+                    log('ShowDialog: tab "' .. t.id .. '" has unknown view "' ..
+                        tostring(t.view) .. '" -- rendering its fields instead', 3)
+                end
                 table.insert(tabs, {
                     id        = t.id,
                     label     = type(t.label) == 'string' and t.label or t.id,
                     icon      = type(t.icon) == 'string' and t.icon or nil,
                     action    = t.action == true or nil,
                     separator = t.separator == true or nil,
+                    view      = view,
                 })
             end
         end
@@ -121,6 +134,15 @@ local function serialiseDialog(id, opts)
         submitLabel = type(opts.submitLabel) == 'string' and opts.submitLabel or nil,
         cancelLabel = type(opts.cancelLabel) == 'string' and opts.cancelLabel or nil,
         size        = size,
+        -- Opt OUT of "reopen where you left it". The page remembers the active
+        -- tab, each tab's scroll offset and where the panel was dragged to,
+        -- keyed by dialog id, so a dialog that closes for a detour (a world
+        -- editor, a HUD reposition) comes back on the tab the button was on.
+        -- A caller that genuinely wants a first-run dialog passes
+        -- `resetState = true`. Sent only when true, and whitelisted here on
+        -- purpose: `view` was once absent from this serialiser and reached the
+        -- page as nothing at all, silently.
+        resetState  = opts.resetState == true or nil,
         blur        = opts.blur ~= false,
         theme       = (type(opts.theme) == 'string' and opts.theme ~= '') and opts.theme or nil,
     }
@@ -459,6 +481,10 @@ function DialogExports.register()
 
         if opts.blur ~= nil and type(opts.blur) ~= 'boolean' then
             return nil, 'Dialog blur must be a boolean'
+        end
+
+        if opts.resetState ~= nil and type(opts.resetState) ~= 'boolean' then
+            return nil, 'Dialog resetState must be a boolean'
         end
 
         id = (type(id) == 'string' and id ~= '') and id or DialogState.generateId()

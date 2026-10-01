@@ -11,7 +11,7 @@ import {
   type ToastType,
 } from "@/lib/toast-lifetime";
 import { applyScopedTheme } from "@/stores/theme-store";
-import "@/components/ui/nui.css";
+import "../../../../shared/ts/nui-kit/nui.css";
 
 const ICONS = {
   success: CircleCheck,

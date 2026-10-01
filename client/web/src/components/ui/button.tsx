@@ -1,16 +1,10 @@
 import { Toggle as ArkToggle } from "@ark-ui/solid/toggle";
 import { cva } from "class-variance-authority";
-import type { ClassValue } from "clsx";
-import clsx from "clsx";
 import type { Component, JSX, ValidComponent } from "solid-js";
 import { mergeProps, Show, splitProps } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { unoMerge } from "unocss-merge";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
-
-function cn(...classLists: ClassValue[]) {
-  return unoMerge(clsx(classLists));
-}
+import { cn } from "@tlib/shared/cn";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 [background-image:none]",
@@ -40,7 +34,7 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
+  },
 );
 
 type ButtonProps = {
@@ -67,7 +61,7 @@ type ButtonProps = {
 const Button: Component<ButtonProps> = (props) => {
   const merged = mergeProps(
     { variant: "default" as const, size: "default" as const, toggle: false },
-    props
+    props,
   );
 
   const [local, toggleProps, others] = splitProps(
@@ -85,7 +79,7 @@ const Button: Component<ButtonProps> = (props) => {
       "disabled",
       "as",
     ],
-    ["pressed", "defaultPressed", "onPressedChange"]
+    ["pressed", "defaultPressed", "onPressedChange"],
   );
 
   const isDisabled = () => !!(local.disabled || local.loading);

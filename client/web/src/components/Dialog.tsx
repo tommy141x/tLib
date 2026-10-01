@@ -1,6 +1,7 @@
 import { Dialog as ArkDialog } from "@ark-ui/solid/dialog";
 import { Tabs } from "@ark-ui/solid/tabs";
 import { createForm } from "@tanstack/solid-form";
+import type { OpenData } from "@tlib/shared/marketplace/ui";
 import { ArrowUpRight, Check, Settings2, X } from "lucide-solid";
 import {
   createEffect,
@@ -23,6 +24,15 @@ import {
   matchesDialog,
   validationErrors,
 } from "./dialog-model";
+import {
+  clampOffset,
+  DIALOG_NO_TAB,
+  forgetDialogView,
+  recallDialogView,
+  rememberDialogView,
+  restoredTab,
+} from "./dialog-view-state";
+import { MarketplaceBrowser } from "./marketplace/MarketplaceBrowser";
 import { NuiButton, NuiField } from "./ui/nui-field";
 import { applyNuiTheme } from "./ui/nui-theme";
 
@@ -39,6 +49,9 @@ export default function Dialog() {
   const [open, setOpen] = createSignal(false);
   onCleanup(
     onNuiEvent<DialogData>("showDialog", (data) => {
+      // Before the session mounts: DialogSession reads the remembered view in
+      // its initialisers, so a reset has to have happened by now.
+      if (data.resetState) forgetDialogView(data.id);
       setSession({ data });
       setOpen(true);
     })
@@ -76,7 +89,14 @@ function DialogSession(props: {
   const [attempted, setAttempted] = createSignal(false);
   const [touched, setTouched] = createSignal<Set<string>>(new Set());
   const [notice, setNotice] = createSignal("");
-  const [offset, setOffset] = createSignal({ x: 0, y: 0 });
+  // Where this dialog id was last left. Read once, here, because everything it
+  // seeds is owned by the session from now on.
+  const remembered = recallDialogView(props.initial.id);
+  const [offset, setOffset] = createSignal(remembered?.offset ?? { x: 0, y: 0 });
+  // Not a signal: the scroll handler writes it on every frame of a scroll and
+  // nothing renders from it. The restore reads it through activeTab().
+  const scrollByTab: Record<string, number> = { ...remembered?.scroll };
+  const [scrollHost, setScrollHost] = createSignal<HTMLDivElement>();
   let panel: HTMLDivElement | undefined;
   let alive = true;
   let drag:
@@ -84,9 +104,21 @@ function DialogSession(props: {
     | undefined;
   const tabIds = createUniqueId();
   const tabs = createMemo(() => effectiveTabs(dialog()));
-  const firstTab = () => tabs().find((tab) => !tab.action)?.id ?? null;
-  const [activeTab, setActiveTab] = createSignal<string | null>(firstTab());
+  const firstTab = () => restoredTab(tabs(), null);
+  // A remembered tab that no longer exists — permissions changed, config
+  // changed — falls back to the first real tab instead of selecting nothing.
+  const [activeTab, setActiveTab] = createSignal<string | null>(
+    restoredTab(tabs(), remembered?.tab)
+  );
+  const activeTabDef = createMemo(() => tabs().find((tab) => tab.id === activeTab()));
   const errorsFor = (values: DialogValues) => validationErrors(dialog().fields, values);
+
+  // Payload for a `view: "marketplace"` tab. It arrives on its own NUI message
+  // rather than inside the dialog schema because it is the answer to a SERVER
+  // round trip (which layouts and sounds are on disk) that the consumer fires
+  // as it opens the dialog — so it lands after `showDialog`, not with it.
+  const [marketplaceData, setMarketplaceData] = createSignal<OpenData | null>(null);
+  onCleanup(onNuiEvent<OpenData>("marketplaceData", (data) => setMarketplaceData(data)));
   const form = createForm(() => ({
     // A single record deliberately avoids interpreting consumer ids containing
     // dots/brackets as TanStack nested paths. Controls bind through this adapter.
@@ -229,18 +261,56 @@ function DialogSession(props: {
     target.setPointerCapture(event.pointerId);
     event.preventDefault();
   }
+  const dragBounds = () => ({
+    panel: { width: panel?.offsetWidth ?? 0, height: panel?.offsetHeight ?? 0 },
+    viewport: { width: innerWidth, height: innerHeight },
+  });
   function moveDrag(event: PointerEvent) {
     if (!drag || event.pointerId !== drag.pointer || !panel) return;
-    const maxX = Math.max(0, (innerWidth - panel.offsetWidth) / 2);
-    const maxY = Math.max(0, (innerHeight - panel.offsetHeight) / 2);
-    setOffset({
-      x: Math.max(-maxX, Math.min(maxX, drag.ox + event.clientX - drag.x)),
-      y: Math.max(-maxY, Math.min(maxY, drag.oy + event.clientY - drag.y)),
-    });
+    setOffset(
+      clampOffset(
+        { x: drag.ox + event.clientX - drag.x, y: drag.oy + event.clientY - drag.y },
+        dragBounds()
+      )
+    );
   }
   onCleanup(() => {
     alive = false;
     endDrag();
+  });
+
+  // --- "reopen where I left it" -------------------------------------------
+  // Saved continuously rather than on close. A dialog can go away by submit,
+  // cancel, an authoritative closeDialog, or being replaced outright by a
+  // reentrant ShowDialog, and only some of those run through this component's
+  // own teardown — reading the state back out at unmount would miss the rest.
+  const scrollKey = () => activeTab() ?? DIALOG_NO_TAB;
+  function persistView() {
+    rememberDialogView(props.initial.id, {
+      tab: activeTab(),
+      scroll: scrollByTab,
+      offset: offset(),
+    });
+  }
+  createEffect(persistView);
+  function recordScroll(event: Event) {
+    scrollByTab[scrollKey()] = (event.currentTarget as HTMLElement).scrollTop;
+    persistView();
+  }
+  // A restore is clamped again here because the remembered offset was clamped
+  // against whatever the window and panel measured last time.
+  createEffect(() => {
+    if (!props.open || !panel) return;
+    setOffset((current) => clampOffset(current, dragBounds()));
+  });
+  // Per tab, not per dialog: restoring one tab's scroll onto another's panel
+  // would land somewhere the player never was. A `view` tab renders no scroll
+  // host at all, which is why this reads the host reactively.
+  createEffect(() => {
+    const host = scrollHost();
+    const key = scrollKey();
+    if (!host || !props.open) return;
+    host.scrollTop = scrollByTab[key] ?? 0;
   });
 
   createEffect(() => {
@@ -359,73 +429,56 @@ function DialogSession(props: {
                   </Tabs.List>
                 </aside>
               </Show>
-              <div
-                class="min-w-0 flex-1 overflow-y-auto p-3.5"
-                style={{ "min-height": dialog().size === "xl" ? "min(360px, 40vh)" : undefined }}
-              >
-                <div
-                  class="flex flex-col gap-3"
-                  role={tabs().length ? "tabpanel" : undefined}
-                  id={activeTab() ? `${tabIds}-${activeTab()}-panel` : undefined}
-                  aria-labelledby={activeTab() ? `${tabIds}-${activeTab()}-tab` : undefined}
-                >
-                  <For each={groupKeys()}>
-                    {(key, index) => {
-                      const ids = JSON.parse(key) as string[];
-                      const first = () => fieldById().get(ids[0]);
-                      const hasLabelledSibling = () =>
-                        ids.length > 1 &&
-                        ids.some((id) => !LABELLESS.has(fieldById().get(id)?.type ?? ""));
-                      return (
-                        <>
-                          <Show
-                            when={
-                              first()?.section &&
-                              first()?.section !== groups()[index() - 1]?.[0].section
-                            }
-                          >
-                            <h3 class="tlib-nui-ruled-b pb-1.5 text-xs font-medium tracking-wide text-[var(--nui-muted)]">
-                              {first()?.section}
-                            </h3>
-                          </Show>
-                          <div class="tlib-nui-field-row">
-                            <For each={ids}>
-                              {(id) => {
-                                const field = () => fieldById().get(id)!;
-                                return (
-                                  <div
-                                    class="tlib-nui-field-cell"
-                                    data-shrink={field()?.flex === "shrink"}
-                                    data-labelless={
-                                      hasLabelledSibling() && LABELLESS.has(field()?.type ?? "")
-                                    }
-                                  >
-                                    <NuiField
-                                      field={field()}
-                                      value={values()[id]}
-                                      theme={dialog().theme}
-                                      active={props.open}
-                                      error={
-                                        attempted() || touched().has(id) ? errors()[id] : undefined
-                                      }
-                                      onBlur={() => {
-                                        if (props.open)
-                                          setTouched((previous) => new Set([...previous, id]));
-                                      }}
-                                      onChange={(value) => updateField(id, value)}
-                                      onAction={() => action(id)}
-                                    />
-                                  </div>
-                                );
-                              }}
-                            </For>
-                          </div>
-                        </>
+              {/* A `view` tab owns its whole panel and is not a scroll box: the
+                  marketplace browser scrolls its own card grid and has to keep
+                  its toolbar and category tabs pinned, which an outer
+                  overflow-y-auto would defeat. It is deliberately inside the
+                  same Tabs.Root, the same dialog surface and the same close
+                  behaviour — no second backdrop, no second focus trap. */}
+              <Show
+                when={activeTabDef()?.view === "marketplace"}
+                fallback={
+                  <div
+                    ref={(el) => {
+                      setScrollHost(el);
+                      onCleanup(() =>
+                        setScrollHost((current) => (current === el ? undefined : current))
                       );
                     }}
-                  </For>
+                    onScroll={recordScroll}
+                    class="min-w-0 flex-1 overflow-y-auto p-3.5"
+                    style={{
+                      "min-height": dialog().size === "xl" ? "min(360px, 40vh)" : undefined,
+                    }}
+                  >
+                    <div
+                      class="flex flex-col gap-3"
+                      role={tabs().length ? "tabpanel" : undefined}
+                      id={activeTab() ? `${tabIds}-${activeTab()}-panel` : undefined}
+                      aria-labelledby={activeTab() ? `${tabIds}-${activeTab()}-tab` : undefined}
+                    >
+                      <FieldGroups />
+                    </div>
+                  </div>
+                }
+              >
+                <div
+                  class="flex min-w-0 flex-1 flex-col overflow-hidden p-3.5"
+                  role="tabpanel"
+                  id={`${tabIds}-${activeTab()}-panel`}
+                  aria-labelledby={`${tabIds}-${activeTab()}-tab`}
+                >
+                  {/* No onEscape: Escape here should dismiss the DIALOG, which
+                      is exactly what happens when the browser leaves the key
+                      alone. It still swallows the first Escape while a preview
+                      is open, which is the layer the user means. */}
+                  <MarketplaceBrowser
+                    class="mp-embed"
+                    data={marketplaceData()}
+                    active={props.open}
+                  />
                 </div>
-              </div>
+              </Show>
             </Tabs.Root>
             <footer class="tlib-nui-ruled-t flex shrink-0 flex-wrap items-center justify-end gap-2 px-4 py-2.5">
               <Show when={attempted() && Object.keys(errors()).length}>
@@ -449,4 +502,55 @@ function DialogSession(props: {
       </ArkDialog.Positioner>
     </ArkDialog.Root>
   );
+
+  function FieldGroups() {
+    return (
+      <For each={groupKeys()}>
+        {(key, index) => {
+          const ids = JSON.parse(key) as string[];
+          const first = () => fieldById().get(ids[0]);
+          const hasLabelledSibling = () =>
+            ids.length > 1 && ids.some((id) => !LABELLESS.has(fieldById().get(id)?.type ?? ""));
+          return (
+            <>
+              <Show
+                when={first()?.section && first()?.section !== groups()[index() - 1]?.[0].section}
+              >
+                <h3 class="tlib-nui-ruled-b pb-1.5 text-xs font-medium tracking-wide text-[var(--nui-muted)]">
+                  {first()?.section}
+                </h3>
+              </Show>
+              <div class="tlib-nui-field-row">
+                <For each={ids}>
+                  {(id) => {
+                    const field = () => fieldById().get(id)!;
+                    return (
+                      <div
+                        class="tlib-nui-field-cell"
+                        data-shrink={field()?.flex === "shrink"}
+                        data-labelless={hasLabelledSibling() && LABELLESS.has(field()?.type ?? "")}
+                      >
+                        <NuiField
+                          field={field()}
+                          value={values()[id]}
+                          theme={dialog().theme}
+                          active={props.open}
+                          error={attempted() || touched().has(id) ? errors()[id] : undefined}
+                          onBlur={() => {
+                            if (props.open) setTouched((previous) => new Set([...previous, id]));
+                          }}
+                          onChange={(value) => updateField(id, value)}
+                          onAction={() => action(id)}
+                        />
+                      </div>
+                    );
+                  }}
+                </For>
+              </div>
+            </>
+          );
+        }}
+      </For>
+    );
+  }
 }

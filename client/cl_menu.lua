@@ -79,6 +79,31 @@ local function convarNumber(name, fallback, minimum, maximum)
     return math.floor(value)
 end
 
+-- Three of these convars were named without their unit, so `10000` on
+-- `tlib_menu_request_timeout` read as seconds to more than one owner. The `_ms`
+-- names are the real ones now; the old spellings still work and say so once, so
+-- nobody's existing server.cfg silently stops applying.
+--
+-- Removal is a MAJOR-version change, not "soon". Until then the old name is
+-- read whenever the new one is unset.
+local DEPRECATED_CONVARS = {
+    tlib_menu_request_timeout_ms    = 'tlib_menu_request_timeout',
+    tlib_menu_permission_refresh_ms = 'tlib_menu_permission_refresh',
+    tlib_menu_highlight_settle_ms   = 'tlib_menu_highlight_settle',
+}
+
+-- The old name wins over the DEFAULT but never over the new name, so an owner
+-- mid-migration who has set both gets the one they just wrote.
+local function convarMs(name, fallback, minimum, maximum)
+    if convar(name, '') ~= '' then return convarNumber(name, fallback, minimum, maximum) end
+    local old = DEPRECATED_CONVARS[name]
+    if old and convar(old, '') ~= '' then
+        print(('[tLib/menu] DEPRECATED convar `%s`; use `%s` instead (same value, milliseconds). The old name still works but will be removed in the next major version.'):format(old, name))
+        return convarNumber(old, fallback, minimum, maximum)
+    end
+    return fallback
+end
+
 local settings = {
     command          = convar('tlib_menu_command', 'tlibmenu'),
     key              = convar('tlib_menu_key', 'F1'),
@@ -87,9 +112,9 @@ local settings = {
     searchKey        = convar('tlib_menu_search_key', 'F3'),
     keySlots         = convarNumber('tlib_menu_key_slots', 8, 0, 16),
     locale           = convar('tlib_menu_locale', 'en'),
-    requestTimeoutMs = convarNumber('tlib_menu_request_timeout', 10000, 1000, 60000),
-    refreshMs        = convarNumber('tlib_menu_permission_refresh', 5000, 1000, 60000),
-    settleMs         = convarNumber('tlib_menu_highlight_settle', 120, 0, 2000),
+    requestTimeoutMs = convarMs('tlib_menu_request_timeout_ms', 10000, 1000, 60000),
+    refreshMs        = convarMs('tlib_menu_permission_refresh_ms', 5000, 1000, 60000),
+    settleMs         = convarMs('tlib_menu_highlight_settle_ms', 120, 0, 2000),
 }
 MC.settings = settings
 

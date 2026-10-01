@@ -8,22 +8,16 @@ import {
   Toaster as ArkToaster,
   createToaster as arkCreateToaster,
 } from "@ark-ui/solid/toast";
-import type { ClassValue } from "clsx";
-import clsx from "clsx";
 import type { Component } from "solid-js";
 import { Show, splitProps } from "solid-js";
 import { Portal } from "solid-js/web";
-import { unoMerge } from "unocss-merge";
 import IconCircleCheck from "~icons/lucide/circle-check";
 import IconCircleX from "~icons/lucide/circle-x";
 import IconInfo from "~icons/lucide/info";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconTriangleAlert from "~icons/lucide/triangle-alert";
 import IconX from "~icons/lucide/x";
-
-function cn(...classLists: ClassValue[]) {
-  return unoMerge(clsx(classLists));
-}
+import { cn } from "@tlib/shared/cn";
 
 export const createToaster = (props: CreateToasterProps) => {
   return arkCreateToaster(props);
@@ -35,7 +29,7 @@ const toasterRegistry = new Map<string, CreateToasterReturn>();
 
 export function getToaster(
   name: string = "default",
-  config?: CreateToasterProps
+  config?: CreateToasterProps,
 ): CreateToasterReturn {
   if (!toasterRegistry.has(name)) {
     const defaultConfig: CreateToasterProps = {
@@ -165,7 +159,7 @@ export const Toast: Component<ToastProps> = (props) => {
                 "data-[type=warning]:border-yellow-600/50 dark:data-[type=warning]:border-yellow-400/50",
                 "data-[type=info]:border-primary/50",
                 "data-[type=loading]:border-primary/50",
-                local.class
+                local.class,
               )}
               style={{
                 "border-radius": "var(--radius)",

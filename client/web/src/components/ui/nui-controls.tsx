@@ -11,7 +11,7 @@
 
 import Check from "lucide-solid/icons/check";
 import { type JSX, Show, splitProps } from "solid-js";
-import "./nui.css";
+import "../../../../../shared/ts/nui-kit/nui.css";
 
 /** Shared with Ark's Checkbox.Control, which wears the same class. */
 export const NUI_CHECKBOX_CLASS = "tlib-nui-control tlib-nui-checkbox-control";

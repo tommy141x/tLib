@@ -52,8 +52,14 @@
      never painted. A brighter top border is the same idea — a surface catching
      a light above it — in a property that renders. It is a border rather than a
      positioned hairline because the panel scrolls, and an absolutely positioned
-     ::before would scroll away with the rows. */
-  border-top-color: color-mix(in srgb, var(--text) 20%, var(--border));
+     ::before would scroll away with the rows.
+     Light at an alpha rather than a mix toward --border: color-mix() is dropped
+     whole by CEF 103, which left this longhand invalid and the top edge plain
+     --border — the cue never painted at all. The panel's background reaches the
+     border box, so 20% of --text here composites over the lifted panel, and over
+     a bright scene it lifts with it. That is the same argument .menu-row's
+     ruling below makes for drawing a hairline in --text instead of --border. */
+  border-top-color: hsl(var(--text-raw) / 0.2);
 }
 /* A brand bar rather than a brand band: one line on the same 12px gutter as
    .menu-heading and the dialog header. The vMenu skin restores the centred
@@ -222,9 +228,13 @@
    it to stay dark, and this panel lets the world through, so over a bright
    scene a dimmed --border lands on the same value the lifted panel does and the
    ruling disappears. A light hairline is the lit-edge cue used everywhere else
-   here and it holds against anything. */
+   here and it holds against anything.
+
+   Written as slash-alpha over --text-raw because CEF 103 predates color-mix()
+   and drops any declaration containing it, which is how a ruling this paragraph
+   argues for spent its life invisible. */
 :where(.tlib-menu[data-skin="default"]) .menu-row {
-  border-bottom-color: color-mix(in srgb, var(--text) 9%, transparent);
+  border-bottom-color: hsl(var(--text-raw) / 0.09);
 }
 :where(.tlib-menu[data-skin="default"]) .menu-row:last-child {
   border-bottom-color: transparent;
@@ -300,8 +310,13 @@
   color: var(--muted);
   cursor: not-allowed;
 }
+/* Ink dimmed toward the bar it sits on, so a disabled row that is also the
+   selected one still reads as unavailable. The old two-colour mix toward
+   --selected is exactly 65% ink drawn over --selected, which is what this row's
+   background already is — so the alpha form composites to the same colour and,
+   unlike color-mix(), CEF 103 parses it. */
 :where(.tlib-menu) .menu-row.is-disabled.is-active .row-main {
-  color: color-mix(in srgb, var(--selected-ink) 65%, var(--selected));
+  color: hsl(var(--selected-ink-raw) / 0.65);
 }
 /* 45%, the slider's share, not 57%: at 57% the value block outweighed the label
    245.7px to 165.3px, truncating a 23-character label while its option kept room
@@ -410,8 +425,12 @@
   height: 15px;
   margin-top: 1px;
 }
+/* A wash of the danger colour behind danger-coloured text. 12% alpha over
+   --menu-danger-raw rather than a color-mix() with transparent: they mean the
+   same thing, but CEF 103 parses only one of them and drops the declaration
+   containing the other, which left this notice with no fill at all. */
 :where(.tlib-menu) .notice-error {
-  background: color-mix(in srgb, var(--menu-danger) 12%, transparent);
+  background: hsl(var(--menu-danger-raw) / 0.12);
   color: var(--menu-danger);
 }
 :where(.tlib-menu) .empty-state {
@@ -890,16 +909,28 @@
    invisible. Flipping the tokens rather than special-casing the control makes
    anything shared that lands in a row legible for free. --nui-inset goes
    transparent and --nui-control-border to the row's ink because on a filled bar
-   the unchecked box is an outline, not a well. */
+   the unchecked box is an outline, not a well. --nui-accent-raw has to turn over
+   with --nui-accent it partners, or the focus ring — the one consumer that needs
+   the triplet rather than the colour — stays --selected and draws white on the
+   white bar, which is the exact invisibility this paragraph is about. */
 :where(.tlib-menu) .menu-row.is-active {
   --nui-accent: var(--selected-ink);
+  --nui-accent-raw: var(--selected-ink-raw);
   --nui-accent-text: var(--selected);
   --nui-inset: transparent;
   --nui-control-border: currentColor;
   --nui-hover: #00000055;
 }
+/* Mid-grey, not the row's own ink. The arrows live in a row whose ink inverts
+   with the selection, so the hover has to lighten a dark row and darken a
+   selected one; currentColor said that directly, but taking an alpha of
+   currentColor needs either color-mix() or relative colour syntax and CEF 103
+   has neither — the whole declaration was dropped and the arrows had no hover.
+   A neutral 12% does both jobs from one value because it is lighter than the
+   row ink on one and darker on the other. Same trick, same number, as
+   .tlib-nui-button:hover in shared/ts/nui-kit/nui.css. */
 :where(.tlib-menu) .row-choice button:not(:disabled):hover {
-  background: color-mix(in srgb, currentColor 12%, transparent);
+  background: rgb(127 127 127 / 0.12);
 }
 :where(.tlib-menu) .back-button:hover,
 :where(.tlib-menu) .menu-footer button:hover {

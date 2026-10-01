@@ -23,24 +23,70 @@
   --border: #343434;
   --selected: #eeeeee;
   --selected-ink: #111111;
+  /* ⚠️ Bare HSL triplets for the colours above that something below needs a
+     translucent share of. NUI is CEF 103 and color-mix() landed in Chromium 111,
+     and CEF does not merely ignore an unknown function — it invalidates the whole
+     declaration. A token defined with color-mix() therefore resolves to nothing
+     and every consumer of it silently paints nothing, which is what these five
+     surfaces did. The Chrome-103-safe way to say "this colour at p% alpha" is
+     slash-alpha over a triplet, `hsl(var(--text-raw) / 0.08)`; the same `-raw`
+     suffix and the same reasoning are already in shared/ts/nui-kit/nui.css.
+
+     Each triplet is the exact hex above it, so nothing moves on the stock theme.
+     They are not derived from those colours — CSS cannot take a resolved colour
+     apart, and there is no function that puts one back into channels — which is
+     why they are written out by hand here and why a theme cannot be left to
+     override only the colour.
+
+     Menu.tsx's theme effect covers five of them for a theme: it still resolves
+     the incoming value to hsl() for the public token, but it now writes the
+     partner beside it from the SAME unresolved value, in the one moment that
+     value still exists. It can only do that when the theme states a colour in
+     channel form (`0 0% 93.33%`, or `hsl(0 0% 93.33%)`). A theme that names a
+     hex or a CSS colour keyword hands over nothing to decompose, so the default
+     below stays in force and its tints paint the stock hue — visible and wrong
+     rather than invalid and invisible. Such a theme should set the `-raw`
+     partner itself; an explicit one always wins over a derived one.
+
+     --menu-danger is not a public theme token and has no such cover: its partner
+     is only ever this constant. Nothing may wrap any of these in hsl() twice. */
+  --text-raw: 0 0% 93.33%;
+  --panel-raw: 0 0% 9.02%;
+  --border-raw: 0 0% 20.39%;
+  --selected-ink-raw: 0 0% 6.67%;
+  /* Equal to --text-raw only because the stock --selected and --text happen to be
+     the same white. Its own token because they are separate theme knobs, and the
+     focus ring further down follows the selection, not the ink. */
+  --selected-raw: 0 0% 93.33%;
   /* Enough of the world to know it is there, not enough to read through. The
      rows have no fill of their own, so this alpha is what a row sits on, and
      88% left a bright daytime street legible straight through the list. */
-  --menu-panel-bg: color-mix(in srgb, var(--panel) 94%, transparent);
+  --menu-panel-bg: hsl(var(--panel-raw) / 0.94);
   /* The three fills below are scrims — a wash over whatever is behind them —
      rather than opaque mixes of --panel, because over a translucent panel an
      opaque band is a hole in the transparency. Composited over the stock
      --panel each is the exact colour the opaque mix it replaced produced, so
-     nothing moves on an opaque theme. */
-  --menu-inset: color-mix(in srgb, #000 18%, transparent);
+     nothing moves on an opaque theme.
+
+     A scrim over black needs no `-raw` partner: it is literally black at an
+     alpha, which rgba() states in a syntax CEF 103 has always parsed. */
+  --menu-inset: rgba(0, 0, 0, 0.18);
   /* The chrome bands — brand bar, heading, description, footer — against the row
      body. A separate token from --menu-inset, which is a sunken well for a
      control: two different jobs that happened to share one value, and sharing it
      is what made four stacked bands read as one. vMenu restores the old value. */
-  --menu-chrome: color-mix(in srgb, #000 45%, transparent);
-  --menu-hover: color-mix(in srgb, var(--text) 8%, transparent);
-  --menu-control-border: color-mix(in srgb, var(--text) 32%, var(--panel));
+  --menu-chrome: rgba(0, 0, 0, 0.45);
+  --menu-hover: hsl(var(--text-raw) / 0.08);
+  /* A border has the panel behind it, not --panel's opaque self — the panel's
+     background paints to the border box and this panel is translucent — so
+     stating the old two-colour mix as --text at the same 32% alpha composites to
+     the same thing wherever the mix was ever right, and stays right over a
+     lifted panel where an opaque mix of --panel would not. It is also the
+     identical expression .tlib-nui-surface uses for --nui-control-border, which
+     is the point: one control border, one number. */
+  --menu-control-border: hsl(var(--text-raw) / 0.32);
   --menu-danger: #ff8585;
+  --menu-danger-raw: 0 100% 76.08%;
   /* The shared control radius, so a menu row's checkbox and a dialog's are the
      same shape. */
   --menu-radius: var(--radius-control, 0.5rem);
@@ -81,6 +127,24 @@
   --nui-hover: var(--menu-hover);
   --nui-accent: var(--selected);
   --nui-accent-text: var(--selected-ink);
+  /* The contract is not finished at the resolved colours: nui.css tints two of
+     them, and a tint needs the triplet, not the colour. Left undefined here
+     `hsl(var(--nui-text-raw) / 0.52)` resolves to `hsl( / 0.52)` — invalid,
+     dropped, painting nothing — which is the same silent failure color-mix()
+     causes above, arriving by the other road. The live casualty in a row is
+     .tlib-nui-control's focus ring, worn by NuiCheckbox and NuiRange: the menu
+     is keyboard- and controller-driven, so that ring is the whole feedback. The
+     other three readers (.tlib-nui-input:hover, .tlib-nui-select-content,
+     .tlib-nui-lit) are not reachable from menu markup today; they are covered
+     anyway, because the point of this block is that anything shared can land in
+     a row without knowing it is in one.
+
+     nui.css's other three `-raw` tokens — --nui-border-raw, --nui-muted-raw,
+     --nui-hover-raw — are deliberately NOT restated. Only admin-ui reads them,
+     it is never inside a menu, and it reads them through a full fallback chain
+     that cannot resolve empty. Restating them here would be three dead tokens. */
+  --nui-text-raw: var(--text-raw);
+  --nui-accent-raw: var(--selected-raw);
   --nui-danger: var(--menu-danger);
   --nui-radius: var(--menu-radius);
   --nui-radius-lg: var(--radius-surface, 0.875rem);

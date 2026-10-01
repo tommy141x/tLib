@@ -10,33 +10,22 @@ import {
   createSignal,
   createUniqueId,
   For,
-  type JSX,
   Match,
   Switch as MatchType,
   Show,
-  splitProps,
 } from "solid-js";
 import { Portal } from "solid-js/web";
+// NuiButton moved into the shared package so tELS, tDetector and tRadar can
+// mount the marketplace components that use it; nothing in this app is
+// reachable from a sibling resource. Re-exported here so the existing import
+// sites in tLib keep working. nui.css comes along with it.
+import { NuiButton } from "../../../../../shared/ts/nui-kit/NuiButton";
 import type { DialogField, DialogValue } from "../dialog-model";
 import { NUI_CHECKBOX_CLASS, NuiCheckGlyph } from "./nui-controls";
 import { applyNuiTheme } from "./nui-theme";
-import "./nui.css";
 
-export function NuiButton(
-  props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
-    tone?: "primary" | "destructive" | "default";
-  }
-) {
-  const [local, rest] = splitProps(props, ["tone", "class", "type"]);
-  return (
-    <button
-      {...rest}
-      type={local.type ?? "button"}
-      data-tone={local.tone ?? "default"}
-      class={`tlib-nui-control tlib-nui-button ${local.class ?? ""}`}
-    />
-  );
-}
+export { NuiButton };
+
 const inputClass = "tlib-nui-control tlib-nui-input";
 
 /** Schema-neutral control binding. State and the NUI wire live in the dialog adapter. */

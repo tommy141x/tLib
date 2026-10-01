@@ -1,15 +1,9 @@
 import { Tooltip as ArkTooltip } from "@ark-ui/solid/tooltip";
 import type { PositioningOptions } from "@zag-js/popper";
-import type { ClassValue } from "clsx";
-import clsx from "clsx";
 import { type JSX, Show, splitProps } from "solid-js";
 import { Portal } from "solid-js/web";
 import { Motion, Presence } from "solid-motionone";
-import { unoMerge } from "unocss-merge";
-
-function cn(...classLists: ClassValue[]) {
-  return unoMerge(clsx(classLists));
-}
+import { cn } from "@tlib/shared/cn";
 
 interface TooltipProps {
   children?: JSX.Element;
@@ -68,7 +62,7 @@ export const TooltipContent = (props: TooltipContentProps) => {
                   <ArkTooltip.Content
                     class={cn(
                       "z-50 rounded-md bg-secondary text-secondary-foreground px-3 py-1.5 text-xs shadow-md",
-                      local.class
+                      local.class,
                     )}
                     {...others}
                   >

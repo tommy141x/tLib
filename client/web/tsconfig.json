@@ -16,7 +16,9 @@
     "allowImportingTsExtensions": true,
     "moduleDetection": "force",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@tlib/shared": ["../../shared/ts/index.ts"],
+      "@tlib/shared/*": ["../../shared/ts/*"]
     }
   },
   "include": ["src"]

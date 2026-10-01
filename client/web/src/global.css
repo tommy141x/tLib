@@ -1,4 +1,7 @@
 @import "@unocss/reset/tailwind.css";
+/* The surface tokens, shared with every other resource's NUI rather than
+   declared here. See the header of that file for why they moved out. */
+@import "../../../shared/css/theme-tokens.css";
 
 /* The one face tLib actually ships, so it is the interface face rather than the
    menu's alone: --font-sans used to name Inter, which is not on disk and not
@@ -25,35 +28,12 @@
   src: url("./menu/fonts/hanken-grotesk-latin.woff2") format("woff2");
 }
 
-/* Neutral HUD surfaces. HSL channels are the public dialog/toast theme contract;
-   the menu keeps its separate full-color tokens on .tlib-menu. */
+/* Neutral HUD surfaces. The HSL channels are the public dialog/toast theme
+   contract and now live in shared/css/theme-tokens.css, imported above; the menu
+   keeps its separate full-color tokens on .tlib-menu. Only the font stays here,
+   because it names a face this resource ships and no other one has. */
 @layer base {
   :root {
-    --background: 0 0% 6.67%;
-    --foreground: 0 0% 93.33%;
-    --card: 0 0% 6.67%;
-    --card-foreground: 0 0% 93.33%;
-    --popover: 0 0% 9.8%;
-    --popover-foreground: 0 0% 93.33%;
-    --primary: 211 80% 55%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 93.33%;
-    --muted: 0 0% 12%;
-    --muted-foreground: 214.3 13.7% 70%;
-    --accent: 211 80% 55%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 20.39%;
-    --input: 0 0% 9.8%;
-    --ring: 211 80% 55%;
-    /* One knob. Everything else is derived from it so a control, a popover and a
-       panel stay in proportion when a theme moves it. */
-    --radius: 0.625rem;
-    --radius-control: calc(var(--radius) * 0.8);
-    --radius-surface: calc(var(--radius) * 1.4);
-    --radius-tight: calc(var(--radius) * 0.4);
     /* The shipped face first, then the same fallbacks the menu has always
        named, so a client that somehow cannot decode the woff2 lands where it
        used to rather than on a serif. */
