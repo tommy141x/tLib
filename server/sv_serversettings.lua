@@ -93,6 +93,10 @@ function ServerSettings.create(opts)
     end
 
     local function saveToFile()
+        -- Demo mode keeps the change in `settings` (already updated by the
+        -- caller) and off disk, so it lasts the session and no longer. `Demo` is
+        -- tLib's own copy of the module consumers reach as `tlib.demo`.
+        if Demo and Demo.dropWrite(('%s/%s'):format(resName, file)) then return end
         if section then
             -- Read, replace our section, write back, so siblings survive.
             local raw = LoadResourceFile(resName, file)

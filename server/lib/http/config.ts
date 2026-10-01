@@ -1,9 +1,17 @@
 // Router configuration. tLib has no config file; deployment-specific values are
 // FiveM convars read at boot:
 //
-//   setr tlib_http_port        7777        # the one external port
-//   setr tlib_http_host        "0.0.0.0"   # bind address
-//   setr tlib_http_public_url  ""          # the address clients should use
+//   set tlib_http_port        7777        # the one external port
+//   set tlib_http_host        "0.0.0.0"   # bind address
+//   set tlib_http_public_url  ""          # the address clients should be told
+//
+// `set`, not `setr`. All three are read here, server-side, through GetConvar —
+// nothing in client/ or any web/ tree reads them, so replicating them to every
+// connected player buys nothing and widens what the server tells the world
+// about its own networking. The public URL still reaches clients: the server
+// resolves it and sends the resolved value, which is why the override does not
+// need to be replicated. README.md's convar table is the source of truth for
+// this and already said `set`; this comment was the one that was wrong.
 //
 // tlib_http_public_url is the one an operator has to think about: the router
 // binds a port but cannot know what address reaches it from outside. Unset

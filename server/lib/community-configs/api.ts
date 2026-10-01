@@ -4,106 +4,37 @@
 //
 // `server/sv_community_configs.lua` used to do this with PerformHttpRequest,
 // and it did not authenticate. The publish endpoint now requires
-// `X-Resource-Secret`, and that secret lives in `../marketplace/api.ts`.
+// `X-Resource-Secret` — the baked-in constant re-exported as `_RS` from
+// `../marketplace/api.ts`, defined once in
+// `shared/ts/marketplace/catalogue.ts`.
+//
+// ⚠️ It is NOT read from a convar, and must never become one. This comment
+// used to say `tmarketplace_resource_secret`, which was wrong and is exactly
+// the misreading that got the secret converted to required operator config
+// once already. See the note on `MARKETPLACE_RESOURCE_SECRET` for why it is
+// public by design.
+//
 // Handing it to the Lua VM through a FiveM export would let any third-party
-// script on a customer's server read it — a strictly worse exposure than the
-// bundle already has, since extracting it from here at least requires file
-// access. So the request moves to the secret rather than the other way round.
+// script on a customer's server read it without console or file access — a
+// strictly worse exposure. So the request moves to the secret rather than the
+// other way round.
 //
-// ── Why this file has its own request helper ────────────────────────────────
+// ── Where the request helper went ───────────────────────────────────────────
 //
-// Two reasons. `../marketplace/api.ts`'s `nodeRequest` hardcodes `"GET"` and an
-// empty body, and three of the five calls here are POSTs. More importantly it
-// is built on `PerformHttpRequest`, which does not exist in this runtime — see
-// the note on `request` below. Generalising that function would mean editing
-// the hash-verified bundle-download path to fix a break this module does not
-// need to inherit.
+// It used to live in this file, because `../marketplace/api.ts`'s `nodeRequest`
+// hardcodes `"GET"` with an empty body — three of the five calls here are POSTs
+// — and, worse, is built on `PerformHttpRequest`, which does not exist in this
+// runtime. It is now `../marketplace/http.ts`, unchanged, because the browse
+// path needs the same thing and a third copy of it would have been the fourth
+// hand-rolled HTTP wrapper pointed at one host.
 
 import { _RS, buildHeaders, MarketplaceError } from "../marketplace/api";
 import { resolveConfig } from "../marketplace/config";
+import { parseJson, request, toError } from "../marketplace/http";
 
 /** The community-configs endpoints hang off the same `/api/v1` prefix. */
 function endpoint(path = ""): string {
   return `${resolveConfig().apiBase}/community-configs${path}`;
-}
-
-const TIMEOUT_MS = 15_000;
-
-interface RawResponse {
-  ok: boolean;
-  status: number;
-  body: string;
-}
-
-/**
- * ⚠️ `fetch`, NOT `PerformHttpRequest`.
- *
- * `PerformHttpRequest` is a Lua-runtime native and is simply absent from
- * globalThis in FiveM's Node server runtime — `../marketplace/fivem.ts`
- * snapshots it at module load and gets `undefined`, so every call through it
- * dies with "fPerformHttpRequest is not a function". It fails at CALL time,
- * not load time, which is why nothing catches it until a request is made.
- * (`../marketplace/api.ts` still routes through that native and has the same
- * latent break in its download path.)
- *
- * The manifest declares Node 22, so global `fetch` is here and is the better
- * tool regardless: real methods, real headers, and a real abort on timeout —
- * PerformHttpRequest has no cancellation at all.
- */
-async function request(
-  url: string,
-  method: "GET" | "POST",
-  body: string,
-  headers: Record<string, string>
-): Promise<RawResponse> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: method === "GET" ? undefined : body,
-      signal: controller.signal,
-    });
-    return { ok: res.ok, status: res.status, body: await res.text() };
-  } catch (e: unknown) {
-    // An abort is a timeout; say so rather than surfacing "This operation was
-    // aborted", which reads like a bug to whoever sees it in game.
-    if (e instanceof Error && e.name === "AbortError") {
-      throw new MarketplaceError("request_timed_out", 0);
-    }
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
- * Turn a non-2xx into the same error type the marketplace path throws, so a
- * caller handling one handles both.
- *
- * The Worker answers `{error: string}` on every refusal — see
- * `src/lib/tels-configs/api.ts` — and that message is written to be shown to a
- * player ("3 of 4 LEDs in this pattern have no name…"), so it is carried
- * through rather than replaced with a status code.
- */
-function toError(resp: RawResponse): MarketplaceError {
-  let code = `http_${resp.status}`;
-  try {
-    const parsed = JSON.parse(resp.body) as { error?: string };
-    if (typeof parsed.error === "string" && parsed.error) code = parsed.error;
-  } catch {
-    // Non-JSON body: keep the http_<status> fallback.
-  }
-  return new MarketplaceError(code, resp.status);
-}
-
-function parseJson<T>(resp: RawResponse): T {
-  try {
-    return JSON.parse(resp.body) as T;
-  } catch {
-    throw new MarketplaceError("unexpected_response", resp.status);
-  }
 }
 
 // ── Publish ─────────────────────────────────────────────────────────────────
@@ -135,8 +66,15 @@ export async function publishConfig(payload: PublishPayload): Promise<string> {
     "POST",
     JSON.stringify(payload),
     // The ONLY call in this file that sends the secret. The reads below are
-    // deliberately unauthenticated: they are also reachable from an in-game
-    // browse panel, which cannot hold a credential.
+    // deliberately unauthenticated, because publishing is the only act that
+    // needs attributing -- but they are NOT reachable from an in-game browse
+    // panel, which is what this comment used to claim. Needing no credential
+    // and being fetchable from CEF are independent properties: the Worker
+    // sends no `Access-Control-Allow-Origin` on any /api/v1 route, so a fetch
+    // from `cfx-nui-<resource>` receives its 200 and then has the body
+    // withheld by the browser. Public is not what makes a response readable
+    // cross-origin; the header is. Every read here therefore runs server-side.
+    // See `shared/ts/marketplace/ui/browse.ts`, which already pays this cost.
     buildHeaders({ "Content-Type": "application/json", "X-Resource-Secret": _RS })
   );
   if (!resp.ok) throw toError(resp);
@@ -181,24 +119,6 @@ export async function listConfigs(params: {
   const resp = await request(`${endpoint()}?${qs}`, "GET", "", buildHeaders());
   if (!resp.ok) throw toError(resp);
   return parseJson<{ items?: CommunityConfigSummary[] }>(resp).items ?? [];
-}
-
-/** `{ "<modelKey>": count }`, for the "N available" badge. Absent means zero. */
-export async function countConfigs(params: {
-  script: string;
-  configType: string;
-  keys: string[];
-}): Promise<Record<string, number>> {
-  if (params.keys.length === 0) return {};
-  const qs = new URLSearchParams({
-    script: params.script,
-    type: params.configType,
-    keys: params.keys.join(","),
-  });
-
-  const resp = await request(`${endpoint("/exists")}?${qs}`, "GET", "", buildHeaders());
-  if (!resp.ok) throw toError(resp);
-  return parseJson<{ counts?: Record<string, number> }>(resp).counts ?? {};
 }
 
 /**
@@ -247,6 +167,40 @@ export async function importConfig(id: string): Promise<string> {
   const resp = await request(
     endpoint(`/${encodeURIComponent(id)}/import`),
     "POST",
+    "",
+    buildHeaders()
+  );
+  if (!resp.ok) throw toError(resp);
+
+  const parsed = parseJson<{ ok?: boolean; configJson?: string }>(resp);
+  if (!parsed.ok || typeof parsed.configJson !== "string") {
+    throw new MarketplaceError("unexpected_response", resp.status);
+  }
+  return parsed.configJson;
+}
+
+/**
+ * Fetch one config WITHOUT counting an import.
+ *
+ * The same payload `importConfig` returns, from `GET /{id}/peek`, which does
+ * not write `import_count` or an import row. It exists because tELS's
+ * marketplace tab animates a listing's LED preview on hover and in its detail
+ * overlay, and animating needs the config's real frames — pulling those through
+ * `/import` would make the import counter a measure of mouse movement.
+ *
+ * ⚠️ NO `X-Resource-Secret`. `publishConfig` is the only call in this file that
+ * sends it, and the reason is in this file's header: the secret must not reach a
+ * path any anonymous caller can hit. Peek is a public read of a row that is
+ * public by definition — `status = 'published'` is the Worker's only gate.
+ *
+ * ⚠️ Returns `configJson` as the raw STRING, exactly as `importConfig` does.
+ * tELS applies its own migrations on the way in, so a pre-parsed object would
+ * skip them.
+ */
+export async function peekConfig(id: string): Promise<string> {
+  const resp = await request(
+    endpoint(`/${encodeURIComponent(id)}/peek`),
+    "GET",
     "",
     buildHeaders()
   );

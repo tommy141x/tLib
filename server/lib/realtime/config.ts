@@ -9,7 +9,10 @@
 // read at boot.
 //
 // convars:
-//   setr tlib_realtime_public_url  "ws://host:7777/rt"   # override the URL handed to clients
+//   set tlib_realtime_public_url  "ws://host:7777/rt"   # override the URL handed to clients
+//
+// `set`, not `setr`: it is read here, server-side. The resolved URL is sent to
+// clients over the wire, so the override itself never needs replicating.
 
 import { REALTIME_MOUNT } from "../http/constants";
 import { fGetConvar } from "./fivem";

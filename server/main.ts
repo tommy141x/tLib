@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { registerWriteResourceFile } from "../shared/ts/fs/server";
 import { installCommunityConfigs } from "./lib/community-configs/index";
 import { installHttp } from "./lib/http/index";
 import { installInference } from "./lib/inference/index";
 import { installMarketplace } from "./lib/marketplace/index";
 import { installRealtime } from "./lib/realtime/index";
+import { installSpawn } from "./lib/spawn/index";
 
 declare function GetResourcePath(resourceName: string): string | null;
 declare function exports(name: string, fn: (...args: unknown[]) => unknown): void;
@@ -29,10 +31,14 @@ installMarketplace();
 installCommunityConfigs();
 
 // A table of which resource is already serving which model, so two resources
-// that each ship local inference load one copy between them — plus the spawn
-// host, which starts those engines so `add_unsafe_child_process_permission
-// tLib` is the only line an operator has to write.
+// that each ship local inference load one copy between them.
 installInference();
+
+// The gated child-process broker. tDB, tAI and tRadio start their engines
+// through this, so `add_unsafe_child_process_permission tLib` is the only line
+// an operator has to write — and what sits behind that one line is narrower
+// than the four unrestricted grants it replaced. See server/lib/spawn/catalog.ts.
+installSpawn();
 
 const siblings: string[] = [];
 
@@ -112,6 +118,26 @@ exports("ScanResourceFiles", (resourceName: unknown, subdir: unknown): string =>
 exports("ScanResourceDirs", (resourceName: unknown, subdir: unknown): string =>
   JSON.stringify(scanResource(resourceName, subdir, "dir"))
 );
+
+// ─── The write counterpart of the scans above ────────────────────────────────
+//
+// tLib registers its own `WriteResourceFile` export for its OWN files, from the
+// implementation every consumer now shares (shared/ts/fs/server.ts).
+//
+// It is NOT the bridge other resources call any more, and cannot be: FiveM's
+// Node runtime sandboxes each resource to its own directory, so a write tLib
+// issued into tDetector's folder was refused before it reached the disk, with a
+// message pointing at `--allow-fs-write` — a server startup argument no shipped
+// product may require of a customer. tDetector and tRadar each register the same
+// export from their own `server/main.ts`, and
+// `shared/imports/fs/server.lua` calls the LOCAL resource's export. The one
+// implementation is still shared; only the registration moved.
+//
+// This registration stays because tLib legitimately writes its own files, and
+// because `tlib.fs.writeResourceFile` running inside tLib's VM resolves to
+// exactly this export — dropping it would make tLib the one resource that
+// cannot use its own module.
+registerWriteResourceFile();
 
 // The directory counterpart. Every consumer that ships "packs" — HUD layouts,
 // skins, sound sets — needs the folder names, and there is no way to get them

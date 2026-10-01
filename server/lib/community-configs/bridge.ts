@@ -10,11 +10,11 @@
 
 import { fExports } from "../marketplace/fivem";
 import {
-  countConfigs,
   importConfig,
   listConfigs,
   matchConfigs,
   type PublishPayload,
+  peekConfig,
   publishConfig,
 } from "./api";
 
@@ -95,26 +95,6 @@ export function registerCommunityConfigsBridge(): void {
     }
   );
 
-  //   exports.tLib:ccExists(script, configType, keysCsv, function(ok, err, countsJson) end)
-  fExports("ccExists", (script: unknown, configType: unknown, keysCsv: unknown, cb: unknown) => {
-    if (!isCallback(cb)) return;
-    if (typeof script !== "string" || typeof configType !== "string") {
-      cb(false, "script and configType required");
-      return;
-    }
-    const keys =
-      typeof keysCsv === "string"
-        ? keysCsv
-            .split(",")
-            .map((k) => k.trim())
-            .filter(Boolean)
-        : [];
-    settle(
-      countConfigs({ script, configType, keys }).then((counts) => JSON.stringify(counts)),
-      cb
-    );
-  });
-
   //   exports.tLib:ccMatch(script, configType, fpJson, key, limit, function(ok, err, itemsJson) end)
   //
   // Returns CANDIDATES. The caller scores them; see `api.ts`.
@@ -169,5 +149,20 @@ export function registerCommunityConfigsBridge(): void {
       return;
     }
     settle(importConfig(id), cb);
+  });
+
+  //   exports.tLib:ccPeek(id, function(ok, err, configJson) end)
+  //
+  // The same payload `ccImport` returns, from a route that does NOT increment
+  // the config's import counter. Consumers that read a config to render or
+  // preview it — rather than because a player chose to install it — must use
+  // this one, or the counter stops meaning "installed".
+  fExports("ccPeek", (id: unknown, cb: unknown) => {
+    if (!isCallback(cb)) return;
+    if (typeof id !== "string" || !id) {
+      cb(false, "id required");
+      return;
+    }
+    settle(peekConfig(id), cb);
   });
 }

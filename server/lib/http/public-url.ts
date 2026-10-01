@@ -2,7 +2,7 @@
 // it from outside -- NAT, a tunnel, a proxy and a bare WAN IP all differ, and
 // most routers do not hairpin -- so the operator states it:
 //
-//   setr tlib_http_public_url "fivem.example.com"
+//   set tlib_http_public_url "fivem.example.com"
 //
 // Unset means detect the public IP and append the router's port. A scheme or an
 // explicit port is always honoured; the rest is inferred from the host's shape:

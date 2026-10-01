@@ -2,9 +2,11 @@
 // shared secret embedded in this bundle, and are rate-limited server-side by IP
 // plus the X-FiveM-Server header derived from sv_licenseKey.
 
-import { createHash } from "node:crypto";
-import { resolveConfig } from "./config";
-import { fGetConvar, fPerformHttpRequest } from "./fivem";
+import {
+  MARKETPLACE_RESOURCE_SECRET,
+  marketplaceServerId,
+} from "../../../shared/ts/marketplace/catalogue";
+import { fPerformHttpRequest } from "./fivem";
 
 interface SimpleResponse {
   ok: boolean;
@@ -49,32 +51,6 @@ function nodeRequest(
   });
 }
 
-/** Must match `marketplace/API.md` v0.6. Timestamps are ISO 8601 strings. */
-export interface MarketplaceItem {
-  id: string;
-  slug: string;
-  type: string;
-  name: string;
-  description: string;
-  creator_name: string;
-  current_version: string;
-  size_bytes: number;
-  downloads: number;
-  created_at: string;
-}
-
-export interface MarketplaceItemDetail extends MarketplaceItem {
-  creator: { id: string; name: string; avatar: string | null };
-  versions: Array<{
-    version: string;
-    changelog: string;
-    size_bytes: number;
-    file_hash: string;
-    created_at: string;
-  }>;
-  /** Set by the server when moderation has flagged an item — installer refuses. */
-  flagged?: boolean;
-}
 
 /** The envelope the website returns on 4xx/5xx. */
 export class MarketplaceError extends Error {
@@ -87,37 +63,38 @@ export class MarketplaceError extends Error {
   }
 }
 
-// Must match MARKETPLACE_RESOURCE_SECRET on the Cloudflare Worker. Lets an
-// in-game server download bundles without a user session while keeping direct
-// browser access gated.
-//
-// ⚠️ EXPORTED, but only for `server/community-configs/api.ts` — the one other
-// caller that authenticates to the same Worker. It must NEVER be handed to a
-// FiveM export: the bundle is already extractable by anyone who unzips the
-// resource, but an export would let any third-party script on a customer's
-// server read it without file access, which is a different and worse exposure.
-// That is the whole reason the community-config upload lives in this bundle
-// instead of in `server/sv_community_configs.lua`.
-export const _RS = "tgmp-7c4a2f19d83e6b05a91f0c47e2d85b3a";
+/**
+ * The marketplace resource secret, re-exported under this file's older name.
+ *
+ * ⚠️ NOT a second copy. It used to be a literal here AND a literal in
+ * `shared/ts/marketplace/catalogue.ts`, which meant one string to rotate in two
+ * places — exactly the shape of hazard where a rotation half-lands and the half
+ * nobody tested keeps 401ing in production. There is now one definition; read
+ * the long note on `MARKETPLACE_RESOURCE_SECRET` for why it is public by design
+ * and must never become a convar or reach a FiveM export.
+ *
+ * The alias stays because `../community-configs/api.ts` imports `_RS` and the
+ * short name reads better at its call sites than the full constant would.
+ */
+export const _RS = MARKETPLACE_RESOURCE_SECRET;
 
-let cachedServerId: string | null = null;
-
-/** Stable server identifier, used as the rate-limit key. */
-function getServerIdHeader(): string {
-  if (cachedServerId) return cachedServerId;
-  const license = (fGetConvar("sv_licenseKey", "") || "").trim();
-  const hostname = (fGetConvar("sv_hostname", "") || "").trim();
-  const fallback = (fGetConvar("sv_projectName", "") || "unknown-server").trim();
-  const source = license || `${hostname}|${fallback}`;
-  cachedServerId = createHash("sha256").update(source).digest("hex").slice(0, 32);
-  return cachedServerId;
-}
-
-/** Exported for `server/community-configs/api.ts`; see the note on `_RS`. */
+/**
+ * Exported for `server/community-configs/api.ts`; see the note on `_RS`.
+ *
+ * ⚠️ Deliberately carries NO `X-Resource-Secret`. Callers add it per request,
+ * because community-configs authenticates only its publish call and must stay
+ * anonymous on the rest. Do not "complete" these headers with the secret —
+ * `marketplaceHeaders()` in the shared catalogue is the variant that includes
+ * it, and the two are separate for that reason.
+ */
 export function buildHeaders(extra?: Record<string, string>): Record<string, string> {
   return {
     Accept: "application/json",
-    "X-FiveM-Server": getServerIdHeader(),
+    // Same derivation this file used to do inline, now shared so the rate-limit
+    // key is memoised once rather than once per transport. One behavioural
+    // nuance came with it: a `sv_projectName` set to whitespace now falls back
+    // to `unknown-server` instead of the empty string.
+    "X-FiveM-Server": marketplaceServerId(),
     ...(extra ?? {}),
   };
 }
@@ -141,105 +118,4 @@ async function toMarketplaceError(resp: Response): Promise<MarketplaceError> {
     // Non-JSON body: keep the http_<status> fallback.
   }
   return new MarketplaceError(code, resp.status, retryAfter);
-}
-
-export interface ListParams {
-  type?: string;
-  search?: string;
-  cursor?: string;
-  limit?: number;
-}
-
-export async function listItems(
-  params: ListParams
-): Promise<{ items: MarketplaceItem[]; nextCursor: string | null }> {
-  const cfg = resolveConfig();
-  const qs = new URLSearchParams();
-  if (params.type) qs.set("type", params.type);
-  if (params.search) qs.set("search", params.search);
-  if (params.cursor) qs.set("cursor", params.cursor);
-  if (params.limit) qs.set("limit", String(params.limit));
-  const url = `${cfg.apiBase}/items${qs.toString() ? `?${qs}` : ""}`;
-  const resp = await fetchWithTimeout(
-    url,
-    buildHeaders({ "X-Resource-Secret": _RS }),
-    cfg.installTimeoutMs
-  );
-  if (!resp.ok) throw await toMarketplaceError(resp);
-  return (await resp.json()) as { items: MarketplaceItem[]; nextCursor: string | null };
-}
-
-export async function getItem(slug: string): Promise<MarketplaceItemDetail> {
-  const cfg = resolveConfig();
-  const url = `${cfg.apiBase}/items/${encodeURIComponent(slug)}`;
-  const resp = await fetchWithTimeout(
-    url,
-    buildHeaders({ "X-Resource-Secret": _RS }),
-    cfg.installTimeoutMs
-  );
-  if (!resp.ok) throw await toMarketplaceError(resp);
-  return (await resp.json()) as MarketplaceItemDetail;
-}
-
-export interface BundleDownload {
-  bytes: Uint8Array;
-  /** Lowercase hex sha256 parsed from the `X-Marketplace-File-Hash` header. */
-  expectedHash: string;
-  /** Size reported by `X-Marketplace-Size-Bytes`, used to sanity-check the body length. */
-  expectedSize: number;
-  /** Version echoed back by the server — not necessarily the one we asked for. */
-  version: string | null;
-}
-
-/**
- * The caller MUST verify `sha256(bytes)` against `expectedHash` before
- * extracting; installer.ts does.
- *
- * The hash and size headers are required by the v0.6 contract, so a missing one
- * means either a non-conforming server or a tampered response. Both are hard
- * failures.
- */
-export async function downloadBundle(slug: string, version: string): Promise<BundleDownload> {
-  const cfg = resolveConfig();
-  const qs = new URLSearchParams();
-  if (version) qs.set("version", version);
-  const url = `${cfg.apiBase}/items/${encodeURIComponent(slug)}/download${qs.toString() ? `?${qs}` : ""}`;
-  const resp = await fetchWithTimeout(
-    url,
-    buildHeaders({ Accept: "application/octet-stream,application/zip", "X-Resource-Secret": _RS }),
-    cfg.installTimeoutMs
-  );
-  if (!resp.ok) throw await toMarketplaceError(resp);
-
-  const rawHash = resp.headers.get("x-marketplace-file-hash");
-  const rawSize =
-    resp.headers.get("x-marketplace-size-bytes") ?? resp.headers.get("content-length");
-  if (!rawHash) {
-    throw new MarketplaceError("missing_hash_header", resp.status);
-  }
-  if (!rawSize) {
-    throw new MarketplaceError("missing_size_header", resp.status);
-  }
-
-  // Contract format is `sha256:<64 lowercase hex>`; a bare hex value is
-  // tolerated for older servers.
-  const expectedHash = rawHash.toLowerCase().replace(/^sha256:/, "");
-  if (!/^[0-9a-f]{64}$/.test(expectedHash)) {
-    throw new MarketplaceError("invalid_hash_format", resp.status);
-  }
-  const expectedSize = Number(rawSize);
-  if (!Number.isFinite(expectedSize) || expectedSize <= 0) {
-    throw new MarketplaceError("invalid_size_header", resp.status);
-  }
-
-  const buf = new Uint8Array(await resp.arrayBuffer());
-  if (buf.byteLength > cfg.maxBundleBytes) {
-    throw new MarketplaceError("bundle_too_large", resp.status);
-  }
-  return {
-    bytes: buf,
-    expectedHash,
-    expectedSize,
-    version: resp.headers.get("x-marketplace-version"),
-  };
 }

@@ -5,6 +5,33 @@ local log = Logger.create('tLib/discovery')
 
 Discovery = {}
 
+-- The resource whose VM issues the file-writing natives below. Every write in
+-- this file is made from tLib's runtime no matter which resource asked for it,
+-- because Discovery.create is reached across an export boundary — so tLib is the
+-- name that appears in a filesystem-permission grant, not the consumer's.
+local TLIB_RESOURCE = _TLIB_IS_FIVEM and GetCurrentResourceName() or 'tLib'
+
+-- The one-time server.cfg line that lifts the cross-resource write refusal for
+-- every resource at once.
+--
+-- A per-target grant is deliberately NOT offered. One cfg line and a full server
+-- restart per vehicle is more work than pasting the JSON in by hand, which makes
+-- it a worse feature than no feature. Either a single line enables the whole
+-- thing, or the export stages the file locally and tells the operator what to
+-- copy — see STAGING below. Nothing in between is worth an operator's time.
+local BLANKET_GRANT_LINE = 'add_filesystem_permission ' .. TLIB_RESOURCE .. ' write *'
+
+-- Where a refused export leaves the file it could not deliver. Inside tLib,
+-- because tLib's own directory is the one place a write from tLib's VM is always
+-- allowed.
+local function stagingPath(targetResource, targetPath)
+    return 'export-staging/' .. tostring(targetResource) .. '/' .. tostring(targetPath)
+end
+
+local function manifestLineFor(metadataKey, targetPath)
+    return tostring(metadataKey) .. " '" .. tostring(targetPath) .. "'"
+end
+
 -- ── PER-PLAYER RATE LIMITING ────────────────────────────────────
 --
 -- The admin-gated handlers below are already bounded by checkPerm; the config
@@ -52,12 +79,61 @@ local function _loadFile(resource, path)
     end
 end
 
+-- ── WRITING TO A RESOURCE THAT IS NOT OURS ──────────────────────────
+--
+-- Measured on this server, from one resource's VM:
+--
+--   SaveResourceFile(<own resource>,   …) → 1
+--   SaveResourceFile(<other resource>, …) → false        -- sandbox refusal
+--   SaveResourceFile(<unknown resource>,…) → THROWS       -- "Resource X not found."
+--   LoadResourceFile(<anything>,       …) → works         -- reads are unrestricted
+--
+-- Three distinguishable outcomes, and until now `_saveFile` discarded all of
+-- them. Every failure was silent: the server logged a write, then logged
+-- success, then told the player in green chat that their config had been
+-- exported, while nothing had been written and a restart reverted the lot. A
+-- green checkmark over silent data loss is worse than an error, so the return
+-- value is now the contract.
+--
+-- `ok, err, kind` where `kind` is:
+--   'denied'  the sandbox refused a cross-resource write (the actionable one)
+--   'missing' the target resource does not exist (the native raised)
+--   'nohost'  not running on FiveM at all
 local function _saveFile(resource, path, content)
-    if _TLIB_IS_FIVEM then
-        SaveResourceFile(resource, path, content, -1)
-    else
-        log('_saveFile: host has no file-write API (resource=' .. tostring(resource) .. ')', 3)
+    if not _TLIB_IS_FIVEM then
+        local err = 'host has no file-write API (resource=' .. tostring(resource) .. ' path=' .. tostring(path) .. ')'
+        log('_saveFile: ' .. err, 3)
+        return false, err, 'nohost'
     end
+    -- pcall because an unknown target resource RAISES rather than returning
+    -- false, and that error unwinds through every caller below.
+    local called, res = pcall(SaveResourceFile, resource, path, content, -1)
+    if not called then
+        return false, tostring(res), 'missing'
+    end
+    if res == false or res == nil or res == 0 then
+        return false,
+            "FiveM's filesystem sandbox refused the write to '" .. tostring(resource) .. "/" .. tostring(path) .. "'",
+            'denied'
+    end
+    return true
+end
+
+--- Write into tLib's OWN directory, which is never sandbox-refused.
+---
+--- Goes through tLib's Node export rather than SaveResourceFile because it
+--- creates missing parent directories; the staging tree below is nested.
+local function _stageFile(relPath, content)
+    if not _TLIB_IS_FIVEM then
+        return false, 'host has no file-write API'
+    end
+    local called, res = pcall(function()
+        return exports[TLIB_RESOURCE]:WriteResourceFile(TLIB_RESOURCE, relPath, content)
+    end)
+    if not called then return false, tostring(res) end
+    -- WriteResourceFile answers `true`, or a string describing the failure.
+    if res ~= true then return false, tostring(res) end
+    return true
 end
 
 local function _getResourceMeta(resource, key)
@@ -159,8 +235,18 @@ end
 
 --- Ensure a resource's fxmanifest.lua carries a metadata line for `metadataKey`.
 --- The Node bundle does the write — it has cross-resource fs access.
+--- Node `fs` is sandboxed per resource exactly as SaveResourceFile is, so this
+--- succeeds only where a write into the target is permitted at all. It must
+--- never be the thing that unwinds an otherwise-successful export, hence pcall.
 local function appendToManifest(resourceName, metadataKey, filePath)
-    return exports['tLib']:AppendToManifest(resourceName, metadataKey, filePath)
+    local ok, res = pcall(function()
+        return exports[TLIB_RESOURCE]:AppendToManifest(resourceName, metadataKey, filePath)
+    end)
+    if not ok then
+        log('AppendToManifest raised for ' .. tostring(resourceName) .. ': ' .. tostring(res), 4)
+        return false
+    end
+    return res == true
 end
 
 function Discovery.create(opts)
@@ -231,14 +317,16 @@ function Discovery.create(opts)
     -- `skipAutoSave` means the owning resource does its own file writes; what it
     -- is avoiding is SaveResourceFile reaching from tLib's runtime into its
     -- folder. Every write path must honour it.
+    --- Returns ok, err, kind. `kind == 'skipped'` is not a failure: the owner
+    --- writes its own file and is expected to. Any other falsey return IS one,
+    --- and callers must not report success over it.
     local function persistLocal(reason)
         if opts.skipAutoSave then
             log("[" .. tag .. "] " .. reason .. ": skipAutoSave set — leaving the file to '"
                 .. tostring(ownerResource) .. "'", 1)
-            return false
+            return false, nil, 'skipped'
         end
-        inst:saveLocal()
-        return true
+        return inst:saveLocal()
     end
 
     local function registerAlias(key)
@@ -335,20 +423,41 @@ function Discovery.create(opts)
         local modelList = {}
         for k in pairs(localOnly) do modelList[#modelList + 1] = tostring(k) end
         log("[" .. tag .. "] saveLocal: writing " .. #modelList .. " model(s): " .. table.concat(modelList, ", "), 1)
+        local encoded
         if localSection then
             -- Merge, so sibling sections of the same file survive.
             local raw = _loadFile(ownerResource, filePath)
             log("[" .. tag .. "] saveLocal: read existing file — " .. (raw and (tostring(#raw) .. " bytes") or "nil/empty"), 1)
             local fileData = (raw and raw ~= "") and json.decode(raw) or {}
+            if type(fileData) ~= "table" then fileData = {} end
             fileData[localSection] = localOnly
-            local encoded = json.encode(fileData)
-            _saveFile(ownerResource, filePath, encoded)
-            log("[" .. tag .. "] saveLocal: wrote " .. tostring(#encoded) .. " bytes to " .. ownerResource .. "/" .. filePath, 1)
+            encoded = json.encode(fileData)
         else
-            local encoded = json.encode(localOnly)
-            _saveFile(ownerResource, filePath, encoded)
-            log("[" .. tag .. "] saveLocal: wrote " .. tostring(#encoded) .. " bytes to " .. ownerResource .. "/" .. filePath, 1)
+            encoded = json.encode(localOnly)
         end
+
+        local ok, err, kind = _saveFile(ownerResource, filePath, encoded)
+        if ok then
+            log("[" .. tag .. "] saveLocal: wrote " .. tostring(#encoded) .. " bytes to " .. ownerResource .. "/" .. filePath, 1)
+            return true
+        end
+
+        -- This used to be where the lie started: the write was discarded, and
+        -- every caller went on to report success.
+        local advice = ""
+        if kind == 'denied' then
+            -- tLib is writing into the consumer's own folder from tLib's VM. The
+            -- owner is the resource that can always write here, so the real fix
+            -- is for it to take the write — which is exactly what `skipAutoSave`
+            -- is for.
+            advice = " '" .. tostring(ownerResource) .. "' should pass skipAutoSave = true to CreateDiscovery and"
+                .. " write its own data file (tlib.fs.writeResourceFile runs inside its VM and is always allowed)."
+                .. " Alternatively, add this one line to server.cfg and restart: " .. BLANKET_GRANT_LINE
+        end
+        log("[" .. tag .. "] saveLocal FAILED for " .. tostring(ownerResource) .. "/" .. tostring(filePath)
+            .. " — " .. tostring(err) .. " Nothing was written; these settings will be gone after a restart."
+            .. advice, 4)
+        return false, err, kind
     end
 
     function inst:loadExternalFromResource(resName)
@@ -469,49 +578,80 @@ function Discovery.create(opts)
         if ext then
             local raw = _loadFile(ext.resource, ext.filePath)
             local extData = (raw and raw ~= "") and json.decode(raw) or {}
+            if type(extData) ~= "table" then extData = {} end
             extData[model] = config
-            _saveFile(ext.resource, ext.filePath, json.encode(extData))
+            local ok, err, kind = _saveFile(ext.resource, ext.filePath, json.encode(extData))
+            if not ok then
+                log("[" .. tag .. "] Could NOT save '" .. model .. "' to " .. ext.resource .. "/" .. ext.filePath
+                    .. " — " .. tostring(err) .. " The change is live in memory but is not on disk and will be lost"
+                    .. " on restart." .. (kind == 'denied'
+                        and (" To let " .. TLIB_RESOURCE .. " write into other resources, add this one line to"
+                             .. " server.cfg and restart the server: " .. BLANKET_GRANT_LINE)
+                        or ""), 4)
+                return false, err, kind
+            end
             log("[" .. tag .. "] Saved '" .. model .. "' → " .. ext.resource .. "/" .. ext.filePath, 2)
         else
             config._local = true
-            if not opts.skipAutoSave then
-                inst:saveLocal()
+            local ok, err, kind = persistLocal("saveModelConfig ('" .. tostring(model) .. "')")
+            if not ok and kind ~= 'skipped' then
+                return false, err, kind
             end
             log("[" .. tag .. "] Saved '" .. model .. "' → local", 2)
         end
+        return true
     end
 
     function inst:removeModelConfig(model)
         model = resolveModel(model)
         local ext = externalSources[model]
+        local warning = nil
         if ext then
             local raw = _loadFile(ext.resource, ext.filePath)
             local extData = (raw and raw ~= "") and json.decode(raw) or {}
+            if type(extData) ~= "table" then extData = {} end
             extData[model] = nil
-            _saveFile(ext.resource, ext.filePath, json.encode(extData))
+            local ok, err = _saveFile(ext.resource, ext.filePath, json.encode(extData))
+            if not ok then
+                -- The entry is gone from memory but still on disk, so it comes
+                -- back on the next scan. Saying so is the whole point.
+                warning = "'" .. tostring(model) .. "' was removed here but could NOT be removed from "
+                    .. ext.resource .. "/" .. ext.filePath .. " — " .. tostring(err)
+                    .. " It will reappear when that resource is next scanned. Delete the '" .. tostring(model)
+                    .. "' entry from that file by hand, or add this one line to server.cfg and restart: "
+                    .. BLANKET_GRANT_LINE
+                log("[" .. tag .. "] " .. warning, 4)
+            end
             externalSources[model] = nil
         end
         configs[model] = nil
-        if not opts.skipAutoSave then
-            inst:saveLocal()
+        local ok, err, kind = persistLocal("removeModelConfig ('" .. tostring(model) .. "')")
+        if not ok and kind ~= 'skipped' then
+            return false, err, kind
         end
+        return true, warning
     end
 
     function inst:getExportTargets()
-        local activeResources = {}
-        for _, ext in pairs(externalSources) do
-            activeResources[ext.resource] = true
-        end
-
         local targets = {}
         table.insert(targets, { name = ownerResource, hasMetadata = true, isLocal = true })
 
+        -- `hasMetadata` is exactly what it says: the resource DECLARES the
+        -- metadata key in its fxmanifest. It used to be derived from which
+        -- resources currently serve a config instead, so a vehicle that declared
+        -- the key but shipped an empty file — or one whose only model is
+        -- shadowed by a local override — showed as "no metadata" in the picker
+        -- and looked like the wrong place to export to.
         local numResources = _getResourceCount()
         for i = 0, numResources - 1 do
             local resName = _getResourceAtIndex(i)
             if resName and resName ~= ownerResource and _getResourceState(resName) == "started" then
-                local hasMetadata = activeResources[resName] == true
-                table.insert(targets, { name = resName, hasMetadata = hasMetadata })
+                local declared = _getResourceMeta(resName, metadataKey)
+                table.insert(targets, {
+                    name = resName,
+                    hasMetadata = (declared ~= nil and declared ~= ""),
+                    configPath = (declared ~= nil and declared ~= "") and declared or nil,
+                })
             end
         end
 
@@ -526,60 +666,211 @@ function Discovery.create(opts)
         return targets
     end
 
+    --- Remove one model from a file another resource owns.
+    --- Returns ok, err. Never throws: the target may not even exist any more.
+    local function clearFromExternal(ext, model)
+        local raw = _loadFile(ext.resource, ext.filePath)
+        local extData = (raw and raw ~= "") and json.decode(raw) or {}
+        if type(extData) ~= "table" then extData = {} end
+        if extData[model] == nil then return true end   -- already absent
+        extData[model] = nil
+        return _saveFile(ext.resource, ext.filePath, json.encode(extData))
+    end
+
+    --- Move `model` back into the owner's own data file.
+    ---
+    --- The external copy is genuinely deleted, and when it cannot be, that is
+    --- reported rather than assumed. The move itself still stands in that case —
+    --- a `_local` entry outranks anything a resource ships, so the config the
+    --- player sees IS the local one — but a stale copy left in the vehicle is
+    --- something the operator has to know about, because it is what will come
+    --- back if the local entry is ever deleted.
+    local function moveBackToLocal(model, config)
+        local info = { status = 'local', warnings = {} }
+        local oldExt = externalSources[model]
+
+        if oldExt then
+            local ok, err = clearFromExternal(oldExt, model)
+            if not ok then
+                info.leftovers = { resource = oldExt.resource, filePath = oldExt.filePath }
+                local warning = "'" .. tostring(model) .. "' is now local, but the copy in "
+                    .. oldExt.resource .. "/" .. oldExt.filePath .. " could NOT be deleted — " .. tostring(err)
+                    .. " The local copy takes priority so the right settings are in use, but delete the '"
+                    .. tostring(model) .. "' entry from that file by hand to finish the move"
+                    .. (BLANKET_GRANT_LINE and (", or add this one line to server.cfg and restart: "
+                        .. BLANKET_GRANT_LINE) or "") .. "."
+                info.warnings[#info.warnings + 1] = warning
+                log("[" .. tag .. "] " .. warning, 4)
+            end
+        end
+
+        externalSources[model] = nil
+        -- `_local` is what makes the entry survive saveLocal and outrank the
+        -- external copy on the next boot. Clearing it here — which is what used
+        -- to happen — is precisely how a "move back to local" could end up
+        -- owning nothing at all.
+        config._local = true
+
+        local ok, err, kind = persistLocal("exportConfig (moved '" .. tostring(model) .. "' back to local)")
+        if not ok and kind ~= 'skipped' then
+            info.status = 'failed'
+            info.message = "Could not write '" .. tostring(model) .. "' into " .. tostring(ownerResource)
+                .. "/" .. tostring(localFile) .. " — " .. tostring(err)
+            return false, nil, info
+        end
+
+        return true, nil, info
+    end
+
+    --- Export `model` into `targetResource`, or back to the owner.
+    ---
+    --- Returns `ok, targetPath, info`. `info.status` is one of:
+    ---   'exported' written into the target resource
+    ---   'staged'   the write was refused; the file is in tLib, with instructions
+    ---   'local'    moved back to the owner's own data file
+    ---   'failed'   nothing was written anywhere
+    ---   'no-config' there is no such model
+    ---
+    --- ORDERING. Nothing that could lose the config is done until the
+    --- destination write has actually succeeded. The previous order cleared
+    --- `_local`, rewrote the owner's data file and deleted the entry from the
+    --- resource that used to hold it BEFORE attempting the target write, and
+    --- attributed the new source only afterwards. On a host where writes land
+    --- that is a delete-then-crash; on this one, where the target write is
+    --- refused, it rewrote the local file with the entry still marked as local-
+    --- but-unowned and left the picker claiming an export that never happened.
+    --- Write first, commit second.
     function inst:exportConfig(model, targetResource)
         model = resolveModel(model)
         local config = configs[model]
-        if type(config) ~= "table" then return false end
+        if type(config) ~= "table" then
+            return false, nil, { status = 'no-config', warnings = {},
+                message = "There is no config named '" .. tostring(model) .. "' to export." }
+        end
 
-        -- Move back to local.
         if targetResource == ownerResource then
-            local oldExt = externalSources[model]
-            if oldExt then
-                local raw = _loadFile(oldExt.resource, oldExt.filePath)
-                local extData = (raw and raw ~= "") and json.decode(raw) or {}
-                extData[model] = nil
-                _saveFile(oldExt.resource, oldExt.filePath, json.encode(extData))
-            end
-            externalSources[model] = nil
-            config._local = nil
-            persistLocal("exportConfig (moved '" .. tostring(model) .. "' back to local)")
-            return true
+            return moveBackToLocal(model, config)
         end
-
-        local oldExt = externalSources[model]
-        if oldExt then
-            local raw = _loadFile(oldExt.resource, oldExt.filePath)
-            local extData = (raw and raw ~= "") and json.decode(raw) or {}
-            extData[model] = nil
-            _saveFile(oldExt.resource, oldExt.filePath, json.encode(extData))
-        end
-        config._local = nil
-        persistLocal("exportConfig ('" .. tostring(model) .. "' → " .. tostring(targetResource) .. ")")
 
         local targetPath = _getResourceMeta(targetResource, metadataKey)
         if not targetPath or targetPath == "" then
             targetPath = defaultFile
         end
 
+        local info = {
+            status = 'failed',
+            warnings = {},
+            resource = targetResource,
+            filePath = targetPath,
+            manifestLine = manifestLineFor(metadataKey, targetPath),
+            grantLine = BLANKET_GRANT_LINE,
+        }
+
+        -- The file the target should end up with: whatever it already ships,
+        -- plus this model. Reads are never sandboxed, so this is accurate even
+        -- when the write that follows is refused — which is what makes the
+        -- staged copy something an operator can simply drop into place.
         local raw = _loadFile(targetResource, targetPath)
         local targetData = (raw and raw ~= "") and json.decode(raw) or {}
+        if type(targetData) ~= "table" then targetData = {} end
         local cleanConfig = {}
         for k, v in pairs(config) do
             if k ~= "_local" then cleanConfig[k] = v end
         end
         targetData[model] = cleanConfig
-        _saveFile(targetResource, targetPath, json.encode(targetData))
+        local encoded = json.encode(targetData)
 
-        local ok = appendToManifest(targetResource, metadataKey, targetPath)
-        if ok then
-            log("[" .. tag .. "] Ensured " .. metadataKey .. " in " .. targetResource .. "/fxmanifest.lua", 2)
-        else
-            log("[" .. tag .. "] WARNING: Could not modify fxmanifest.lua for '" .. targetResource .. "'", 4)
+        local wrote, err, kind = _saveFile(targetResource, targetPath, encoded)
+
+        if not wrote then
+            -- NOTHING has been committed at this point: the config is still
+            -- local, still marked `_local`, still in the owner's file and still
+            -- being served to clients. The export did not happen, and this
+            -- returns false so no caller can claim it did.
+            info.status = 'staged'
+            info.error = err
+            info.errorKind = kind
+
+            local staged = stagingPath(targetResource, targetPath)
+            local stagedOk, stageErr = _stageFile(staged, encoded)
+            if stagedOk then
+                info.stagedResource = TLIB_RESOURCE
+                info.stagedPath = staged
+                info.steps = {
+                    "1. Copy " .. TLIB_RESOURCE .. "/" .. staged
+                        .. "  ->  " .. targetResource .. "/" .. targetPath,
+                    "2. Add this line to " .. targetResource .. "/fxmanifest.lua:  " .. info.manifestLine,
+                    "3. Restart " .. targetResource .. " (or the server).",
+                }
+                info.message = "Could not write into '" .. targetResource .. "' (" .. tostring(err)
+                    .. "), so the finished file was written to " .. TLIB_RESOURCE .. "/" .. staged .. " instead."
+            else
+                info.status = 'failed'
+                info.stageError = stageErr
+                info.message = "Could not write into '" .. targetResource .. "' (" .. tostring(err)
+                    .. "), and the fallback copy could not be written either (" .. tostring(stageErr)
+                    .. "). Nothing was exported; the config is unchanged and still local."
+            end
+
+            log("[" .. tag .. "] EXPORT NOT COMPLETED: " .. info.message, 4)
+            for _, step in ipairs(info.steps or {}) do
+                log("[" .. tag .. "]   " .. step, 4)
+            end
+            if kind == 'denied' and BLANKET_GRANT_LINE then
+                log("[" .. tag .. "]   To make this one-click instead, add ONE line to server.cfg and restart the"
+                    .. " server:  " .. BLANKET_GRANT_LINE
+                    .. "   (it is a config-file directive; it cannot be run from the console)", 4)
+            elseif kind == 'missing' then
+                log("[" .. tag .. "]   '" .. tostring(targetResource) .. "' is not a resource this server knows"
+                    .. " about — check the name.", 4)
+            end
+            return false, targetPath, info
         end
 
-        externalSources[model] = { resource = targetResource, filePath = targetPath }
+        -- ── committed from here: the destination has the config ─────────
+        info.status = 'exported'
+        log("[" .. tag .. "] Wrote '" .. tostring(model) .. "' → " .. targetResource .. "/" .. targetPath, 2)
 
-        return true, targetPath
+        local oldExt = externalSources[model]
+        if oldExt and not (oldExt.resource == targetResource and oldExt.filePath == targetPath) then
+            local cleared, clearErr = clearFromExternal(oldExt, model)
+            if not cleared then
+                local warning = "'" .. tostring(model) .. "' is now in " .. targetResource .. "/" .. targetPath
+                    .. ", but the old copy in " .. oldExt.resource .. "/" .. oldExt.filePath
+                    .. " could NOT be deleted — " .. tostring(clearErr)
+                    .. " Two resources now ship this model; delete the '" .. tostring(model)
+                    .. "' entry from " .. oldExt.resource .. "/" .. oldExt.filePath .. " by hand."
+                info.warnings[#info.warnings + 1] = warning
+                log("[" .. tag .. "] " .. warning, 4)
+            end
+        end
+
+        -- Attribute the new source BEFORE persisting: saveLocal only drops the
+        -- entry from the owner's file once it knows somebody else owns it.
+        externalSources[model] = { resource = targetResource, filePath = targetPath }
+        config._local = nil
+        local persisted, persistErr, persistKind =
+            persistLocal("exportConfig ('" .. tostring(model) .. "' → " .. tostring(targetResource) .. ")")
+        if not persisted and persistKind ~= 'skipped' then
+            local warning = "'" .. tostring(model) .. "' was exported, but " .. tostring(ownerResource) .. "/"
+                .. tostring(localFile) .. " could not be rewritten (" .. tostring(persistErr)
+                .. "), so the old local copy is still on disk and will shadow the exported one after a restart."
+            info.warnings[#info.warnings + 1] = warning
+            log("[" .. tag .. "] " .. warning, 4)
+        end
+
+        if appendToManifest(targetResource, metadataKey, targetPath) then
+            info.manifestOk = true
+            log("[" .. tag .. "] Ensured " .. metadataKey .. " in " .. targetResource .. "/fxmanifest.lua", 2)
+        else
+            info.manifestOk = false
+            local warning = "Could not edit " .. targetResource .. "/fxmanifest.lua. Add this line to it by hand,"
+                .. " or the file will never be read:  " .. info.manifestLine
+            info.warnings[#info.warnings + 1] = warning
+            log("[" .. tag .. "] " .. warning, 4)
+        end
+
+        return true, targetPath, info
     end
 
     -- Load local first (takes priority), then external, then deduplicate.
@@ -646,7 +937,7 @@ function Discovery.create(opts)
             end
         end
 
-        if count > 0 and opts.receiveEvent then
+        if count > 0 and opts.receiveEvent and not opts.skipAutoBroadcast then
             Platform.TriggerClientEvent(opts.receiveEvent, -1, configs)
         end
     end))
@@ -656,9 +947,47 @@ function Discovery.create(opts)
         local receiveEv     = opts.receiveEvent or (prefix .. ":config_receive")
         local sourceInfoEv  = opts.sourceInfoEvent or (prefix .. ":externalSourceInfo")
         local targetsEv     = opts.exportTargetsEvent or (prefix .. ":exportTargets")
+        -- The outcome of an export, structured. Separate from `sourceInfoEv`,
+        -- which only ever carried "who owns this model now" and therefore had no
+        -- way to express a refused write at all.
+        local resultEv      = opts.exportResultEvent or (prefix .. ":exportResult")
         local permCheck     = opts.permissionCheck
 
+        -- `skipAutoBroadcast` is the delivery counterpart of `skipAutoSave`: the
+        -- owning resource takes over sending configs to clients, exactly as
+        -- `skipAutoSave` hands it the file writes. Off by default, so every
+        -- existing caller keeps the behaviour it has.
+        --
+        -- It exists because this broadcast is a plain, non-latent
+        -- `TriggerClientEvent` of the WHOLE map to `-1` on every save, and an
+        -- owner that wants to pace it (TriggerLatentClientEvent) or send only
+        -- the model that changed cannot do either while this one still fires:
+        -- FiveM serialises and sends a net event whether or not any client has
+        -- a handler for it, so redirecting `receiveEvent` at an unused name
+        -- would cost the same bandwidth and merely hide it.
+        --
+        -- An owner that sets this MUST answer `config_request` itself — nothing
+        -- else replies to it — and must send after `afterSave`/`afterRemove`.
+        -- Announce a declined path ONCE per instance rather than per call, which
+        -- is where this has to differ from `skipAutoSave`. That option guards
+        -- file writes — rare, and one line each is proportionate. These guard a
+        -- broadcast and a per-player request: on a full server the request path
+        -- alone is one line per player per second, which buries the very first
+        -- line an owner needs to read. Once is enough to turn silent-forever
+        -- into a console message naming who owes the reply.
+        local skipNoticed = {}
+        local function noticeSkip(path, owes)
+            if skipNoticed[path] then return end
+            skipNoticed[path] = true
+            log("[" .. tag .. "] " .. path .. ": skipAutoBroadcast set — " .. owes
+                .. " is left to '" .. tostring(ownerResource) .. "'", 1)
+        end
+
         local function broadcast()
+            if opts.skipAutoBroadcast then
+                noticeSkip("broadcast", "sending configs to clients")
+                return
+            end
             Platform.TriggerClientEvent(receiveEv, -1, configs)
         end
 
@@ -676,6 +1005,13 @@ function Discovery.create(opts)
             if not src or src <= 0 then return end
             -- After the cheap source check, before serialising the config map.
             if rateLimited(prefix .. ":config_request", src, 1000) then return end
+            -- See `broadcast` above: the owner answers this itself. This is the
+            -- drop worth hearing about — a client that asks and is never told
+            -- has no other way to find out.
+            if opts.skipAutoBroadcast then
+                noticeSkip("config_request", "answering config_request")
+                return
+            end
             Platform.TriggerClientEvent(receiveEv, src, configs)
         end)
 
@@ -721,26 +1057,57 @@ function Discovery.create(opts)
             model = resolveModel(model)
             if not configs[model] then return end
 
-            local ok, targetPath = inst:exportConfig(model, targetResource)
-            if not ok then return end
+            local ok, _, info = inst:exportConfig(model, targetResource)
+            info = info or { status = ok and 'exported' or 'failed', warnings = {} }
+            info.model = model
+
+            -- Mirrors `:afterSave` / `:afterRemove`. It exists so an owner that
+            -- does its own persistence and delivery can react to an export
+            -- WITHOUT calling exportConfig a second time — which is what tRadio
+            -- was doing, running the whole move twice per click.
+            TriggerEvent(metadataKey .. ":afterExport", model, targetResource, ok, info)
 
             broadcast()
 
-            if targetResource == ownerResource then
+            -- The structured result, for a consumer UI that wants to render the
+            -- steps properly. Sent on every outcome, including the failures —
+            -- this event is the only thing that distinguishes "exported" from
+            -- "could not export, here is what to do" on the client.
+            Platform.TriggerClientEvent(resultEv, src, info)
+
+            if ok and info.status == 'local' then
                 Platform.TriggerClientEvent(sourceInfoEv, src, model, nil)
-                _chatMessage(src, chatTag, "Moved ~b~" .. model .. "~w~ back to local ~y~data.json~w~.")
-                log("[" .. tag .. "] Player " .. src .. " moved '" .. model .. "' back to local data.json", 2)
-            else
+                _chatMessage(src, chatTag, "Moved ~b~" .. model .. "~w~ back to local ~y~" .. tostring(localFile) .. "~w~.")
+                log("[" .. tag .. "] Player " .. src .. " moved '" .. model .. "' back to local " .. tostring(localFile), 2)
+            elseif ok then
                 Platform.TriggerClientEvent(sourceInfoEv, src, model, targetResource)
-                _chatMessage(src, chatTag, "Exported ~b~" .. model .. "~w~ config to ~y~" .. targetResource .. "~w~.")
-
-                if not appendToManifest(targetResource, metadataKey, targetPath or defaultFile) then
-                    _chatMessage(src, "^1" .. chatTag,
-                        "Could not modify fxmanifest.lua for ~y~" .. targetResource ..
-                        "~w~. Please add manually: ~g~" .. metadataKey .. " '" .. (targetPath or defaultFile) .. "'")
+                _chatMessage(src, chatTag, "Exported ~b~" .. model .. "~w~ config to ~y~" .. tostring(targetResource) .. "~w~.")
+                log("[" .. tag .. "] Player " .. src .. " exported '" .. model .. "' to '" .. tostring(targetResource) .. "'", 2)
+            else
+                -- The export did NOT happen. The config is untouched and still
+                -- served from wherever it was — say so, and say what to do,
+                -- rather than leaving a green message over a file that was never
+                -- written.
+                Platform.TriggerClientEvent(sourceInfoEv, src, model,
+                    inst:getExternalSource(model) and inst:getExternalSource(model).resource or nil)
+                if info.status == 'staged' then
+                    _chatMessage(src, "^3" .. chatTag, "Could not write into ~y~" .. tostring(targetResource)
+                        .. "~w~ — that resource's folder is protected by FiveM's filesystem sandbox. "
+                        .. "The finished file has been written for you; three steps to finish:")
+                    for _, step in ipairs(info.steps or {}) do
+                        _chatMessage(src, "^3" .. chatTag, "~w~" .. step)
+                    end
+                    if info.errorKind == 'denied' and BLANKET_GRANT_LINE then
+                        _chatMessage(src, "^3" .. chatTag, "To make this one click in future, add this ONE line to "
+                            .. "~y~server.cfg~w~ and restart: ~g~" .. BLANKET_GRANT_LINE)
+                    end
+                else
+                    _chatMessage(src, "^1" .. chatTag, "Export failed: ~w~" .. tostring(info.message or "unknown error"))
                 end
+            end
 
-                log("[" .. tag .. "] Player " .. src .. " exported '" .. model .. "' to '" .. targetResource .. "'", 2)
+            for _, warning in ipairs(info.warnings or {}) do
+                _chatMessage(src, "^3" .. chatTag, "~w~" .. warning)
             end
         end)
     end

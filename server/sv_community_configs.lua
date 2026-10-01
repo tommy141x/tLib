@@ -4,11 +4,16 @@
 -- ── This file no longer performs HTTP ──────────────────────────────────────
 --
 -- It used to call PerformHttpRequest directly and send no credential. The
--- publish endpoint now requires X-Resource-Secret, and that secret lives in
--- the Node bundle (server/marketplace/api.ts). Handing it to this VM through
--- an export would let any third-party script on a customer's server read it,
--- which is worse than the bundle's existing exposure — extracting it from
--- there at least takes file access. So the request moved to the secret.
+-- publish endpoint now requires X-Resource-Secret, a constant baked into the
+-- Node bundle (defined once in shared/ts/marketplace/catalogue.ts).
+--
+-- ⚠️ NOT a convar. This comment used to name `tmarketplace_resource_secret`,
+-- which was never true and is the misreading that got the secret turned into
+-- required operator config once already.
+--
+-- Handing it to this VM through an export would let any third-party script on
+-- a customer's server read it without console or file access. So the request
+-- moved to the secret.
 --
 -- Everything here is now a thin wrapper over the `cc*` exports registered by
 -- server/community-configs/bridge.ts. The two original exports keep their
@@ -131,9 +136,49 @@ local function registerExports()
         end)
     end)
 
+    --- Fetch a config by id WITHOUT incrementing its import counter.
+    --- callback(ok, configJson, err), the same payload CommunityConfigsImport
+    --- hands back.
+    ---
+    --- ⚠️ The ONLY difference from CommunityConfigsImport is that this does not
+    --- count. Use it whenever the config is being read to render or preview it
+    --- rather than because a player chose to install it — tELS's marketplace
+    --- tab animates a listing's LEDs on hover, and routing that through import
+    --- would turn the counter into a measure of mouse movement. Keep the two
+    --- separate; do not "simplify" one into the other.
+    ---
+    --- ⚠️ Same argument ORDER note as above: (ok, configJson, err) out here,
+    --- (ok, err, value) from the bridge.
+    Platform.export('tLib', 'CommunityConfigsPeek', function(id, callback)
+        if type(id) ~= 'string' or id == '' then
+            if isCallable(callback) then callback(false, nil, 'invalid id') end
+            return
+        end
+        callback = guardCallback(callback, 'CommunityConfigsPeek')
+        if not callback then return end
+
+        exports['tLib']:ccPeek(id, function(ok, err, configJson)
+            if not ok or type(configJson) ~= 'string' then
+                local errMsg = tostring(err or 'unexpected response')
+                log(('peek failed for id=%s: %s'):format(id, errMsg), 3)
+                callback(false, nil, errMsg)
+                return
+            end
+            -- No success log, deliberately, where Import has one at level 2.
+            -- An import is a discrete user decision and worth a line; a peek
+            -- fires on hover and would flood a server console during ordinary
+            -- browsing. Failures still log at level 3.
+            callback(true, configJson, nil)
+        end)
+    end)
+
     --- Browse published configs. callback(ok, items, err) where `items` is a
-    --- decoded array. Reads are unauthenticated by design — they are also
-    --- reachable from an in-game panel, which cannot hold a credential.
+    --- decoded array. Reads are unauthenticated by design, but NOT reachable
+    --- from an in-game panel — the backend sends no Access-Control-Allow-Origin
+    --- on /api/v1, so a fetch from `cfx-nui-<resource>` is refused by the
+    --- browser after the request itself succeeds. That is precisely why this
+    --- export exists: the panel asks the game server, and the server does the
+    --- HTTP.
     Platform.export('tLib', 'CommunityConfigsList', function(opts, callback)
         if type(opts) ~= 'table' then
             if isCallable(callback) then callback(false, nil, 'invalid opts') end
@@ -160,38 +205,6 @@ local function registerExports()
                     return
                 end
                 local decoded, parsed = pcall(json.decode, itemsJson or '[]')
-                callback(true, (decoded and parsed) or {}, nil)
-            end
-        )
-    end)
-
-    --- How many configs exist for each of `opts.keys`. callback(ok, counts, err)
-    --- where `counts` maps model key → number. A key with none is absent, not
-    --- zero, so read it with a `or 0`.
-    Platform.export('tLib', 'CommunityConfigsExists', function(opts, callback)
-        if type(opts) ~= 'table' then
-            if isCallable(callback) then callback(false, nil, 'invalid opts') end
-            return
-        end
-        callback = guardCallback(callback, 'CommunityConfigsExists')
-        if not callback then return end
-
-        local keys = type(opts.keys) == 'table' and opts.keys or {}
-        if #keys == 0 then
-            callback(true, {}, nil)
-            return
-        end
-
-        exports['tLib']:ccExists(
-            type(opts.script) == 'string' and opts.script or '',
-            type(opts.configType) == 'string' and opts.configType or '',
-            table.concat(keys, ','),
-            function(ok, err, countsJson)
-                if not ok then
-                    callback(false, nil, tostring(err or 'unexpected response'))
-                    return
-                end
-                local decoded, parsed = pcall(json.decode, countsJson or '{}')
                 callback(true, (decoded and parsed) or {}, nil)
             end
         )

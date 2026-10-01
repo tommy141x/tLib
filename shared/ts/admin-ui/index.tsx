@@ -2,20 +2,75 @@
 
 import { type JSX, type ParentProps, Show } from "solid-js";
 
+/**
+ * The palette these controls draw with — the HOST's theme tokens, not a copy.
+ *
+ * ── What these used to be ───────────────────────────────────────────────────
+ *
+ * Thirteen hard-coded literals: `hsl(225 8% 12%)`, `hsl(225 8% 16%)`,
+ * `hsl(225 10% 30% / 0.6)` and so on. Those are not arbitrary — they are tELS's
+ * old blue-tinted palette, frozen into a shared library at some point when tELS
+ * was the only consumer. Because every one is applied as an INLINE style, they
+ * beat any stylesheet the host has, so a panel built from these controls looked
+ * the same everywhere no matter what the surrounding UI was themed to. tLib's
+ * own dialogs are neutral grey, so an `AdminPanel` inside tLib was visibly a
+ * different product from the dialog containing it.
+ *
+ * Once tELS moved onto tLib's shared tokens the mismatch simply changed sides:
+ * these controls became the only blue things left on a grey screen. A literal in
+ * a shared component cannot be right in more than one host, which is the whole
+ * argument for reading the token.
+ *
+ * ── Why each one keeps its old value as a fallback ──────────────────────────
+ *
+ * `var(--x, <literal>)` is not defensive padding. These controls are exported to
+ * any resource that wants a settings panel, and a host that has not defined the
+ * token set would otherwise get `hsl()` with an empty argument — an invalid
+ * declaration, dropped, leaving a transparent control with `currentColor`
+ * borders. The fallback is exactly what that host renders today, so adopting
+ * this change can only be a no-op or an improvement for them.
+ *
+ * ⚠️ No `color-mix()` and no `oklch()` anywhere in here, however tempting for
+ * the hover shades: these render in the game's NUI, which is CEF 103, and both
+ * landed in Chromium 111. CEF drops the declaration rather than erroring, so the
+ * failure would be a silently uncoloured control.
+ *
+ * ── 2026-09-22: converged onto the --nui-* layer ────────────────────────────
+ *
+ * Each entry now reads its `--nui-*` equivalent first and keeps the old chain as
+ * the fallback, so there is ONE set of names a host overrides to retheme both
+ * these controls and the marketplace components in `../marketplace/ui`, rather
+ * than two sets that drift. The fallback chain means a host that defines nothing
+ * — tDetector and tRadar declare no tokens at all — renders exactly what it
+ * rendered before.
+ *
+ * ⚠️ Two colours DID change on purpose, and this is the repaint that was signed
+ * off rather than an accident:
+ *
+ *   accent       --primary (blue 211 80% 55%) → --nui-accent (neutral #eeeeee)
+ *   destructive  --destructive (0 62% 50%)    → --nui-danger (#ff8585)
+ *
+ * Every consumer rendered the blue: tELS, tDetector and tRadar define no
+ * `--primary` and so took the fallback, and tRadio declares that same blue. The
+ * accent is now neutral by default and follows a theme's registered primary when
+ * there is one, which is what `applyNuiTheme` in tLib's `nui-theme.ts` already
+ * intends for every other control — and it resolves the complaint at the top of
+ * this comment, where these were "the only blue things left on a grey screen".
+ */
 const C = {
-  bg: "hsl(225 8% 12%)",
-  card: "hsl(225 8% 16%)",
-  border: "hsl(225 10% 30% / 0.6)",
-  fg: "hsl(220 10% 90%)",
-  muted: "hsl(220 8% 58%)",
-  mutedFaint: "hsl(220 8% 58% / 0.5)",
-  mutedFainter: "hsl(220 8% 58% / 0.35)",
-  accent: "hsl(211 80% 55%)",
-  accentFg: "hsl(0 0% 100%)",
-  secondary: "hsl(225 10% 26% / 0.6)",
-  secondaryHover: "hsl(225 10% 26%)",
-  destructive: "hsl(0 62% 50%)",
-  destructiveHover: "hsl(0 62% 60%)",
+  bg: "var(--nui-bg, hsl(var(--background, 225 8% 12%)))",
+  card: "var(--nui-surface, hsl(var(--card, 225 8% 16%)))",
+  border: "hsl(var(--nui-border-raw, var(--border, 225 10% 30%)) / 0.6)",
+  fg: "var(--nui-text, hsl(var(--foreground, 220 10% 90%)))",
+  muted: "var(--nui-muted, hsl(var(--muted-foreground, 220 8% 58%)))",
+  mutedFaint: "hsl(var(--nui-muted-raw, var(--muted-foreground, 220 8% 58%)) / 0.5)",
+  mutedFainter: "hsl(var(--nui-muted-raw, var(--muted-foreground, 220 8% 58%)) / 0.35)",
+  accent: "var(--nui-accent, #eeeeee)",
+  accentFg: "var(--nui-accent-text, #111111)",
+  secondary: "hsl(var(--nui-hover-raw, var(--secondary, 225 10% 26%)) / 0.6)",
+  secondaryHover: "hsl(var(--nui-hover-raw, var(--secondary, 225 10% 26%)))",
+  destructive: "var(--nui-danger, hsl(var(--destructive, 0 62% 50%)))",
+  destructiveHover: "var(--nui-danger-hover, hsl(var(--destructive-hover, 0 62% 60%)))",
 } as const;
 
 export function SectionLabel(props: { label: string }) {
