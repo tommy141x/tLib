@@ -15,6 +15,43 @@ export interface ProtectedBuiltinInventory {
   files: readonly string[];
 }
 
+/**
+ * The prepared, fully-validated payload a {@link ContentValidator} is handed.
+ *
+ * `files` is keyed by the entry's path within the bundle, exactly as it will be written
+ * relative to the install destination. A raw (non-ZIP) sound bundle is a single entry under
+ * the empty-string key — the same convention `prepareBundle` and `installFromData` use, so a
+ * validator sees precisely the bytes that are about to be committed.
+ */
+export interface PreparedPayload {
+  type: string;
+  slug: string;
+  /** True for a ZIP bundle, false for a single raw file. */
+  zip: boolean;
+  files: ReadonlyMap<string, Buffer>;
+}
+
+/**
+ * A consumer's own content contract for one item type, run immediately before the commit.
+ *
+ * ⚠️ REJECT BY THROWING. The thrown message is surfaced verbatim as `InstallFailure.error`,
+ * so write it for the server owner who will read it, not for a log grep.
+ *
+ * This exists because the structural guarantees in this module — zip-slip, case aliasing,
+ * entry counts, declared-vs-actual sizes, compression methods, digests — establish that a
+ * bundle is *safe to extract*, and nothing more. They cannot establish that it is a valid
+ * instance of whatever the consuming resource expects, because only the consumer knows that.
+ * Without a hook here, the only place left to find out is at render time on a player's
+ * machine, which is how a malformed item installs cleanly and then silently misbehaves.
+ *
+ * Deliberately called BEFORE the staging directory is created, so a rejected bundle touches
+ * no disk at all and leaves nothing to roll back.
+ *
+ * Deliberately NOT given the resource root or any filesystem handle: a validator inspects
+ * the payload it is passed and nothing else. Keep it pure — it runs inside the install lock.
+ */
+export type ContentValidator = (payload: PreparedPayload) => void;
+
 export interface InstallTarget {
   resourceName: string;
   resourceRoot: string;
@@ -23,6 +60,12 @@ export interface InstallTarget {
   maxBundleBytes: number;
   /** Optional for compatibility. Absence never authorizes legacy adoption. */
   protectedInventory?: ProtectedBuiltinInventory;
+  /**
+   * Optional content contract for this type. Absence means "no contract declared", which is
+   * the pre-hook behaviour and stays the default — adding this field changed no existing
+   * consumer's outcome.
+   */
+  validate?: ContentValidator;
 }
 
 export interface InstallResult {

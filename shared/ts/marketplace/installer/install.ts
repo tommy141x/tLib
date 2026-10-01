@@ -48,6 +48,17 @@ export function installFromData(
   try {
     const c = context(target, slug);
     const prepared = prepareBundle(target, c, zipBytes, expectedHash, expectedSize);
+    // The consumer's own content contract, before anything touches disk. prepareBundle has
+    // established the bundle is safe to extract; only the consumer can establish that it is a
+    // valid instance of its own item type. Placed here, ahead of mkdir/lock/stage, so a
+    // rejection costs no filesystem state and no rollback — and the throw lands in the same
+    // catch as every other refusal, so it reports as `{ ok: false, error }` like the rest.
+    target.validate?.({
+      type,
+      slug: c.name,
+      zip: prepared.zip,
+      files: prepared.files,
+    });
     const { destination, bytesWritten } = prepared;
     const fileCount = prepared.files.size;
     owned(c); // Preserve unreceipted-target refusal before creating a lock.

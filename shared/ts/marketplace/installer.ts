@@ -3,10 +3,12 @@
 //
 // This file is the public surface; the modules behind it are internal.
 export type {
+  ContentValidator,
   InstallFailure,
   InstallOutcome,
   InstallResult,
   InstallTarget,
+  PreparedPayload,
   ProtectedBuiltinInventory,
   UninstallOutcome,
   UninstallResult,
@@ -32,3 +34,5 @@ export type {
 } from "./installer/lock";
 export { inspectMarketplaceLock, recoverMarketplaceLock } from "./installer/lock";
 export { protectedInventoryFromRelease, snapshotProtectedInventory } from "./installer/protected";
+export type { ResetOutcome, ResetResult } from "./installer/reset";
+export { resetInstalledToShipped } from "./installer/reset";
