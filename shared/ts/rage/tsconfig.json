@@ -1,0 +1,18 @@
+{
+  "//": "Standalone typecheck for @tlib/shared/rage. `types: []` is deliberate: the parsers must compile against the DOM lib alone, with no ambient Node or Bun globals, because they ship into NUI (CEF 103) and the browser. If this starts needing a @types package, the dependency-free guarantee has been broken.",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2023", "dom"],
+    "types": [],
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": false,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["scripts/**", "**/*.test.ts"]
+}

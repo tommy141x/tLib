@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": [
+      "es2023",
+      "dom"
+    ],
+    "types": [
+      "bun"
+    ],
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": [
+    "**/*.ts",
+    "../rage/**/*.ts"
+  ],
+  "//": "Standalone typecheck for @tlib/shared/rage-viewer. Unlike rage/'s tsconfig this allows types (bun, for the tests) and pulls in three from shared/ts/node_modules; the parsers' dependency-free guarantee lives next door, not here."
+}
