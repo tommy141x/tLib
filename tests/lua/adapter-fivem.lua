@@ -150,10 +150,68 @@ for _, side in ipairs({'client', 'server'}) do
             env.ace = value
             check(p.hasPermission(42, 'probe') == (value == true or value == 1), 'ACE BOOL normalization')
         end
+
+        -- hasPermissionBatch: ONE call for a key list, so a consumer asking 40+
+        -- keys pays one reference call instead of 40+. Checked here, against the
+        -- real adapter, because its whole contract is "the same answer per key as
+        -- hasPermission" -- the two share one decision helper precisely so they
+        -- cannot drift, and these are what notice if someone splits them again.
+        local aceByKey = function(_, key)
+            if key == 'yes' then return true end
+            if key == 'one' then return 1 end     -- legal BOOL marshalling of true
+            if key == 'zero' then return 0 end    -- ... and of false, which Lua calls truthy
+            return false
+        end
+        env.IsPlayerAceAllowed = aceByKey
+        local batch = p.hasPermissionBatch(42, {'yes', 'no', 'one', 'zero'})
+        check(batch.yes == true and batch.no == false, 'batch returns grants and denials in one map')
+        check(batch.one == true and batch.zero == false, 'batch keeps the 1/0 BOOL normalization')
+        for _, key in ipairs({'yes', 'no', 'one', 'zero'}) do
+            check(batch[key] == p.hasPermission(42, key), 'batch agrees with hasPermission for ' .. key)
+        end
+        local aceCalls = 0
+        env.IsPlayerAceAllowed = function(...) aceCalls = aceCalls + 1; return aceByKey(...) end
+        p.hasPermissionBatch(42, {'yes', 'yes', 'yes'})
+        check(aceCalls == 1, 'a duplicated key is decided once')
+        local function count(t) local n = 0; for _ in pairs(t) do n = n + 1 end; return n end
+        check(count(p.hasPermissionBatch(42, nil)) == 0, 'a nil key list is an empty map')
+        check(count(p.hasPermissionBatch(42, 'yes')) == 0, 'a non-table key list is an empty map')
+        check(count(p.hasPermissionBatch(nil, {'yes'})) == 0, 'no source is an empty map')
+        -- Fails closed the same way the single-key guard does: a non-string or
+        -- empty key has nothing to file an answer under, so it gets no entry and
+        -- reads back as nil -- never as a grant.
+        local mixed = p.hasPermissionBatch(42, {'yes', 7, '', false})
+        check(count(mixed) == 1 and mixed.yes == true, 'non-string and empty keys are dropped, not granted')
+        env.IsPlayerAceAllowed = function() return env.ace end
+
         p.registerPermissionResolver(function() error('failure') end)
         check(not p.hasPermission(42, 'probe'), 'resolver exception fails closed')
         p.registerPermissionResolver(function() return true end)
         check(p.hasPermission(42, 'probe'), 'framework resolver preserved')
+
+        -- A resolver outranks ACE in the batch path too, and an exception for ONE
+        -- key must deny that key without abandoning the rest of the list. The
+        -- `~= nil` check is the load-bearing one: an aborted batch would leave
+        -- 'nope' nil, which is falsy, so the denial assertion above it would pass
+        -- while the whole tail of the list went unanswered.
+        env.ace = true
+        p.registerPermissionResolver(function(_, key)
+            if key == 'boom' then error('resolver failure for one key') end
+            return key == 'ok'
+        end)
+        local viaResolver = p.hasPermissionBatch(42, {'ok', 'boom', 'nope'})
+        check(viaResolver.ok == true, 'batch routes through the resolver')
+        check(viaResolver.nope == false, 'and the resolver, not ACE, decides -- ACE grants everything here')
+        check(viaResolver.boom == false, 'a resolver error denies only its own key')
+        check(viaResolver.nope ~= nil, 'a resolver error does not abort the remaining keys')
+
+        -- Demo mode short-circuits ahead of the resolver in both forms. The
+        -- resolver still registered above denies 'nope'.
+        env.Demo = { active = function() return true end }
+        check(p.hasPermissionBatch(42, {'nope'}).nope == true and p.hasPermission(42, 'nope'),
+            'demo mode grants every key, batch and single alike')
+        env.Demo = nil
+        check(p.hasPermissionBatch(42, {'nope'}).nope == false, 'and stops granting when demo mode is off')
         p.Fetch({url = 'https://example.invalid'}, fn)
         check(env.http[2] == fn and env.http[3] == 'GET' and env.http[6].followLocation, 'HTTP native contract')
     else
