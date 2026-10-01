@@ -342,6 +342,92 @@ describe("HUD geometry (no DOM)", () => {
     const centred = { ...base, anchor: "center" as const, x: 0.25 };
     expect(migrateOffsets(centred)).toBe(centred);
   });
+  /**
+   * 1:1 dragging, which is requirement 4 of the bug report, and the thing the
+   * v1/v2 unit mismatch broke: at 3440x1440 a `x`-as-a-fraction-of-WIDTH renderer
+   * moved 3440/1440 = 2.389 px for every px the outline moved.
+   *
+   * Every viewport here, and every UI scale: `moveLayout(dx, dy)` must change the
+   * rendered rect by exactly `dx`, `dy`, because the rect IS what both the outline
+   * and every consumer draw.
+   */
+  test("a pixel of drag is a pixel of movement at any viewport, anchor and scale", () => {
+    const viewports = [
+      { width: 1920, height: 1080 },
+      { width: 3440, height: 1440 }, // the reporter's screen
+      { width: 1280, height: 720 },
+      { width: 2560, height: 1080 }, // 21:9, where width/height diverge most
+    ];
+    for (const vp of viewports) {
+      for (const anchor of anchors) {
+        for (const scale of [0.5, 1, 2]) {
+          const layout: Layout = { ...base, ...inward(anchor, 0.25), scale, anchor };
+          const before = layoutRect(component, layout, vp);
+          for (const [dx, dy] of [
+            [100, 0],
+            [0, 100],
+            [-100, -60],
+            [37, -13],
+          ]) {
+            const after = layoutRect(component, moveLayout(component, layout, vp, dx, dy), vp);
+            expect(after.left - before.left).toBeCloseTo(dx, 6);
+            expect(after.top - before.top).toBeCloseTo(dy, 6);
+            // Dragging must never resize: the scale factor is independent of position.
+            expect(after.width).toBeCloseTo(before.width, 6);
+            expect(after.height).toBeCloseTo(before.height, 6);
+          }
+        }
+      }
+    }
+  });
+  /**
+   * Outline/render agreement, with the actual numbers. `layoutRect` is the single
+   * definition of where a widget is; tRadar, tELS, tDetector and the tLib SDK all
+   * call this exact function, and tRadio's Lua `convert()` is asserted against the
+   * same numbers in tRadio's own suite. A regression here is a regression in all
+   * five at once, so the expected values are written out rather than derived.
+   */
+  test("the rendered rect is the same rect at 1080p and at 3440x1440", () => {
+    const layout: Layout = {
+      x: -48 / 1080,
+      y: -48 / 1080,
+      scale: 1,
+      visible: true,
+      anchor: "bottom-right",
+    };
+    // 1080p: the offset is one reference pixel per pixel, so 48 px in from each edge.
+    const hd = layoutRect(component, layout, { width: 1920, height: 1080 });
+    expect(hd).toEqual({ left: 1920 - 200 - 48, top: 1080 - 100 - 48, width: 200, height: 100 });
+    // 3440x1440: everything scales by 1440/1080 = 4/3 -- the widget AND the inset --
+    // and the inset does NOT scale by the width, which is the whole v2 rule.
+    const uw = layoutRect(component, layout, { width: 3440, height: 1440 });
+    expect(uw.width).toBeCloseTo(200 * (4 / 3), 6);
+    expect(uw.height).toBeCloseTo(100 * (4 / 3), 6);
+    expect(3440 - (uw.left + uw.width)).toBeCloseTo(48 * (4 / 3), 6);
+    expect(1440 - (uw.top + uw.height)).toBeCloseTo(48 * (4 / 3), 6);
+    // The v1 reading would have put the right inset at 48 * 3440/1080 = 152.9 px
+    // while the outline sat at 64 px -- 88.9 px apart on a static, unmoved widget.
+    expect(48 * (3440 / 1080)).toBeCloseTo(152.889, 3);
+  });
+  /** Clamp on load: a record from another resolution or another unit system heals. */
+  test("constrainLayout rescues a record that would otherwise be unreachable", () => {
+    const vp = { width: 3440, height: 1440 };
+    // What the v1/v2 mismatch actually produced: an x the editor thought was fine.
+    const lost: Layout = { x: -4, y: -4, scale: 1, visible: true, anchor: "bottom-right" };
+    const rect = layoutRect(component, lost, vp);
+    expect(rect.left).toBeLessThan(0); // MUTATION GUARD: it really is off screen
+    const healed = constrainLayout(component, lost, vp);
+    expect(healed).not.toEqual(lost);
+    const after = layoutRect(component, healed, vp);
+    const need = Math.min(after.width, vp.width, Math.max(96, after.width * 0.4));
+    expect(Math.min(vp.width, after.left + after.width) - Math.max(0, after.left)).toBeGreaterThan(
+      need - 1e-6
+    );
+    // An already-legal placement is returned by identity, so registering a
+    // component never rewrites a good saved value by a float epsilon.
+    const fine: Layout = { ...base, ...inward("bottom-right", 0.1), anchor: "bottom-right" };
+    expect(constrainLayout(component, fine, vp)).toBe(fine);
+  });
   test("resize bounds and capability respected", () => {
     expect(resizeLayout(component, base, viewport, "se", 99999, 99999).scale).toBe(2);
     expect(resizeLayout(component, base, viewport, "se", -99999, -99999).scale).toBe(0.5);

@@ -4,7 +4,7 @@ import {
   inspectableIdentity,
   matchesInspectionReply,
   summarizeInspection,
-} from "../../client/web/src/components/marketplace/inspection";
+} from "../../shared/ts/marketplace/ui/inspection";
 
 const request: InspectionRequest = {
   resource: "tRadio",

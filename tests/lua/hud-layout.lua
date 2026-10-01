@@ -317,4 +317,158 @@ constrainedOptions.minVisiblePixels = -1
 check(not exports.RegisterHudComponent('invalidBounds', constrainedOptions, function() end))
 constrainedOptions.minVisiblePixels, constrainedOptions.minVisibleFraction = 100, 1.1
 check(not exports.RegisterHudComponent('invalidBounds', constrainedOptions, function() end))
+-- ── Recovery: reset must work from ANY stored state ─────────────────────────
+--
+-- The unrecoverable-HUD bug. A consumer that owns its own storage (persist =
+-- false) used to have only one slot to put a placement in, so it passed its
+-- SAVED position as `defaults` -- and "Reset this" then restored the very
+-- placement the player was trying to escape. `layout` is now where the widget
+-- is and `defaults` is where Reset puts it back, and they are validated
+-- independently so garbage in either falls through instead of being trusted.
+caller = 'alpha'
+for _, key in ipairs({ 'test', 'bounds', 'toasts' }) do exports.UnregisterHudComponent(key) end
+local resetMessages = {}
+local FACTORY = { x = -0.05, y = -0.05, scale = 1, visible = true, anchor = 'bottom-right' }
+local CURRENT = { x = -0.9, y = -0.3, scale = 1, visible = true, anchor = 'bottom-right' }
+local consumerOptions = { label = 'Consumer owned', width = 300, height = 400, persist = false,
+    defaults = FACTORY, layout = CURRENT }
+check(exports.RegisterHudComponent('owned', consumerOptions, function(data) resetMessages[#resetMessages + 1] = data end))
+check(exports.GetHudLayout('owned').x == -0.9,
+    'A consumer-owned component starts from `layout`, not from the factory `defaults`')
+check(exports.GetHudLayout('owned').x ~= FACTORY.x, 'MUTATION GUARD: the two placements must actually differ')
+local resetCount = exports.ResetHudLayout('owned')
+check(resetCount == 1, 'ResetHudLayout reports how many components it restored')
+check(exports.GetHudLayout('owned').x == FACTORY.x and exports.GetHudLayout('owned').y == FACTORY.y,
+    'Reset restores the FACTORY placement, never the stored one')
+check(resetMessages[#resetMessages].phase == 'commit' and resetMessages[#resetMessages].editing == false,
+    'Reset tells a consumer that owns its storage to write the factory placement down')
+
+-- Garbage in `layout` falls through to `defaults` rather than poisoning anything.
+-- One case per way a record can rot: an older version's missing field, NaN, a
+-- value past the schema bound, a negative scale, and an anchor that no longer exists.
+local garbage = {
+    { y = -0.05, scale = 1, visible = true, anchor = 'bottom-right' },          -- missing x
+    { x = 0/0, y = -0.05, scale = 1, visible = true, anchor = 'bottom-right' }, -- NaN
+    { x = -99, y = -0.05, scale = 1, visible = true, anchor = 'bottom-right' }, -- past MAX_OFFSET
+    { x = -0.05, y = -0.05, scale = -3, visible = true, anchor = 'bottom-right' },
+    { x = -0.05, y = -0.05, scale = 1, visible = true, anchor = 'middle-out' },
+    { x = -0.05, y = -0.05, scale = 1, visible = 'yes', anchor = 'bottom-right' },
+    'not even a table',
+}
+for index, bad in ipairs(garbage) do
+    exports.UnregisterHudComponent('owned')
+    consumerOptions.layout = bad
+    check(exports.RegisterHudComponent('owned', consumerOptions, function() end),
+        ('Stored garbage #%d must not stop the component registering'):format(index))
+    local restored = exports.GetHudLayout('owned')
+    check(restored.x == FACTORY.x and restored.y == FACTORY.y and restored.scale == FACTORY.scale
+        and restored.visible == true and restored.anchor == FACTORY.anchor,
+        ('Stored garbage #%d falls through to the factory default'):format(index))
+end
+-- A component whose FACTORY default is itself garbage is refused outright, which
+-- is what makes "reset always lands somewhere sane" true by construction.
+consumerOptions.layout = CURRENT
+consumerOptions.defaults = { x = 0/0, y = 0, scale = 1, visible = true, anchor = 'bottom-right' }
+exports.UnregisterHudComponent('owned')
+check(not exports.RegisterHudComponent('owned', consumerOptions, function() end),
+    'An unusable factory default is refused at registration, not discovered at Reset')
+consumerOptions.defaults = FACTORY
+
+-- ── Clamp on load ───────────────────────────────────────────────────────────
+-- A record written at another resolution, or by a version with the wrong units,
+-- heals on the way IN. The tool for rescuing a lost widget is the one you cannot
+-- see to open, so it must never be needed for this case.
+exports.UnregisterHudComponent('owned')
+consumerOptions.layout = { x = -4, y = -4, scale = 1, visible = true, anchor = 'bottom-right' }
+check(exports.RegisterHudComponent('owned', consumerOptions, function() end))
+local healed = exports.GetHudLayout('owned')
+check(healed.x > -4, 'MUTATION GUARD: an off-screen record must actually have been moved on load')
+do
+    -- GetActiveScreenResolution is 1920x1080 in this harness.
+    local vw, vh = 1920, 1080
+    local w, h = 300 * healed.scale, 400 * healed.scale
+    local left, top = (vw - w) + healed.x * vh, (vh - h) + healed.y * vh
+    local needX = math.min(w, vw, math.max(96, w * 0.4))
+    local needY = math.min(h, vh, math.max(96, h * 0.4))
+    check(math.min(vw, left + w) - math.max(0, left) + 1e-8 >= needX,
+        'A healed record keeps the minimum visible width on screen')
+    check(math.min(vh, top + h) - math.max(0, top) + 1e-8 >= needY,
+        'A healed record keeps the minimum visible height on screen')
+end
+
+-- ── The unbrick command ─────────────────────────────────────────────────────
+-- /tlibhud reset has to work with the editor shut, with the editor open, and
+-- with every widget dragged somewhere the player cannot reach.
+consumerOptions.layout = CURRENT
+exports.UnregisterHudComponent('owned')
+check(exports.RegisterHudComponent('owned', consumerOptions, function() end))
+local persisted = { label = 'Persisted', width = 200, height = 100,
+    defaults = { x = 0.02, y = 0.02, scale = 1, visible = true, anchor = 'top-left' } }
+check(exports.RegisterHudComponent('kept', persisted, function() end))
+check(exports.OpenHudEditor())
+check(HudLayout.isEditing(), 'MUTATION GUARD: the editor really is open before the reset')
+local writesBefore = writes
+commands.tlibhud(nil, { 'reset' })
+check(not HudLayout.isEditing(), 'reset discards an open session rather than fighting it')
+check(exports.GetHudLayout('owned').x == FACTORY.x, 'reset restores every registered component')
+check(writes > writesBefore and next(captured.layouts) == nil,
+    'reset clears the stored layout table, including records for resources that are not running')
+check(exports.ResetHudLayout() >= 2, 'The export with no id resets everything')
+exports.UnregisterHudComponent('owned')
+exports.UnregisterHudComponent('kept')
+
+
+-- ── Live placement: dragging a device by its own background ─────────────────
+-- SetHudLayout has to be the editor's Save for one component and nothing
+-- looser, because a position a player produced by dragging their remote has to
+-- be exactly as recoverable as one produced in the editor.
+check(capabilities.liveLayoutWrite == true, 'Consumers can detect that live placement exists')
+local liveMessages = {}
+local live = { label = 'Live', width = 220, height = 488,
+    defaults = { x = -600 / 1080, y = -40 / 1080, scale = 1, visible = true, anchor = 'bottom-right' } }
+check(exports.RegisterHudComponent('live', live, function(data) liveMessages[#liveMessages + 1] = data end))
+local DRAGGED = { x = -0.3, y = -0.1, scale = 1, visible = true, anchor = 'bottom-right' }
+
+check(select(1, exports.SetHudLayout('nope', DRAGGED)) == false, 'An unknown component is refused')
+check(select(1, exports.SetHudLayout('live', 'not a table')) == false, 'A non-table layout is refused')
+check(select(1, exports.SetHudLayout('live', { x = 0, y = 0, scale = 1, visible = true, anchor = 'sideways' })) == false,
+    'An invalid anchor is refused')
+check(select(1, exports.SetHudLayout('live', { x = 99, y = 0, scale = 1, visible = true, anchor = 'center' })) == false,
+    'An out-of-range offset is refused, not clamped into acceptance')
+caller = nil
+check(select(1, exports.SetHudLayout('live', DRAGGED)) == false, 'An unidentifiable caller is refused')
+caller = 'beta'
+check(select(1, exports.SetHudLayout('live', DRAGGED)) == false, 'Another resource cannot place this component')
+caller = 'alpha'
+
+local before = writes
+check(exports.SetHudLayout('live', DRAGGED) == true, 'A valid live placement is accepted')
+check(writes == before + 1, 'It writes the SAME KVP record the editor Save writes')
+check(captured.version == 2 and captured.layouts['alpha:live'].x == DRAGGED.x,
+    'The dragged position is in the stored table under the component key')
+check(exports.GetHudLayout('live').x == DRAGGED.x, 'The component now reports the dragged position')
+check(liveMessages[#liveMessages].phase == 'commit' and liveMessages[#liveMessages].editing == false,
+    "It is announced as 'commit', so a consumer with its own store writes it down too")
+
+-- Healing is not optional on this path either: a position that would strand the
+-- device off screen comes back on screen instead of being stored as given.
+check(exports.SetHudLayout('live', { x = -3.9, y = 3.9, scale = 1, visible = true, anchor = 'top-left' }) == true)
+local healed = exports.GetHudLayout('live')
+check(healed.x > -3.9 and healed.y < 3.9, 'A live placement is healed against the live resolution')
+check(HudLayoutSchema.constrain(healed, { width = 220, height = 488 }, { width = 1920, height = 1080 }).x == healed.x,
+    'What was stored is a placement the shared clamp already agrees with')
+
+-- An open editor is a transaction over every component; a live write inside one
+-- would be discarded by Cancel without telling anybody.
+check(exports.OpenHudEditor())
+check(select(1, exports.SetHudLayout('live', DRAGGED)) == false, 'Refused while the editor is open')
+HudLayout.close()
+check(exports.SetHudLayout('live', DRAGGED) == true, 'Accepted again once the editor is shut')
+
+-- Reset is still the safety net for a position produced this way.
+check(exports.ResetHudLayout('live') == 1)
+check(exports.GetHudLayout('live').x == live.defaults.x, 'Reset recovers a dragged position')
+check(captured.layouts['alpha:live'] == nil, 'Reset clears the dragged record from storage')
+exports.UnregisterHudComponent('live')
+
 print(('PASS: %d shared HUD layout ownership, transaction, validation and cleanup checks'):format(checks))

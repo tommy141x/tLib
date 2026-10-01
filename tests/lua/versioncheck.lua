@@ -43,6 +43,15 @@ local function fixture(authors, name)
     -- reaches it, and the module's guard is written to accept either.
     StudioBranding = nil
     assert(loadfile('shared/sh_branding.lua'))()
+    -- Same story for the studio API host: the module takes it from tLib's real
+    -- shared/sh_api.lua so `tmarketplace_base_url` is ONE switch -- pointing it
+    -- at a dev worker has to move the version check and its changelog too, not
+    -- just marketplace installs. Pre-loaded here for the same reason branding is;
+    -- the module's guard accepts either. GetConvar is left undefined by default
+    -- so the default host is what these assertions see.
+    StudioApi = nil
+    GetConvar = nil
+    assert(loadfile('shared/sh_api.lua'))()
     print = function(line) output[#output + 1] = line end
     json = { decode = function(body) return body end }
     local vc = assert(loadfile('shared/imports/versioncheck/server.lua'))()
@@ -146,6 +155,48 @@ test('Studios provider queries each product and resolves once', function()
     end
 end)
 
+-- The whole point of tmarketplace_base_url is pointing every studio call at one
+-- local dev server. Before this, the provider below hard-coded the host, so an
+-- operator testing marketplace installs against localhost still had their
+-- version check and changelog hitting production -- exactly the split the convar
+-- exists to remove. github() is asserted UNCHANGED in the same test: that one
+-- really does point at GitHub and must never follow this convar.
+test('Studios provider follows tmarketplace_base_url; GitHub does not', function()
+    local f = fixture({ 'TIMMYG Studios' })
+    GetConvar = function(name, default)
+        if name == 'tmarketplace_base_url' then return 'http://localhost:8787/' end
+        return default
+    end
+    f.vc({ name = 'tELS', current = '1.0.0', fetch = f.vc.studios('tELS', '1.0.0') })
+    assert(f.requests[1].url == 'http://localhost:8787/api/products/tELS/changelog?since=1.0.0&limit=10',
+        'studios provider ignored the convar: ' .. tostring(f.requests[1].url))
+
+    local g = fixture({ 'TIMMYG Studios' })
+    GetConvar = function(name, default)
+        if name == 'tmarketplace_base_url' then return 'http://localhost:8787' end
+        return default
+    end
+    g.vc({ name = 'tLib', current = '1.0.0', fetch = g.vc.github('tommy141x/tLib') })
+    assert(g.requests[1].url == 'https://api.github.com/repos/tommy141x/tLib/releases/latest',
+        'github provider must not follow the marketplace convar')
+    GetConvar = nil
+end)
+
+-- A value someone pastes out of a browser address bar. The callers append
+-- /api/... themselves, so taking it literally would build
+-- .../api/v1/api/products/... -- a 404 that reads as a broken dev server.
+test('Studios provider trims a trailing /api path off the convar', function()
+    local f = fixture({ 'TIMMYG Studios' })
+    GetConvar = function(name, default)
+        if name == 'tmarketplace_base_url' then return '  http://localhost:8787/api/v1/  ' end
+        return default
+    end
+    f.vc({ name = 'tELS', current = '1.0.0', fetch = f.vc.studios('tELS', '1.0.0') })
+    assert(f.requests[1].url == 'http://localhost:8787/api/products/tELS/changelog?since=1.0.0&limit=10',
+        'normalisation drifted from shared/sh_api.lua: ' .. tostring(f.requests[1].url))
+    GetConvar = nil
+end)
+
 test('Studios timeout prints failure without accepting a late result', function()
     local f = fixture({ 'TIMMYG Studios' })
     f.vc({ name = 'tELS', current = '1.0.0', fetch = f.vc.studios('tELS', '1.0.0') })
@@ -161,12 +212,18 @@ test('tDB forwards initial and subsequent database status through tLib', functio
     tlib = { versioncheck = f.vc }
     assert(loadfile('../tDB/server/utils/version.lua'))()
     TriggerEvent('tdb:startupStatus', 'Database ready')
+    -- tDB queries its own repository, not PocketBase's. This asserts the real URL
+    -- because the interesting failure is a plausible-looking wrong repo, which a
+    -- "some request was made" check would pass.
+    assert(#f.requests == 1)
+    assert(f.requests[1].url == 'https://api.github.com/repos/tommy141x/tDB/releases/latest')
+    f.requests[1].cb(200, { tag_name = 'v1.0.0', body = 'Notes', html_url = 'https://github.com/tommy141x/tDB/releases/tag/v1.0.0' })
     f.run(1100)
     contains(f.text(), 'Database ready')
-    contains(f.text(), 'GitHub repository not configured')
+    -- The status line is tDB's, and it keeps flowing after the version check has
+    -- resolved -- the two are independent, which is the point of this test.
     TriggerEvent('tdb:startupStatus', 'Database authentication failed')
     contains(f.text(), 'Database authentication failed')
-    assert(#f.requests == 0)
 end)
 
 test('all five shipped manifests explicitly credit TIMMYG Studios', function()

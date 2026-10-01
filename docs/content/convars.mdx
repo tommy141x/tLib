@@ -1,0 +1,202 @@
+---
+title: "Convars"
+description: "Every convar tLib reads — what it does, its unit, its default, and whether it needs set or setr."
+order: 6
+group: "tLib"
+---
+
+tLib has **no config file**. Everything an owner can change is a FiveM convar in
+`server.cfg`, placed **before** `ensure tLib`. This page is the one place that
+surface is documented; if a convar is not listed here, tLib does not read it.
+
+## `set` vs `setr` — read this first
+
+`set` defines a convar the **server** can read. `setr` additionally replicates
+it to every connected **game client**.
+
+The rule is mechanical: a convar read by client Lua or by the NUI needs `setr`.
+A convar read only by the server bundle uses `set`.
+
+Getting it wrong fails *quietly*, which is why the column below is not decorative:
+
+- A `setr` convar written with `set` makes the client read return the built-in
+  default. Point `tmarketplace_base_url` at your own host with `set` and the
+  server talks to your host while the in-game panel keeps talking to ours.
+- A `set` convar written with `setr` still works, but it ships your server's
+  networking details to everyone who joins. Never do it for a secret.
+
+## Naming: two prefixes, on purpose
+
+| Prefix | Owner | Scope |
+| --- | --- | --- |
+| `tlib_*` | tLib | Settings that exist because tLib exists. |
+| `tmarketplace_*` | the marketplace API contract | Read by **several** resources, not just tLib. |
+
+`tmarketplace_*` is deliberately **not** folded into `tlib_*`. It names the
+marketplace contract shared with the website's `API.md`, and the same convars are
+read outside this repository — `tmarketplace_base_url` is read by tRadio
+(`client/cl_bridge.lua`) as well as by tLib's own client and server. Renaming it
+would break a sibling resource's `server.cfg` for no gain, so it stays. New
+marketplace-contract convars go under `tmarketplace_*`; everything else under
+`tlib_*`.
+
+## Units
+
+Every duration convar carries its unit in the name (`_ms`). Three did not, and
+were renamed. The old names still work and print a one-line deprecation warning
+naming the replacement; they will be removed in the next major version.
+
+| Old name | Use instead |
+| --- | --- |
+| `tlib_menu_request_timeout` | `tlib_menu_request_timeout_ms` |
+| `tlib_menu_permission_refresh` | `tlib_menu_permission_refresh_ms` |
+| `tlib_menu_highlight_settle` | `tlib_menu_highlight_settle_ms` |
+
+## Demo mode
+
+| Convar | Command | Type / unit | Default | What it does |
+| --- | --- | --- | --- | --- |
+| `tlib_demo` | `set` | boolean — `1`, `true`, `yes` or `on` | *(off)* | Turns the server into a self-resetting showroom. **Every player becomes a superadmin and every access gate opens**, no resource writes its data file, and marketplace installs are swept off disk at the next start. |
+
+`set`, not `setr`: the server is the authority and pushes the state to clients,
+so a client never needs to read the convar itself. `setr` also works and does no
+harm.
+
+### What it is for
+
+A public demo box that cleans itself on `ensure <resource>`, and — because it is
+the same artifact you ship — a test server with nothing patched out of it.
+
+The reason this is a convar rather than a config key is that a convar is the one
+setting that **cannot travel inside the release**. `server.cfg` is not in the zip
+and not escrow-packed, so the demo box keeps demo mode across every update
+without a per-release edit, and a customer installing that identical artifact
+gets the real thing. There is no build flag and no step to forget.
+
+### Read this before you set it
+
+Demo mode is **fail-open**, and it is the only thing in tLib that is. Everything
+else here fails closed deliberately; demo mode overrides all of it. Anyone who
+connects can do anything, including install marketplace content and change every
+server setting. Never set it on a server whose data you care about or whose
+players you do not.
+
+tLib prints a red banner at boot and every 30 minutes for as long as it is on.
+
+### What it does and does not reset
+
+| | In demo mode |
+| --- | --- |
+| Server settings, layouts, codeplugs, vehicle configs — anything in a resource's `data.json` | Held in memory for the session, never written. Back to the shipped file on restart. |
+| Marketplace items a visitor installs | Really installed, so they work; swept at the next start of that resource. |
+| **Preinstalled** marketplace content shipped in the zip | **Untouched.** It is covered by the release's protected inventory and is never receipt-owned, so the sweep cannot see it. |
+| Per-player client storage (HUD placement, menu preferences) | **Untouched.** It lives on the player's own machine and is not server state. |
+
+Because nothing is deleted — writes are dropped, not rolled back — removing the
+convar and restarting brings the server back exactly as it was.
+
+### Flipping it on a running server
+
+`tlib_demo [on|off|convar]` (console, or `tlib.admin`) changes it live and
+reports the new state. `convar` stops overriding and follows `server.cfg` again.
+
+Access and permission changes take effect immediately. The **data reset and the
+marketplace sweep cannot** — both happen when a resource starts — so the command
+says so every time it is used. To test that a marketplace install survives a
+restart, turn demo mode off and restart the resource; that is the supported way
+to run the two modes apart.
+
+## Marketplace
+
+| Convar | Command | Type / unit | Default | What it does |
+| --- | --- | --- | --- | --- |
+| `tmarketplace_base_url` | `setr` | URL, no trailing slash, no `/api` suffix | `https://timmygstudios.com` | **Where the TIMMYG Studios API lives** — not just the marketplace. One switch: browse, preview, install downloads, community configs **and** the startup version check with its changelog all follow it. Point it at a local `wrangler dev` worker for integration testing. Read by the server bundle **and** by client Lua, so `set` alone leaves the in-game panel on the default host. |
+
+<Callout type="info">
+  **It covers version checks and changelogs too.** Until tLib 0.11 the startup
+  version check hard-coded `https://timmygstudios.com/api/products/...`, so an
+  operator pointing this convar at localhost got marketplace traffic on their
+  dev worker while update checks quietly went on hitting production. It is the
+  same host and the same API surface (`/api/v1`, `/api/v2`, `/api/products`),
+  so it is now one convar for all of it.
+
+  The GitHub release check that some resources use instead is **not** affected —
+  that one really does point at GitHub.
+</Callout>
+
+<Callout type="info">
+  **The value is normalised, and the change takes effect immediately.**
+
+  A trailing slash is stripped, and so is a trailing `/api`, `/api/v1`, `/api/v2`
+  or `/api/v2/marketplace` — the callers append those themselves, so taking such
+  a value literally would build `.../api/v1/api/v1/items`, a 404 that reads as a
+  broken dev server. A one-line warning is printed when that trimming happens.
+  An empty value falls back to the default rather than producing a relative URL.
+
+  Nothing caches the resolved value. `resolveConfig()` in the server bundle used
+  to memoise it at first use, which meant changing the convar mid-session did
+  nothing on the server while tRadio's client bridge followed it immediately.
+  Both re-read per call now, so a `setr` from the console applies without a
+  resource restart.
+</Callout>
+
+<Callout>
+  **The marketplace needs no credential and no setup.** Browse, preview,
+  install and community-config publish all work on a fresh install with nothing
+  in your `server.cfg`.
+
+  Earlier versions of this page listed a required `tmarketplace_resource_secret`
+  convar. That was never right — the value the server presents as
+  `X-Resource-Secret` is compiled into the resource, not configured. If you set
+  that convar, nothing reads it; you can delete the line.
+</Callout>
+
+## HTTP router
+
+All server-read. The resolved public URL is sent to clients over the wire, so
+none of these needs replicating.
+
+| Convar | Command | Type / unit | Default | What it does |
+| --- | --- | --- | --- | --- |
+| `tlib_http_port` | `set` | integer, 1–65535 | `7777` | The one external listen port. |
+| `tlib_http_host` | `set` | bind address | `0.0.0.0` | Interface the listener binds. |
+| `tlib_http_public_url` | `set` | host, `host:port` or full URL | *(empty — auto-detect)* | The address clients should be told to use. Bare IP/localhost implies HTTP and the listener port; a bare domain implies `https://`. An advertised address, not a bind address, and not proof of reachability. |
+| `tlib_realtime_public_url` | `set` | `ws://` / `wss://` URL | *(empty — derived from the router)* | Overrides the realtime WebSocket URL handed to clients. Realtime is a mount on the router at `/rt`; the removed `tlib_realtime_port` and `tlib_realtime_host` do nothing. |
+
+## Menu
+
+All read by client Lua, so all need `setr`. `tlib_menu_key` and
+`tlib_menu_pad_key` are read during resource start because `RegisterKeyMapping`
+only takes effect then — changing them needs a restart, not a reload.
+
+| Convar | Command | Type / unit | Default | What it does |
+| --- | --- | --- | --- | --- |
+| `tlib_menu_command` | `setr` | string | `tlibmenu` | Chat/console command that opens the menu. |
+| `tlib_menu_key` | `setr` | key name | `F1` | Default keyboard binding. |
+| `tlib_menu_pad_key` | `setr` | pad control name | `start_index` | Default controller binding. |
+| `tlib_menu_search_key` | `setr` | key name | `F3` | Opens search. |
+| `tlib_menu_label` | `setr` | string | `Open Menu` | Label shown in FiveM's key-binding settings. |
+| `tlib_menu_key_slots` | `setr` | integer, 0–16 | `8` | How many per-item quick-bind slots are offered. `0` disables them. |
+| `tlib_menu_locale` | `setr` | locale code | `en` | UI language. |
+| `tlib_menu_request_timeout_ms` | `setr` | milliseconds, 1000–60000 | `10000` | How long a snapshot/action request waits on the server before failing. |
+| `tlib_menu_permission_refresh_ms` | `setr` | milliseconds, 1000–60000 | `5000` | How often permission-filtered menus are re-pushed. |
+| `tlib_menu_highlight_settle_ms` | `setr` | milliseconds, 0–2000 | `120` | Delay before a highlight change is treated as settled. `0` fires immediately. |
+
+Out-of-range or non-numeric values fall back to the default rather than erroring.
+
+## HUD and storage
+
+| Convar | Command | Type / unit | Default | What it does |
+| --- | --- | --- | --- | --- |
+| `tlib_hud_profile` | `setr` | string | *(empty — the server endpoint)* | Namespaces each player's saved HUD placement. Set it when one community runs several endpoints that should share one layout. |
+| `tlib_community_id` | `setr` | string, `[A-Za-z0-9_-]` only | *(empty — falls back to `sv_projectName`)* | Prefix for tLib's KVP keys, so two servers on one machine do not share player storage. Characters outside the allowed set are stripped; a value that strips to nothing falls through to `sv_projectName`. Read by both client Lua and the server bundle. |
+
+## Not convars
+
+These look similar and are not convars — do not put them in `server.cfg`:
+
+| Name | What it actually is |
+| --- | --- |
+| `tlib_min_version`, `tlib_module`, `tlib_modules` | `fxmanifest.lua` metadata keys on the **consuming** resource. |
+| `tlib_menu_selftest`, `tlib_menu_refresh`, `tlib_menu_permissions` | Console commands. |
+| `tlib_demo` *(as a command)* | Also a console command, `tlib_demo [on\|off\|convar]`, which toggles the convar above at runtime. The convar is the real setting. |

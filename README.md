@@ -234,6 +234,24 @@ The in-game panel for browsing and installing content a resource publishes.
 - `OpenMarketplace(opts)` / `CloseMarketplace()` — Client. `{ type = 'ui-radio' }` filters the
   panel on open.
 
+The marketplace needs **no credential and no setup** — it works on a fresh install.
+The only convar here is optional, and only if you self-host:
+
+```cfg
+setr tmarketplace_base_url "https://timmygstudios.com"   # only to self-host
+```
+Unset, browse/preview/install and community-config publish refuse and log the convar
+name once rather than falling back to a shared built-in value. `tmarketplace_base_url`
+is the opposite case: client Lua reads it too, so it needs `setr` or the in-game panel
+keeps talking to the default host while the server talks to yours.
+
+It is a **single** switch for the whole TIMMYG Studios API, not just the marketplace:
+browse, preview, install downloads, community configs and the startup version check with
+its changelog all follow it, so pointing it at a local `wrangler dev` worker moves all of
+them together. A trailing slash or a trailing `/api…` path is trimmed, nothing caches the
+value, and the GitHub release check is deliberately unaffected. See
+`docs/content/convars.mdx`.
+
 ---
 
 ### Logger
@@ -496,6 +514,10 @@ Converts between FiveM's coordinate system (Z-up) and Three.js (Y-up) for web ed
 
 1. Download the latest release and extract `tLib` into your server's resources directory.
 2. Add `ensure tLib` to your `server.cfg` **before** any resource that depends on it.
+3. That's it — nothing else is required. The marketplace needs no configuration.
+
+Every convar tLib reads — name, unit, default, and whether it needs `set` or `setr` — is
+listed in one place: [`docs/content/convars.mdx`](docs/content/convars.mdx).
 
 ---
 

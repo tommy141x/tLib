@@ -26,7 +26,7 @@ takes an optional trailing `declaredOwner`, used only where the platform cannot 
 caller. Pass it as its own argument — never as the result of a call in the last argument slot,
 since `f(json.decode(x))` expands to *two* values and the second lands in `declaredOwner`.
 
-[Developing modular menu resources](/docs/tlib/menu-consumers) walks through a complete
+[Developing modular menu resources](/docs/tLib/menu-consumers) walks through a complete
 standalone consumer.
 
 ### Server — declaring the tree
@@ -108,6 +108,26 @@ Unscoped: the screen belongs to the player, not to a resource.
 | `confirm` | `string` | Ask this before the row runs. |
 | `icon` / `rightIcon` / `rightLabel` | `string` | Row decoration. |
 
+Every `kind` on one page, in the order above — an action, a `rightLabel`, two toggles, a
+selector, a slider, a status row, a submenu and a destructive action:
+
+<ZoomableImage
+  src="/assets/tLib/menu--controls.png"
+  width={1600}
+  height={900}
+  alt="A Vehicle page: Repair highlighted, Clean marked free, Engine checked, Doors unchecked, Livery on Police, Dirt level 40, Plate, Performance, Delete"
+/>
+
+A namespace or page theme changes the same rows without the page changing. The skin below is
+the same definition under a different `theme`:
+
+<ZoomableImage
+  src="/assets/tLib/menu--controls-vmenu.png"
+  width={1600}
+  height={900}
+  alt="The same Vehicle page in a wider skin with a large centred title and triple chevrons on the submenu row; values and rows are unchanged"
+/>
+
 ---
 
 ## Dialog System
@@ -133,7 +153,18 @@ events and via optional inline callbacks — the two are additive, not alternati
 | `size` | `string` | `"sm"`, `"md"` or `"lg"` (default `"md"`). |
 | `theme` | `string` | Id of a registered tLib theme. |
 | `blur` | `boolean` | Blur the scene behind the dialog. |
+| `resetState` | `boolean` | Open at the defaults instead of where the player last left this dialog id. |
 | `fields` | `table[]` | Array of field definitions. |
+
+A dialog reopens **where the player left it**: the selected tab, each tab's scroll
+position and where the panel was dragged to are remembered per dialog id, so closing
+the dialog for a detour — a HUD reposition, a 3D editor — and reopening it lands back
+on the tab the button was on. This needs no opt-in and applies to every consumer.
+
+Values are never remembered, nor is validation state; a remembered tab that no longer
+exists (config or permissions changed) falls back to the first tab. The state is held
+in the NUI page in memory only, so restarting tLib or reconnecting forgets it. Pass
+`resetState = true` for the rare caller that genuinely wants a first-run dialog.
 
 ### Field types
 
@@ -145,6 +176,16 @@ events and via optional inline callbacks — the two are additive, not alternati
 | `checkbox` | `defaultValue` (boolean) |
 
 All fields share: `id` (required), `type`, `label`, `description`, `required`, `disabled`.
+
+One of each type in a single `lg` dialog. `select` with two options renders as a segmented
+control rather than the `Dropdown` list:
+
+<ZoomableImage
+  src="/assets/tLib/dialog--every-field.png"
+  width={1600}
+  height={1018}
+  alt="Dialog with text, number 12, masked password, notes textarea, a Tow/Release segmented select, a Mission Row dropdown, Day/Night, a Tint slider at 35 and a checkbox"
+/>
 
 ### Events
 
@@ -199,6 +240,16 @@ deadline. Limits are 32 active per producer and 256 total.
 | `warning` | 5000 ms |
 | `info` | 4000 ms |
 | `loading` | Persistent until dismissed or updated |
+
+Each type carries its own icon and colour, so the type you pass is what a player reads before
+the words. Newest sits at the bottom of the stack:
+
+<ZoomableImage
+  src="/assets/tLib/toast--stack.png"
+  width={1600}
+  height={900}
+  alt="Five stacked toasts: green Vehicle stored, red Not enough cash, amber Engine damaged, blue Shift starts in 5 minutes, and a spinning Installing layout"
+/>
 
 ### Events
 
@@ -260,11 +311,64 @@ player can move, scale and hide it alongside every other resource's HUD.
 | `GetHudLayout(id)` | The component's current layout, or `nil`. |
 | `OpenHudEditor(options)` | Open the editor for this resource. `{ demo = true }` adds a sample component. |
 | `CloseHudEditor()` | Close it, if this resource opened it. |
+| `ResetHudLayout(id?)` | Restore factory placements and clear the saved record. With no `id`, everything. Returns how many components it restored. |
 | `GetHudLayoutCapabilities()` | Feature flags for consumers that support several tLib versions. |
 
-`options` is `{ label, width, height, canHide?, canScale?, minScale?, maxScale?, defaults = { x, y, scale, visible, anchor } }`.
+There is one editor, not one per resource. Registering puts your component in the same list,
+and on the same screen, as everyone else's:
+
+<ZoomableImage
+  src="/assets/tLib/layout--editor.png"
+  width={1600}
+  height={900}
+  alt="The HUD layout editor listing Lightbar HUD from tELS, Radio from tRadio and Radar from tRadar, with all three drag frames outlined inside a safe-area border"
+/>
+
+`options` is `{ label, width, height, canHide?, canScale?, minScale?, maxScale?, persist?,
+minVisiblePixels?, minVisibleFraction?, defaults = { x, y, scale, visible, anchor }, layout? }`.
 Layouts persist per server endpoint; without one they are session-only and tLib says so at
 startup.
+
+### `defaults` and `layout` are different things
+
+`defaults` is the **factory** placement — the one "Reset this" goes back to. `layout` is where
+the widget **is right now**.
+
+They only coincide for a component that has nowhere else to keep its placement. A consumer that
+passes `persist = false` owns its own storage, and passing its saved position as `defaults` makes
+Reset restore the very placement the player is trying to escape. If a widget can be dragged
+somewhere it cannot be dragged back from, that makes it unrecoverable. Pass both:
+
+```lua
+exports['tLib']:RegisterHudComponent('radio', {
+    label = 'Radio', width = 300, height = 440, persist = false,
+    defaults = factoryPlacement,   -- where Reset puts it
+    layout   = savedPlacement,     -- where it is
+}, onLayout)
+```
+
+`layout` needs tLib 0.10; check `GetHudLayoutCapabilities().separateDefaults` before relying on
+it, and fall back to `defaults = savedPlacement` on older versions.
+
+Every layout tLib is given — saved record, `layout`, or `defaults` — is validated independently
+and falls through to the next when it is unusable, and the survivor is clamped against the live
+resolution so at least `minVisiblePixels` (96 by default) or `minVisibleFraction` (0.4) of the
+widget stays on screen. That happens on **registration**, not only while editing: a record
+written at another resolution heals on the way in.
+
+### Units
+
+`x` and `y` are a ratio of a **1080px-tall reference screen on both axes** — the same unit the
+widget's own size scales by — so a corner inset stays visually constant from 16:9 to 32:9.
+Centre-anchored `x` is the one exception and stays proportional to the width. Dividing `x` by the
+viewport *width* is the v1 rule and is wrong: at 3440x1440 it places the widget 3440/1440 = 2.39x
+further from the anchor than the editor's outline, and drags stop being 1:1.
+
+### If a player loses their HUD
+
+`/tlibhud reset` restores every registered component to its factory placement and clears the
+saved layout, with the editor open or shut. It is deliberately not restricted to the resource
+that opened the editor.
 
 ---
 
@@ -276,8 +380,15 @@ publishes.
 | Export | Side | Description |
 | --- | --- | --- |
 | `RegisterMarketplaceType(kind, opts)` | Server | Declare a content type this resource provides. |
-| `OpenMarketplace(opts)` | Client | Open the panel. `{ type = 'ui-radio' }` filters it on open. |
-| `CloseMarketplace()` | Client | Close it. |
+| `OpenMarketplace(opts)` | Client | Open the standalone panel. `{ type = 'ui-radio' }` filters it on open. |
+| `ProvideMarketplaceData(opts)` | Client | Same payload, no modal: feeds a marketplace tab inside a dialog you already opened. |
+| `CloseMarketplace()` | Client | Close the standalone panel. |
+
+`ProvideMarketplaceData` is the integrated path. Give your dialog a tab with
+`view = "marketplace"` and it renders the browser in that tab's panel, inside
+your own dialog chrome. Call this when the server answers with what is
+installed; it takes no NUI focus, because the dialog already has it.
+`OpenMarketplace` stays for places with no host dialog to embed in.
 
 ---
 
@@ -378,22 +489,122 @@ string, and an empty string is the universal "no".
 | `InferenceLookup(capability, workload)` | An engine another resource already has up for the same weights, or `''`. Never returns your own. |
 | `InferenceWithdraw(handle)` | Drop one of your own advertisements. A resource's entries are dropped for it when it stops. |
 | `InferenceList()` | Everything registered, for diagnostics. |
-| `InferenceServe(json)` | Start a long-lived process: `{ key, binary, args, cwd, env }`. Returns `{ pid }` or `{ error }`. Starting the same key twice returns the first pid. |
-| `InferenceOutput(key, since)` | `{ lines, next, alive, code }` — what that process has printed since your cursor. |
-| `InferenceUnserve(key)` | Stop it. |
-| `InferenceRun(json)` | A one-shot process, with an optional `stdin` string. Returns `{ job }`. |
-| `InferenceJob(id)` | `{ state, code, error }`. Reading a finished job forgets it. |
 
-The spawning exports exist so one line covers a box running several resources that ship
-inference:
+Starting those engines is a separate, gated surface — see [Child processes](#child-processes).
+
+---
+
+## Child processes
+
+**Server.** One `add_unsafe_child_process_permission` line for a whole box, however many
+first-party resources ship a local engine.
+
+FXServer attributes the child-process check to whichever resource's runtime made the call, so
+every resource that spawns needs its own grant, and a customer who drops in a new one gets a
+feature that silently does not work until they find out why. tLib makes the call instead:
 
 ```cfg
 add_unsafe_child_process_permission tLib
 ```
 
-`binary` and `cwd` are relative to **your** resource, and a path that resolves — symlinks
-included — outside it is refused. tLib holding the permission does not make it a way to run
-arbitrary programs. Processes are killed when the resource that asked for them stops.
+That is the only line. It replaced four.
+
+### What sits behind the one line
+
+A single grant is only an improvement if what it permits is *narrower* than the grants it
+replaced, so it is. **The caller names a program, never a path.** tLib holds a catalog —
+`server/lib/spawn/catalog.ts` — of which resources may spawn, which programs each may run,
+where those programs live inside that resource, and what their arguments are allowed to look
+like. It resolves the executable itself, checks the resolved path is inside the calling
+resource after `realpath` (so neither a `..` nor a symlink escapes), rebuilds the argv token by
+token from a declared shape, and execs with **no shell**.
+
+What tDB could run before was *anything*. What it can run now is `pocketbase`, from its own
+directory, with PocketBase's own flags.
+
+<Callout type="warning">
+This narrows what a **compromised first-party resource** can do. It is not a defence against a
+hostile resource *pretending* to be one. `GetInvokingResource()` identifies the calling
+resource container honestly, but a folder named `tDB` containing someone else's code passes
+that check — exactly as it passed `add_unsafe_child_process_permission tDB` before. The
+`author` in a caller's fxmanifest is read and a mismatch is logged loudly, but a resource
+writes its own manifest, so a match authorises nothing and nothing in tLib branches on it.
+</Callout>
+
+### Exports
+
+| Export | Description |
+| --- | --- |
+| `SpawnServe(json)` | Start a long-lived process: `{ key, program, args, cwd, env, mode }`. Returns `{ pid }` or `{ error }`. Serving the same `key` twice while it is alive returns the first pid rather than a second copy. |
+| `SpawnOutput(key, since)` | `{ lines, next, alive, code }` — what that process has printed since your cursor. In `bytes` mode, `{ chunks, next, stderr, alive, code }`. |
+| `SpawnUnserve(key)` | Stop it: SIGTERM, then SIGKILL after a five-second grace. |
+| `SpawnWrite(key, base64)` | Write bytes to a `bytes`-mode process's stdin. |
+| `SpawnRun(json)` | A one-shot: `{ program, args, cwd, env, stdin }`. Returns `{ job }`. |
+| `SpawnJob(id)` | `{ state, code, stdout, stderr, error }`. Reading a finished job forgets it. |
+| `SpawnCancel(id)` | Kill a one-shot that is still running. |
+| `SpawnList()` | What is running and for whom, for diagnostics. |
+
+`cwd` is resource-relative and must be one the catalog declares for that program; omitted, it
+is the binary's own directory. `env` names must be on the program's allowlist — this is why
+`LD_PRELOAD` cannot be set. `mode` is `lines` (default) or `bytes`, which hands stdout back
+base64 with nothing dropped and keeps stdin open; it exists for a child that exchanges binary
+frames rather than log lines, and it widens the **data** path only — the program, its path and
+its arguments go through the same gate either way.
+
+### Cross-platform by construction
+
+Linux containers are a first-class target, not a port, so there is no
+platform branch anywhere in this surface. The catalog declares a binary per platform — tDB's
+`.runtime/pocketbase-win.exe` against `.runtime/pocketbase-linux`, matching what its own
+setup script fetches — and the caller never says which one it wants. Containment compares
+paths **exactly**, never case-folded: `/opt/res/tdb` and `/opt/res/tDB` are two directories
+on Linux, and folding them would accept the wrong one there while weakening the check on
+Windows. The gate's whole environment — platform, separator, `realpath`, `GetResourcePath` —
+is injected, and the test suite runs every containment, resolution and traversal case twice,
+once against `path.posix` fixtures and once against `path.win32` fixtures.
+
+tLib briefly ran two fixed PowerShell commands on a caller's behalf, to resolve a live PID's
+executable and to count physical cores. They are gone. They were not exploitable — tLib owned
+every byte of those command lines — but they were Windows-only, which meant one question with
+two implementations, and a minimal container has no PowerShell. Both answers are computed
+in-process by the consumers now, the same way on every host.
+
+### Lifecycle
+
+A child started here belongs to **tLib's** runtime, not to the resource that asked for it, so
+it no longer dies with its owner for free. tLib reaps it instead:
+
+- when the owning resource stops — including the stop half of a restart;
+- when the owner calls `SpawnUnserve`;
+- when tLib itself stops, because a restart that left them running would find its own ports
+  held by its own children.
+
+A caller restarting is **kill-and-respawn, not reuse**. `onResourceStop` fires before the
+restarted copy starts, so the old engine is signalled and waited for before a new one is
+asked for. Reuse was the alternative and was rejected: the new copy may have a different model,
+context size or port, and adopting a process started under the old configuration is how you get
+a server silently running yesterday's settings.
+
+An orphan here is a genuinely unpleasant bug — a leftover PocketBase holds its HTTP port and
+locks its SQLite directory, and the next start fails as a bind error that reads like
+misconfiguration. Each product keeps its own PID file as well, because that is the only thing
+that covers the *unclean* case: `kill -9` and txAdmin give neither resource a chance to run a
+handler.
+
+### Not pinned, and why
+
+tLib has a pinned-asset system with sha256 and `.pin.json` markers, and the spawn catalog
+supports a `sha256` list per program. Nothing uses it today, which is a real gap rather than an
+oversight:
+
+- PocketBase **updates itself**, so its hash changes underneath any pin tLib could ship.
+- `llama-server`, `whisper-server`, `piper` and the vendored Node are fetched per platform and
+  per upstream release by each product's own setup script, which verifies them against the
+  publisher's checksums *at fetch time*. A hash table in tLib would need an entry per product
+  per version per platform and would block a legitimate upgrade the day it went stale.
+
+So integrity for these binaries lives at fetch time in each product; what tLib adds is
+containment and argument shape.
 
 ---
 
@@ -406,7 +617,78 @@ arbitrary programs. Processes are killed when the resource that asked for them s
 | `CreateDiscovery(opts)` | Server | Scan resources for tagged config files, load and save them, and pick up resources that start late. |
 | `CreateServerSettings(opts)` | Server | Admin-configurable settings for one resource, persisted to a JSON file inside it. |
 | `CommunityConfigsImport(...)` / `CommunityConfigsUpload(...)` | Server | Proxy for the community configs API, so a consumer neither repeats the HTTP boilerplate nor sees the server hash. |
+| `CommunityConfigsPeek(id, cb)` | Server | The same config payload `CommunityConfigsImport` returns, but it does **not** increment the config's import counter. Use it to render or preview a listing; use `CommunityConfigsImport` only when a player actually installs one. |
 
 `CreateDiscovery` must be given `resourceName = GetCurrentResourceName()` when it is called at
 module init time: `GetInvokingResource()` returns `nil` during top-level script execution, and
 without the name the file I/O targets tLib instead of the caller.
+
+---
+
+## Exporting a config into another resource
+
+Discovery can move a config out of your resource's `data.json` and into the resource that owns
+the model — a vehicle pack ships `tels.json` beside its `.yft`, declares it in its own
+`fxmanifest.lua`, and the config travels with the vehicle instead of living in a server-specific
+data file.
+
+That write crosses a resource boundary, and FiveM does not allow it by default.
+
+<Callout type="warning">
+FiveM sandboxes every resource to its own directory. From one resource's runtime,
+`SaveResourceFile` into your **own** resource returns `1`, into **another** started resource
+returns `false`, and into a resource that does not exist **raises**. Node's `fs` is sandboxed the
+same way. Reads are not restricted — `LoadResourceFile` works everywhere.
+</Callout>
+
+There are two ways to run this feature, and it works either way. Nothing is ever reported as
+exported unless the file actually landed.
+
+### Option A — allow it once, in server.cfg
+
+One line, added once, for every resource on the server:
+
+```cfg
+add_filesystem_permission tLib write *
+```
+
+With that in place the export is one click: tLib writes the JSON into the target resource and
+adds the metadata line to its `fxmanifest.lua` for you.
+
+<Callout type="note">
+`add_filesystem_permission` is a **configuration-file directive**, not a console command. Running
+it from the live console — or from a file you `exec` at runtime — is refused with
+*"add_filesystem_permission is only executable from inside a configuration file or command line
+argument."* It has to be in `server.cfg` before the server starts, so adding it needs a restart.
+</Callout>
+
+This grants tLib write access to every resource on the server. If you would rather not do that,
+do nothing — option B is the behaviour you get without it, and it is fully supported.
+
+### Option B — export to a file you copy
+
+Without the grant, the export cannot write into the vehicle, so tLib writes the **finished file**
+into its own directory instead and tells you exactly what to do with it. The player sees the
+steps in chat and the server console logs the same three lines:
+
+```
+1. Copy tLib/export-staging/<target-resource>/<file>.json  ->  <target-resource>/<file>.json
+2. Add this line to <target-resource>/fxmanifest.lua:  tels_config 'tels.json'
+3. Restart <target-resource> (or the server).
+```
+
+The staged file is not a fragment — it is the target's existing config file with your model
+merged into it, so it can be dropped straight in. Until you do, nothing has changed: the config
+is still local, still served to clients, and the picker still shows it as local.
+
+### What the metadata line looks like
+
+The key is whatever the consuming resource declares — `tels_config` for tELS, `tradio_config`
+for tRadio — and the value is the file name relative to the resource root:
+
+```lua
+-- fxmanifest.lua, in the vehicle resource
+tels_config 'tels.json'
+```
+
+Without that line the file is never read, however it got there.

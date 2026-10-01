@@ -97,7 +97,12 @@ env.GetCurrentResourceName = function() return 'tLib' end
 env.exports = setmetatable({}, { __index = function() return setmetatable({}, {
     __index = function() return function() return false end end,
 }) end })
-env.Logger = { create = function() return function() end end }
+-- Capturing rather than discarding: skipAutoBroadcast's whole point is that it
+-- must NOT fail silently, so the log line is part of the contract under test.
+env.logs = {}
+env.Logger = { create = function()
+    return function(message) env.logs[#env.logs + 1] = tostring(message) end
+end }
 env.Permission = { isPlayerAdmin = function() return true end }
 env.json = {
     encode = function() return '{}' end,
@@ -190,3 +195,120 @@ fourth:dispose()
 emit('onResourceStop', 'consumer')
 check(fourth:isDisposed(), 'still disposed, and disposing twice is not an error')
 print('PASS discovery-lifetime: dispose is idempotent (' .. checks .. ' checks)')
+
+-- ── skipAutoBroadcast: the owner takes over delivery ────────────────
+-- The delivery counterpart of skipAutoSave, and tested beside it for the same
+-- reason: both hand a responsibility to the owning resource, and both fail as
+-- silence rather than as an error if the owner does not pick it up.
+local function createWith(extra)
+    local o = {
+        metadataKey = 'demo_config',
+        defaultFileName = 'demo.json',
+        localFile = 'data.json',
+        localSection = 'vehicles',
+        resourceName = 'consumer',
+        eventPrefix = 'demo',
+        skipAutoSave = true,
+        permissionCheck = function() return true end,
+    }
+    for k, v in pairs(extra or {}) do o[k] = v end
+    return env.Discovery.create(o)
+end
+
+env.source = 1
+
+-- Default off: every existing caller must keep the behaviour it has. This is
+-- the assertion that proves the option is additive rather than a silent
+-- behaviour change for tRadio, tRadar and anything else on Discovery.
+local onByDefault = createWith(nil)
+check(not onByDefault:isDisposed(), 'the default-off instance is live')
+env.replies = {}
+emit('demo:config_request')
+check(#env.replies == 1, 'default: config_request is answered')
+env.replies = {}
+emit('demo:config_save', 'car', { siren = { maxHz = 900 } })
+check(#env.replies == 1, 'default: a save still broadcasts')
+check(env.replies[1].target == -1, 'default: and it broadcasts to everyone')
+
+-- On: all three paths go quiet.
+env.logs = {}
+local skipping = createWith({ skipAutoBroadcast = true })
+check(onByDefault:isDisposed(), 'creating the skipping instance disposed the default one')
+env.replies = {}
+emit('demo:config_request')
+check(#env.replies == 0, 'skipAutoBroadcast: config_request is not answered by tLib')
+env.replies = {}
+emit('demo:config_save', 'car', { siren = { maxHz = 950 } })
+check(#env.replies == 0, 'skipAutoBroadcast: a save does not broadcast')
+env.replies = {}
+emit('demo:config_remove', 'car')
+check(#env.replies == 0, 'skipAutoBroadcast: a remove does not broadcast')
+
+-- The drop is observable. An owner who sets the option and then forgets to
+-- answer config_request would otherwise get clients that receive nothing,
+-- forever, with nothing in the console to say why.
+local sawRequestNotice = false
+for _, line in ipairs(env.logs) do
+    if line:find('skipAutoBroadcast', 1, true)
+        and line:find('config_request', 1, true)
+        and line:find('consumer', 1, true) then
+        sawRequestNotice = true
+    end
+end
+check(sawRequestNotice,
+    'skipAutoBroadcast: the config_request drop is logged, naming the resource that owes the reply')
+
+-- Once per instance, not once per call: on a full server the request path is
+-- one line per player per second, which would bury the line above.
+local before = #env.logs
+for _ = 1, 5 do emit('demo:config_request') end
+local requestNotices = 0
+for i = before + 1, #env.logs do
+    if env.logs[i]:find('config_request', 1, true) then requestNotices = requestNotices + 1 end
+end
+check(requestNotices == 0, 'skipAutoBroadcast: the drop is announced once, not once per request')
+
+-- The third guard: the auto-broadcast inside the onResourceStart handler, which
+-- fires when ANOTHER resource starts and contributes configs. Reaching it needs
+-- `receiveEvent` set AND a provider resource to exist — and the shared stubs
+-- above report zero resources, so without this setup the option would look
+-- fully covered while one of its three paths never executed once.
+skipping:dispose()
+
+local baseLoad = env.LoadResourceFile
+env.GetResourceMetadata = function(resource, key)
+    if resource == 'provider' and key == 'demo_config' then return 'provided.json' end
+    return nil
+end
+env.LoadResourceFile = function(resource, path)
+    if resource == 'provider' and path == 'provided.json' then
+        -- A model the consumer does not already hold, so `count > 0` holds.
+        return '{"van":{"siren":{"maxHz":600}}}'
+    end
+    return baseLoad(resource, path)
+end
+
+local scanDefault = createWith({ receiveEvent = 'demo:config_receive' })
+env.replies = {}
+emit('onResourceStart', 'provider')
+local sawScan = false
+for _, r in ipairs(env.replies) do
+    if r.event == 'demo:config_receive' and r.target == -1 then sawScan = true end
+end
+check(sawScan, 'default: a provider starting broadcasts the configs it contributed')
+scanDefault:dispose()
+
+local scanSkipping = createWith({ receiveEvent = 'demo:config_receive', skipAutoBroadcast = true })
+env.replies = {}
+emit('onResourceStart', 'provider')
+local sawSkipped = false
+for _, r in ipairs(env.replies) do
+    if r.event == 'demo:config_receive' then sawSkipped = true end
+end
+check(not sawSkipped, 'skipAutoBroadcast: a provider starting does not broadcast')
+scanSkipping:dispose()
+
+env.GetResourceMetadata = function() return nil end
+env.LoadResourceFile = baseLoad
+
+print('PASS discovery-lifetime: skipAutoBroadcast suppresses delivery and says so (' .. checks .. ' checks)')

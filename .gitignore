@@ -20,8 +20,16 @@ dist/
 # The workshop: reference material and sources used to make what ships.
 /assets/
 
-# Private tooling. tLib is a public MIT repo -- the obfuscator is consumed from
-# here by the closed resources but is not published with it.
+# Private tooling. internal/ is the provenance engine: its own git repository,
+# nested here so the consumers that use it sit beside it, and ignored so it can
+# never reach this public MIT repo. Nesting is the real guard, not this line --
+# git add -f on a directory containing .git records a gitlink, not the contents,
+# and git clean -xdf leaves a nested repo alone. tests/unit/private-not-tracked.test.ts
+# asserts both.
+/internal/
+
+# The obfuscator used to sit at this path, hidden only by this rule; the rule stays
+# as a tripwire so a copy that drifts back can never be committed.
 shared/ts/build/obfuscate.ts
 
 # Local state and notes.
@@ -30,6 +38,11 @@ docs/todo.md
 CLAUDE.md
 .claude/
 docs/internal/
+
+# Config exports that could not be written into their target resource. Runtime
+# output for the operator to copy by hand, one directory per target — never
+# source. See "Exporting a config into another resource" in docs/content/exports.mdx.
+export-staging/
 
 # Secrets.
 .env

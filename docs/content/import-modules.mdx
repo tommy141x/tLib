@@ -1,6 +1,6 @@
 ---
 title: "Import Modules"
-description: "Lightweight Lua modules that load on demand — coords, kvp, settings, and layouts."
+description: "Lightweight Lua modules that load on demand — access, config, coords, kvp, settings, and layouts."
 order: 3
 group: "tLib"
 ---
@@ -33,6 +33,247 @@ local settings = tlib.settings
 
 ---
 
+## access
+
+Decides who may use your resource, on the server, in a way the server owner configures.
+
+Server owners gate things differently — an ACE, a QBox job, an item in an ox_inventory,
+or a function in their own framework — so `access` makes all of those the same shape.
+
+```lua title="config.lua"
+Config.access = {
+    mode = "item",          -- everyone | ace | job | item | custom
+
+    ace  = "tdetector.use",
+    job  = { police = 0, sheriff = 2 },   -- job = MINIMUM grade
+    item = "radar_detector",
+    count = 1,                             -- how many of `item`; default 1
+
+    custom = function(src) return false end,
+}
+```
+
+`mode` may also be a list — `mode = { "ace", "item" }` passes if **either** does.
+
+### Server
+
+```lua
+local gate = tlib.access.gate(Config.access, { key = 'detector', label = 'the detector' })
+
+RegisterNetEvent('tDetector:deploy', function()
+    if not gate:allowed(source) then return end
+    -- ...
+end)
+```
+
+| Function                  | Description                                                             |
+| ------------------------- | ----------------------------------------------------------------------- |
+| `gate:allowed(src)`       | The decision. Call it before **every** privileged action.               |
+| `gate:push(src)`          | Recompute and send the answer to that player's client mirror.           |
+| `gate:invalidate(src)`    | Drop the cached answer after you change what the gate reads. `nil` = all. |
+| `gate:describe()`         | One line of prose for `<resource>_diag`.                                |
+| `gate:report()`           | The same thing structured — assert on this, not on the prose.           |
+| `access.jobs(src)`        | `{ [job] = grade }` from the detected framework.                        |
+| `access.count(src, item)` | How many of an item, from the detected inventory.                       |
+| `access.framework()` / `access.inventory()` | The **name** of what was detected, or `nil` — not the adapter. |
+| `access.use(fw, inv)`     | Pin detection. `'none'` for neither, `'auto'` to go back to detecting.  |
+| `access.registerFramework(a)` / `registerInventory(a)` | Teach it about a fork.                     |
+| `access.problems(block, label, env)` | Check a block without building a gate. See below.            |
+
+### Checking a block yourself
+
+`gate()` already validates the block it is given, so most resources never call this. Reach for
+it when your resource has its own startup config validator and you want the access block
+reported alongside everything else it checks, in one pass.
+
+```lua
+for _, problem in ipairs(tlib.access.problems(Config.access, 'the detector', false)) do
+    print(problem)
+end
+```
+
+The third argument is the one that matters, because it separates two problems that read alike
+and are not alike:
+
+| `environment` | Catches                                                  | When it is true                                            |
+| ------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
+| `false`       | A mistake in the file — a misspelled mode, a `job` of the wrong shape | The moment the file is read. It can only be fixed by editing the file, and it disables the gate. |
+| `true`        | `mode = 'job'` with no framework in sight                | Only once resources have settled.                            |
+
+<Callout type="warning">
+  Do not check the environmental half at startup. A framework that simply has not started yet
+  is indistinguishable from one that is missing, so asserting it early prints a confident,
+  wrong error on a perfectly healthy server. It never disables the gate either — the gate
+  starts passing on its own the moment the framework appears.
+</Callout>
+
+### Client
+
+The client half is for **drawing the UI only**.
+
+```lua
+local gate = tlib.access.gate({ key = 'detector' })   -- same key as the server
+
+if gate:allowed() then showButton() end
+gate:onChange(function(allowed) toggleButton(allowed) end)
+gate:refresh()   -- after going on duty, picking the item up, etc.
+```
+
+<Callout type="warning">
+  `gate:allowed()` on the client is a cached copy of a server decision, living in a process
+  the player controls. It answers "should I draw the button?", never "may this player do the
+  thing." If your net event handler does not call the **server** gate's `allowed(source)`,
+  you have written a suggestion, not a gate.
+</Callout>
+
+### Migrating an older config
+
+Resources that shipped loose `accessMode` / `acePermission` / job-list keys before
+`Config.access` existed keep working. `access.migrate` does the translation once, here,
+rather than in each resource:
+
+```lua
+Config.access = tlib.access.migrate(Config.access, {
+    mode = Config.accessMode,
+    ace  = Config.acePermission,
+    job  = Config.jobs,          -- a flat list OR { name = grade }
+    item = Config.qbItemName,
+}, {
+    file = 'shared/config.lua',
+    removeIn = '2.0.0',
+    names = { mode = 'Config.accessMode', ace = 'Config.acePermission' },
+})
+```
+
+A written `Config.access` always wins, and any stale old keys are named and reported as
+ignored. A **flat job list** becomes `{ name = 0 }` — the old shape could not express a
+minimum grade, so every grade qualifies, and that widening is stated rather than silent.
+
+### Fails closed, always
+
+A framework that is absent, not yet started, or throwing answers **no jobs**, which denies.
+A `custom` function that errors denies, and one returning a truthy non-boolean (`return player`)
+denies too. An unset ACE denies. A gate with config errors denies everyone and says why.
+Nothing here falls back to "allow" — a missing dependency is never a reason to hand out the
+resource.
+
+### Replacing the logic entirely
+
+`custom` is the escape hatch, and it is a plain Lua function in the owner's own config file —
+so a server owner can still replace the decision wholesale, as they could when each resource
+kept a separate editable access file. `registerFramework` / `registerInventory` cover the
+other case: the same gate semantics, against a core this module does not ship an adapter for.
+
+```lua title="server/sv_access.lua"
+tlib.access.registerFramework({
+    name   = 'my_framework',
+    detect = function() return GetResourceState('my_framework') == 'started' end,
+    jobs   = function(src) return { police = 3 } end,   -- { [job] = grade }
+})
+```
+
+If you are moving from a hand-written "edit this function to return the player's job" hook,
+note that the adapter shape is strictly wider, not a rename: it returns a **map** of every job
+to its grade, so a server with police *and* sheriff can express both — and grades at all —
+which a single-job return could not. `detect` is yours too, so the framework no longer has to
+be one that merely happens to be running.
+
+<Callout type="note">
+  Adapters register into the **consuming resource's own server VM**, so `registerFramework`
+  has to be called from a `server_script` in that resource — not from `config.lua`, which is
+  shared. A resource that ships under escrow must therefore keep one server file in
+  `escrow_ignore` for this, or the extension point is unreachable for the owner it exists for.
+</Callout>
+
+### Supported frameworks and inventories
+
+Detected independently — these are separate questions answered by separate resources, so
+nat2k15 for jobs alongside ox_inventory for items is a supported setup, as is an item gate
+on a server with no framework at all.
+
+| Axis | Supported, in detection order |
+| --- | --- |
+| Framework (`job`) | `qbx_core`, `qb-core`, `ND_Core`, `es_extended`, `ox_core`, `nat2k15framework` |
+| Inventory (`item`) | `ox_inventory`, `qs-inventory`, `codem-inventory`, `origen_inventory`, `core_inventory`, `tgiann-inventory`, `qb-inventory`, `ps-inventory`, `jpr-inventory` |
+
+Order matters: `qbx_core` is checked before `qb-core` because QBox registers the `qb-core`
+export names, so the legacy path "works" there and silently returns a deprecated shim.
+Detection requires the resource to be **started**, not merely present, and is redone whenever
+any resource starts — so a gate built before your framework loads starts working by itself.
+
+Grades differ by framework and `access` normalises them: qb nests (`job.grade.level`), ESX is
+flat (`job.grade`), ND uses `groups[name].rank`. A framework with no grade concept reports `0`,
+so `job = { LSPD = 0 }` works and `job = { LSPD = 3 }` **denies** rather than ignoring the `3`.
+
+<Callout type="note">
+  **vRP** is not in the table. vRP2 registers no exports at all — an outside resource cannot
+  query it without running inside the vRP context — so there is no adapter to ship. Load a
+  script into vRP with `vRP.loadScript`, then call `tlib.access.registerFramework`. Note vRP
+  groups are a set with no numeric rank, so report grade `0`.
+</Callout>
+
+---
+
+## config
+
+Validates an owner-edited `config.lua` once at startup and refuses to run on a broken one.
+
+| Function                       | Description                                                             |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| `config.check(tbl, spec)`      | Validates, prints every problem, returns `false` if any were fatal.     |
+| `config.validate(tbl, spec)`   | Same checks, returns `{ ok, errors, warnings }` and prints nothing.     |
+
+Use `check` in a resource; use `validate` in tests, or when you want to route the
+messages somewhere other than the console.
+
+```lua
+local ok = tlib.config.check(Config, {
+    file = 'shared/config.lua',
+    keys = {
+        detectionRangeMeters = { type = 'number', default = 500.0, min = 1, max = 2000 },
+        speedUnit            = { type = 'string', default = 'kmh', oneOf = { 'kmh', 'mph' } },
+        enableSiren          = { type = 'boolean', default = true },
+        radarResources       = { type = 'list',   default = {} },
+    },
+    deprecated = {
+        detectionRange = { replacement = 'detectionRangeMeters', removeIn = '2.0.0' },
+    },
+})
+if not ok then return end
+```
+
+### Spec
+
+| Field        | Description                                                                          |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `file`       | Path shown in messages. Use the path the owner actually edits.                        |
+| `keys`       | Map of key name → definition.                                                         |
+| `deprecated` | Map of old key → `{ replacement, removeIn }`.                                         |
+| `prefix`     | Table name in messages. Defaults to `Config`.                                         |
+| `allowUnknown` | Skip the unknown-key warnings. Only for a table that legitimately holds extra keys. |
+
+A key definition takes `type` (`number`, `string`, `boolean`, `list`, `table`),
+`default`, `required`, `min`, `max`, `oneOf`, and `fix` to override the suggested
+remedy.
+
+### What it guarantees
+
+- **Every** problem is reported at once, not just the first.
+- Each message names the file, the key, what was expected, what was found, and a fix.
+- A default fills a key the owner **omitted**. A value the owner actually set is
+  **never** silently replaced — a rejected value is reported and left alone, because a
+  fallback that quietly differs from the config file is how "I changed the setting and
+  nothing happened" happens.
+- An unknown key warns and suggests the key that was probably meant, including the
+  unit-less near-misses (`detectionRnge` → `detectionRangeMeters`) that naming units in
+  keys tends to produce.
+- A deprecated key keeps working: its value is carried to the replacement, and one
+  warning names the replacement and the version the old name stops working in.
+- A missing `required` key is fatal, so the resource stops at its own config rather than
+  failing later in a way that blames an innocent file.
+
+---
+
 ## coords
 
 Vehicle coordinate math helpers for transforming positions between local and world space.
@@ -58,9 +299,120 @@ local wx, wy, wz = Coords.localToWorld(right, fwd, up, pos, 0.5, 1.0, 0.0)
 
 ---
 
+## demo
+
+Reports whether the server is running in demo mode, and gives a file writer the
+one line it needs to honour it.
+
+Demo mode is a server-owner switch — the `tlib_demo` convar — that turns a server
+into a self-resetting showroom. See [Convars](/docs/convars#demo-mode) for what it
+is for and the warning that comes with it. This module is how your resource takes
+part.
+
+| Function                   | Side   | Description                                                                |
+| -------------------------- | ------ | -------------------------------------------------------------------------- |
+| `demo.active()`            | both   | `true` while demo mode is on. Cheap enough for a hot path.                  |
+| `demo.dropWrite(what)`     | server | `true` when the caller must skip a write. Prints one notice per target.     |
+
+### You probably need nothing
+
+Three of the four things demo mode does are already handled inside tLib, and a
+resource that uses the normal primitives inherits all of them without a line of
+code:
+
+- `tlib.access` gates all answer yes;
+- `tlib.permission` reports every player as a superadmin;
+- `tlib.fs.writeResourceFile` drops the write;
+- the marketplace agent sweeps everything it installed at the next start.
+
+### Unless you write files yourself
+
+The exception is a resource with its **own** file writer that does not go through
+`tlib.fs` — which, for historical reasons, is most of them. One line at the top of
+that function is the whole integration:
+
+```lua title="server/sv_admin.lua"
+local function saveData(json)
+    if tlib.demo.dropWrite('data.json') then return true end
+    return tlib.fs.writeResourceFile('data.json', json)
+end
+```
+
+<Callout type="warning">
+Return **success** to the caller, not a failure. Every caller of a save function
+treats a failure as data loss and says so to the player — correctly, normally. On
+a demo server the save did exactly what was asked of it, so failing it puts a red
+error behind every settings change and teaches visitors that the demo is broken.
+The console already says, once per file, what happened.
+</Callout>
+
+This works because these resources already keep a complete in-memory mirror of
+their state and treat the file as write-behind. Dropping the write leaves the
+mirror serving the session, and the next start reads the shipped file back.
+
+### Reacting to it in your own code
+
+Only if you have state tLib cannot see. `demo.active()` is readable on both sides;
+on the client it is pushed by tLib rather than read from the convar, so it is
+correct whether the owner wrote `set` or `setr`.
+
+<Callout type="warning">
+Never use `demo.active()` to decide something a player could benefit from being
+wrong about on the client. It is a display and convenience signal. Demo mode's
+real effects are all applied server-side, which is the only place they are
+enforceable.
+</Callout>
+
+---
+
+## diag
+
+Console blocks for the things an operator has to go and fix — a config file that
+failed to load, an escrow error, an inventory that cannot be asked a question.
+
+You write prose. `diag` does the wrapping, the dashed rules, the `^colour` codes and
+the `[resource]` prefix on every line, so a block is three lines of Lua instead of
+fifteen `print` calls and every resource's blocks look alike.
+
+| Function                       | Description                                                       |
+| ------------------------------ | ----------------------------------------------------------------- |
+| `Diag.fatal(title, opts)`      | Red, prefixed `FATAL:`. Nothing works until this is fixed.         |
+| `Diag.error(title, opts)`      | Red. Something is denied or broken, the resource still runs.       |
+| `Diag.warn(title, opts)`       | Yellow. Works, but probably not the way the operator intended.     |
+| `Diag.info(title, opts)`       | White.                                                             |
+| `Diag.render(level, title, o)` | The lines, without printing them — for a support dump or a panel.  |
+| `Diag.wrap(text, width, ind)`  | The word wrap on its own.                                          |
+| `Diag.said(key)`               | Has this `once` key already printed?                               |
+| `Diag.reset()`                 | Forget every `once` key.                                           |
+
+`opts` is `{ cause, fix, detail, scope, once }`, all optional. `fix` takes a string
+or a list — one renders as `To fix:`, several as `Fix it one of these ways:`, which
+matters because an operator must not think they need to do all of them. `once` is a
+key: the first call with it prints, the rest are dropped. `scope` overrides the
+resource name in the prefix.
+
+```lua
+tlib.diag.fatal('Config does not exist. tRadio cannot start.', {
+    cause = 'config/config.lua failed to load. Almost always a Lua syntax error in your edited copy.',
+    fix   = 'Scroll UP in this console: FiveM printed the exact file and line just before this message.',
+    once  = 'no-config',
+})
+```
+
+It prints; it never logs. Every caller is explaining why something is broken, and a
+log level is exactly the thing an operator in that situation has not configured.
+
+<Callout type="info">
+  Put these blocks in files your customers receive on every update, not in
+  `escrow_ignore`'d config files. The partial upload that breaks a config file is
+  usually the one that takes the explanation with it.
+</Callout>
+
+---
+
 ## kvp
 
-Typed KVP wrapper with automatic community-server prefixing. Each server gets isolated storage via `tlib_community_id` or `sv_projectName`.
+Typed KVP wrapper with automatic community-server prefixing. Each server gets isolated storage via `tlib_community_id` or `sv_projectName`. `tlib_community_id` needs `setr` — it is read on both sides; see [Convars](/docs/tLib/convars).
 
 ### Typed Getters / Setters
 
@@ -157,3 +509,59 @@ local html = layouts.loadTemplate('layouts', 'default', 'layout.html', {
     VERSION = '1.0',
 })
 ```
+
+---
+
+## logger
+
+Levelled console logging with the same line format in every resource: `[scope][LEVEL] message`.
+
+| Function / field                     | Description                                                     |
+| ------------------------------------ | --------------------------------------------------------------- |
+| `logger.create(scope)`               | Return a `log(...)` function that prefixes every line.          |
+| `log(...)`                           | Log the arguments, space-joined. Defaults to `INFO`.            |
+| `log(..., level)`                    | A **trailing number** is taken as the level, not printed.       |
+| `logger.DEBUG` / `INFO` / `WARN` / `ERROR` | `1` / `2` / `3` / `4`. Higher is more severe.             |
+| `logger.setLevel(level)`             | Minimum level printed (default `INFO`).                         |
+
+```lua
+local log = tlib.logger.create('tRadar')
+
+log('layout loaded:', name)              -- [tRadar][INFO] layout loaded: ...
+log('no layout, falling back', tlib.logger.WARN)
+log('state dump', tlib.logger.DEBUG)     -- hidden unless setLevel(DEBUG)
+```
+
+<Callout type="warning">
+  A trailing number is consumed as the level: `log('count', 4)` logs `count` at `ERROR`. Pass
+  numbers you mean to print as strings, or anywhere but last.
+</Callout>
+
+---
+
+## permission
+
+Server-only. Admin and permission checks that match tLib's own rules.
+
+| Function                     | Description                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------ |
+| `permission.isAdmin(src)`    | `true` for `tlib.admin` or `tlib.superadmin`. Same answer as `exports.tLib:IsPlayerAdmin`. |
+| `permission.level(src)`      | `0` none, `1` admin, `2` superadmin.                                                 |
+| `permission.has(src, key)`   | Any permission key, resolved by tLib — ACE, or a framework resolver registered with tLib. |
+
+```lua
+RegisterNetEvent('myres:saveDefaults', function(data)
+    local src = source
+    if not tlib.permission.isAdmin(src) then return end
+    -- ...
+end)
+
+if tlib.permission.has(src, Config.acePermission) then
+    -- open the panel
+end
+```
+
+`isAdmin` is answered inside your resource, so it works even while tLib is still starting. `has`
+has to ask tLib, because a registered resolver lives there. If tLib can't answer, it returns
+`false` rather than falling back to a plain ACE check, since a resolver is allowed to deny what
+ACE would grant.

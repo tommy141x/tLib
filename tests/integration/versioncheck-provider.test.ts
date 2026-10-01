@@ -25,6 +25,9 @@ function fixture(current = "v1.0.0") {
   let gate: Promise<void> = Promise.resolve();
   const api = load("updates.ts", ["checkForUpdates", "isNewerVersion", "getCachedUpdateResult"], {
     serverLogger: { debug() {}, warn() {}, error() {} },
+    // `load` strips imports, so updates.ts's import of tLib's single base-URL
+    // definition has to be handed in. Production reads the convar here.
+    marketplaceBaseUrl: () => "https://timmygstudios.com",
     GetResourceMetadata: () => current,
     GetCurrentResourceName: () => "tRadio",
     fetch: async (url: string) => {

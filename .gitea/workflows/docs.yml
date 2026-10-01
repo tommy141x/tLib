@@ -4,9 +4,16 @@ name: Docs Sync
 # Self-contained (see tRadio): the shared reusable workflow is served stale by act_runner's
 # ref cache, so inlining the steps is the reliable path.
 #
-# Split casing in tWeb (pre-existing, kept to avoid breaking live URLs):
-#   docs   -> src/content/docs/tlib   (lowercase; the /docs/tlib/* URL)
+# Both tWeb directories are named for the RESOURCE, not a product slug:
+#   docs   -> src/content/docs/tLib   (the /docs/tLib/* URL)
 #   assets -> public/assets/tLib      (tLib currently has no doc media; step is a no-op then)
+# They used to disagree -- docs was lowercase `tlib` while assets was `tLib`. The lowercase
+# URL still resolves: tWeb's docBySlug lookup is case-insensitive and the route answers with
+# the camel-cased slug, so links shared before the rename redirect rather than 404.
+#
+# tLib is not a store product and so has no product slug. Where `tlib` IS still the right
+# spelling is src/lib/changelog: it is a RemoteSource id there, mirroring GitHub releases
+# onto /changelog?product=tlib. That namespace is lowercase and stays as it is.
 
 on:
   push:
@@ -33,7 +40,7 @@ jobs:
 
       - name: Sync documentation + media
         env:
-          DOCS_DIR: tlib
+          DOCS_DIR: tLib
           ASSET_DIR: tLib
         run: |
           set -euo pipefail
@@ -51,7 +58,7 @@ jobs:
 
       - name: Commit + push to tWeb
         env:
-          DOCS_DIR: tlib
+          DOCS_DIR: tLib
           ASSET_DIR: tLib
           SHA: ${{ github.sha }}
           ACTOR: ${{ github.actor }}
