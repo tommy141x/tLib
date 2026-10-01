@@ -13,6 +13,16 @@ if type(StudioBranding) ~= 'table' then
     assert(load(source, '@@tLib/' .. path))()
 end
 
+-- Same mechanism, same reason: the `studios` provider below talks to the same
+-- host the marketplace does, so it must honour `tmarketplace_base_url` too.
+-- Without this the convar was only half a switch -- installs went to a local dev
+-- worker while the version check and its changelog still hit production.
+if type(StudioApi) ~= 'table' then
+    local path = 'shared/sh_api.lua'
+    local source = assert(LoadResourceFile('tLib', path), 'Missing tLib module: ' .. path)
+    assert(load(source, '@@tLib/' .. path))()
+end
+
 local function hasStudioAuthor()
     return StudioBranding.isStudioResource(GetCurrentResourceName())
 end
@@ -645,7 +655,11 @@ local function studios(product, current)
         local encoded = tostring(current or 'unknown'):gsub('[^%w%-._~]', function(c)
             return ('%%%02X'):format(c:byte())
         end)
-        local url = ('https://timmygstudios.com/api/products/%s/changelog?since=%s&limit=10'):format(product, encoded)
+        -- Same host, same API surface as the marketplace, so the same convar
+        -- points it at a dev worker. The `github` provider above deliberately
+        -- does NOT follow it -- that one really is GitHub.
+        local url = ('%s/api/products/%s/changelog?since=%s&limit=10')
+            :format(StudioApi.baseUrl(), product, encoded)
         local resolved = false
         local function finish(release)
             if resolved then return end

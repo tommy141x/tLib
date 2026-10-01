@@ -43,6 +43,87 @@ function platform.getMyVehicle()
     }
 end
 
+--- Fallback bound for the seat scan, matching the server adapter's constant.
+--- Only reached when `GetVehicleMaxNumberOfPassengers` gives no usable answer —
+--- normally the client knows the vehicle's real seat count and scans exactly it.
+platform.MAX_SEAT_INDEX = 16
+
+--- The FRONT seat the local player occupies. Mirrors the server's
+--- `getPlayerFrontSeat`: seats -1 and 0 only, a rear seat reads as nil.
+--- @return seat, vehicleHandle, netId — or nil.
+function platform.getMyFrontSeat()
+    local ped = PlayerPedId()
+    if not IsPedInAnyVehicle(ped, false) then return nil end
+    local veh = GetVehiclePedIsIn(ped, false)
+    -- GetVehiclePedIsIn can transiently return 0 on the same frame that
+    -- IsPedInAnyVehicle returns true (a one-frame native desync), so the guard
+    -- is not redundant — without it seat queries are passed entity 0.
+    if veh == 0 then return nil end
+    local seat = nil
+    if GetPedInVehicleSeat(veh, -1) == ped then
+        seat = -1
+    elseif GetPedInVehicleSeat(veh, 0) == ped then
+        seat = 0
+    end
+    if seat == nil then return nil end
+    return seat, veh, NetworkGetNetworkIdFromEntity(veh)
+end
+
+--- ANY seat the local player occupies, rear rows included. Mirrors the server's
+--- `getPlayerSeat`, including the seat numbering: -1 driver, 0 front passenger,
+--- 1 upwards the rear rows in layout order.
+---
+--- Unlike the server, the client CAN ask the vehicle how many seats it has
+--- (`GetVehicleMaxNumberOfPassengers`, 0xA7C4F2C6E744A550), so the scan is
+--- exact here and `MAX_SEAT_INDEX` is only the fallback for a vehicle that
+--- answers with nothing usable.
+--- @return seat, vehicleHandle, netId — or nil.
+function platform.getMySeat()
+    local ped = PlayerPedId()
+    if not IsPedInAnyVehicle(ped, false) then return nil end
+    local veh = GetVehiclePedIsIn(ped, false)
+    -- Same one-frame native desync guard as getMyFrontSeat: without it the seat
+    -- queries below are passed entity 0.
+    if veh == 0 then return nil end
+
+    if GetPedInVehicleSeat(veh, -1) == ped then
+        return -1, veh, NetworkGetNetworkIdFromEntity(veh)
+    end
+
+    -- Passenger seats are 0 .. count-1, so the last index is one less than the
+    -- count. An unusable answer falls back to the shared bound rather than to
+    -- zero, which would silently make every rear seat read as on foot.
+    local passengers = GetVehicleMaxNumberOfPassengers(veh)
+    local last = platform.MAX_SEAT_INDEX
+    if type(passengers) == "number" and passengers >= 1 then last = passengers - 1 end
+
+    for index = 0, last do
+        if GetPedInVehicleSeat(veh, index) == ped then
+            return index, veh, NetworkGetNetworkIdFromEntity(veh)
+        end
+    end
+    return nil
+end
+
+--- Server IDs of the two front-seat occupants of a vehicle, as seen locally.
+--- Either may be nil (empty seat, or an NPC — a ped with no player index).
+--- @return driverServerId, passengerServerId
+function platform.getFrontSeatServerIds(vehicle)
+    if not vehicle or vehicle == 0 then return nil, nil end
+    local function idOf(index)
+        local ped = GetPedInVehicleSeat(vehicle, index)
+        if not ped or ped == 0 then return nil end
+        local playerIndex = NetworkGetPlayerIndexFromPed(ped)
+        -- -1 is the natives' "this ped is not a player". Returning it as an ID
+        -- would hand consumers a server ID that addresses nobody.
+        if not playerIndex or playerIndex < 0 then return nil end
+        local serverId = GetPlayerServerId(playerIndex)
+        if not serverId or serverId <= 0 then return nil end
+        return serverId
+    end
+    return idOf(-1), idOf(0)
+end
+
 function platform.getClothingItem(slotType, slotId)
     local ped = PlayerPedId()
     if slotType == "prop" then
@@ -107,9 +188,30 @@ function platform.getNetworkEntityPosition(networkId)
     return { x = c.x, y = c.y, z = c.z, speed = GetEntitySpeed(entity) }
 end
 
+--- Whether a BOOL native said yes.
+---
+--- MEASURED 2026-09-26, FiveM Enhanced: every BOOL native reached from Lua here
+--- returns the NUMBER 1, not `true` -- DoesEntityExist, NetworkDoesNetworkIdExist,
+--- IsPedInAnyVehicle, IsEntityAVehicle and HasModelLoaded were all checked with
+--- `type()` and all answered "number". So `native(...) == true` is ALWAYS FALSE, and
+--- the code below used to be exactly that.
+---
+--- It cost a full debugging session: screentarget's `exists` provider rejected every
+--- entity that existed, so no vehicle ever qualified as a screen target and the props
+--- on all three devices stayed dark -- no browser, no backlight, no lamps -- while
+--- every unit test passed, because the suites INJECT their own providers and so never
+--- run a real native.
+---
+--- `not not v` is NOT the fix: 0 is truthy in Lua, so it would turn every "no" into a
+--- "yes". Both shapes have to be spelled out.
+local function nativeTruth(v)
+    if v == true then return true end
+    return type(v) == "number" and v ~= 0
+end
+
 function platform.isNetworkIdValid(netId)
     if type(NetworkDoesNetworkIdExist) ~= "function" then return false end
-    return NetworkDoesNetworkIdExist(netId) == true
+    return nativeTruth(NetworkDoesNetworkIdExist(netId))
 end
 
 function platform.isEntityValid(handle)
@@ -320,30 +422,210 @@ do
         return cb, nil
     end
 
-    function platform.bindKey(key, cb, eventType, bindingId, label)
-        local pressCb, releaseCb = normalizePair(cb, eventType)
-        local token
+    --- Every bind this resource registered, in registration order.
+    ---
+    --- Exists so a keybind can be inspected rather than only fired: a controls
+    --- page, a `<resource>_diag` dump, and the conflict check below all read it.
+    --- Without it a `RegisterKeyMapping` is write-only — the engine takes it and
+    --- nothing in-process can answer "what did we bind?".
+    local _registry = {}
 
-        if type(bindingId) == 'string' and bindingId ~= '' then
-            token = bindingId:gsub('[^%w_]', '_')
+    --- Valid RegisterKeyMapping input groups.
+    ---
+    --- The group used to be hardcoded to 'keyboard', and that single line is why
+    --- three resources never adopted this helper: every in-world editor needs
+    --- MOUSE_BUTTON for orbit/look, so tELS, tAFK and tRadio each dropped to raw
+    --- RegisterKeyMapping and took their own naming conventions with them.
+    local VALID_GROUPS = {
+        keyboard = true,
+        MOUSE_BUTTON = true,
+        pad_digitalbuttonany = true,
+        pad_analogbutton = true,
+    }
+
+    --- Composed so every product reads the same way in GTA's control list.
+    ---
+    --- That list is flat, sorted by resource, and shows only this string. Five
+    --- different formats currently ship ("ELS: X", "Radio - X", "tDetector: x",
+    --- "LED Editor: X", and tLib's own bare "Open Menu"), so a player scanning
+    --- ~70 rows cannot tell which product a row belongs to.
+    ---
+    --- The unbound suffix generalises a habit only tELS had: an entry with no
+    --- default key is invisible until the player knows to go looking for it.
+    local function composeLabel(product, action, defaultKey)
+        local text
+        if product and product ~= '' and action and action ~= '' then
+            text = ('%s: %s'):format(product, action)
         else
-            local count     = (_bindCount[key] or 0) + 1
-            _bindCount[key] = count
-            local base      = cmdName(key)
-            token           = count == 1 and base or (base .. '_' .. count)
+            text = action or product or ''
+        end
+        if (defaultKey == nil or defaultKey == '') and text ~= '' then
+            text = text .. ' (unbound — assign a key in GTA keybinds menu)'
+        end
+        return text
+    end
+
+    -- Same resolution the other shared/imports modules use: `tlib.name` when the
+    -- table is present, falling back to the literal. `tLibName` in imports.lua is
+    -- a local there and is NOT visible in a module chunk's environment.
+    local tLibName = (type(tlib) == 'table' and tlib.name) or 'tLib'
+
+    local function record(entry)
+        _registry[#_registry + 1] = entry
+        -- Best-effort report to tLib so conflicts can be found ACROSS resources.
+        -- Intra-resource conflicts are findable here; the live ones are not —
+        -- tELS's PA mic and tRadio's push-to-talk both default to B, and neither
+        -- VM can see the other. pcall-guarded because an older tLib has no such
+        -- export and a missing export raises rather than returning nil.
+        pcall(function()
+            exports[tLibName]:ReportKeybind(entry)
+        end)
+    end
+
+    --- Conflicts among THIS resource's own binds.
+    ---
+    --- Returns `{ { group = , key = , tokens = { ... } }, ... }`. Two mappings on
+    --- one default key both register and both dispatch, so nothing errors — the
+    --- vehicle just does two things per press. tELS shipped exactly that: its
+    --- siren-tone loop ran 1..8 while cruise, takedown and traffic advisor had
+    --- already claimed 6, 7 and 8.
+    function platform.keybindConflicts()
+        local seen, out = {}, {}
+        for _, e in ipairs(_registry) do
+            if e.default and e.default ~= '' then
+                local k = e.group .. '\1' .. e.default
+                seen[k] = seen[k] or {}
+                local list = seen[k]
+                list[#list + 1] = e.token
+            end
+        end
+        for k, tokens in pairs(seen) do
+            if #tokens > 1 then
+                local group, key = k:match('^(.-)\1(.*)$')
+                out[#out + 1] = { group = group, key = key, tokens = tokens }
+            end
+        end
+        return out
+    end
+
+    --- The registry, for a controls UI, a diag dump or docs generation.
+    function platform.keybinds()
+        return _registry
+    end
+
+    --- Register a keybind.
+    ---
+    --- Two call forms. The positional one is the original and is unchanged —
+    --- every existing call site keeps working:
+    ---
+    ---     platform.bindKey(key, cb, eventType, bindingId, label)
+    ---
+    --- The table form is preferred for new code:
+    ---
+    ---     platform.bindKey{
+    ---       id      = 'toggle_lights',   -- namespaced to <resource>_<id>
+    ---       token   = 'lbar_toggle',     -- OPT OUT of namespacing; see below
+    ---       product = 'ELS',
+    ---       action  = 'Toggle Lights',
+    ---       default = 'Q',
+    ---       group   = 'keyboard',        -- or MOUSE_BUTTON / pad_*
+    ---       press   = fn, release = fn,
+    ---       pair    = true,              -- false => one command, no +/- pair
+    ---       when    = SOME_FLAG,         -- false => skip registration entirely
+    ---     }
+    ---
+    --- ⚠️ `token` exists because **a command name IS the stored binding**. FiveM
+    --- persists a player's rebind against the command token, so renaming a token
+    --- silently discards that rebind and the key reverts to default. tRadio's
+    --- `talkOnRadio`/`toggleradioui` and tELS's 32 `lbar_*` tokens therefore
+    --- cannot be migrated to a namespaced form — pass them as `token` and leave
+    --- them alone. New binds should use `id` and get namespacing for free.
+    ---
+    --- ⚠️ `when` is not sugar for an `if` around the call. A RegisterKeyMapping is
+    --- permanent in the player's FiveM settings the moment it is first seen, so a
+    --- bind registered once and later removed leaves a dead row in their control
+    --- list forever. Gate it here rather than registering speculatively.
+    function platform.bindKey(key, cb, eventType, bindingId, label)
+        local opts
+        if type(key) == 'table' then
+            opts = key
+        else
+            opts = {
+                default = key,
+                token = bindingId,
+                label = label,
+                _legacyCb = cb,
+                _legacyEvent = eventType,
+            }
         end
 
-        local displayLabel = (type(label) == 'string' and label ~= '' and label)
-            or token:gsub('_', ' ')
+        if opts.when ~= nil and not opts.when then return end
 
-        RegisterCommand('+' .. token, function()
-            if pressCb then pressCb() end
-        end, false)
-        RegisterCommand('-' .. token, function()
-            if releaseCb then releaseCb() end
-        end, false)
+        local pressCb, releaseCb
+        if opts._legacyCb ~= nil then
+            pressCb, releaseCb = normalizePair(opts._legacyCb, opts._legacyEvent)
+        else
+            pressCb, releaseCb = opts.press, opts.release
+        end
 
-        RegisterKeyMapping('+' .. token, displayLabel, 'keyboard', key or '')
+        local defaultKey = opts.default or ''
+        local group = opts.group or 'keyboard'
+        if not VALID_GROUPS[group] then
+            error(('platform.bindKey: unknown input group %q'):format(tostring(group)), 2)
+        end
+
+        local token
+        if type(opts.token) == 'string' and opts.token ~= '' then
+            token = opts.token:gsub('[^%w_]', '_')
+        elseif type(opts.id) == 'string' and opts.id ~= '' then
+            token = (_resourceName:lower() .. '_' .. opts.id):gsub('[^%w_]', '_')
+        else
+            local count           = (_bindCount[defaultKey] or 0) + 1
+            _bindCount[defaultKey] = count
+            local base            = cmdName(defaultKey)
+            token                 = count == 1 and base or (base .. '_' .. count)
+        end
+
+        local displayLabel
+        if type(opts.label) == 'string' and opts.label ~= '' then
+            displayLabel = opts.label
+        elseif opts.product or opts.action then
+            displayLabel = composeLabel(opts.product, opts.action, defaultKey)
+        else
+            displayLabel = token:gsub('_', ' ')
+        end
+
+        local pair = opts.pair
+        if pair == nil then pair = true end
+
+        if pair then
+            RegisterCommand('+' .. token, function()
+                if pressCb then pressCb() end
+            end, false)
+            RegisterCommand('-' .. token, function()
+                if releaseCb then releaseCb() end
+            end, false)
+            RegisterKeyMapping('+' .. token, displayLabel, group, defaultKey)
+        else
+            -- One-shot toggles (tDetector's mute/dim/mark) are plain commands with
+            -- no release half. Forcing a +/- pair on them would register a dead
+            -- `-token` command and a release the caller never asked for.
+            RegisterCommand(token, function()
+                if pressCb then pressCb() end
+            end, false)
+            RegisterKeyMapping(token, displayLabel, group, defaultKey)
+        end
+
+        record({
+            token = token,
+            resource = _resourceName,
+            label = displayLabel,
+            product = opts.product,
+            action = opts.action,
+            default = defaultKey,
+            group = group,
+            pair = pair,
+        })
     end
 end
 

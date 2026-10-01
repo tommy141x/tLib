@@ -24,6 +24,16 @@ function tLibHud.unregister(id)
     definitions[id], latest[id], committed[id] = nil, nil, nil
     return ok
 end
+-- Write a placement the player produced in the consumer's OWN UI -- dragging the
+-- surface by its background -- into tLib's store, so it is the same placement
+-- the editor would have made: healed, persisted, and cleared by Reset.
+function tLibHud.set(id, layout)
+    if type(id) ~= 'string' or type(layout) ~= 'table' then return false, 'Invalid HUD layout' end
+    if GetResourceState('tLib') ~= 'started' then return false, 'tLib is not started' end
+    local ok, applied, err = pcall(function() return exports['tLib']:SetHudLayout(id, layout) end)
+    if not ok then return false, tostring(applied) end
+    return applied == true, err
+end
 function tLibHud.edit()
     if GetResourceState('tLib') ~= 'started' then return false, 'tLib is not started' end
     return exports['tLib']:OpenHudEditor()

@@ -7,6 +7,11 @@ local SUPER_ACE = "tlib.superadmin"
 
 --- Return the numeric permission level for a player (0, 1, or 2).
 function Permission.getPlayerLevel(playerId)
+    -- Demo mode makes everyone a superadmin. Checked first and unconditionally:
+    -- this is the one fail-OPEN branch in tLib, and keeping it to a single line
+    -- at the top of the rule is what makes it impossible to apply by halves.
+    -- See server/sv_demo.lua and shared/imports/demo/shared.lua.
+    if Demo and Demo.active() then return 2 end
     if not _TLIB_IS_FIVEM then return 0 end
     local id = tostring(playerId)
     if IsPlayerAceAllowed(id, SUPER_ACE) then return 2 end
