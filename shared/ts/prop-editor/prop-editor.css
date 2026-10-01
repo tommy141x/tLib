@@ -1,0 +1,253 @@
+/**
+ * Every SIZE in the prop editor's chrome, derived from one viewport-relative unit.
+ *
+ * ── Why a stylesheet and not utilities ──────────────────────────────────────
+ *
+ * Co-located CSS imported by its component is the existing convention in this
+ * folder's siblings (`nui-kit/nui.css`, `marketplace/ui/marketplace.css`), and
+ * here it also sidesteps three measured UnoCSS behaviours at once:
+ *
+ *   - a cva or class table in a plain `.ts` emits no CSS at all, silently;
+ *   - `cn()` treats an arbitrary font size and a text colour as ONE conflict
+ *     group and drops one of them, which has already shipped a bug in this
+ *     editor (the POV button inheriting the page's 16px);
+ *   - UnoCSS scans comments, so describing a class name in prose is the only
+ *     way to mention one without emitting dead CSS.
+ *
+ * None of those can bite a hand-written rule. The split is therefore: COLOUR
+ * stays in the component as shared token utilities (`bg-card`, `text-muted-
+ * foreground`, `border-border`) so a host's own token values still theme the
+ * editor; SIZE lives here. After this change the component contains no
+ * arbitrary font size at all, which makes the `cn()` collision structurally
+ * impossible rather than merely avoided.
+ *
+ * ── The scale ───────────────────────────────────────────────────────────────
+ *
+ * One custom property, no JS. `--tlib-pe-u` is the editor's spacing quantum and
+ * every other length is a multiple of it, so the chrome grows as a unit instead
+ * of drifting apart the way independently-bumped pixel values do.
+ *
+ * The scale is a FRACTION of the viewport's short side, not a pixel size at some
+ * reference resolution. The tool button is 5% of the short side on every display:
+ * 54px tall at 1080p, 72px at 1440p, 108px at 2160p, and it keeps scaling past
+ * both ends rather than pinning.
+ *
+ * `vmin` rather than `vw`: the editor is a ring of panels around the edges of a
+ * full-screen 3D view, so its size should follow the SHORT side. On a 3440x1440
+ * ultrawide `vw` would inflate it by 2.4x for a display that is no taller than
+ * 1440p. 0.3704vmin is 4px at a 1080px short side by construction (4/1080*100).
+ *
+ * The clamp ceiling is the 2x the 4K case wants; the floor keeps the editor
+ * usable on a 720p window rather than letting it collapse toward zero. CEF 103
+ * (the game client's Chromium) supports `clamp()`, `vmin` and custom properties
+ * — all three predate it comfortably.
+ *
+ * ⚠️ The WebGL viewport and the gizmo are deliberately NOT scaled. The gizmo is
+ * picked in screen space by `GizmoScene`; scaling its canvas or its host would
+ * move the hit targets away from the pixels they are drawn at.
+ */
+
+[data-prop-editor] {
+  /* The quantum. Everything below is a multiple of it.
+   *
+   * Purely proportional: no clamp, no pixel anchor. The chrome occupies the same
+   * FRACTION of the viewport on every display, which is the whole point — a
+   * `clamp(3px, …, 8px)` here reintroduced exactly the pixel-relative behaviour
+   * this is meant to avoid, going fixed above a 2160px short side and below an
+   * 810px one, so only a narrow band of resolutions actually scaled.
+   *
+   * `vmin` rather than `vw`: the editor is a ring of panels around the edges of a
+   * full-screen 3D view, so it must follow the SHORT side. On a 3440x1440
+   * ultrawide `vw` would inflate it by 2.4x against a screen no taller than
+   * 1440p, which is an aspect-ratio bug rather than a scale one.
+   *
+   * The coefficient is expressed as "the tool button is 5% of the short side"
+   * (`--tlib-pe-tool` is 9u, so u = 5vmin / 9). Size decisions belong in that
+   * sentence, not in a pixel value: to make the editor bigger or smaller, change
+   * the percentage and nothing else.
+   */
+  --tlib-pe-u: calc(5vmin / 9);
+
+  /* Type. The three steps the editor had as 9/10/12px at 1080p. */
+  --tlib-pe-fs-xs: calc(var(--tlib-pe-u) * 2.25);
+  --tlib-pe-fs-sm: calc(var(--tlib-pe-u) * 2.5);
+  --tlib-pe-fs-md: calc(var(--tlib-pe-u) * 3);
+
+  /* Geometry. */
+  --tlib-pe-edge: calc(var(--tlib-pe-u) * 2);
+  --tlib-pe-radius: calc(var(--tlib-pe-u) * 1.5);
+  --tlib-pe-tool: calc(var(--tlib-pe-u) * 9);
+  --tlib-pe-panel-w: calc(var(--tlib-pe-u) * 44);
+}
+
+/* ── Panels ────────────────────────────────────────────────────────────────
+ *
+ * Position and size only. The card surface itself — fill, border, shadow —
+ * stays on the component as the token utilities an approved contrast pass put
+ * there, so a host's palette still drives it.
+ */
+
+[data-prop-editor] .tlib-pe-badge {
+  top: var(--tlib-pe-edge);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: calc(var(--tlib-pe-u) * 1) calc(var(--tlib-pe-u) * 3);
+  border-radius: 0 0 var(--tlib-pe-radius) var(--tlib-pe-radius);
+  font-size: var(--tlib-pe-fs-sm);
+}
+
+[data-prop-editor] .tlib-pe-badge-suffix {
+  margin-left: calc(var(--tlib-pe-u) * 2);
+  font-size: var(--tlib-pe-fs-xs);
+}
+
+[data-prop-editor] .tlib-pe-actions {
+  top: var(--tlib-pe-edge);
+  right: var(--tlib-pe-edge);
+  gap: calc(var(--tlib-pe-u) * 0.5);
+  /* Inherited by whatever a host puts in the toolbar slot, so a host control
+     that sizes itself in `em` scales with the rest of the chrome for free. */
+  font-size: var(--tlib-pe-fs-md);
+}
+
+[data-prop-editor] .tlib-pe-toolbar {
+  left: var(--tlib-pe-edge);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: calc(var(--tlib-pe-u) * 1.5);
+  gap: calc(var(--tlib-pe-u) * 1);
+  border-radius: var(--tlib-pe-radius);
+}
+
+[data-prop-editor] .tlib-pe-props {
+  top: calc(var(--tlib-pe-u) * 12);
+  right: var(--tlib-pe-edge);
+  bottom: calc(var(--tlib-pe-u) * 10);
+  width: var(--tlib-pe-panel-w);
+  gap: calc(var(--tlib-pe-u) * 2);
+}
+
+[data-prop-editor] .tlib-pe-props-card {
+  padding: calc(var(--tlib-pe-u) * 2);
+  gap: calc(var(--tlib-pe-u) * 2);
+  border-radius: var(--tlib-pe-radius);
+}
+
+[data-prop-editor] .tlib-pe-hints {
+  bottom: var(--tlib-pe-edge);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: calc(var(--tlib-pe-u) * 1.5) calc(var(--tlib-pe-u) * 3);
+  gap: calc(var(--tlib-pe-u) * 3);
+  border-radius: var(--tlib-pe-radius);
+  font-size: var(--tlib-pe-fs-sm);
+}
+
+[data-prop-editor] .tlib-pe-label {
+  font-size: var(--tlib-pe-fs-xs);
+}
+
+[data-prop-editor] .tlib-pe-sep {
+  margin-top: calc(var(--tlib-pe-u) * 0.5);
+  margin-bottom: calc(var(--tlib-pe-u) * 0.5);
+}
+
+[data-prop-editor] .tlib-pe-sep-v {
+  height: calc(var(--tlib-pe-u) * 3);
+}
+
+/* ── Controls ──────────────────────────────────────────────────────────────
+ *
+ * These ride on top of the shared `ui/button` kit, which supplies the fill,
+ * the hover step, the pressed state and the focus ring. Only the metrics are
+ * here, and they beat the kit's own utilities on specificity (an attribute
+ * selector plus a class outranks a single class) without needing `!important`.
+ *
+ * `cursor: pointer` is on the element selector rather than on each class: the
+ * host-supplied toolbar slot renders inside this tree too, and none of the
+ * controls in this editor had a pointer cursor before — the whole chrome read
+ * as inert.
+ */
+
+[data-prop-editor] button,
+[data-prop-editor] [role="button"] {
+  cursor: pointer;
+}
+
+[data-prop-editor] button:disabled {
+  cursor: default;
+}
+
+[data-prop-editor] .tlib-pe-btn {
+  height: calc(var(--tlib-pe-u) * 7);
+  padding-left: calc(var(--tlib-pe-u) * 3);
+  padding-right: calc(var(--tlib-pe-u) * 3);
+  border-radius: var(--tlib-pe-radius);
+  font-size: var(--tlib-pe-fs-md);
+}
+
+[data-prop-editor] .tlib-pe-tool {
+  width: var(--tlib-pe-tool);
+  height: var(--tlib-pe-tool);
+  padding: 0;
+  border-radius: var(--tlib-pe-radius);
+  font-size: var(--tlib-pe-fs-sm);
+}
+
+[data-prop-editor] .tlib-pe-remove {
+  width: 100%;
+  height: calc(var(--tlib-pe-u) * 6.5);
+  padding-left: calc(var(--tlib-pe-u) * 2);
+  padding-right: calc(var(--tlib-pe-u) * 2);
+  border-radius: var(--tlib-pe-radius);
+  font-size: var(--tlib-pe-fs-sm);
+}
+
+/* ── The numeric axis fields ───────────────────────────────────────────────
+ *
+ * The inputs are the one control the button kit does not cover, so their hover
+ * and focus affordances are spelled out to match it: the same ring token, the
+ * same 2px width and 2px offset the kit's `focus-visible` ring uses.
+ *
+ * `:focus-visible` and not `:focus`: clicking into a field to drag-select a
+ * number should not paint a ring, which is the same rule the buttons follow.
+ */
+
+[data-prop-editor] .tlib-pe-field {
+  gap: calc(var(--tlib-pe-u) * 1.5);
+}
+
+[data-prop-editor] .tlib-pe-field-label {
+  width: calc(var(--tlib-pe-u) * 5);
+  font-size: var(--tlib-pe-fs-xs);
+}
+
+[data-prop-editor] .tlib-pe-field-input {
+  height: calc(var(--tlib-pe-u) * 5.5);
+  padding-left: calc(var(--tlib-pe-u) * 1.5);
+  padding-right: calc(var(--tlib-pe-u) * 1.5);
+  border-radius: calc(var(--tlib-pe-radius) - 2px);
+  font-size: var(--tlib-pe-fs-sm);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+[data-prop-editor] .tlib-pe-field-input:hover {
+  border-color: hsl(var(--border));
+}
+
+[data-prop-editor] .tlib-pe-field-input:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-color: hsl(var(--primary));
+}
+
+/* Chrome paints spinner arrows over a 9px-wide field and they get no smaller
+   as the field grows, so they are dropped rather than scaled. The value is
+   still typed and still committed on change. */
+[data-prop-editor] .tlib-pe-field-input::-webkit-outer-spin-button,
+[data-prop-editor] .tlib-pe-field-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
