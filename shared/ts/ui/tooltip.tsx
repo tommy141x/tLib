@@ -16,22 +16,24 @@ import { Portal } from "solid-js/web";
  *
  * ── Two deliberate differences from the tELS original ──────────────────────
  *
- * 1. **No `solid-motionone`.** The original wrapped Content in
- *    `<Presence><Motion.div>` for a 150ms fade, which makes `solid-motionone` a
- *    runtime dependency of every consumer of this file. The enter transition here
- *    is CSS keyed off Ark's own `data-state`; there is no exit animation, because a
- *    CSS one needs the element mounted and Ark unmounts it.
+ * 1. **No solid-motionone.** The original wrapped Content in a Presence/Motion pair
+ *    for a 150ms fade, which makes solid-motionone a runtime dependency of every
+ *    consumer of this file. The enter transition here is CSS keyed off Ark's own
+ *    state attribute; there is no exit animation, because a CSS one needs the
+ *    element mounted and Ark unmounts it. A consumer migrating off the old copy
+ *    loses the fade-out, which is the one visible difference.
  *
- * 2. **No `shadow-md`.** CEF does not composite a blurred drop shadow usefully.
- *    `bg-secondary` against the surface below it plus the arrow is the whole
- *    affordance.
+ * 2. **No elevation effect.** CEF does not composite a blurred one usefully. The
+ *    secondary surface colour against the panel below it, plus the arrow, is the
+ *    whole affordance.
  *
- * tELS keeps its own copy, so nothing there changes.
+ * Text is 12px, the body step of the scale in surface.css — not the extra-small
+ * step, which resolves to 10px and is below the floor. That is the single most
+ * common place a sub-floor size gets reintroduced, because the extra-small step on
+ * a tooltip reads as obviously right.
  *
- * Text is 12px, the body step of the scale in surface.css — not `text-xs`, which
- * resolves to 10px and is below the floor. That is the single most common place a
- * sub-floor size gets reintroduced, because `text-xs` on a tooltip reads as
- * obviously right.
+ * Utility names are deliberately spelled out in words here: UnoCSS scans comments,
+ * so writing one emits it as dead CSS in every consuming app.
  */
 
 export type TooltipProps = Omit<ArkTooltip.RootProps, "children"> & {

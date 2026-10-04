@@ -10,17 +10,23 @@ import IconMinus from "~icons/lucide/minus";
  *
  * ── Two deliberate differences from the tELS original ──────────────────────
  *
- * 1. **The label sizes are on the scale.** The original's tiers were `text-sm` /
- *    `text-base` / `text-lg` — 14/16/18px — which is a form-page scale, not an
- *    editor-chrome one, and beside 11px captions a 16px checkbox label reads as an
- *    unstyled control dropped into a dense panel. They are 11/12/13px here, the
- *    three body steps of the scale at the top of `shared/css/surface.css`, and the
- *    control boxes shrank to match. `md` is still the default, so a caller passing
- *    no size gets the 12px body step.
+ * 1. **The label sizes are on the scale.** The original's three tiers were the
+ *    14/16/18px steps, which is a form-page scale, not an editor-chrome one, and
+ *    beside 11px captions a 16px checkbox label reads as an unstyled control
+ *    dropped into a dense panel. They are 11/12/13px here, the three body steps of
+ *    the scale at the top of shared/css/surface.css, and the control boxes shrank
+ *    to match. The middle tier is still the default, so a caller passing no size
+ *    gets the 12px body step.
  *
- * 2. **No `hover:shadow-sm`.** CEF does not composite a blurred shadow, so the
- *    original's hover step was `hover:border-ring` and nothing else — the shadow
- *    half of it never reached the screen. It is now only what was actually visible.
+ * 2. **No hover elevation.** CEF does not composite a blurred one, so the original's
+ *    hover step was the border-colour change and nothing else — the elevation half of
+ *    it never reached the screen. It is now only what was actually visible.
+ *
+ * Utility names are spelled out in words above on purpose: UnoCSS scans comments as
+ * well as code, so a class name written here is emitted as dead CSS in every app
+ * that imports this file. Measured — the two names this paragraph replaced were
+ * shipping two unused rules into tAFK's bundle. Mind which words you pick: the
+ * typography preset claims some ordinary English ones too.
  *
  * The composable parts below (`CheckboxRoot`, `CheckboxControl`, …) are kept
  * because tELS's markup uses them, so a later migration of tELS onto this file is a

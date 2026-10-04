@@ -18,13 +18,17 @@ import IconX from "~icons/lucide/x";
  *    needs the element to stay mounted and Ark unmounts it. A popover that vanishes
  *    on close is not a defect in a game overlay.
  *
- *    tELS keeps its own copy and is untouched by this, so nothing there regresses.
+ *    A consumer migrating off the old copy loses the fade-out, which is the one
+ *    visible difference.
  *
- * 2. **No `shadow-md`.** FiveM's CEF does not composite a blurred drop shadow
- *    usefully. Elevation here is `bg-popover` — one rung above the `--card` panel
+ * 2. **No blurred elevation.** FiveM's CEF does not composite one usefully.
+ *    Elevation here is the popover surface token — one rung above the card panel
  *    this opens from, per the ladder at the bottom of theme-tokens.css — plus a
- *    `--border` edge. That is the same recipe `ui/select`'s dropdown uses, so a
- *    popover and a dropdown opened from the same panel look like the same layer.
+ *    border edge. That is the same recipe the select dropdown uses, so a popover
+ *    and a dropdown opened from the same panel look like the same layer.
+ *
+ *    Utility names are written out in words on purpose: UnoCSS scans comments, so
+ *    naming a class here emits it as dead CSS in every consuming app.
  *
  * Consumers need `unplugin-icons` for the `~icons/lucide/x` import on
  * `PopoverCloseTrigger`, as they already do for `ui/button`.
