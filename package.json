@@ -21,7 +21,7 @@
     "typecheck:shared": "cd shared/ts && bunx tsc --noEmit -p tsconfig.json",
     "check:imports": "bun run scripts/check-relative-imports.ts",
     "scan:solid2": "bun run scripts/solid2-scan.ts",
-    "check:regression": "bun run typecheck && bun run check:imports && bun run test && bun run test:lua",
+    "check:regression": "bun run typecheck && bun run typecheck:shared && bun run check:imports && bun run test && bun run test:lua",
     "verify": "bun run lint && bun run check:regression && bun run build"
   },
   "dependencies": {

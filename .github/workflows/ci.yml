@@ -25,6 +25,13 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      # shared/ts has its OWN tsconfig and its own jsx settings. The step
+      # above is client/web's project, which pulls the shared TSX in under
+      # `jsxImportSource: "solid-js"` — so the Solid 2 surface was compiled
+      # only under the wrong jsx runtime and never under its own.
+      - name: Typecheck shared
+        run: bun run typecheck:shared
+
       # Catches a relative specifier left behind by a move, which only fails at
       # the moment the module is first loaded and so can pass the suite below.
       - name: Relative imports resolve
