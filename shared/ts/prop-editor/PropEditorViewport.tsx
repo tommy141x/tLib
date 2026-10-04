@@ -6,13 +6,13 @@
  * the camera kept in lockstep by `setCameraPosition` messages.
  */
 
-import { createEffect, on, onCleanup, onMount } from "solid-js";
+import { createEffect, onCleanup, onSettled } from "solid-js";
 import { attachCameraDrag } from "../camera-drag";
 import { GizmoScene } from "../gizmo/GizmoScene";
 import { fivemWorldToLocal } from "../gizmo/vehicle-math";
 import { fetchNui, onNuiEvent } from "../nui";
 import { getGizmoScene, setGizmoScene } from "./scene";
-import { propEditorState, setPropEditorState } from "./store";
+import { mergePropEditorPropData, propEditorState } from "./store";
 
 export interface PropEditorViewportProps {
   /** Event namespace, without the colon. `"radio"` → `radio:propMoved`. */
@@ -26,7 +26,7 @@ export function PropEditorViewport(props: PropEditorViewportProps) {
 
   const nui = (name: string, data: unknown) => fetchNui(`${props.prefix}:${name}`, data);
 
-  onMount(() => {
+  onSettled(() => {
     const scene = new GizmoScene({ canvas: canvasRef, fov: propEditorState.cameraFov });
     setGizmoScene(scene);
 
@@ -38,13 +38,13 @@ export function PropEditorViewport(props: PropEditorViewportProps) {
       const vm = propEditorState.vehicleMatrix;
       if (!vm) return;
       const local = fivemWorldToLocal(vm, fivemWorldPos.x, fivemWorldPos.y, fivemWorldPos.z);
-      setPropEditorState("propData", { ...propEditorState.propData, ...local });
+      mergePropEditorPropData(local);
       nui("propMoved", { ...local });
     };
 
     scene.onRotationChange = () => {
       const rot = scene.extractPropRotation();
-      setPropEditorState("propData", { ...propEditorState.propData, ...rot });
+      mergePropEditorPropData(rot);
       nui("propRotated", rot);
     };
 
@@ -94,36 +94,60 @@ export function PropEditorViewport(props: PropEditorViewportProps) {
 
   // Camera sync from Lua. Not namespaced: the Lua half sends this action bare,
   // because it is the one message on the hot path and it predates the prefix.
-  onMount(() => {
+  // `onCleanup(off)` was called inside the old `onMount` body; Solid 2 forbids
+  // that in an `onSettled` scope and wants the unsubscribe returned instead.
+  onSettled(() => {
     const off = onNuiEvent<{
       position: { x: number; y: number; z: number };
       focus: { x: number; y: number; z: number };
     }>("setCameraPosition", (data) => {
       if (data?.position && data?.focus) getGizmoScene()?.syncCamera(data.position, data.focus);
     });
-    onCleanup(off);
+    return off;
   });
+
+  /*
+   * ── `on()` IS GONE; ITS JOB IS NOW `createEffect`'s FIRST ARGUMENT ─────────
+   *
+   * Solid 2's `createEffect(compute, apply)` splits the two phases `on()` used
+   * to emulate: `compute` tracks and IS the dependency list, `apply` runs
+   * untracked. So `createEffect(on(src, fn))` folds to `createEffect(src, fn)`
+   * one-for-one, with no change in which reads are tracked.
+   *
+   * ⚠️ NO `{ defer: true }` ANYWHERE HERE, DELIBERATELY. Solid 1's `on()` also
+   * defaulted to running immediately, so these four already fired on their first
+   * value and still must — the gizmo has to be given the initial mode, space and
+   * matrix. `defer` would skip exactly that run. (It is also the option
+   * portfolio-next measured dropping subsequent runs when `apply` reads `prev`;
+   * none of these read `prev`, but there is no reason to reach for it.)
+   */
 
   // External edits (the numeric fields) move the handle; a live drag must not,
   // or the gizmo fights the pointer.
   createEffect(
-    on(
-      () => propEditorState.propData,
-      (pd) => {
-        if (!isDragging) getGizmoScene()?.updatePropGizmo(pd);
-      }
-    )
+    () => propEditorState.propData,
+    (pd) => {
+      if (!isDragging) getGizmoScene()?.updatePropGizmo(pd);
+    }
   );
 
-  createEffect(on(() => propEditorState.mode, (mode) => getGizmoScene()?.setMode(mode)));
-  createEffect(on(() => propEditorState.space, (space) => getGizmoScene()?.setSpace(space)));
   createEffect(
-    on(
-      () => propEditorState.vehicleMatrix,
-      (vm) => {
-        if (vm) getGizmoScene()?.setVehicleMatrix(vm);
-      }
-    )
+    () => propEditorState.mode,
+    (mode) => {
+      getGizmoScene()?.setMode(mode);
+    }
+  );
+  createEffect(
+    () => propEditorState.space,
+    (space) => {
+      getGizmoScene()?.setSpace(space);
+    }
+  );
+  createEffect(
+    () => propEditorState.vehicleMatrix,
+    (vm) => {
+      if (vm) getGizmoScene()?.setVehicleMatrix(vm);
+    }
   );
 
   return (

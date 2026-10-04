@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import { createMemo, createSignal, For, Match, onCleanup, onSettled, Show, Switch } from "solid-js";
 import IconChevronLeft from "~icons/lucide/chevron-left";
 import IconDownload from "~icons/lucide/download";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
@@ -409,13 +409,17 @@ function UiPreviewFrame(props: {
   const [containerW, setContainerW] = createSignal(700);
   const [containerH, setContainerH] = createSignal(400);
 
-  onMount(() => {
+  // `onSettled` is Solid 2's `onMount`. The observer's teardown is RETURNED at
+  // the bottom rather than registered with a nested `onCleanup`, which
+  // `onSettled` refuses outright. The fetch below is deliberately NOT awaited
+  // here — its `.then` resolves after this callback has returned, so it cannot
+  // contribute to the cleanup and never did.
+  onSettled(() => {
     const ro = new ResizeObserver(() => {
       setContainerW(containerRef.clientWidth);
       setContainerH(containerRef.clientHeight);
     });
     ro.observe(containerRef);
-    onCleanup(() => ro.disconnect());
 
     // The document arrives as TEXT, brokered by the game server — see
     // `./browse.ts`. It cannot simply be an `<iframe src>`: everything below
@@ -458,6 +462,8 @@ function UiPreviewFrame(props: {
         setHtml(rewritten);
       })
       .catch(() => setLoadError(true));
+
+    return () => ro.disconnect();
   });
 
   // Canvas size, in descending order of trust: studio-design metadata, tRadio's

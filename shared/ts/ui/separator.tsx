@@ -24,7 +24,6 @@ export const Separator: Component<SeparatorProps> = (props) => {
   const others = omit(props, "class", "orientation", "decorative");
 
   return (
-    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: role is dynamically set; aria-orientation is only present when role="separator"
     <div
       role={props.decorative ? "none" : "separator"}
       aria-orientation={props.decorative ? undefined : props.orientation || "horizontal"}

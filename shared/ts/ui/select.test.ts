@@ -41,6 +41,29 @@ import { cn } from "../cn.ts";
 mock.module("~icons/lucide/check", () => ({ default: () => null }));
 mock.module("~icons/lucide/chevron-down", () => ({ default: () => null }));
 
+/**
+ * `@ark-ui/solid@5.39.2` is stubbed for the same reason the icons are, and the
+ * reason is new with Solid 2.
+ *
+ * Ark 5.39.2 is built against Solid 1: it imports `solid-js/web`, `solid-js/store`
+ * and `splitProps` from bare `solid-js`, none of which Solid 2 publishes. Inside
+ * Vite that is handled by `solid-compat/`'s resolveId plugin, which redirects a
+ * VENDOR import to the shim. `bun test` is not Vite, that plugin never runs, and
+ * the suite dies at resolution before a test executes — first on `solid-js/web`,
+ * then `solid-js/store`, then `SyntaxError: Export named 'splitProps' not found`.
+ * Forwarding the two subpaths one at a time just walks to the next one; the whole
+ * Solid 1 value surface would have to be reconstructed here, which is the shim's
+ * job and not this file's.
+ *
+ * So Ark is stubbed outright instead. Nothing below renders — this file asserts on
+ * resolved class STRINGS — and `select.tsx` touches neither symbol at module
+ * scope, so the stub only has to let the module graph load.
+ */
+mock.module("@ark-ui/solid", () => ({
+  Select: new Proxy({}, { get: () => () => null }),
+  createListCollection: () => ({}),
+}));
+
 const { SELECT_SIZES, SELECT_CONTENT_CLASS } = await import("./select.tsx");
 
 /**

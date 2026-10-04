@@ -23,7 +23,7 @@
  */
 
 import { Button } from "@tlib/shared/ui/button";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createSignal, For, onSettled, Show } from "solid-js";
 import { fetchNui, onNuiEvent } from "../nui";
 import { Separator } from "../ui/separator";
 import "./prop-editor.css";
@@ -37,7 +37,7 @@ import {
   openPropEditor,
   propEditorState,
   setPropEditorMode,
-  setPropEditorState,
+  setPropEditorPropData,
   togglePropEditorSpace,
 } from "./store";
 import type {
@@ -83,8 +83,7 @@ export interface PropEditorProps {
  * is invisible over a TRANSPARENT NUI composited on the game. The value here is
  * the one `.settings-panel` uses.
  */
-const PANEL_SURFACE =
-  "bg-card/95 border border-border/60 shadow-[0_4px_24px_rgba(0,0,0,0.45)]";
+const PANEL_SURFACE = "bg-card/95 border border-border/60 shadow-[0_4px_24px_rgba(0,0,0,0.45)]";
 
 /**
  * Sizes live in `prop-editor.css`, colours live here.
@@ -133,7 +132,11 @@ export function PropEditor(props: PropEditorProps) {
   const hover = (hovered: boolean) => nui("propEditorPanelHover", { hovered });
 
   // The Lua half drives open/close; the host wires nothing.
-  onMount(() => {
+  //
+  // `onSettled` is Solid 2's `onMount`, and the cleanup is RETURNED — it refuses
+  // a nested `onCleanup` outright ([CLEANUP_IN_FORBIDDEN_SCOPE]). An effect can
+  // only return one cleanup, so the two unsubscribes are composed into it.
+  onSettled(() => {
     const offInit = onNuiEvent<PropEditorInitMessage>(`${props.prefix}:propEditorInit`, (data) => {
       openPropEditor(data);
       props.onOpen?.(data);
@@ -142,10 +145,10 @@ export function PropEditor(props: PropEditorProps) {
       closePropEditor();
       props.onClose?.();
     });
-    onCleanup(() => {
+    return () => {
       offInit();
       offClose();
-    });
+    };
   });
 
   function handleKeyDown(e: KeyboardEvent) {
@@ -184,21 +187,21 @@ export function PropEditor(props: PropEditorProps) {
     }
   }
 
-  onMount(() => {
+  onSettled(() => {
     window.addEventListener("keydown", handleKeyDown);
-    onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
+    return () => window.removeEventListener("keydown", handleKeyDown);
   });
 
   function updatePosition(axis: "x" | "y" | "z", v: number) {
     const pd = { ...propEditorState.propData, [axis]: v };
-    setPropEditorState("propData", pd);
+    setPropEditorPropData(pd);
     nui("propMoved", { x: pd.x, y: pd.y, z: pd.z });
     getGizmoScene()?.updatePropGizmo(pd);
   }
 
   function updateRotation(axis: "rx" | "ry" | "rz", v: number) {
     const pd = { ...propEditorState.propData, [axis]: v };
-    setPropEditorState("propData", pd);
+    setPropEditorPropData(pd);
     nui("propRotated", { rx: pd.rx, ry: pd.ry, rz: pd.rz });
     getGizmoScene()?.updatePropGizmo(pd);
   }
@@ -421,8 +424,7 @@ export function PropEditor(props: PropEditorProps) {
             <Separator orientation="vertical" class="tlib-pe-sep-v bg-border/60" />
             <Show when={wasdCamMode()}>
               <span class={HINT}>
-                <span class="text-foreground">{T("hint_wasd")}</span>{" "}
-                {T("hint_wasd_orbit_label")}
+                <span class="text-foreground">{T("hint_wasd")}</span> {T("hint_wasd_orbit_label")}
               </span>
               <span class={HINT}>
                 <span class="text-foreground">{T("hint_qe")}</span> {T("hint_qe_zoom_label")}
