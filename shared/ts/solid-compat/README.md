@@ -70,6 +70,33 @@ Losing that race disables the whole redirect with **no build error** — it
 appears at runtime as `Cannot read properties of undefined (reading 'effect')`
 with nothing rendered.
 
+**This is now enforced rather than only documented.** `configResolved` receives
+the plugin list already sorted — Vite groups by `enforce` and keeps array order
+within a group — so by that point the array *is* the resolution order. If any
+plugin named `solid` or `solid:*` precedes the shim, the build throws and names
+them.
+
+The matched names are read out of `@solidjs/vite-plugin`'s own dist (`solid`,
+`solid:boundary-modules`, `solid:server-functions/compiler`, `solid:diagnostics`,
+…) rather than pattern-guessed: a bare `/^solid/` would also match this plugin,
+`solid-devtools` and any consumer's own `solid-`-named plugin, and a false throw
+here breaks every adopting build — far worse than the silent failure it guards.
+
+Verified in both directions, including the cases that must **not** throw: shim
+first → ok; `solid` first → throws; `solid:*` first → throws; `solid-devtools`
+before the shim → ok; shim absent from the list → ok (nothing to compare against,
+and guessing is worse than not checking); no plugin list at all → ok. Checked
+against real builds too: web-next and tCAD both still build, and a false positive
+would have failed every one of web-next's 203 test files rather than none.
+
+⚠️ **Requirements 1 and 3 are still unenforced.** A missing
+`optimizeDeps.exclude` entry is computable the same way and is the natural next
+guard. It was deliberately left out: the client environment's exclude list is
+injected by `@solidjs/vite-plugin` rather than written by the consumer, so the
+check has to model which environments actually pre-bundle before it can throw
+without false positives — and an over-eager throw there would break every
+consumer at once.
+
 **3. Exclude the same set from the dependency optimizer.**
 
 ```ts
@@ -166,6 +193,39 @@ that has not been done — do that instead.
 Consumers import the plugin by path rather than through this export, because a
 vite config is loaded before any alias resolution exists. The export entry is
 for anything else in the monorepo that may want it.
+
+## Testing
+
+**Nothing in this directory has a test of its own, and that is a gap rather than
+a design.** The rule under *Changing anything here* — "every export must have a
+vendor call site, count it in `node_modules` or delete it" — is enforced by hand
+today.
+
+⚠️ **One consumer has already written the suite this layer wants.** tWeb's
+`vite/solid-1-compat-surface.test.ts` (402 lines) asserts, mechanically and
+against its own installed tree:
+
+- every shim export has a named vendor consumer (the rule above)
+- every name a vendor imports is actually supplied (the dangerous direction — a
+  missing one fails as `"./web" is not exported …` naming no importer)
+- the vendor-only gate is real: an application importer resolves to `null`, a
+  vendor importer resolves to the shim, and `ariaAttributeFix` redirects bare
+  `@solidjs/web` to `solid-2-aria-attributes.ts`
+- a control that the vendor scan found imports *at all*, so a silent empty walk
+  cannot pass every assertion beneath it
+
+It is parameterised on `VENDOR_PACKAGES` and the project root, so it is
+promotable: the assertions belong here, the environment stays per-consumer. The
+natural shape is a module here exporting the suite, which each consumer's vitest
+picks up in one line — every project then checks the shared layer against *its
+own* `node_modules`, which is exactly what rule 2 under *Changing anything here*
+asks for and what no single project can do alone.
+
+⛔ **The tests cannot simply run here.** tLib is on Solid 1.9.12, so a runner
+started in this directory resolves the wrong Solid — the same trap recorded at
+the top of this file, where `createRequire` resolving the shim's "real" Solid
+from tLib kept a build green while 40 test files vanished at collection. The
+suite has to execute in a consumer, against Solid 2.
 
 ## Formatting
 
