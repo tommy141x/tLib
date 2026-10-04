@@ -256,6 +256,39 @@ const RULES: Rule[] = [
       return out;
     },
   },
+  {
+    id: "createEffect-single-arg",
+    run(src, file) {
+      const out: Finding[] = [];
+      // Solid 2's signature is createEffect(compute, effect, options?) with
+      // `effect` REQUIRED, so every one-argument call is a migration site.
+      //
+      // Added after this scanner reported tDetector 10 / tRadar 11 while
+      // missing five such calls between them. The broken-control drill was
+      // green throughout and could not have caught it: a control proves a
+      // rule still fires, never that the rule set is complete.
+      //
+      // A call is one-argument when its argument list holds no TOP-LEVEL
+      // comma. Brace- and paren-matched rather than regexed, because a
+      // compute body routinely contains commas inside nested calls, object
+      // literals and arrays.
+      for (const m of src.matchAll(/\bcreateEffect\s*\(/g)) {
+        const open = (m.index ?? 0) + m[0].length - 1;
+        let depth = 0;
+        let comma = false;
+        for (let i = open; i < src.length; i++) {
+          const ch = src[i];
+          if (ch === "(" || ch === "[" || ch === "{") depth++;
+          else if (ch === ")" || ch === "]" || ch === "}") {
+            depth--;
+            if (depth === 0) break;
+          } else if (ch === "," && depth === 1) comma = true;
+        }
+        if (!comma) out.push(hit("createEffect-single-arg", file, src, m.index ?? 0));
+      }
+      return out;
+    },
+  },
 ];
 
 /**
