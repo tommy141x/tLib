@@ -7,6 +7,16 @@
  *   bun run scan:solid2                 # report
  *   bun run scan:solid2 --min 10        # fail unless at least 10 sites remain
  *   bun run scan:solid2 --expect-zero   # fail unless the tree is clean
+ *   bun run scan:solid2 --root <dir>    # scan somewhere else (a consumer's src/)
+ *
+ * `--root` exists so the CONSUMERS of shared/ts are measured by this scanner and
+ * not by a second one. A migration is per-repo but the rules are not: tUnit hit
+ * `createEffect(on(...))`, the store path setter and `solid-js/web` exactly as
+ * shared/ts did. A sibling copy would drift from the control fixture, and a rule
+ * that has drifted reports zero — which reads as a finished migration.
+ *
+ * The control is read from THIS repo either way, so pointing `--root` elsewhere
+ * cannot weaken it: the fixture never moves and all 7 rules must still trip on it.
  *
  * THE CONTROL IS THE POINT. Every rule below is also run against
  * `scripts/solid2-scan-control.fixture.tsx`, a file that is deliberately still
@@ -22,8 +32,20 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 const REPO = resolve(import.meta.dir, "..");
-const SCAN_ROOT = join(REPO, "shared", "ts");
 const CONTROL = join(REPO, "scripts", "solid2-scan-control.fixture.tsx");
+
+const argRoot = process.argv.indexOf("--root");
+if (argRoot !== -1 && !process.argv[argRoot + 1]) {
+  console.error("--root needs a directory");
+  process.exit(3);
+}
+/** Resolved against the CWD, not this repo, so a consumer can pass a relative path. */
+const SCAN_ROOT =
+  argRoot === -1 ? join(REPO, "shared", "ts") : resolve(process.cwd(), process.argv[argRoot + 1]!);
+if (!statSync(SCAN_ROOT, { throwIfNoEntry: false })?.isDirectory()) {
+  console.error(`scan root is not a directory: ${SCAN_ROOT}`);
+  process.exit(3);
+}
 
 /** Not ours: `solid-compat/` is a vendor-import shim a peer owns, and it is
  *  REQUIRED to keep naming the Solid 1 surface. Scanning it would be noise. */
