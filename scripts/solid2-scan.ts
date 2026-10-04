@@ -52,8 +52,33 @@ function hit(rule: string, file: string, src: string, index: number): Finding {
   return { rule, file, line: lineOf(src, index), text: textOf(src, index).slice(0, 140) };
 }
 
+/**
+ * Types that `solid-js` no longer owns: the renderer package does.
+ *
+ * `JSX` is simply gone from core — core models a renderer-neutral `Element` and
+ * `@solidjs/web` owns the JSX namespace. `ValidComponent` is the nastier one,
+ * because BOTH packages export that name and the core one still resolves: core's
+ * is `Component<any>` (function components only) while the web one admits a tag
+ * name, so a polymorphic `as="a"` typechecks against the web flavour alone.
+ */
+const MOVED_TO_SOLIDJS_WEB = ["JSX", "ValidComponent"];
+
 /** `import ... from "<spec>"` with the binding list captured. Multi-line safe. */
 const IMPORT_RE = /import\s+(type\s+)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g;
+
+/** Named bindings of an import match, with any inline `type` modifier stripped. */
+function bindingsOf(m: RegExpMatchArray): string[] {
+  return (m[2] ?? "")
+    .split(",")
+    .map((s) =>
+      s
+        .replace(/\btype\b/, "")
+        .trim()
+        .split(/\s+as\s+/)[0]
+        ?.trim()
+    )
+    .filter(Boolean) as string[];
+}
 
 const RULES: Rule[] = [
   {
@@ -77,6 +102,21 @@ const RULES: Rule[] = [
         for (const n of names) {
           if (REMOVED_FROM_SOLID_JS.includes(n)) {
             out.push(hit(`solid1-import-removed:${n}`, file, src, m.index ?? 0));
+          }
+        }
+      }
+      return out;
+    },
+  },
+  {
+    id: "solid1-type-moved",
+    run(src, file) {
+      const out: Finding[] = [];
+      for (const m of src.matchAll(IMPORT_RE)) {
+        if (m[3] !== "solid-js") continue;
+        for (const n of bindingsOf(m)) {
+          if (MOVED_TO_SOLIDJS_WEB.includes(n)) {
+            out.push(hit(`solid1-type-moved:${n}`, file, src, m.index ?? 0));
           }
         }
       }
