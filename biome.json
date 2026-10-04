@@ -14,7 +14,8 @@
       "!**/.build",
       "!**/assets",
       "!**/client/ui/assets",
-      "!**/client/ui/index.html"
+      "!**/client/ui/index.html",
+      "!shared/ts/solid-compat"
     ]
   },
   "formatter": {
