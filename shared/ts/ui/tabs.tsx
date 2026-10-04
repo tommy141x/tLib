@@ -1,7 +1,8 @@
 import { Tabs as ArkTabs } from "@ark-ui/solid";
 import { cn } from "@tlib/shared/cn";
 import { cva } from "class-variance-authority";
-import { type Component, createSignal, type JSX, onMount, splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { type Component, createSignal, omit, onSettled } from "solid-js";
 
 /**
  * Tabs, promoted from `tELS/client/web/src/components/ui/tabs.tsx`.
@@ -69,10 +70,10 @@ export type TabsProps = Omit<ArkTabs.RootProps, "children" | "class"> & {
 };
 
 export const Tabs: Component<TabsProps> = (props) => {
-  const [local, others] = splitProps(props, ["children", "class"]);
+  const others = omit(props, "children", "class");
   return (
-    <ArkTabs.Root class={cn("w-full relative", local.class)} {...others}>
-      {local.children}
+    <ArkTabs.Root class={cn("w-full relative", props.class)} {...others}>
+      {props.children}
     </ArkTabs.Root>
   );
 };
@@ -82,13 +83,10 @@ export const TabsList: Component<{
   class?: string;
   variant?: TabsVariant;
 }> = (props) => {
-  const [local, variantProps, others] = splitProps(props, ["children", "class"], ["variant"]);
+  const others = omit(props, "children", "class", "variant");
   return (
-    <ArkTabs.List
-      class={cn(tabListVariants({ variant: variantProps.variant }), local.class)}
-      {...others}
-    >
-      {local.children}
+    <ArkTabs.List class={cn(tabListVariants({ variant: props.variant }), props.class)} {...others}>
+      {props.children}
     </ArkTabs.List>
   );
 };
@@ -100,13 +98,13 @@ export const TabsTrigger: Component<{
   class?: string;
   variant?: TabsVariant;
 }> = (props) => {
-  const [local, variantProps, others] = splitProps(props, ["children", "class"], ["variant"]);
+  const others = omit(props, "children", "class", "variant");
   return (
     <ArkTabs.Trigger
-      class={cn(tabTriggerVariants({ variant: variantProps.variant }), local.class)}
+      class={cn(tabTriggerVariants({ variant: props.variant }), props.class)}
       {...others}
     >
-      {local.children}
+      {props.children}
     </ArkTabs.Trigger>
   );
 };
@@ -116,33 +114,40 @@ export const TabsContent: Component<{
   children?: JSX.Element;
   class?: string;
 }> = (props) => {
-  const [local, others] = splitProps(props, ["children", "class"]);
+  const others = omit(props, "children", "class");
   return (
     <ArkTabs.Content
       class={cn(
         "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "mt-4",
-        local.class
+        props.class
       )}
       {...others}
     >
-      {local.children}
+      {props.children}
     </ArkTabs.Content>
   );
 };
 
 export const TabsIndicator: Component<{ class?: string; variant?: TabsVariant }> = (props) => {
-  const [local, others] = splitProps(props, ["class", "variant"]);
+  const others = omit(props, "class", "variant");
   const [mounted, setMounted] = createSignal(false);
 
   // Transitions are enabled a frame AFTER mount, deliberately: Ark sets `--left`
   // and `--width` once it has measured the triggers, and with the transition
   // already live the indicator visibly slides in from 0 on every page load.
-  onMount(() => {
-    requestAnimationFrame(() => setMounted(true));
+  //
+  // `onSettled` is Solid 2's `onMount`; the cleanup is RETURNED, never registered
+  // with a nested `onCleanup`, which `onSettled` refuses outright. The frame is
+  // cancelled on teardown — previously there was nothing to cancel because there
+  // was no cleanup at all, and a tab strip disposed inside one frame would have
+  // written a signal on a dead owner.
+  onSettled(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
   });
 
-  const isUnderline = () => local.variant === "underline";
+  const isUnderline = () => props.variant === "underline";
 
   return (
     <ArkTabs.Indicator
@@ -154,7 +159,7 @@ export const TabsIndicator: Component<{ class?: string; variant?: TabsVariant }>
             // bottom rung of the ladder is the right fill, because the track above
             // it is `bg-muted`.
             "bg-background rounded-md",
-        local.class
+        props.class
       )}
       style={{
         left: "var(--left)",

@@ -1,6 +1,7 @@
 // dark-themed settings panel components (used by tRadio, tELS, etc.)
 
-import { type JSX, type ParentProps, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { type ParentProps, Show } from "solid-js";
 
 /**
  * The palette these controls draw with — the HOST's theme tokens, not a copy.

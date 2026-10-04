@@ -1,7 +1,8 @@
 import { Tooltip as ArkTooltip } from "@ark-ui/solid/tooltip";
 import { cn } from "@tlib/shared/cn";
-import { type JSX, Show, splitProps } from "solid-js";
-import { Portal } from "solid-js/web";
+import type { JSX } from "@solidjs/web";
+import { Show, omit } from "solid-js";
+import { Portal } from "@solidjs/web";
 
 /**
  * The hover label, promoted from `tELS/client/web/src/components/ui/tooltip.tsx`.
@@ -49,8 +50,8 @@ export const TooltipTrigger = (props: {
   class?: string;
   asChild?: ArkTooltip.TriggerProps["asChild"];
 }) => {
-  const [local, others] = splitProps(props, ["class", "asChild"]);
-  return <ArkTooltip.Trigger class={cn(local.class)} asChild={local.asChild} {...others} />;
+  const others = omit(props, "class", "asChild");
+  return <ArkTooltip.Trigger class={cn(props.class)} asChild={props.asChild} {...others} />;
 };
 
 export const TooltipContent = (props: {
@@ -58,7 +59,7 @@ export const TooltipContent = (props: {
   class?: string;
   showArrow?: boolean;
 }) => {
-  const [local, others] = splitProps(props, ["children", "class", "showArrow"]);
+  const others = omit(props, "children", "class", "showArrow");
 
   return (
     <Portal>
@@ -69,16 +70,16 @@ export const TooltipContent = (props: {
             "origin-[var(--transform-origin)] transition-[opacity,transform] duration-150 ease-out",
             "data-[state=open]:opacity-100 data-[state=open]:scale-100",
             "data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.96]",
-            local.class
+            props.class
           )}
           {...others}
         >
-          <Show when={local.showArrow !== false}>
+          <Show when={props.showArrow !== false}>
             <ArkTooltip.Arrow class="[--arrow-size:8px] [--arrow-background:hsl(var(--secondary))]">
               <ArkTooltip.ArrowTip />
             </ArkTooltip.Arrow>
           </Show>
-          {local.children}
+          {props.children}
         </ArkTooltip.Content>
       </ArkTooltip.Positioner>
     </Portal>

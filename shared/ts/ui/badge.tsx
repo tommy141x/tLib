@@ -1,7 +1,8 @@
 import { cn } from "@tlib/shared/cn";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { Component, JSX } from "solid-js";
-import { Show, splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import type { Component } from "solid-js";
+import { omit, Show } from "solid-js";
 
 const badgeVariants = cva(
   "inline-flex items-center gap-1 rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
@@ -43,11 +44,10 @@ export interface BadgeProps {
 }
 
 export const Badge: Component<BadgeProps> = (props) => {
-  const [local, variantProps, others] = splitProps(
-    props,
-    ["children", "class", "onClick"],
-    ["variant", "clickable"]
-  );
+  // `splitProps` returned three bags — `local`, `variantProps`, `others`. `omit`
+  // returns only the last, so the two picked bags collapse into reading `props`
+  // directly; one `omit` naming every key from both lists yields the same `others`.
+  const others = omit(props, "children", "class", "onClick", "variant", "clickable");
 
   // An accessor, NOT a string. A Solid component body runs exactly once, so
   // evaluating this eagerly reads variant, clickable and class at setup and a prop
@@ -57,23 +57,23 @@ export const Badge: Component<BadgeProps> = (props) => {
   const classes = () =>
     cn(
       badgeVariants({
-        variant: variantProps.variant,
-        clickable: variantProps.clickable,
+        variant: props.variant,
+        clickable: props.clickable,
       }),
-      local.class
+      props.class
     );
 
   return (
     <Show
-      when={variantProps.clickable || local.onClick}
+      when={props.clickable || props.onClick}
       fallback={
         <span class={classes()} {...others}>
-          {local.children}
+          {props.children}
         </span>
       }
     >
-      <button type="button" class={classes()} onClick={local.onClick} {...others}>
-        {local.children}
+      <button type="button" class={classes()} onClick={props.onClick} {...others}>
+        {props.children}
       </button>
     </Show>
   );

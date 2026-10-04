@@ -1,5 +1,6 @@
 import { cn } from "@tlib/shared/cn";
-import { type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 
 /**
  * A caption, its control, and an optional line of explanation under it.

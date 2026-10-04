@@ -1,7 +1,7 @@
 import { Select as ArkSelect, createListCollection } from "@ark-ui/solid";
 import { cn } from "@tlib/shared/cn";
-import { createMemo, For, splitProps } from "solid-js";
-import { Portal } from "solid-js/web";
+import { createMemo, For } from "solid-js";
+import { Portal } from "@solidjs/web";
 import IconCheck from "~icons/lucide/check";
 import IconChevronDown from "~icons/lucide/chevron-down";
 
@@ -94,32 +94,25 @@ export const SELECT_CONTENT_CLASS =
   "z-[100] max-h-[220px] w-full overflow-y-auto rounded-[var(--radius-control)] border border-border bg-popover p-1 text-popover-foreground";
 
 export function Select(props: SelectProps) {
-  // No rest binding: SelectProps is closed over exactly these eight keys, so the
+  // This used to take a picked-only `splitProps` bag and read through it. Solid 2's
+  // `omit` has no picked half — it returns the rest object alone — and there is no
+  // rest to bind here: SelectProps is closed over exactly these eight keys, so the
   // remainder is always empty, and a rest that is always empty reads like props are
-  // being dropped somewhere.
-  const [local] = splitProps(props, [
-    "items",
-    "value",
-    "onChange",
-    "placeholder",
-    "disabled",
-    "class",
-    "size",
-    "label",
-  ]);
+  // being dropped somewhere. So the bag is simply gone and every read is `props.x`,
+  // which is the reactive access anyway.
 
   const normalize = (item: SelectItem) =>
     typeof item === "string" ? { value: item, label: item } : item;
 
   const collection = createMemo(() =>
     createListCollection({
-      items: local.items.map(normalize),
+      items: props.items.map(normalize),
       itemToValue: (i) => i.value,
       itemToString: (i) => i.label,
     })
   );
 
-  const sz = () => SELECT_SIZES[local.size ?? "default"];
+  const sz = () => SELECT_SIZES[props.size ?? "default"];
 
   return (
     <ArkSelect.Root
@@ -127,24 +120,24 @@ export function Select(props: SelectProps) {
       // `[]`, not `undefined`, for the unset case. Passing `undefined` to a
       // controlled Ark Select hands the value back to its own internal state, so a
       // record cleared server-side would leave the old label on screen.
-      value={local.value ? [local.value] : []}
-      onValueChange={(d) => local.onChange?.(d.value[0] ?? "")}
-      disabled={local.disabled}
+      value={props.value ? [props.value] : []}
+      onValueChange={(d) => props.onChange?.(d.value[0] ?? "")}
+      disabled={props.disabled}
       positioning={{ fitViewport: true, sameWidth: true }}
     >
       <ArkSelect.Control>
         <ArkSelect.Trigger
-          aria-label={local.label}
+          aria-label={props.label}
           class={cn(
             // `.prop-input` already carries the `[data-state="open"]` focus ring
             // that Ark sets here.
             "prop-input inline-flex items-center justify-between gap-1.5 text-left",
             sz().trigger,
-            local.class
+            props.class
           )}
         >
           <ArkSelect.ValueText
-            placeholder={local.placeholder}
+            placeholder={props.placeholder}
             class="min-w-0 flex-1 truncate text-foreground data-[placeholder]:text-muted-foreground"
           />
           <ArkSelect.Indicator class="shrink-0 text-muted-foreground transition-transform data-[state=open]:rotate-180">

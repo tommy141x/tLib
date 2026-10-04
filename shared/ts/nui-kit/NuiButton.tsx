@@ -18,7 +18,8 @@
 // a fallback, so this renders in a host that defines no theme tokens at all —
 // tDetector and tRadar are both such hosts today.
 
-import { type JSX, splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { omit } from "solid-js";
 import "./nui.css";
 
 export function NuiButton(
@@ -26,13 +27,13 @@ export function NuiButton(
     tone?: "primary" | "destructive" | "default";
   }
 ) {
-  const [local, rest] = splitProps(props, ["tone", "class", "type"]);
+  const rest = omit(props, "tone", "class", "type");
   return (
     <button
       {...rest}
-      type={local.type ?? "button"}
-      data-tone={local.tone ?? "default"}
-      class={`tlib-nui-control tlib-nui-button ${local.class ?? ""}`}
+      type={props.type ?? "button"}
+      data-tone={props.tone ?? "default"}
+      class={`tlib-nui-control tlib-nui-button ${props.class ?? ""}`}
     />
   );
 }

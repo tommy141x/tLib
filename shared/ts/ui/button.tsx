@@ -1,9 +1,14 @@
 import { Toggle as ArkToggle } from "@ark-ui/solid/toggle";
 import { cn } from "@tlib/shared/cn";
 import { cva } from "class-variance-authority";
-import type { Component, JSX, ValidComponent } from "solid-js";
-import { mergeProps, Show, splitProps } from "solid-js";
-import { Dynamic } from "solid-js/web";
+// ⚠️ `ValidComponent` must come from `@solidjs/web`, NOT `solid-js`. Both packages
+// export a type under that name and `solid-js`'s resolves fine, but it is
+// `Component<any>` — function components only. `@solidjs/web`'s is the one that
+// admits a tag name, which is what `as="button"` below needs, and it is also the
+// constraint `dynamic()` itself is declared against.
+import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
+import type { Component } from "solid-js";
+import { merge, omit, Show } from "solid-js";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
 
 /**
@@ -134,46 +139,51 @@ type ButtonProps = {
 };
 
 const Button: Component<ButtonProps> = (props) => {
-  const merged = mergeProps(
+  const merged = merge(
     { variant: "default" as const, size: "default" as const, toggle: false },
     props
   );
 
-  const [local, toggleProps, others] = splitProps(
+  // `splitProps` returned three bags; `omit` returns only the last. Both picked
+  // bags collapse into reading `merged` directly — note `merged`, NOT `props`:
+  // the former `local.variant` / `local.size` / `local.toggle` were reading the
+  // defaults applied above, and `props.variant` is `undefined` when a call site
+  // omits it.
+  const others = omit(
     merged,
-    [
-      "variant",
-      "size",
-      "class",
-      "toggle",
-      "children",
-      "loading",
-      "loadingText",
-      "leftIcon",
-      "rightIcon",
-      "disabled",
-      "as",
-    ],
-    ["pressed", "defaultPressed", "onPressedChange"]
+    "variant",
+    "size",
+    "class",
+    "toggle",
+    "children",
+    "loading",
+    "loadingText",
+    "leftIcon",
+    "rightIcon",
+    "disabled",
+    "as",
+    "pressed",
+    "defaultPressed",
+    "onPressedChange"
   );
 
-  const isDisabled = () => !!(local.disabled || local.loading);
+  const isDisabled = () => !!(merged.disabled || merged.loading);
 
   // LeftIconSlot / RightIconSlot are tiny components defined inside Button so
   // they close over `local`. Defining them as named components (capital letter)
   // means SolidJS treats them as reactive nodes in the render tree — they
-  // re-run when `local.loading` or `local.leftIcon` / `local.rightIcon` change,
+  // re-run when `merged.loading` or `merged.leftIcon` / `merged.rightIcon` change,
   // rather than being evaluated once and baked into a static JSX snapshot.
   // This is the correct pattern to avoid "template is not a function" hydration
   // errors that occur when bare ternaries or called helper-functions are used.
   const LeftIconSlot: Component = () => {
-    if (local.loading || !local.leftIcon) return null;
-    return <>{local.leftIcon()}</>;
+    if (merged.loading || !merged.leftIcon) return null;
+    return <>{merged.leftIcon()}</>;
   };
 
   const RightIconSlot: Component = () => {
-    if (local.loading || !local.rightIcon) return null;
-    return <>{local.rightIcon()}</>;
+    if (merged.loading || !merged.rightIcon) return null;
+    return <>{merged.rightIcon()}</>;
   };
 
   // innerContent is assigned as a JSX value (not called as a function), so it
@@ -181,25 +191,25 @@ const Button: Component<ButtonProps> = (props) => {
   // node re-evaluates independently when its signals change.
   const innerContent: JSX.Element = (
     <>
-      <Show when={local.loading}>
+      <Show when={merged.loading}>
         <IconLoaderCircle class="h-4 w-4 animate-spin" />
       </Show>
       <LeftIconSlot />
-      <Show when={local.loading && local.loadingText} fallback={local.children}>
-        {local.loadingText}
+      <Show when={merged.loading && merged.loadingText} fallback={merged.children}>
+        {merged.loadingText}
       </Show>
       <RightIconSlot />
     </>
   );
 
-  if (local.toggle) {
+  if (merged.toggle) {
     return (
       <ArkToggle.Root
-        pressed={toggleProps.pressed as unknown as boolean | undefined}
-        defaultPressed={toggleProps.defaultPressed as unknown as boolean | undefined}
-        onPressedChange={toggleProps.onPressedChange}
+        pressed={merged.pressed as unknown as boolean | undefined}
+        defaultPressed={merged.defaultPressed as unknown as boolean | undefined}
+        onPressedChange={merged.onPressedChange}
         disabled={isDisabled()}
-        class={cn(buttonVariants({ variant: local.variant, size: local.size }), local.class)}
+        class={cn(buttonVariants({ variant: merged.variant, size: merged.size }), merged.class)}
         {...others}
       >
         {innerContent}
@@ -208,11 +218,11 @@ const Button: Component<ButtonProps> = (props) => {
   }
 
   // For polymorphic rendering without 'as' prop, use regular button
-  if (!local.as) {
+  if (!merged.as) {
     return (
       <button
         disabled={isDisabled()}
-        class={cn(buttonVariants({ variant: local.variant, size: local.size }), local.class)}
+        class={cn(buttonVariants({ variant: merged.variant, size: merged.size }), merged.class)}
         {...others}
       >
         {innerContent}
@@ -220,20 +230,24 @@ const Button: Component<ButtonProps> = (props) => {
     );
   }
 
-  // For polymorphic rendering with 'as' prop, use Dynamic
+  // For polymorphic rendering with 'as' prop, use `dynamic()`.
+  // `<Dynamic>` still exists but is deprecated; `dynamic()` is the factory form
+  // and is called ONCE per component instance rather than per render — it
+  // memoises on the source, so hoisting it is the whole point of the new API.
+  // `merged.as` stays inside the getter, so the tag is still reactive.
   // Don't pass disabled to non-button elements (like anchor tags)
-  const isNativeButton = local.as === "button";
+  const isNativeButton = merged.as === "button";
   const extraProps = isNativeButton ? { disabled: isDisabled() } : {};
+  const As = dynamic(() => merged.as as ValidComponent);
 
   return (
-    <Dynamic
-      component={local.as}
-      class={cn(buttonVariants({ variant: local.variant, size: local.size }), local.class)}
+    <As
+      class={cn(buttonVariants({ variant: merged.variant, size: merged.size }), merged.class)}
       {...extraProps}
       {...others}
     >
       {innerContent}
-    </Dynamic>
+    </As>
   );
 };
 

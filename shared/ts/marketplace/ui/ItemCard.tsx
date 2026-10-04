@@ -69,7 +69,7 @@ export function ItemCard(props: {
               class="mp-action mp-delete"
               aria-label="Delete from server"
               disabled={busy()}
-              aria-busy={busy()}
+              aria-busy={busy() ? "true" : "false"}
               onClick={props.onUninstall}
               title="Delete from server"
             >
@@ -84,7 +84,7 @@ export function ItemCard(props: {
             class="mp-action"
             tone={s().state === "installed" ? "default" : "primary"}
             disabled={busy()}
-            aria-busy={busy()}
+            aria-busy={busy() ? "true" : "false"}
             onClick={props.onInstall}
             title={installError()}
           >

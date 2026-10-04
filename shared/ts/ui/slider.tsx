@@ -1,6 +1,7 @@
 import { Slider as ArkSlider } from "@ark-ui/solid/slider";
 import { cn } from "@tlib/shared/cn";
-import { type Component, type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { type Component, Show } from "solid-js";
 
 /**
  * The range control.

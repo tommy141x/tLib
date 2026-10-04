@@ -1,8 +1,9 @@
 import { ColorPicker as ArkColorPicker, parseColor } from "@ark-ui/solid";
 import { cn } from "@tlib/shared/cn";
-import type { Component, ComponentProps, JSX } from "solid-js";
-import { For, Show, splitProps } from "solid-js";
-import { Portal } from "solid-js/web";
+import type { JSX } from "@solidjs/web";
+import type { Component, ComponentProps } from "solid-js";
+import { For, Show, omit } from "solid-js";
+import { Portal } from "@solidjs/web";
 import { Motion, Presence } from "solid-motionone";
 import IconPipette from "~icons/lucide/pipette";
 import type { ComponentMeta } from "./meta.ts";
@@ -62,14 +63,15 @@ export const ColorPicker: Component<ColorPickerProps> & {
   HiddenInput: typeof ColorPickerHiddenInput;
   Context: typeof ArkColorPicker.Context;
 } = (props: ColorPickerProps) => {
-  const [local, others] = splitProps(props, [
+  const others = omit(
+    props,
     "children",
     "class",
     "label",
     "showAlpha",
     "showEyeDropper",
-    "swatches",
-  ]);
+    "swatches"
+  );
 
   const defaultSwatches = [
     "#ef4444",
@@ -91,17 +93,17 @@ export const ColorPicker: Component<ColorPickerProps> & {
     "#f43f5e",
   ];
 
-  const swatchColors = () => local.swatches || defaultSwatches;
+  const swatchColors = () => props.swatches || defaultSwatches;
 
   return (
     <ArkColorPicker.Root
-      class={cn("flex flex-col gap-2", local.class)}
+      class={cn("flex flex-col gap-2", props.class)}
       positioning={{ sameWidth: true, ...others.positioning }}
       {...others}
     >
-      {local.label && (
+      {props.label && (
         <ArkColorPicker.Label class="text-sm font-medium leading-none">
-          {local.label}
+          {props.label}
         </ArkColorPicker.Label>
       )}
       <ArkColorPicker.Control class="flex items-center gap-2">
@@ -146,7 +148,7 @@ export const ColorPicker: Component<ColorPickerProps> & {
                               <ArkColorPicker.ChannelSliderThumb class="h-4 w-4 rounded-full border-2 border-white -translate-x-1/2 -translate-y-1/2" />
                             </ArkColorPicker.ChannelSlider>
 
-                            <Show when={local.showAlpha !== false}>
+                            <Show when={props.showAlpha !== false}>
                               <ArkColorPicker.ChannelSlider channel="alpha">
                                 <ArkColorPicker.TransparencyGrid size="8px" class="rounded-md" />
                                 <ArkColorPicker.ChannelSliderTrack class="h-3 rounded-md" />
@@ -170,7 +172,7 @@ export const ColorPicker: Component<ColorPickerProps> & {
                             </ArkColorPicker.SwatchGroup>
                           </Show>
 
-                          <Show when={local.showEyeDropper !== false}>
+                          <Show when={props.showEyeDropper !== false}>
                             <ArkColorPicker.EyeDropperTrigger class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">
                               <IconPipette class="h-4 w-4" />
                               Pick Color
@@ -328,13 +330,13 @@ const ColorPickerArea: Component<{
   xChannel?: "hue" | "saturation" | "brightness" | "lightness" | "red" | "green" | "blue";
   yChannel?: "hue" | "saturation" | "brightness" | "lightness" | "red" | "green" | "blue";
 }> = (props) => {
-  const [local, others] = splitProps(props, ["class", "children"]);
+  const others = omit(props, "class", "children");
   return (
     <ArkColorPicker.Area
-      class={cn("h-40 w-full rounded-lg border border-border relative", local.class)}
+      class={cn("h-40 w-full rounded-lg border border-border relative", props.class)}
       {...others}
     >
-      {local.children}
+      {props.children}
     </ArkColorPicker.Area>
   );
 };
@@ -356,10 +358,10 @@ const ColorPickerChannelSlider: Component<{
   channel: "hue" | "saturation" | "brightness" | "lightness" | "red" | "green" | "blue" | "alpha";
   class?: string;
 }> = (props) => {
-  const [local, others] = splitProps(props, ["class", "children"]);
+  const others = omit(props, "class", "children");
   return (
-    <ArkColorPicker.ChannelSlider class={cn(local.class)} {...others}>
-      {local.children}
+    <ArkColorPicker.ChannelSlider class={cn(props.class)} {...others}>
+      {props.children}
     </ArkColorPicker.ChannelSlider>
   );
 };
@@ -385,12 +387,12 @@ const ColorPickerChannelInput: Component<{
     | "blue";
   class?: string;
 }> = (props) => {
-  const [local, others] = splitProps(props, ["class"]);
+  const others = omit(props, "class");
   return (
     <ArkColorPicker.ChannelInput
       class={cn(
         "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-all duration-200 file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-destructive",
-        local.class
+        props.class
       )}
       {...others}
     />
@@ -426,16 +428,16 @@ const ColorPickerSwatchTrigger: Component<{
   disabled?: boolean;
   class?: string;
 }> = (props) => {
-  const [local, others] = splitProps(props, ["class", "children"]);
+  const others = omit(props, "class", "children");
   return (
     <ArkColorPicker.SwatchTrigger
       class={cn(
         "relative h-8 w-8 rounded-md overflow-hidden border border-border cursor-pointer transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed",
-        local.class
+        props.class
       )}
       {...others}
     >
-      {local.children}
+      {props.children}
     </ArkColorPicker.SwatchTrigger>
   );
 };
@@ -445,10 +447,10 @@ const ColorPickerSwatch: Component<{
   value: string;
   class?: string;
 }> = (props) => {
-  const [local, others] = splitProps(props, ["class", "children"]);
+  const others = omit(props, "class", "children");
   return (
-    <ArkColorPicker.Swatch class={cn("h-full w-full", local.class)} {...others}>
-      {local.children}
+    <ArkColorPicker.Swatch class={cn("h-full w-full", props.class)} {...others}>
+      {props.children}
     </ArkColorPicker.Swatch>
   );
 };

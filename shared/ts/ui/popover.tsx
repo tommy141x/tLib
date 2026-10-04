@@ -1,6 +1,7 @@
 import { Popover as ArkPopover } from "@ark-ui/solid/popover";
 import { cn } from "@tlib/shared/cn";
-import { createSignal, type JSX, mergeProps, Show, splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { createSignal, merge, Show, omit } from "solid-js";
 import IconX from "~icons/lucide/x";
 
 /**
@@ -63,7 +64,7 @@ export type PopoverProps = Omit<ArkPopover.RootProps, "children"> & {
 };
 
 export const Popover = (props: PopoverProps) => {
-  const merged = mergeProps({ closeOnInteractOutside: true, closeOnEscape: true }, props);
+  const merged = merge({ closeOnInteractOutside: true, closeOnEscape: true }, props);
   return <ArkPopover.Root {...merged} />;
 };
 
@@ -72,13 +73,13 @@ export const PopoverTrigger = (props: {
   class?: string;
   title?: string;
 }) => {
-  const [local, others] = splitProps(props, ["class"]);
-  return <ArkPopover.Trigger class={cn(local.class)} {...others} />;
+  const others = omit(props, "class");
+  return <ArkPopover.Trigger class={cn(props.class)} {...others} />;
 };
 
 export const PopoverAnchor = (props: { children?: JSX.Element; class?: string }) => {
-  const [local, others] = splitProps(props, ["class"]);
-  return <ArkPopover.Anchor class={cn(local.class)} {...others} />;
+  const others = omit(props, "class");
+  return <ArkPopover.Anchor class={cn(props.class)} {...others} />;
 };
 
 export const PopoverContent = (props: {
@@ -86,7 +87,7 @@ export const PopoverContent = (props: {
   class?: string;
   showArrow?: boolean;
 }) => {
-  const [local, others] = splitProps(props, ["children", "class", "showArrow"]);
+  const others = omit(props, "children", "class", "showArrow");
 
   return (
     <ArkPopover.Positioner>
@@ -99,57 +100,57 @@ export const PopoverContent = (props: {
           "origin-[var(--transform-origin)] transition-[opacity,transform] duration-150 ease-out",
           "data-[state=open]:opacity-100 data-[state=open]:scale-100",
           "data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.96]",
-          local.class
+          props.class
         )}
         {...others}
       >
-        <Show when={local.showArrow !== false}>
+        <Show when={props.showArrow !== false}>
           <ArkPopover.Arrow class="[--arrow-size:12px] [--arrow-background:hsl(var(--popover))]">
             <ArkPopover.ArrowTip class="border-t border-l border-border" />
           </ArkPopover.Arrow>
         </Show>
-        {local.children}
+        {props.children}
       </ArkPopover.Content>
     </ArkPopover.Positioner>
   );
 };
 
 export const PopoverTitle = (props: { children?: JSX.Element; class?: string }) => {
-  const [local, others] = splitProps(props, ["class"]);
+  const others = omit(props, "class");
   // 13px, the top step of the scale in surface.css — the heading of a floating
   // panel is the same weight as an editor's header identity and no larger.
   return (
     <ArkPopover.Title
-      class={cn("text-[13px] font-semibold text-foreground", local.class)}
+      class={cn("text-[13px] font-semibold text-foreground", props.class)}
       {...others}
     />
   );
 };
 
 export const PopoverDescription = (props: { children?: JSX.Element; class?: string }) => {
-  const [local, others] = splitProps(props, ["class"]);
+  const others = omit(props, "class");
   // 12px at FULL `--muted-foreground`, never a fractional one. See rule 2 of the
   // scale at the top of surface.css.
   return (
     <ArkPopover.Description
-      class={cn("text-[12px] text-muted-foreground", local.class)}
+      class={cn("text-[12px] text-muted-foreground", props.class)}
       {...others}
     />
   );
 };
 
 export const PopoverCloseTrigger = (props: { children?: JSX.Element; class?: string }) => {
-  const [local, others] = splitProps(props, ["children", "class"]);
+  const others = omit(props, "children", "class");
 
   return (
     <ArkPopover.CloseTrigger
       class={cn(
         "rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none",
-        local.class
+        props.class
       )}
       {...others}
     >
-      {local.children || (
+      {props.children || (
         <>
           <IconX class="h-4 w-4" />
           <span class="sr-only">Close</span>

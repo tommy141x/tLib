@@ -1,7 +1,8 @@
 import { HoverCard as ArkHoverCard } from "@ark-ui/solid/hover-card";
 import { cn } from "@tlib/shared/cn";
 import type { PositioningOptions } from "@zag-js/popper";
-import { type JSX, Show, splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show, omit } from "solid-js";
 import { Motion, Presence } from "solid-motionone";
 
 interface HoverCardProps {
@@ -24,11 +25,11 @@ interface HoverCardTriggerProps {
 }
 
 export const HoverCardTrigger = (props: HoverCardTriggerProps) => {
-  const [local, others] = splitProps(props, ["class"]);
+  const others = omit(props, "class");
 
   return (
     <ArkHoverCard.Trigger
-      class={cn("cursor-help underline decoration-dotted underline-offset-4", local.class)}
+      class={cn("cursor-help underline decoration-dotted underline-offset-4", props.class)}
       {...others}
     />
   );
@@ -41,7 +42,7 @@ interface HoverCardContentProps {
 }
 
 export const HoverCardContent = (props: HoverCardContentProps) => {
-  const [local, others] = splitProps(props, ["children", "class", "showArrow"]);
+  const others = omit(props, "children", "class", "showArrow");
 
   return (
     <ArkHoverCard.Context>
@@ -57,16 +58,16 @@ export const HoverCardContent = (props: HoverCardContentProps) => {
                 <ArkHoverCard.Content
                   class={cn(
                     "z-50 w-64 rounded-md border border-border bg-background p-4 outline-none",
-                    local.class
+                    props.class
                   )}
                   {...others}
                 >
-                  {local.showArrow !== false && (
+                  {props.showArrow !== false && (
                     <ArkHoverCard.Arrow class="[--arrow-size:12px] [--arrow-background:hsl(var(--background))]">
                       <ArkHoverCard.ArrowTip class="border-t border-l border-border" />
                     </ArkHoverCard.Arrow>
                   )}
-                  {local.children}
+                  {props.children}
                 </ArkHoverCard.Content>
               </Motion.div>
             </Show>

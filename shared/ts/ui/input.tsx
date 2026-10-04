@@ -1,5 +1,6 @@
 import { cn } from "@tlib/shared/cn";
-import { type JSX, splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { omit } from "solid-js";
 
 /**
  * The text input.
@@ -45,11 +46,11 @@ export interface InputProps extends Omit<JSX.InputHTMLAttributes<HTMLInputElemen
 }
 
 export function Input(props: InputProps) {
-  const [local, others] = splitProps(props, ["class", "size"]);
+  const others = omit(props, "class", "size");
 
   return (
     <input
-      class={cn("prop-input", sizeClasses[local.size ?? "default"], local.class)}
+      class={cn("prop-input", sizeClasses[props.size ?? "default"], props.class)}
       {...others}
     />
   );

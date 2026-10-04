@@ -1,7 +1,8 @@
 import { cn } from "@tlib/shared/cn";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { Component, JSX } from "solid-js";
-import { splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import type { Component } from "solid-js";
+import { omit } from "solid-js";
 
 const kbdVariants = cva(
   "pointer-events-none inline-flex select-none items-center justify-center gap-1 rounded border border-border bg-muted font-mono font-medium opacity-100 text-muted-foreground",
@@ -25,11 +26,11 @@ interface KbdProps extends VariantProps<typeof kbdVariants> {
 }
 
 export const Kbd: Component<KbdProps> = (props) => {
-  const [local, others] = splitProps(props, ["children", "class", "size"]);
+  const others = omit(props, "children", "class", "size");
 
   return (
-    <kbd class={cn(kbdVariants({ size: local.size || "default" }), local.class)} {...others}>
-      {local.children}
+    <kbd class={cn(kbdVariants({ size: props.size || "default" }), props.class)} {...others}>
+      {props.children}
     </kbd>
   );
 };
@@ -40,11 +41,11 @@ interface KbdGroupProps {
 }
 
 export const KbdGroup: Component<KbdGroupProps> = (props) => {
-  const [local, others] = splitProps(props, ["children", "class"]);
+  const others = omit(props, "children", "class");
 
   return (
-    <div class={cn("inline-flex items-center gap-1", local.class)} {...others}>
-      {local.children}
+    <div class={cn("inline-flex items-center gap-1", props.class)} {...others}>
+      {props.children}
     </div>
   );
 };

@@ -31,6 +31,7 @@
   // it resolves through a `virtual:` specifier that only exists inside Vite.
   "include": [
     "env.d.ts",
+    "solid-1-compat-jsx.d.ts",
     "admin-ui/**/*.ts",
     "admin-ui/**/*.tsx",
     "marketplace/ui/**/*.ts",
@@ -43,5 +44,8 @@
     "ui/**/*.tsx",
     "cn.ts"
   ],
-  "exclude": ["node_modules", "dist", "solid-compat"]
+  // `*.test.ts` is excluded: those run under `bun test`, which supplies `bun:test`
+  // and the `Bun` global. Pulling them in here would mean adding `types: ["bun"]`
+  // to a config whose whole job is to check browser code against Solid 2.
+  "exclude": ["node_modules", "dist", "solid-compat", "**/*.test.ts", "**/*.test.tsx"]
 }

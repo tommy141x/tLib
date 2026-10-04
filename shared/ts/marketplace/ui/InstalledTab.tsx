@@ -250,7 +250,7 @@ function InstalledItemCard(props: {
                 class="mp-action mp-delete"
                 aria-label="Delete from server"
                 disabled={busy() || managementBlocked()}
-                aria-busy={busy()}
+                aria-busy={busy() ? "true" : "false"}
                 onClick={onDelete}
                 title="Delete from server"
               >
@@ -267,7 +267,7 @@ function InstalledItemCard(props: {
                 class="mp-action"
                 tone={s().state === "installed" ? "default" : "primary"}
                 disabled={busy() || managementBlocked()}
-                aria-busy={busy()}
+                aria-busy={busy() ? "true" : "false"}
                 onClick={onInstall}
               >
                 <Show when={s().state === "installing"} fallback={<IconDownload class="w-3 h-3" />}>

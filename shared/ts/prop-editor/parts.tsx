@@ -7,7 +7,7 @@
  * `oklch()` and `color-mix()` are dropped silently rather than erroring.
  */
 
-import type { JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import { cn } from "../cn";
 
 export interface PropFieldProps {

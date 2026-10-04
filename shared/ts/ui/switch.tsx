@@ -1,6 +1,7 @@
 import { Switch as ArkSwitch } from "@ark-ui/solid/switch";
 import { cn } from "@tlib/shared/cn";
-import type { Component, JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import type { Component } from "solid-js";
 import { createUniqueId } from "solid-js";
 
 type SwitchProps = {

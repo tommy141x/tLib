@@ -1,7 +1,8 @@
 import { cn } from "@tlib/shared/cn";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { Component, JSX } from "solid-js";
-import { splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import type { Component } from "solid-js";
+import { omit } from "solid-js";
 
 /**
  * ⚠️ `elevated` no longer elevates, and `default` and `elevated` now resolve to the
@@ -45,11 +46,11 @@ export interface CardProps {
 }
 
 export const Card: Component<CardProps> = (props) => {
-  const [local, variantProps, others] = splitProps(props, ["children", "class"], ["variant"]);
+  const others = omit(props, "children", "class", "variant");
 
   return (
-    <div class={cn(cardVariants({ variant: variantProps.variant }), local.class)} {...others}>
-      {local.children}
+    <div class={cn(cardVariants({ variant: props.variant }), props.class)} {...others}>
+      {props.children}
     </div>
   );
 };
@@ -60,11 +61,11 @@ export interface CardTitleProps {
 }
 
 export const CardTitle: Component<CardTitleProps> = (props) => {
-  const [local, others] = splitProps(props, ["children", "class"]);
+  const others = omit(props, "children", "class");
 
   return (
-    <h3 class={cn("text-2xl font-semibold leading-none tracking-tight", local.class)} {...others}>
-      {local.children}
+    <h3 class={cn("text-2xl font-semibold leading-none tracking-tight", props.class)} {...others}>
+      {props.children}
     </h3>
   );
 };
@@ -75,11 +76,11 @@ export interface CardDescriptionProps {
 }
 
 export const CardDescription: Component<CardDescriptionProps> = (props) => {
-  const [local, others] = splitProps(props, ["children", "class"]);
+  const others = omit(props, "children", "class");
 
   return (
-    <p class={cn("text-sm text-muted-foreground", local.class)} {...others}>
-      {local.children}
+    <p class={cn("text-sm text-muted-foreground", props.class)} {...others}>
+      {props.children}
     </p>
   );
 };
@@ -90,11 +91,11 @@ export interface CardContentProps {
 }
 
 export const CardContent: Component<CardContentProps> = (props) => {
-  const [local, others] = splitProps(props, ["children", "class"]);
+  const others = omit(props, "children", "class");
 
   return (
-    <div class={cn("p-6 pt-0", local.class)} {...others}>
-      {local.children}
+    <div class={cn("p-6 pt-0", props.class)} {...others}>
+      {props.children}
     </div>
   );
 };
@@ -105,11 +106,11 @@ export interface CardHeaderProps {
 }
 
 export const CardHeader: Component<CardHeaderProps> = (props) => {
-  const [local, others] = splitProps(props, ["children", "class"]);
+  const others = omit(props, "children", "class");
 
   return (
-    <div class={cn("flex flex-col space-y-1.5 p-6", local.class)} {...others}>
-      {local.children}
+    <div class={cn("flex flex-col space-y-1.5 p-6", props.class)} {...others}>
+      {props.children}
     </div>
   );
 };
@@ -120,11 +121,11 @@ export interface CardFooterProps {
 }
 
 export const CardFooter: Component<CardFooterProps> = (props) => {
-  const [local, others] = splitProps(props, ["children", "class"]);
+  const others = omit(props, "children", "class");
 
   return (
-    <div class={cn("flex items-center p-6 pt-0", local.class)} {...others}>
-      {local.children}
+    <div class={cn("flex items-center p-6 pt-0", props.class)} {...others}>
+      {props.children}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { cn } from "@tlib/shared/cn";
-import { For, type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 
 /**
  * A two-or-three-way choice between MODES, as one track of pressed buttons.
@@ -54,8 +55,8 @@ export function Segmented<T extends string>(props: {
             type="button"
             class="segment"
             title={option.hint}
-            aria-pressed={props.value === option.value}
-            aria-disabled={option.disabled === true}
+            aria-pressed={props.value === option.value ? "true" : "false"}
+            aria-disabled={option.disabled === true ? "true" : "false"}
             onClick={() => {
               if (option.disabled) return;
               if (props.value === option.value) return;

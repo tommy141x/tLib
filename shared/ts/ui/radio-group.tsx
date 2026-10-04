@@ -1,6 +1,7 @@
 import { RadioGroup as ArkRadioGroup } from "@ark-ui/solid/radio-group";
 import { cn } from "@tlib/shared/cn";
-import type { Component, JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import type { Component } from "solid-js";
 import { Motion } from "solid-motionone";
 
 type RadioGroupProps = {

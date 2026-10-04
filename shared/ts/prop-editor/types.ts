@@ -1,4 +1,4 @@
-import type { JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import type { VehicleMatrix } from "../gizmo/types";
 
 export type { VehicleMatrix };

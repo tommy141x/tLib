@@ -1,6 +1,7 @@
 import { Checkbox as ArkCheckbox } from "@ark-ui/solid";
 import { cn } from "@tlib/shared/cn";
-import { type JSX, Show, splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show, omit } from "solid-js";
 import IconCheck from "~icons/lucide/check";
 import IconMinus from "~icons/lucide/minus";
 
@@ -67,18 +68,18 @@ const LABEL_BASE =
   "font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 transition-colors duration-150 cursor-pointer select-none";
 
 export const Checkbox = (props: CheckboxProps & { size?: keyof typeof SIZES }) => {
-  const [local, others] = splitProps(props, ["children", "class", "size"]);
-  const sz = () => SIZES[local.size ?? "md"];
+  const others = omit(props, "children", "class", "size");
+  const sz = () => SIZES[props.size ?? "md"];
 
   return (
-    <ArkCheckbox.Root class={cn("flex items-center gap-2", local.class)} {...others}>
+    <ArkCheckbox.Root class={cn("flex items-center gap-2", props.class)} {...others}>
       <ArkCheckbox.Control class={cn(CONTROL_BASE, sz().control)}>
         <ArkCheckbox.Indicator class={INDICATOR_BASE}>
           <IconCheck class={sz().icon} />
         </ArkCheckbox.Indicator>
       </ArkCheckbox.Control>
-      <Show when={local.children}>
-        <ArkCheckbox.Label class={cn(LABEL_BASE, sz().label)}>{local.children}</ArkCheckbox.Label>
+      <Show when={props.children}>
+        <ArkCheckbox.Label class={cn(LABEL_BASE, sz().label)}>{props.children}</ArkCheckbox.Label>
       </Show>
       <ArkCheckbox.HiddenInput />
     </ArkCheckbox.Root>
@@ -91,14 +92,14 @@ export const CheckboxRoot = ArkCheckbox.Root;
 export const CheckboxHiddenInput = ArkCheckbox.HiddenInput;
 
 export const CheckboxLabel = (props: { children?: JSX.Element; class?: string }) => {
-  const [local, others] = splitProps(props, ["class"]);
-  return <ArkCheckbox.Label class={cn(LABEL_BASE, "text-[12px]", local.class)} {...others} />;
+  const others = omit(props, "class");
+  return <ArkCheckbox.Label class={cn(LABEL_BASE, "text-[12px]", props.class)} {...others} />;
 };
 
 export const CheckboxControl = (props: { children?: JSX.Element; class?: string }) => {
-  const [local, others] = splitProps(props, ["class"]);
+  const others = omit(props, "class");
   return (
-    <ArkCheckbox.Control class={cn(CONTROL_BASE, SIZES.md.control, local.class)} {...others} />
+    <ArkCheckbox.Control class={cn(CONTROL_BASE, SIZES.md.control, props.class)} {...others} />
   );
 };
 
@@ -107,15 +108,15 @@ export const CheckboxIndicator = (props: {
   children?: JSX.Element;
   class?: string;
 }) => {
-  const [local, others] = splitProps(props, ["class", "children", "indeterminate"]);
+  const others = omit(props, "class", "children", "indeterminate");
   return (
     <ArkCheckbox.Indicator
-      indeterminate={local.indeterminate}
-      class={cn(INDICATOR_BASE, local.class)}
+      indeterminate={props.indeterminate}
+      class={cn(INDICATOR_BASE, props.class)}
       {...others}
     >
-      {local.children || (
-        <Show when={local.indeterminate} fallback={<IconCheck class={SIZES.md.icon} />}>
+      {props.children || (
+        <Show when={props.indeterminate} fallback={<IconCheck class={SIZES.md.icon} />}>
           <IconMinus class={SIZES.md.icon} />
         </Show>
       )}
@@ -126,8 +127,8 @@ export const CheckboxIndicator = (props: {
 export const CheckboxGroup = (
   props: { children?: JSX.Element; class?: string } & Omit<ArkCheckbox.GroupProps, "class">
 ) => {
-  const [local, others] = splitProps(props, ["class"]);
-  return <ArkCheckbox.Group class={cn("flex flex-col gap-2", local.class)} {...others} />;
+  const others = omit(props, "class");
+  return <ArkCheckbox.Group class={cn("flex flex-col gap-2", props.class)} {...others} />;
 };
 
 export default Checkbox;

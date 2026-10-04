@@ -53,7 +53,7 @@ export function PreviewOverlay(props: {
               class="mp-action mp-delete"
               aria-label="Delete from server"
               disabled={busy()}
-              aria-busy={busy()}
+              aria-busy={busy() ? "true" : "false"}
               onClick={props.onUninstall}
             >
               <Show when={s().state === "uninstalling"} fallback={<IconTrash2 class="w-3 h-3" />}>
@@ -66,7 +66,7 @@ export function PreviewOverlay(props: {
             class="mp-action"
             tone={s().state === "installed" ? "default" : "primary"}
             disabled={busy()}
-            aria-busy={busy()}
+            aria-busy={busy() ? "true" : "false"}
             onClick={props.onInstall}
           >
             <Show when={s().state === "installing"} fallback={<IconDownload class="w-3 h-3" />}>
