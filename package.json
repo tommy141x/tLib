@@ -19,6 +19,7 @@
     "test:lua": "bun run scripts/test-lua.ts",
     "typecheck": "bunx tsc --noEmit -p client/web/tsconfig.json",
     "check:imports": "bun run scripts/check-relative-imports.ts",
+    "scan:solid2": "bun run scripts/solid2-scan.ts",
     "check:regression": "bun run typecheck && bun run check:imports && bun run test && bun run test:lua",
     "verify": "bun run lint && bun run check:regression && bun run build"
   },
