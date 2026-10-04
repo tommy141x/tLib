@@ -27,7 +27,7 @@ jobs:
 
       # shared/ts has its OWN tsconfig and its own jsx settings. The step
       # above is client/web's project, which pulls the shared TSX in under
-      # `jsxImportSource: "solid-js"` — so the Solid 2 surface was compiled
+      # `jsxImportSource: "solid-js"` â€” so the Solid 2 surface was compiled
       # only under the wrong jsx runtime and never under its own.
       - name: Typecheck shared
         run: bun run typecheck:shared
