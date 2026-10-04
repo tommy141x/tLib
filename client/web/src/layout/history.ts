@@ -1,4 +1,4 @@
-import { type Layout, sameLayout } from "./geometry";
+import { type Layout, sameLayout } from "@tlib/shared/hud-geometry";
 export interface Change {
   key: string;
   before: Layout;

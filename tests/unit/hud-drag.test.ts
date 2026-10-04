@@ -13,13 +13,13 @@ import {
   attachHudDrag,
   HUD_CONTROL_SELECTOR,
   isHudControl,
-} from "../../client/web/src/layout/drag";
+} from "../../shared/ts/hud-drag";
 import {
   constrainLayout,
   type Layout,
   layoutRect,
   MAX_OFFSET,
-} from "../../client/web/src/layout/geometry";
+} from "../../shared/ts/hud-geometry";
 
 // ── DOM harness ─────────────────────────────────────────────────────────────
 class FakeElement {

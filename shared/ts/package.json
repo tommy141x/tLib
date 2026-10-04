@@ -16,6 +16,8 @@
     "./rage/ytd": "./rage/ytd/index.ts",
     "./rage-viewer": "./rage-viewer/index.ts",
     "./deck": "./deck/index.ts",
+    "./hud-drag": "./hud-drag.ts",
+    "./hud-geometry": "./hud-geometry.ts",
     "./hud-layout": "./hud-layout.ts",
     "./hud-layout-scan": "./hud-layout-scan.ts",
     "./hud-preview-script": "./hud-preview-script.ts",

@@ -7,7 +7,7 @@ local anchors = { ['top-left'] = true, ['top-right'] = true, ['bottom-left'] = t
 -- Offsets are a ratio of a 1080px-tall reference screen -- the same unit the
 -- widget's own size scales by -- so a corner inset stays visually constant from
 -- 16:9 to 32:9. Centre-anchored X stays proportional to width. Mirrored by
--- layout/geometry.ts; the two must agree or the editor and the game disagree.
+-- shared/ts/hud-geometry.ts; the two must agree or the editor and the game disagree.
 S.REFERENCE_HEIGHT = 1080
 S.MAX_OFFSET = 4
 S.MIN_VISIBLE_PIXELS = 96
@@ -32,7 +32,7 @@ function S.layout(value, component)
     if not component.canScale and value.scale ~= component.defaults.scale then return nil end
     return S.copy(value)
 end
--- Recoverability constraint, shared with layout/geometry.ts. Applies to EVERY
+-- Recoverability constraint, shared with shared/ts/hud-geometry.ts. Applies to EVERY
 -- component: a widget must always be grabbable again, whatever put it where it
 -- is -- a drag, a resolution change, or a record written by an older version.
 -- Pixels are CSS pixels at the given viewport; fraction uses the rendered extent.

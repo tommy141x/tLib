@@ -19,7 +19,7 @@
 import type { DialogData } from "../client/web/src/components/dialog-model.ts";
 import type { MarketplaceItem, OpenData } from "../shared/ts/marketplace/ui/types.ts";
 import type { ToastData } from "../client/web/src/lib/toast-lifetime.ts";
-import type { Anchor, Component } from "../client/web/src/layout/geometry.ts";
+import type { Anchor, Component } from "../shared/ts/hud-geometry.ts";
 import type { LayoutOpen } from "../client/web/src/layout/LayoutEditor.tsx";
 import type { Branding, Snapshot } from "../client/web/src/menu/types.ts";
 

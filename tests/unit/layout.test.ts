@@ -17,7 +17,7 @@ import {
   resolveSnap,
   safezoneRect,
   scaleLayout,
-} from "../../client/web/src/layout/geometry";
+} from "../../shared/ts/hud-geometry";
 import { LayoutHistory } from "../../client/web/src/layout/history";
 
 const base: Layout = { x: 0, y: 0, scale: 1, visible: true, anchor: "top-left" };

@@ -1,5 +1,5 @@
 import type { HudLayoutClient, HudLayoutUpdate as Update } from "../../../shared/ts/hud-layout";
-import { layoutRect, MAX_OFFSET, REFERENCE_HEIGHT } from "./layout/geometry";
+import { layoutRect, MAX_OFFSET, REFERENCE_HEIGHT } from "@tlib/shared/hud-geometry";
 
 type Binding = {
   element: HTMLElement;

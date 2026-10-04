@@ -1,7 +1,7 @@
 import { Eye, EyeOff } from "lucide-solid";
 import { createMemo, For, Show } from "solid-js";
 import { NuiButton } from "@/components/ui/nui-field";
-import { type Component, type Corner, type Layout, layoutRect, type Viewport } from "./geometry";
+import { type Component, type Corner, type Layout, layoutRect, type Viewport } from "@tlib/shared/hud-geometry";
 
 const corners: Corner[] = ["nw", "ne", "sw", "se"];
 

@@ -1,6 +1,6 @@
-import type { HudAnchor as Anchor, HudLayout as Layout } from "../../../../shared/ts/hud-layout";
+import type { HudAnchor as Anchor, HudLayout as Layout } from "./hud-layout";
 
-export type { HudAnchor as Anchor, HudLayout as Layout } from "../../../../shared/ts/hud-layout";
+export type { HudAnchor as Anchor, HudLayout as Layout } from "./hud-layout";
 export interface Component {
   key: string;
   owner: string;

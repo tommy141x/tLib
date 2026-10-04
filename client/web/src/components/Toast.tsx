@@ -2,7 +2,7 @@ import { Toast as ArkToast, createToaster, Toaster } from "@ark-ui/solid/toast";
 import { CircleCheck, CircleX, Info, LoaderCircle, TriangleAlert } from "lucide-solid";
 import { createEffect, createSignal, type JSX, onCleanup, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { type Layout, layoutRect } from "@/layout/geometry";
+import { type Layout, layoutRect } from "@tlib/shared/hud-geometry";
 import { onNuiEvent } from "@/lib/nui";
 import {
   createToastLifetime,

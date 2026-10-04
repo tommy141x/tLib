@@ -35,7 +35,7 @@ import {
   sameLayout,
   scaleLayout,
   type Viewport,
-} from "./geometry";
+} from "@tlib/shared/hud-geometry";
 import { LayoutHistory } from "./history";
 import LayoutProxy from "./LayoutProxy";
 import { PreviewChannel } from "./preview";
