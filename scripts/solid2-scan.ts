@@ -48,8 +48,14 @@ const lineOf = (src: string, index: number) => src.slice(0, index).split("\n").l
 const textOf = (src: string, index: number) =>
   (src.split("\n")[lineOf(src, index) - 1] ?? "").trim();
 
+/** Original (un-blanked) source per file, so a finding reports the real line. */
+const ORIGINAL = new Map<string, string>();
+
 function hit(rule: string, file: string, src: string, index: number): Finding {
-  return { rule, file, line: lineOf(src, index), text: textOf(src, index).slice(0, 140) };
+  const line = lineOf(src, index);
+  const original = ORIGINAL.get(file) ?? src;
+  const text = (original.split("\n")[line - 1] ?? textOf(src, index)).trim();
+  return { rule, file, line, text: text.slice(0, 140) };
 }
 
 /**
@@ -65,6 +71,53 @@ const MOVED_TO_SOLIDJS_WEB = ["JSX", "ValidComponent"];
 
 /** `import ... from "<spec>"` with the binding list captured. Multi-line safe. */
 const IMPORT_RE = /import\s+(type\s+)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g;
+
+/**
+ * Blanks out comment bodies, keeping every byte position and newline.
+ *
+ * Needed because a migration leaves prose BEHIND that names the old API —
+ * "`createEffect(on(src, fn))` folds to `createEffect(src, fn)`" is the
+ * explanation of a finished change, not a finding. Without this the scanner can
+ * never reach zero without the comments being reworded to avoid it, which is
+ * exactly backwards: the note is the valuable part.
+ *
+ * It is a small state machine rather than a regex because a naive `//` strip eats
+ * the `//` in a URL inside a string literal, and that silently removes real code
+ * from the rest of the line.
+ */
+function stripComments(src: string): string {
+  const out = src.split("");
+  let i = 0;
+  const blank = (from: number, to: number) => {
+    for (let k = from; k < to; k++) if (out[k] !== "\n" && out[k] !== "\r") out[k] = " ";
+  };
+  while (i < src.length) {
+    const c = src[i];
+    const n = src[i + 1];
+    if (c === "/" && n === "/") {
+      let j = i;
+      while (j < src.length && src[j] !== "\n") j++;
+      blank(i, j);
+      i = j;
+    } else if (c === "/" && n === "*") {
+      const j = src.indexOf("*/", i + 2);
+      const end = j === -1 ? src.length : j + 2;
+      blank(i, end);
+      i = end;
+    } else if (c === '"' || c === "'" || c === "`") {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) {
+        if (src[j] === "\\") j++;
+        else if (src[j] === "\n" && c !== "`") break;
+        j++;
+      }
+      i = j + 1;
+    } else {
+      i++;
+    }
+  }
+  return out.join("");
+}
 
 /** Named bindings of an import match, with any inline `type` modifier stripped. */
 function bindingsOf(m: RegExpMatchArray): string[] {
@@ -225,7 +278,8 @@ function scan(files: { file: string; src: string }[]): Finding[] {
 // ---------------------------------------------------------------- the control
 
 const controlSrc = readFileSync(CONTROL, "utf8");
-const controlFindings = scan([{ file: CONTROL, src: controlSrc }]);
+ORIGINAL.set(CONTROL, controlSrc);
+const controlFindings = scan([{ file: CONTROL, src: stripComments(controlSrc) }]);
 const controlRules = new Set(controlFindings.map((f) => f.rule.split(":")[0]));
 const EXPECTED_IN_CONTROL = [...RULES.map((r) => r.id), "store-path-setter"];
 const deadRules = EXPECTED_IN_CONTROL.filter((id) => !controlRules.has(id));
@@ -246,7 +300,12 @@ if (deadRules.length > 0) {
 
 // ----------------------------------------------------------------- the scan
 
-const files = walk(SCAN_ROOT).map((file) => ({ file, src: readFileSync(file, "utf8") }));
+const files = walk(SCAN_ROOT).map((file) => {
+  const src = readFileSync(file, "utf8");
+  ORIGINAL.set(file, src);
+  // Rules run over comment-blanked source; see stripComments.
+  return { file, src: stripComments(src) };
+});
 const findings = scan(files);
 
 const byRule = new Map<string, number>();
