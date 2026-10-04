@@ -40,7 +40,15 @@ export interface BadgeProps {
    */
   onClick?: JSX.EventHandlerUnion<HTMLElement, MouseEvent>;
   class?: string;
-  style?: JSX.CSSProperties | string;
+  /**
+   * Solid's own union, not the hand-written `CSSProperties | string` this was.
+   * Solid 2 added `RemoveAttribute` (`undefined | false`) to every attribute
+   * value so an attribute can be removed, and the trigger props a Tooltip or
+   * Popover hands through `asChild` carry that wider `style`. Spelling it
+   * narrower here rejected every such call site on the `style` prop alone,
+   * before TypeScript ever reached the rest of the bag.
+   */
+  style?: JSX.CSSProperties | string | JSX.RemoveAttribute;
 }
 
 export const Badge: Component<BadgeProps> = (props) => {
