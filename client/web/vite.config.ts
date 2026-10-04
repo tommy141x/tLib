@@ -80,5 +80,5 @@ export default defineConfig(({ command }) => ({
     modulePreload: { polyfill: false },
     chunkSizeWarningLimit: 1000,
   },
-  plugins: [cleanOutDir(), Icons({ compiler: "solid" }), UnoCSS(), solid()],
+  plugins: [cleanOutDir(), Icons({ compiler: "solid", autoInstall: false }), UnoCSS(), solid()],
 }));
