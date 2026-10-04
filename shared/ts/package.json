@@ -33,6 +33,7 @@
     "./marketplace/agent": "./marketplace/agent.ts",
     "./cn": "./cn.ts",
     "./solid-compat/plugin": "./solid-compat/solid-1-compat-plugin.ts",
+    "./solid-compat/surface-suite": "./solid-compat/solid-compat-surface-suite.ts",
     "./prop-editor": "./prop-editor/index.tsx",
     "./prop-editor/numpad": "./prop-editor/numpad.ts",
     "./prop-editor/store": "./prop-editor/store.ts",
@@ -69,11 +70,16 @@
   },
   "devDependencies": {
     "@types/three": ">=0.150.0",
-    "unocss": "^66.6.7"
+    "unocss": "^66.6.7",
+    "@solidjs/vite-plugin": "3.0.0-next.47",
+    "@solidjs/web": "2.0.0-rc.13",
+    "solid-js": "2.0.0-rc.13",
+    "typescript": "7.0.2"
   },
   "peerDependencies": {
     "@ark-ui/solid": ">=5.39.2",
-    "solid-js": ">=1.8.0",
+    "@solidjs/web": ">=2.0.0-rc.13",
+    "solid-js": ">=2.0.0-rc.13",
     "three": ">=0.150.0",
     "unocss": ">=66.0.0",
     "solid-motionone": ">=1.0.4"

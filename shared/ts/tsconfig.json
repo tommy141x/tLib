@@ -5,15 +5,43 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "moduleResolution": "bundler",
     "jsx": "preserve",
-    "jsxImportSource": "solid-js",
+    // Solid 2: solid-js no longer ships `solid-js/jsx-runtime`. The renderer
+    // package owns the JSX types, so this has to name @solidjs/web — the same
+    // value tWeb, web-next, portfolio-next, ha-dash and tCAD all carry.
+    "jsxImportSource": "@solidjs/web",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
-    "moduleDetection": "force"
+    "moduleDetection": "force",
+    "paths": {
+      "@tlib/shared": ["./index.ts"],
+      "@tlib/shared/*": ["./*"]
+    }
   },
-  "include": ["src"],
-  "exclude": ["src/build"]
+  // The JSX surface and what it pulls in. This package has no build of its own —
+  // consumers compile it — so the roots are named here deliberately rather than
+  // globbing the directory: `build/` is Bun tooling, `rage*/scripts/` are CLI
+  // verifiers, and both have their own tsconfigs and their own runtime types.
+  //
+  // `solid-compat/` is excluded on purpose and must stay excluded: it is the
+  // vendor-import shim, it is REQUIRED to keep naming the Solid 1 surface, and
+  // it resolves through a `virtual:` specifier that only exists inside Vite.
+  "include": [
+    "env.d.ts",
+    "admin-ui/**/*.ts",
+    "admin-ui/**/*.tsx",
+    "marketplace/ui/**/*.ts",
+    "marketplace/ui/**/*.tsx",
+    "nui-kit/**/*.ts",
+    "nui-kit/**/*.tsx",
+    "prop-editor/**/*.ts",
+    "prop-editor/**/*.tsx",
+    "ui/**/*.ts",
+    "ui/**/*.tsx",
+    "cn.ts"
+  ],
+  "exclude": ["node_modules", "dist", "solid-compat"]
 }
