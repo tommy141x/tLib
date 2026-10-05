@@ -1,0 +1,34 @@
+diff --git a/dist/chunk/5WDOTHAF.js b/dist/chunk/5WDOTHAF.js
+index 2de40dab07c0c1ec471e31b6e1eb17750f1bb9fa..ba06f4950cfee80bbc95260455425e59affb6e75 100644
+--- a/dist/chunk/5WDOTHAF.js
++++ b/dist/chunk/5WDOTHAF.js
+@@ -46,11 +46,11 @@ var useCollapsible = (props = {}) => {
+   }));
+   const service = useMachine(collapsible.machine, machineProps);
+   const [wasVisible, setWasVisible] = createSignal(false);
++  const api = createMemo(() => collapsible.connect(service, normalizeProps));
+   createEffect(() => {
+     const isPresent = api().visible;
+     if (isPresent) setWasVisible(true);
+   });
+-  const api = createMemo(() => collapsible.connect(service, normalizeProps));
+   return createMemo(() => ({
+     ...api(),
+     unmounted: !api().visible && !wasVisible() && renderStrategyProps.lazyMount || renderStrategyProps.unmountOnExit && !api().visible && wasVisible()
+diff --git a/dist/chunk/YUGCBFMK.jsx b/dist/chunk/YUGCBFMK.jsx
+index 3439a5164f64724169f42eeef10a6b35d5b19602..4d94e2800012aca8bbb8fd76d067cbdb731869f2 100644
+--- a/dist/chunk/YUGCBFMK.jsx
++++ b/dist/chunk/YUGCBFMK.jsx
+@@ -65,11 +65,11 @@ var useCollapsible = (props = {}) => {
+   }));
+   const service = useMachine(collapsible.machine, machineProps);
+   const [wasVisible, setWasVisible] = createSignal(false);
++  const api = createMemo(() => collapsible.connect(service, normalizeProps));
+   createEffect(() => {
+     const isPresent = api().visible;
+     if (isPresent) setWasVisible(true);
+   });
+-  const api = createMemo(() => collapsible.connect(service, normalizeProps));
+   return createMemo(() => ({
+     ...api(),
+     unmounted: !api().visible && !wasVisible() && renderStrategyProps.lazyMount || renderStrategyProps.unmountOnExit && !api().visible && wasVisible()
