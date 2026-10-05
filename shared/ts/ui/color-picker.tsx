@@ -4,7 +4,6 @@ import type { JSX } from "@solidjs/web";
 import type { Component, ComponentProps } from "solid-js";
 import { For, Show, omit } from "solid-js";
 import { Portal } from "@solidjs/web";
-import { Motion, Presence } from "solid-motionone";
 import IconPipette from "~icons/lucide/pipette";
 import type { ComponentMeta } from "./meta.ts";
 
@@ -109,83 +108,68 @@ export const ColorPicker: Component<ColorPickerProps> & {
       <ArkColorPicker.Control class="flex items-center gap-2">
         <ArkColorPicker.ChannelInput
           channel="hex"
-          class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-all duration-200 file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-destructive"
+          class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-all duration-200 file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-destructive"
         />
-        <ArkColorPicker.Trigger class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 w-10 p-0 relative overflow-hidden">
+        <ArkColorPicker.Trigger class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 ease-out outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 w-10 p-0 relative overflow-hidden">
           <ArkColorPicker.ValueSwatch class="absolute inset-0 h-full w-full rounded-lg" />
         </ArkColorPicker.Trigger>
       </ArkColorPicker.Control>
       <Portal>
         <ArkColorPicker.Positioner>
-          <ArkColorPicker.Context>
-            {(context) => {
-              const isOpen = () => context().open;
+          {/* The enter transition is CSS keyed off Ark's own `data-state`, which
+              is what `ui/popover` and `ui/tooltip` already do. It replaced a
+              `Presence`/`Motion` pair that made `solid-motionone` -- and through
+              it `@motionone/dom` -- a runtime dependency of every consumer that
+              imports this file, for a 150ms fade on a page drawing over a 3D
+              scene in CEF 103. The trade is the exit animation: a CSS one needs
+              the element mounted and Ark unmounts it. */}
+          <ArkColorPicker.Content class="z-50 w-full min-w-[300px] max-w-sm rounded-md border border-border bg-background p-4 outline-none origin-[var(--transform-origin)] transition-[opacity,transform] duration-150 ease-out data-[state=open]:opacity-100 data-[state=open]:scale-100 data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.96]">
+            <div class="flex flex-col gap-3">
+              <ArkColorPicker.Area class="h-40 w-full rounded-lg border border-border relative">
+                <div class="absolute inset-0 overflow-hidden rounded-lg">
+                  <ArkColorPicker.AreaBackground class="h-full w-full" />
+                </div>
+                <ArkColorPicker.AreaThumb class="h-4 w-4 rounded-full border-2 border-white outline-none z-10" />
+              </ArkColorPicker.Area>
 
-              return (
-                <Presence exitBeforeEnter>
-                  <Show when={isOpen()}>
-                    <Motion.div
-                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                      transition={{
-                        duration: 0.15,
-                        easing: [0.16, 1, 0.3, 1],
-                      }}
-                    >
-                      <ArkColorPicker.Content class="z-50 w-full min-w-[300px] max-w-sm rounded-md border border-border bg-background p-4 outline-none">
-                        <div class="flex flex-col gap-3">
-                          <ArkColorPicker.Area class="h-40 w-full rounded-lg border border-border relative">
-                            <div class="absolute inset-0 overflow-hidden rounded-lg">
-                              <ArkColorPicker.AreaBackground class="h-full w-full" />
-                            </div>
-                            <ArkColorPicker.AreaThumb class="h-4 w-4 rounded-full border-2 border-white outline-none z-10" />
-                          </ArkColorPicker.Area>
+              <div class="flex flex-col gap-2">
+                <ArkColorPicker.ChannelSlider channel="hue">
+                  <ArkColorPicker.ChannelSliderTrack class="h-3 rounded-md bg-[linear-gradient(to_right,#ef4444,#eab308,#22c55e,#06b6d4,#3b82f6,#a855f7,#ef4444)]" />
+                  <ArkColorPicker.ChannelSliderThumb class="h-4 w-4 rounded-full border-2 border-white -translate-x-1/2 -translate-y-1/2" />
+                </ArkColorPicker.ChannelSlider>
 
-                          <div class="flex flex-col gap-2">
-                            <ArkColorPicker.ChannelSlider channel="hue">
-                              <ArkColorPicker.ChannelSliderTrack class="h-3 rounded-md bg-[linear-gradient(to_right,#ef4444,#eab308,#22c55e,#06b6d4,#3b82f6,#a855f7,#ef4444)]" />
-                              <ArkColorPicker.ChannelSliderThumb class="h-4 w-4 rounded-full border-2 border-white -translate-x-1/2 -translate-y-1/2" />
-                            </ArkColorPicker.ChannelSlider>
+                <Show when={props.showAlpha !== false}>
+                  <ArkColorPicker.ChannelSlider channel="alpha">
+                    <ArkColorPicker.TransparencyGrid size="8px" class="rounded-md" />
+                    <ArkColorPicker.ChannelSliderTrack class="h-3 rounded-md" />
+                    <ArkColorPicker.ChannelSliderThumb class="h-4 w-4 rounded-full border-2 border-white -translate-x-1/2 -translate-y-1/2" />
+                  </ArkColorPicker.ChannelSlider>
+                </Show>
+              </div>
 
-                            <Show when={props.showAlpha !== false}>
-                              <ArkColorPicker.ChannelSlider channel="alpha">
-                                <ArkColorPicker.TransparencyGrid size="8px" class="rounded-md" />
-                                <ArkColorPicker.ChannelSliderTrack class="h-3 rounded-md" />
-                                <ArkColorPicker.ChannelSliderThumb class="h-4 w-4 rounded-full border-2 border-white -translate-x-1/2 -translate-y-1/2" />
-                              </ArkColorPicker.ChannelSlider>
-                            </Show>
-                          </div>
+              <Show when={swatchColors().length > 0}>
+                <ArkColorPicker.SwatchGroup class="flex flex-wrap gap-2">
+                  <For each={swatchColors()}>
+                    {(color) => (
+                      <ArkColorPicker.SwatchTrigger
+                        value={color}
+                        class="relative h-8 w-8 rounded-md overflow-hidden border border-border cursor-pointer transition-transform hover:scale-110 outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1"
+                      >
+                        <ArkColorPicker.Swatch value={color} class="h-full w-full" />
+                      </ArkColorPicker.SwatchTrigger>
+                    )}
+                  </For>
+                </ArkColorPicker.SwatchGroup>
+              </Show>
 
-                          <Show when={swatchColors().length > 0}>
-                            <ArkColorPicker.SwatchGroup class="flex flex-wrap gap-2">
-                              <For each={swatchColors()}>
-                                {(color) => (
-                                  <ArkColorPicker.SwatchTrigger
-                                    value={color}
-                                    class="relative h-8 w-8 rounded-md overflow-hidden border border-border cursor-pointer transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                  >
-                                    <ArkColorPicker.Swatch value={color} class="h-full w-full" />
-                                  </ArkColorPicker.SwatchTrigger>
-                                )}
-                              </For>
-                            </ArkColorPicker.SwatchGroup>
-                          </Show>
-
-                          <Show when={props.showEyeDropper !== false}>
-                            <ArkColorPicker.EyeDropperTrigger class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">
-                              <IconPipette class="h-4 w-4" />
-                              Pick Color
-                            </ArkColorPicker.EyeDropperTrigger>
-                          </Show>
-                        </div>
-                      </ArkColorPicker.Content>
-                    </Motion.div>
-                  </Show>
-                </Presence>
-              );
-            }}
-          </ArkColorPicker.Context>
+              <Show when={props.showEyeDropper !== false}>
+                <ArkColorPicker.EyeDropperTrigger class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">
+                  <IconPipette class="h-4 w-4" />
+                  Pick Color
+                </ArkColorPicker.EyeDropperTrigger>
+              </Show>
+            </div>
+          </ArkColorPicker.Content>
         </ArkColorPicker.Positioner>
       </Portal>
       <ArkColorPicker.HiddenInput />
@@ -247,7 +231,7 @@ const ColorPickerTrigger: Component<{
   return (
     <ArkColorPicker.Trigger
       class={cn(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 w-10 p-0 relative overflow-hidden",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 ease-out outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 w-10 p-0 relative overflow-hidden",
         props.class
       )}
     >
@@ -291,36 +275,22 @@ const ColorPickerContent: Component<{
   class?: string;
 }> = (props) => {
   return (
-    <ArkColorPicker.Context>
-      {(context) => {
-        const isOpen = () => context().open;
-
-        return (
-          <Presence exitBeforeEnter>
-            <Show when={isOpen()}>
-              <Motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                transition={{
-                  duration: 0.15,
-                  easing: [0.16, 1, 0.3, 1],
-                }}
-              >
-                <ArkColorPicker.Content
-                  class={cn(
-                    "z-50 w-full min-w-[300px] max-w-sm rounded-md border border-border bg-background p-4 outline-none",
-                    props.class
-                  )}
-                >
-                  {props.children}
-                </ArkColorPicker.Content>
-              </Motion.div>
-            </Show>
-          </Presence>
-        );
-      }}
-    </ArkColorPicker.Context>
+    <ArkColorPicker.Content
+      class={cn(
+        "z-50 w-full min-w-[300px] max-w-sm rounded-md border border-border bg-background p-4 outline-none",
+        // The enter transition, in CSS, exactly as `ui/popover` and `ui/tooltip`
+        // do it. `data-state` is Ark's own attribute, so it cannot fall out of
+        // step with the component's state the way a parallel `Presence` signal
+        // can. There is no exit animation: a CSS one needs the element mounted
+        // and Ark unmounts it.
+        "origin-[var(--transform-origin)] transition-[opacity,transform] duration-150 ease-out",
+        "data-[state=open]:opacity-100 data-[state=open]:scale-100",
+        "data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.96]",
+        props.class
+      )}
+    >
+      {props.children}
+    </ArkColorPicker.Content>
   );
 };
 
@@ -391,7 +361,7 @@ const ColorPickerChannelInput: Component<{
   return (
     <ArkColorPicker.ChannelInput
       class={cn(
-        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-all duration-200 file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-destructive",
+        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-all duration-200 file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-destructive",
         props.class
       )}
       {...others}
@@ -432,7 +402,7 @@ const ColorPickerSwatchTrigger: Component<{
   return (
     <ArkColorPicker.SwatchTrigger
       class={cn(
-        "relative h-8 w-8 rounded-md overflow-hidden border border-border cursor-pointer transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed",
+        "relative h-8 w-8 rounded-md overflow-hidden border border-border cursor-pointer transition-transform hover:scale-110 outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:opacity-50 disabled:cursor-not-allowed",
         props.class
       )}
       {...others}
@@ -475,7 +445,7 @@ const ColorPickerEyeDropperTrigger: Component<{
   return (
     <ArkColorPicker.EyeDropperTrigger
       class={cn(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3",
         props.class
       )}
     >

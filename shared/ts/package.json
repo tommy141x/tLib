@@ -44,11 +44,9 @@
     "./ui/button": "./ui/button.tsx",
     "./ui/card": "./ui/card.tsx",
     "./ui/color-picker": "./ui/color-picker.tsx",
-    "./ui/hover-card": "./ui/hover-card.tsx",
     "./ui/kbd": "./ui/kbd.tsx",
     "./ui/meta": "./ui/meta.ts",
     "./ui/progress": "./ui/progress.tsx",
-    "./ui/radio-group": "./ui/radio-group.tsx",
     "./ui/separator": "./ui/separator.tsx",
     "./ui/slider": "./ui/slider.tsx",
     "./ui/switch": "./ui/switch.tsx",
@@ -81,8 +79,7 @@
     "@solidjs/web": ">=2.0.0-rc.13",
     "solid-js": ">=2.0.0-rc.13",
     "three": ">=0.150.0",
-    "unocss": ">=66.0.0",
-    "solid-motionone": ">=1.0.4"
+    "unocss": ">=66.0.0"
   },
   "patchedDependencies": {
     "@ark-ui/solid@5.39.2": "patches/@ark-ui%2Fsolid@5.39.2.patch",
