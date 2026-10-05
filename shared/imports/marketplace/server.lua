@@ -29,10 +29,81 @@ function marketplace.upsertSound(installedSounds, slug)
     return conflict
 end
 
--- Remove a sound entry by slug; clean flat toneWavMap references.
--- Returns the removed filename string, or nil if slug not found.
--- Caller is responsible for any per-model/nested map cleanup.
-function marketplace.removeSound(installedSounds, toneWavMap, slug)
+--- Clear every tone mapping that points at `filename`.
+---
+---     tlib.marketplace.forgetSoundFile(filename, toneWavMap, { modelToneWavMap })
+---
+--- `flatMap` is `key -> filename`. Each entry of `scopedMaps` is a map of
+--- `scope -> { key -> filename }` -- tRadio's per-model tone overrides, tELS's
+--- per-vehicle ones -- and a scope left with no keys is removed entirely rather
+--- than left as an empty table, because every consumer tests those maps with
+--- `next()` and an empty one reads as "this model has overrides".
+---
+--- ── WHY THIS IS SHARED, WHICH IT WAS NOT ───────────────────────────────────
+---
+--- `removeSound` used to say "Caller is responsible for any per-model/nested
+--- map cleanup", and FIVE call sites took that responsibility with the same
+--- eight lines: tRadio's `radio:removeInstalledSound`, its
+--- `radio:admin:webRemoveSound` and its marketplace `sounds.uninstalled`, and
+--- tELS's `tels:removeInstalledSound` and its marketplace `sounds.uninstalled`.
+---
+--- Leaving a mapping pointed at a file that is gone is not cosmetic: the NUI
+--- builds a download URL per entry, so it 404s instead of falling back to the
+--- shipped tone, and the device is silent for that event. It is the same class
+--- of fault as the reconcile-ordering cascade in soundstore's header, and the
+--- reason the sweep belongs with the removal rather than next to it.
+---
+--- All five copies agreed, so there was no divergence to resolve -- which is
+--- exactly the state in which the sixth copy, written from one of the other
+--- five, quietly leaves a map out. The flat sweep was already shared and the
+--- scoped one was not, for no reason other than that the signature only had
+--- room for one map.
+--- @return boolean changed
+function marketplace.forgetSoundFile(filename, flatMap, scopedMaps)
+    if type(filename) ~= "string" or filename == "" then return false end
+    local changed = false
+
+    if type(flatMap) == "table" then
+        for key, fname in pairs(flatMap) do
+            if fname == filename then
+                flatMap[key] = nil
+                changed = true
+            end
+        end
+    end
+
+    for _, scoped in ipairs(scopedMaps or {}) do
+        if type(scoped) == "table" then
+            for scope, map in pairs(scoped) do
+                if type(map) == "table" then
+                    for key, fname in pairs(map) do
+                        if fname == filename then
+                            map[key] = nil
+                            changed = true
+                        end
+                    end
+                    -- Emptied, so the scope goes too. Consumers test these with
+                    -- `next(map)`, and an empty table answers "yes, overrides".
+                    if next(map) == nil then
+                        scoped[scope] = nil
+                        changed = true
+                    end
+                end
+            end
+        end
+    end
+
+    return changed
+end
+
+--- Remove a sound entry by slug, and clear every mapping that pointed at its
+--- file -- flat and scoped.
+---
+--- `scopedMaps` is optional and has the shape `forgetSoundFile` documents. It
+--- was added because omitting it was the DEFAULT: the old contract told the
+--- caller to clean nested maps itself, and five call sites did.
+--- @return string|nil the removed filename, or nil when the slug was not found
+function marketplace.removeSound(installedSounds, toneWavMap, slug, scopedMaps)
     local removedFilename = nil
     for i, s in ipairs(installedSounds) do
         if s.slug == tostring(slug) then
@@ -41,10 +112,8 @@ function marketplace.removeSound(installedSounds, toneWavMap, slug)
             break
         end
     end
-    if removedFilename and toneWavMap then
-        for key, fname in pairs(toneWavMap) do
-            if fname == removedFilename then toneWavMap[key] = nil end
-        end
+    if removedFilename then
+        marketplace.forgetSoundFile(removedFilename, toneWavMap, scopedMaps)
     end
     return removedFilename
 end

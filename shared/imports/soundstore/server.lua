@@ -87,7 +87,10 @@ end
 --- Drop an installed sound by filename and clear every tone that used it.
 ---
 --- The map is swept too, because a mapping left pointing at a deleted file 404s
---- in the NUI rather than falling back.
+--- in the NUI rather than falling back. Through
+--- `tlib.marketplace.forgetSoundFile` rather than inline: that function is the
+--- one sweep, and it was extracted BECAUSE the same eight lines existed in five
+--- places outside this module. A copy here would have made six.
 --- @return boolean
 function Store:removeSound(filename)
     if type(filename) ~= "string" or filename == "" then return false end
@@ -97,9 +100,7 @@ function Store:removeSound(filename)
             break
         end
     end
-    for key, fname in pairs(self.toneWavMap) do
-        if fname == filename then self.toneWavMap[key] = nil end
-    end
+    tlib.marketplace.forgetSoundFile(filename, self.toneWavMap)
     self:save()
     return true
 end
