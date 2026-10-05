@@ -92,6 +92,44 @@ if gate(3) then fail('precondition broken') end
 drop(nil)
 if not gate(3) then fail('a sourceless playerDropped forgot every player') end
 
+-- ── The sweep is LIVE over the bucket table, not a snapshot of it ───────────
+--
+-- This is what a consumer relies on when it DELETES its own hand-written sweep
+-- line and keeps the bucket: tRadio's sv_radio.lua and sv_integrations.lua each
+-- cleared their timestamps from a consolidated playerDropped handler hundreds of
+-- lines from the limit. Removing those lines is only safe if the module's single
+-- handler reaches every bucket it owns, including ones opened after it was
+-- installed and after a disconnect has already been processed.
+--
+-- Asserted through the consequence, not by inspecting `buckets`: a bucket opened
+-- late must still treat a post-disconnect call as a FIRST call.
+
+local late = RateLimit.bucket('openedAfterADisconnect', 1000)
+now = 8000
+if late(4) then fail('precondition broken: player 4 has no timestamp in the late bucket') end
+drop(4)
+if late(4) then
+    fail('a bucket opened after the sweep was installed is not swept; a consumer that '
+        .. 'deleted its own playerDropped line in favour of this module would leak')
+end
+
+-- All of them at once, from ONE disconnect. The hand-written sweeps this module
+-- replaced each cleared exactly one named table, so "the module reaches every
+-- bucket" is the whole content of the migration.
+local many = {}
+for i = 1, 5 do many[i] = RateLimit.bucket('sweepAll' .. i, 1000) end
+now = 9000
+for i = 1, 5 do
+    if many[i](7) then fail('precondition broken: bucket ' .. i .. ' already held player 7') end
+end
+drop(7)
+for i = 1, 5 do
+    if many[i](7) then
+        fail('one disconnect did not reach bucket ' .. i .. ' of 5; a resource with several '
+            .. 'request-shaped events would leak from all but one of them')
+    end
+end
+
 -- ── One handler, not one per bucket ─────────────────────────────────────────
 --
 -- `playerDropped` is an ordinary event; N handlers would mean N table walks per
@@ -111,4 +149,98 @@ if pcall(RateLimit.bucket, nil, 1000) then fail('a nil bucket name was accepted'
 if pcall(RateLimit.bucket, 'x', nil) then fail('a nil interval was accepted') end
 if pcall(RateLimit.bucket, 'x', -1) then fail('a negative interval was accepted') end
 
-print('PASS ratelimit')
+-- ── ⚠️ NEGATIVE CONTROLS ────────────────────────────────────────────────────
+--
+-- Two sweeps that are wrong in ways nothing raises about, asserted to be caught
+-- by the scenarios above. Reported BY NAME, never by count: the point of a
+-- control is to say which rule is doing the catching, and a total goes stale.
+
+local controls = {}
+
+--- A sweep that captured the bucket list at install time instead of reading it
+--- live. This is the shape you get by writing the handler once, next to the
+--- first bucket, which is exactly how the hand-written copies were written.
+controls['sweep over a snapshot of the bucket list'] = function()
+    local buckets = {}
+    local installed = false
+    local snapshot
+    local function open(name)
+        local b = buckets[name] or {}
+        buckets[name] = b
+        if not installed then
+            installed = true
+            snapshot = {}
+            for _, v in pairs(buckets) do snapshot[#snapshot + 1] = v end
+        end
+        return function(src, t)
+            local last = b[src]
+            if last and (t - last) < 1000 then return true end
+            b[src] = t
+            return false
+        end
+    end
+    local function sweep(src)
+        for _, b in ipairs(snapshot) do b[src] = nil end
+    end
+
+    local first = open('first')
+    first(1, 0)
+    local late = open('late')
+    late(1, 0)
+    sweep(1)
+    -- Correct behaviour: BOTH buckets forget player 1, so both treat the next
+    -- call as a first call.
+    return first(1, 100) == false and late(1, 100) == false
+end
+
+--- A sweep that only clears the bucket it was registered alongside -- one
+--- handler per call site, each naming its own table. Six of the seven copies
+--- this module replaced were exactly this.
+controls['sweep clears only its own bucket'] = function()
+    local a, b = {}, {}
+    local function gateOver(t)
+        return function(src, now)
+            local last = t[src]
+            if last and (now - last) < 1000 then return true end
+            t[src] = now
+            return false
+        end
+    end
+    local ga, gb = gateOver(a), gateOver(b)
+    ga(1, 0)
+    gb(1, 0)
+    a[1] = nil -- only the first site remembered to sweep
+    return ga(1, 100) == false and gb(1, 100) == false
+end
+
+local EXPECTED_REFUSED = {
+    ['sweep over a snapshot of the bucket list'] = true,
+    ['sweep clears only its own bucket'] = true,
+}
+
+local refused, slipped = {}, {}
+for name, fn in pairs(controls) do
+    local ok, satisfied = pcall(fn)
+    if (not ok) or satisfied ~= true then
+        refused[#refused + 1] = name
+    else
+        slipped[#slipped + 1] = name
+    end
+end
+table.sort(refused)
+table.sort(slipped)
+
+for _, name in ipairs(slipped) do
+    fail(('⚠️ negative control "%s" PASSED. It re-implements a sweep this module '
+        .. 'exists to replace, so the scenario meant to catch it is not '
+        .. 'discriminating.'):format(name))
+end
+local want = {}
+for name in pairs(EXPECTED_REFUSED) do want[#want + 1] = name end
+table.sort(want)
+if table.concat(refused, '|') ~= table.concat(want, '|') then
+    fail(('the set of controls refused is [%s]; declared [%s]')
+        :format(table.concat(refused, ', '), table.concat(want, ', ')))
+end
+
+print('PASS ratelimit (' .. #refused .. ' negative controls, all refused)')

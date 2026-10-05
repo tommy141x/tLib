@@ -5,6 +5,46 @@ lua54 'yes'
 author 'Tommy Johnston'
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM)'
+-- 0.16.0 closes out two duplications a name-agnostic scan found and the 0.15.0
+-- settings work did NOT absorb, plus one place where two copies of the same
+-- writer disagreed about which of them was correct.
+--
+-- `soundfields` (shared/imports/soundfields/client.lua): the Sounds tab of a
+-- settings dialog. tDetector's and tRadar's client/cl_settings.lua each carried
+-- the whole of it -- the field builder was 86 lines identical in both, and the
+-- open-tab refresh handler was identical in its body. Re-measured after 0.15.0:
+-- 287 of 482 and 639 lines still matched, and this was the largest block.
+-- Normalising the three things that actually varied leaves nothing behind: the
+-- device noun in one section label, the dialog id, and one reworded sentence.
+--
+-- It is a module rather than a copy because both hazards in it are ORDERING
+-- ones that raise nothing when you get them wrong. The refresh must key off
+-- what was DRAWN rather than off the arriving config -- a key added
+-- server-side after the dialog opened has no control to patch, and addressing
+-- a field that does not exist is not something UpdateDialogField can report --
+-- and `options` must travel in the SAME patch as `defaultValue`, because the
+-- value is validated against the options it arrives with. tests/lua/
+-- soundfields.lua pins both, with five negative controls that each
+-- re-implement one of them wrongly and are asserted to be refused.
+--
+-- `shared/ts/audio/wav.ts` gains `encodeWav`/`writeWav` and
+-- `decodeWavChannels`. ⚠️ This one is a BEHAVIOUR change, and deliberately:
+-- there were four copies of the writer and two of them scaled negative samples
+-- SYMMETRICALLY (`v * 32767`), which is one LSB short of the int16 floor. The
+-- 0.15.0 reader consolidation left the writers alone on the grounds that
+-- unifying them changes emitted bytes. It does -- 11,978 of 48,000 samples on
+-- a full-scale ramp, every one negative, every one by exactly 1, -90.3 dBFS --
+-- and that delta IS the bug rather than a reason not to touch it. The 44-byte
+-- header is unchanged in every case. `decodeWavChannels` exists because the
+-- fifth reader copy this absorbed (tRadio's fix-ambient-assets.ts) edits per
+-- channel and writes back, so `decodeWav`'s mono downmix genuinely could not
+-- serve it. tests/unit/wav-encode.test.ts runs the retired symmetric body as
+-- its negative control and pins the measured delta.
+--
+-- Additive otherwise: nothing that worked against 0.15.0 behaves differently,
+-- `decodeWav`/`readWav` included -- they now downmix from `decodeWavChannels`
+-- and the existing 23-case suite passes unchanged.
+--
 -- 0.15.0 is the shared answer to two cross-cutting duplications a
 -- filename-based scan cannot see: Escape ownership, and settings persistence.
 --
@@ -199,7 +239,7 @@ description 'tLib — shared UI and utility library (FiveM)'
 -- Both are additive — nothing that worked against 0.11.0 behaves differently. The bump
 -- exists so a consumer can PIN them via tlib_min_version, which is what imports.lua's
 -- header calls the real guarantee: a capability probe cannot report its own absence.
-version '0.15.0'
+version '0.16.0'
 
 -- Layout note: the top-level folder is the VM a file is loaded into, matching
 -- every other resource here. Where one module spans VMs -- the platform adapter
