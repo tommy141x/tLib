@@ -1,7 +1,8 @@
 import { Toast as ArkToast, createToaster, Toaster } from "@ark-ui/solid/toast";
 import { CircleCheck, CircleX, Info, LoaderCircle, TriangleAlert } from "lucide-solid";
-import { createEffect, createSignal, type JSX, onCleanup, Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { createEffect, createSignal, onCleanup, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Dynamic } from "@solidjs/web";
 import { type Layout, layoutRect } from "@tlib/shared/hud-geometry";
 import { onNuiEvent } from "@/lib/nui";
 import {
@@ -10,7 +11,7 @@ import {
   type ToastData,
   type ToastType,
 } from "@/lib/toast-lifetime";
-import { applyScopedTheme } from "@/stores/theme-store";
+import { applyScopedTheme, themeRevision } from "@/stores/theme-store";
 import "../../../../shared/ts/nui-kit/nui.css";
 
 const ICONS = {
@@ -126,13 +127,23 @@ export default function Toast() {
       class="tlib-nui-toasts"
       style={placementStyle()}
       aria-label="Notifications"
-      tabIndex={-1}
+      tabindex={-1}
     >
       {(toast) => (
         <ArkToast.Root
-          ref={(el) => createEffect(() => applyScopedTheme(toast().meta?.theme, el))}
+          ref={(el) =>
+            createEffect(
+              // themeRevision() in compute: applyScopedTheme reads it
+              // internally, and an apply-half read subscribes to nothing.
+              () => {
+                themeRevision();
+                return toast().meta?.theme;
+              },
+              (theme) => applyScopedTheme(theme, el)
+            )
+          }
           data-toast-id={toast().id}
-          tabIndex={-1}
+          tabindex={-1}
           class="tlib-nui-surface tlib-nui-toast flex shrink-0 items-start gap-3 rounded-xl border border-[var(--nui-border)] bg-[var(--nui-surface)] px-4 py-3 text-[var(--nui-text)]"
           style={{
             position: "relative",

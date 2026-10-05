@@ -32,6 +32,17 @@ function applyTheme(): void {
 }
 
 const [themeRevision, setThemeRevision] = createSignal(0);
+/**
+ * The dependency `applyScopedTheme` reads internally, exported so a Solid 2
+ * `createEffect(compute, apply)` can read it in COMPUTE.
+ *
+ * Only `compute` tracks. `applyScopedTheme` is a DOM write and belongs in
+ * `apply`, but its own `themeRevision()` read would then subscribe to nothing
+ * and a late theme registration would stop repainting — with no error, and
+ * nothing in the markup to show for it. Every caller reads this alongside the
+ * theme id it is passing.
+ */
+export { themeRevision };
 const scopedProperties = new WeakMap<HTMLElement, string[]>();
 
 export function applyScopedTheme(themeId: string | undefined, el: HTMLElement): void {

@@ -31,7 +31,7 @@ export default function ComponentList(props: {
             const layout = () => props.layoutOf(component);
             const selected = () => props.selected === component.key;
             return (
-              <li class="tlib-layout__row" classList={{ "tlib-layout__row--selected": selected() }}>
+              <li class={["tlib-layout__row", { "tlib-layout__row--selected": selected() }]}>
                 <button
                   type="button"
                   class="tlib-layout__row-select"

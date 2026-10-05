@@ -66,11 +66,19 @@ import Volume2 from "lucide-solid/icons/volume-2";
 import VolumeOff from "lucide-solid/icons/volume-off";
 import Wind from "lucide-solid/icons/wind";
 import X from "lucide-solid/icons/x";
-import type { Component, JSX } from "solid-js";
+import type { LucideProps } from "lucide-solid";
+import type { Component } from "solid-js";
 
-export type IconComponent = Component<
-  JSX.SvgSVGAttributes<SVGSVGElement> & { size?: number | string; strokeWidth?: number | string }
->;
+// Built from lucide-solid's OWN props type rather than from Solid 2's
+// `JSX.SvgSVGAttributes`. Props are contravariant, so an alias even slightly
+// WIDER than what the real components accept makes every one of the 99
+// re-exports below fail to satisfy it — and it reports as 99 unrelated icon
+// errors rather than as one type being too generous. Solid 2 widened several
+// SVG attributes (`class` to the whole `ClassValue` union, `width`/`height`
+// to include `RemoveAttribute`), and narrowing them back one at a time was
+// whack-a-mole: `LucideProps` is the single honest description, and it
+// already carries `size` and `strokeWidth`.
+export type IconComponent = Component<LucideProps>;
 
 // Chrome affordances. These replace text glyphs, so they are decorative and the
 // caller marks them aria-hidden; the surrounding control carries the label.

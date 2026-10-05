@@ -34,7 +34,7 @@ import {
 } from "./dialog-view-state";
 import { MarketplaceBrowser } from "./marketplace/MarketplaceBrowser";
 import { NuiButton, NuiField } from "./ui/nui-field";
-import { applyNuiTheme } from "./ui/nui-theme";
+import { applyNuiTheme, nuiThemeDeps } from "./ui/nui-theme";
 
 const SIZE_W = { sm: "300px", md: "360px", lg: "440px", xl: "760px" };
 
@@ -292,33 +292,52 @@ function DialogSession(props: {
       offset: offset(),
     });
   }
-  createEffect(persistView);
+  // Solid 2's two-argument form is a PHASE CONTRACT: only the first function
+  // tracks. `persistView` reads `activeTab()` and `offset()`, so those reads
+  // have to happen in compute — passing it as the apply half would subscribe to
+  // nothing and persist exactly once.
+  createEffect(
+    () => ({ tab: activeTab(), offset: offset() }),
+    (view) =>
+      rememberDialogView(props.initial.id, {
+        tab: view.tab,
+        scroll: scrollByTab,
+        offset: view.offset,
+      })
+  );
   function recordScroll(event: Event) {
     scrollByTab[scrollKey()] = (event.currentTarget as HTMLElement).scrollTop;
     persistView();
   }
   // A restore is clamped again here because the remembered offset was clamped
   // against whatever the window and panel measured last time.
-  createEffect(() => {
-    if (!props.open || !panel) return;
-    setOffset((current) => clampOffset(current, dragBounds()));
-  });
+  createEffect(
+    () => ({ open: props.open, bounds: dragBounds() }),
+    ({ open, bounds }) => {
+      if (!open || !panel) return;
+      setOffset((current) => clampOffset(current, bounds));
+    }
+  );
   // Per tab, not per dialog: restoring one tab's scroll onto another's panel
   // would land somewhere the player never was. A `view` tab renders no scroll
   // host at all, which is why this reads the host reactively.
-  createEffect(() => {
-    const host = scrollHost();
-    const key = scrollKey();
-    if (!host || !props.open) return;
-    host.scrollTop = scrollByTab[key] ?? 0;
-  });
+  createEffect(
+    () => ({ host: scrollHost(), key: scrollKey(), open: props.open }),
+    ({ host, key, open }) => {
+      if (!host || !open) return;
+      host.scrollTop = scrollByTab[key] ?? 0;
+    }
+  );
 
-  createEffect(() => {
-    if (props.open) return;
-    endDrag();
-    const focused = document.activeElement;
-    if (focused instanceof HTMLElement && panel?.contains(focused)) focused.blur();
-  });
+  createEffect(
+    () => props.open,
+    (open) => {
+      if (open) return;
+      endDrag();
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && panel?.contains(focused)) focused.blur();
+    }
+  );
 
   return (
     <ArkDialog.Root
@@ -349,10 +368,19 @@ function DialogSession(props: {
         <ArkDialog.Content
           ref={(el) => {
             panel = el;
-            createEffect(() => applyNuiTheme(dialog().theme, el));
+            createEffect(
+              // `nuiThemeDeps()` is read here, in COMPUTE, because the revision
+              // signals applyNuiTheme reads internally would subscribe to
+              // nothing from the apply half — see its doc comment.
+              () => {
+                nuiThemeDeps();
+                return dialog().theme;
+              },
+              (theme) => applyNuiTheme(theme, el)
+            );
           }}
           inert={!props.open}
-          aria-hidden={!props.open ? true : undefined}
+          aria-hidden={!props.open ? "true" : undefined}
           class="tlib-nui-surface tlib-nui-dialog tlib-nui-lit pointer-events-auto flex max-w-full flex-col overflow-hidden rounded-[var(--nui-radius-lg)] border border-[var(--nui-border)] bg-[var(--nui-surface)] outline-none"
           style={{
             width: SIZE_W[dialog().size] ?? SIZE_W.md,
@@ -385,7 +413,7 @@ function DialogSession(props: {
               <X size={16} />
             </ArkDialog.CloseTrigger>
           </header>
-          <form class="flex min-h-0 flex-col" noValidate onSubmit={submit}>
+          <form class="flex min-h-0 flex-col" novalidate onSubmit={submit}>
             <Tabs.Root
               value={activeTab()}
               orientation="vertical"

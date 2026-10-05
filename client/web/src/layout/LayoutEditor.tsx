@@ -1,17 +1,15 @@
 import { Check, Grip, LayoutDashboard, Redo2, RotateCcw, Undo2, X } from "lucide-solid";
 import {
-  batch,
   createMemo,
   createRenderEffect,
   createSignal,
+  createStore,
   For,
-  onCleanup,
-  onMount,
+  onSettled,
   Show,
 } from "solid-js";
-import { createStore } from "solid-js/store";
 import { NuiButton } from "@/components/ui/nui-field";
-import { applyNuiTheme } from "@/components/ui/nui-theme";
+import { applyNuiTheme, nuiThemeDeps } from "@/components/ui/nui-theme";
 import { fetchNui, onNuiEvent } from "@/lib/nui";
 import ComponentList from "./ComponentList";
 import {
@@ -117,7 +115,9 @@ export default function LayoutEditor() {
     // undo and resize-response goes through here, so all of them are clamped.
     // The anchor is re-derived once at gesture end; mid-drag it would thrash.
     const next = constrainLayout(component, layout, viewport());
-    setLayouts(key, next);
+    setLayouts((draft) => {
+      draft[key] = next;
+    });
     preview.queue(key, next);
   }
 
@@ -328,10 +328,8 @@ export default function LayoutEditor() {
       dy = move.y - held.y;
     const corner = held.corner;
     if (corner) {
-      batch(() => {
-        update(component.key, resizeLayout(component, held.before, viewport(), corner, dx, dy));
-        setScalingKey(component.key);
-      });
+      update(component.key, resizeLayout(component, held.before, viewport(), corner, dx, dy));
+      setScalingKey(component.key);
       return;
     }
     const start = layoutRect(component, held.before, viewport());
@@ -347,11 +345,11 @@ export default function LayoutEditor() {
     }
     const placed = placeRect(held.before, { ...start, left, top }, viewport());
     // One update pass for the guides and the placement together, so the frame
-    // cannot paint a guide line against the previous position.
-    batch(() => {
-      setGuides(snapGuides);
-      update(component.key, placed);
-    });
+    // cannot paint a guide line against the previous position. Solid 2 defers
+    // every write to the end of the tick, so this no longer needs a `batch`
+    // wrapper to get that — the two writes land together by construction.
+    setGuides(snapGuides);
+    update(component.key, placed);
   }
   function queuePointerMove() {
     if (!moveFrame) moveFrame = requestAnimationFrame(applyPointerMove);
@@ -551,7 +549,7 @@ export default function LayoutEditor() {
     setSession(null);
     setFinishing(false);
     setComponents([]);
-    setLayouts({});
+    setLayouts(() => ({}));
     setGuides({});
     setScalingKey("");
     previousFocus?.isConnected && previousFocus.focus({ preventScroll: true });
@@ -588,7 +586,7 @@ export default function LayoutEditor() {
     }
   }
 
-  onMount(() => {
+  onSettled(() => {
     const offOpen = onNuiEvent<LayoutOpen>("layoutOpen", (data) => {
       if (!Number.isFinite(data.session) || data.session <= highSession) return;
       highSession = data.session;
@@ -601,10 +599,11 @@ export default function LayoutEditor() {
       setViewport({ width: window.innerWidth, height: window.innerHeight });
       setComponents(data.components);
       setLayouts(
-        Object.fromEntries(data.components.map((c) => [c.key, { ...c.layout }])) as Record<
-          string,
-          Layout
-        >
+        () =>
+          Object.fromEntries(data.components.map((c) => [c.key, { ...c.layout }])) as Record<
+            string,
+            Layout
+          >
       );
       setSelected(data.components[0]?.key ?? "");
       setSafezone(data.safezone);
@@ -633,7 +632,9 @@ export default function LayoutEditor() {
       history.remove(data.key);
       tick();
       setComponents((all) => all.filter((c) => c.key !== data.key));
-      setLayouts(data.key, undefined!);
+      setLayouts((draft) => {
+        delete draft[data.key];
+      });
       if (selected() === data.key) setSelected(components()[0]?.key ?? "");
     });
     void fetchNui("layoutReady", {
@@ -650,7 +651,9 @@ export default function LayoutEditor() {
     window.addEventListener("keyup", keyUp);
     window.addEventListener("resize", resized);
     window.addEventListener("blur", blurred);
-    onCleanup(() => {
+    // Solid 2's `onSettled` takes its teardown as the RETURNED function rather
+    // than through `onCleanup` inside the body.
+    return () => {
       offOpen();
       offClose();
       offRemove();
@@ -663,7 +666,7 @@ export default function LayoutEditor() {
       window.removeEventListener("resize", resized);
       window.removeEventListener("blur", blurred);
       stop();
-    });
+    };
   });
 
   const safeRect = createMemo(() => safezoneRect(viewport(), safezone()));
@@ -672,10 +675,13 @@ export default function LayoutEditor() {
       <div
         ref={(element) => {
           surface = element;
-          createRenderEffect(() => applyNuiTheme(undefined, element));
+          // Two-argument form. There is no theme id to track here, but
+          // applyNuiTheme's own revision reads still have to happen in compute
+          // or a later setTheme stops repainting this surface.
+          createRenderEffect(nuiThemeDeps, () => applyNuiTheme(undefined, element));
         }}
         class="tlib-layout tlib-nui-surface"
-        tabIndex={-1}
+        tabindex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="HUD layout editor"
@@ -719,8 +725,7 @@ export default function LayoutEditor() {
         </For>
         <aside
           ref={attachPanel}
-          class="tlib-layout__panel"
-          classList={{ "tlib-layout__panel--dragging": panelDragging() }}
+          class={["tlib-layout__panel", { "tlib-layout__panel--dragging": panelDragging() }]}
           style={
             panelPosition()
               ? {

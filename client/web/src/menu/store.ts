@@ -1,5 +1,4 @@
-import { batch, createSignal } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
+import { createSignal, createStore, reconcile } from "solid-js";
 import { locale, setLocale } from "./i18n";
 import { isItem, normalizeAnchor, withinPresentationBudget } from "./protocol";
 import type { Anchor, Branding, Menu, NuiMessage, SearchEntry, Snapshot } from "./types";
@@ -23,8 +22,10 @@ export function createMenuStore() {
   // must not stay hidden into the next open, but a snapshot arriving while the
   // pause menu is up must not put the menu back on screen behind it.
   function setVisible(next: boolean) {
-    setState("visible", next);
-    if (!next) setState("hidden", false);
+    setState((s) => {
+      s.visible = next;
+      if (!next) s.hidden = false;
+    });
   }
   // A signal rather than part of the store: at ~2,300 entries and ~51,000 option
   // labels, createStore would mint a child proxy for every entry and string array
@@ -43,9 +44,10 @@ export function createMenuStore() {
   }
   function snapshot(data: Snapshot) {
     sizes.clear();
-    batch(() => {
-      setState("menus", reconcile(data.menus, { key: "id" }));
-      setVisible(data.visible);
+    setState((s) => {
+      reconcile(data.menus, "id")(s.menus);
+      s.visible = data.visible;
+      if (!data.visible) s.hidden = false;
     });
   }
   function updateMenus(updates: Menu[]): boolean {
@@ -64,10 +66,10 @@ export function createMenuStore() {
       )
     )
       return false;
-    batch(() => {
+    setState((s) => {
       for (const update of updates) {
-        const index = state.menus.findIndex((menu) => menu.id === update.id);
-        setState("menus", index, reconcile(update, { key: "id" }));
+        const index = s.menus.findIndex((menu) => menu.id === update.id);
+        reconcile(update, "id")(s.menus[index]!);
       }
     });
     return true;
@@ -78,22 +80,29 @@ export function createMenuStore() {
         snapshot(message.data);
         break;
       case "menu:visible":
-        batch(() => setVisible(message.data));
+        setVisible(message.data);
         break;
       // Hidden means "visible and off screen", so arriving while closed is a
       // no-op rather than a state the next open inherits.
       case "menu:hidden":
-        if (state.visible || !message.data) setState("hidden", message.data);
+        if (state.visible || !message.data)
+          setState((s) => {
+            s.hidden = message.data;
+          });
         break;
       // parseMessage already accepted it; the normalizer runs again only to turn
       // source's 'left'/'right' into corners the stylesheet has classes for.
       case "menu:align":
-        setState("align", normalizeAnchor(message.data) ?? state.align);
+        setState((s) => {
+          s.align = normalizeAnchor(message.data) ?? s.align;
+        });
         break;
       // Configuration, not content: replaced whole, so a server that drops its
       // banner gets the plain header back rather than a merge of the two.
       case "menu:branding":
-        setState("branding", reconcile(message.data, { key: null }));
+        setState((s) => {
+          reconcile(message.data, null)(s.branding);
+        });
         break;
       // Held by i18n.ts, not the store: nothing reconciles against a locale, and
       // every component down to MenuRow reads it without being passed a prop.
@@ -102,7 +111,9 @@ export function createMenuStore() {
         setLocale(message.data);
         break;
       case "menu:palettes":
-        setState("palettes", reconcile(message.data, { key: null }));
+        setState((s) => {
+          reconcile(message.data, null)(s.palettes);
+        });
         break;
       // Replaced whole, as the game rebuilds it: the index describes one
       // permission-filtered catalog, and merging would leave revoked rows
@@ -117,13 +128,17 @@ export function createMenuStore() {
           .filter((menu) => menu.id !== message.data.id)
           .concat(message.data);
         if (!budget(candidate, [message.data.id])) break;
-        if (index < 0) setState("menus", state.menus.length, message.data);
-        else setState("menus", index, reconcile(message.data, { key: "id" }));
+        setState((s) => {
+          if (index < 0) s.menus.push(message.data);
+          else reconcile(message.data, "id")(s.menus[index]!);
+        });
         break;
       }
       case "menu:remove":
         sizes.delete(message.data.menuId);
-        setState("menus", (menus) => menus.filter((menu) => menu.id !== message.data.menuId));
+        setState((s) => {
+          s.menus = s.menus.filter((menu) => menu.id !== message.data.menuId);
+        });
         break;
       case "menu:patch": {
         const { menuId, itemId, changes } = message.data;
@@ -133,7 +148,9 @@ export function createMenuStore() {
         if (item < 0 || !isItem({ ...state.menus[menu]!.items[item], ...changes })) break;
         // A patch rewrites the page in place, so its cached size no longer holds.
         sizes.delete(menuId);
-        setState("menus", menu, "items", item, changes);
+        setState((s) => {
+          Object.assign(s.menus[menu]!.items[item]!, changes);
+        });
         break;
       }
     }

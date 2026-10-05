@@ -10,7 +10,8 @@
 // and pending flow, onCycle and changeSlider for itself.
 
 import Check from "lucide-solid/icons/check";
-import { type JSX, Show, splitProps } from "solid-js";
+import { omit, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import "../../../../../shared/ts/nui-kit/nui.css";
 
 /** Shared with Ark's Checkbox.Control, which wears the same class. */
@@ -49,16 +50,24 @@ export function NuiCheckbox(props: { checked: boolean; class?: string }) {
 export function NuiRange(
   props: JSX.InputHTMLAttributes<HTMLInputElement> & { fill: number; color?: string }
 ) {
-  const [local, rest] = splitProps(props, ["fill", "color", "class", "style"]);
+  // `omit` is Solid 2's `splitProps`, and it returns the REST BAG ALONE rather
+  // than a [local, rest] pair. There are no defaults to merge in here, so the
+  // four extracted keys are simply read back off `props`, which is still the
+  // live, reactive source for them.
+  const rest = omit(props, "fill", "color", "class", "style");
   return (
     <input
       {...rest}
       type="range"
-      class={`tlib-nui-control tlib-nui-range${local.class ? ` ${local.class}` : ""}`}
+      // Array form, not a template literal: UnoCSS tokenises `foo${` as two
+      // broken candidates, so a utility immediately before an interpolation is
+      // never extracted. These are hand-written `tlib-` classes rather than
+      // utilities, but the form is the house rule because the failure is silent.
+      class={["tlib-nui-control tlib-nui-range", props.class]}
       style={{
-        "--nui-range-fill": `${Math.max(0, Math.min(1, local.fill)) * 100}%`,
-        ...(local.color ? { "--nui-range-color": local.color } : {}),
-        ...(typeof local.style === "object" ? local.style : {}),
+        "--nui-range-fill": `${Math.max(0, Math.min(1, props.fill)) * 100}%`,
+        ...(props.color ? { "--nui-range-color": props.color } : {}),
+        ...(typeof props.style === "object" ? props.style : {}),
       }}
     />
   );

@@ -1,9 +1,13 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
+import solidPlugin from "@solidjs/vite-plugin";
 import UnoCSS from "unocss/vite";
 import Icons from "unplugin-icons/vite";
-import solid from "vite-plugin-solid";
 import { defineConfig, type Plugin } from "vite-plus";
+// Imported BY PATH, not through an alias: a vite config is loaded before
+// `resolve.alias` exists, so an alias cannot name it.
+import { solid1CompatShim } from "../../shared/ts/solid-compat/solid-1-compat-plugin";
+import { VENDOR_PACKAGES } from "./vite/solid-compat-vendors";
 
 // The build writes to client/ui (fxmanifest's ui_page), and that directory is
 // the only thing this plugin may ever delete from.
@@ -52,9 +56,11 @@ export default defineConfig(({ command }) => ({
     },
     // shared/ts has its own solid-js (bun auto-installs peerDependencies), so without this
     // the alias above puts two copies of the runtime in the bundle and any component here
-    // reading a context created in shared silently gets the context default. Invisible in
-    // dev: vite-plugin-solid only dedupes solid-js when command === "dev".
-    dedupe: ["solid-js", "@ark-ui/solid"],
+    // reading a context created in shared silently gets the context default — no error, no
+    // warning. `@solidjs/web` joins the list for exactly the same reason `solid-js` was on
+    // it: Solid 2 moved the DOM runtime there, and shared/ts carries its own copy of that
+    // too, so leaving it off would give this bundle two DOM runtimes instead of two cores.
+    dedupe: ["solid-js", "@solidjs/web", "@ark-ui/solid"],
   },
   base: "./",
   build: {
@@ -80,5 +86,35 @@ export default defineConfig(({ command }) => ({
     modulePreload: { polyfill: false },
     chunkSizeWarningLimit: 1000,
   },
-  plugins: [cleanOutDir(), Icons({ compiler: "solid", autoInstall: false }), UnoCSS(), solid()],
+  // ⚠️ `solid1CompatShim` MUST BE FIRST, and it is enforced rather than only
+  // documented — the plugin throws at `configResolved` if any plugin named
+  // `solid` or `solid:*` precedes it. It carries `enforce: "pre"` and has to win
+  // the specifier race against `@solidjs/vite-plugin`'s own `enforce: "pre"`
+  // resolveId hooks for the same specifiers. Losing that race disables the whole
+  // redirect with NO build error; it appears at runtime as `Cannot read
+  // properties of undefined (reading 'effect')` and a blank panel.
+  //
+  // `cleanOutDir()` follows it rather than leading, which it no longer may: it
+  // only has a `buildStart` hook, so its position among the others does not
+  // affect what it deletes.
+  plugins: [
+    solid1CompatShim({ vendorPackages: [...VENDOR_PACKAGES] }),
+    cleanOutDir(),
+    Icons({ compiler: "solid", autoInstall: false }),
+    UnoCSS(),
+    solidPlugin(),
+  ],
+
+  // Vite's dependency optimizer runs BEFORE the plugin pipeline, in a reduced
+  // plugin container the shim is not part of. Anything it pre-bundles escapes
+  // the redirect entirely and produces a module id the `virtual:` bypass can
+  // never name — which is the two-reactive-runtimes hazard the shim exists to
+  // prevent. Vite matches these by prefix, so a bare name covers its subpaths.
+  //
+  // The set is the same one the shim is given, by construction. `solid-js` and
+  // `@solidjs/web` are on it as well so the real runtime is never pre-bundled
+  // into a second copy beside the one the shim hands the vendors.
+  optimizeDeps: {
+    exclude: ["solid-js", "@solidjs/web", ...VENDOR_PACKAGES],
+  },
 }));

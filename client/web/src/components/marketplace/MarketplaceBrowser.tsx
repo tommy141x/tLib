@@ -41,7 +41,8 @@ import {
   PreviewOverlay,
   summarizeInspection,
 } from "@tlib/shared/marketplace/ui";
-import { createEffect, createSignal, For, type JSX, onCleanup, Show, untrack } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import { fetchNui, onNuiEvent } from "@/lib/nui";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconSearch from "~icons/lucide/search";
@@ -264,12 +265,13 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   // payload arrives as a fresh object off an NUI message, and a host that
   // re-sends the same object means "nothing changed".
   let applied: OpenData | null = null;
-  createEffect(() => {
-    const data = props.data;
-    const active = props.active;
-    // Untracked so the resets below — which write most of the signals in this
-    // component — cannot re-trigger this effect.
-    untrack(() => {
+  // The two-argument form replaces the `untrack` that used to wrap the body:
+  // in Solid 2 only `compute` tracks, so the resets below — which write most of
+  // the signals in this component — cannot re-trigger this effect, and the
+  // phase split states that rather than relying on a wrapper to enforce it.
+  createEffect(
+    () => ({ data: props.data, active: props.active }),
+    ({ data, active }) => {
       if (!active || !data) {
         if (applied) {
           applied = null;
@@ -281,8 +283,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
       if (data === applied) return;
       applied = data;
       applyOpenData(data);
-    });
-  });
+    }
+  );
 
   onCleanup(
     onNuiEvent<unknown>("marketplaceInspectResult", (data) => {
@@ -462,7 +464,11 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
 
       <div class="mp-tabs" aria-label="Marketplace category">
         {(["uis", "sounds", "installed"] as const).map((t) => (
-          <NuiButton class="mp-tab" aria-pressed={tab() === t} onClick={() => handleTabSwitch(t)}>
+          <NuiButton
+            class="mp-tab"
+            aria-pressed={tab() === t ? "true" : "false"}
+            onClick={() => handleTabSwitch(t)}
+          >
             {t === "uis" ? "UIs" : t === "sounds" ? "Sounds" : "Installed"}
           </NuiButton>
         ))}

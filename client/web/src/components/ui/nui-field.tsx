@@ -14,7 +14,7 @@ import {
   Switch as MatchType,
   Show,
 } from "solid-js";
-import { Portal } from "solid-js/web";
+import { Portal } from "@solidjs/web";
 // NuiButton moved into the shared package so tELS, tDetector and tRadar can
 // mount the marketplace components that use it; nothing in this app is
 // reachable from a sibling resource. Re-exported here so the existing import
@@ -22,7 +22,7 @@ import { Portal } from "solid-js/web";
 import { NuiButton } from "../../../../../shared/ts/nui-kit/NuiButton";
 import type { DialogField, DialogValue } from "../dialog-model";
 import { NUI_CHECKBOX_CLASS, NuiCheckGlyph } from "./nui-controls";
-import { applyNuiTheme } from "./nui-theme";
+import { applyNuiTheme, nuiThemeDeps } from "./nui-theme";
 
 export { NuiButton };
 
@@ -50,12 +50,15 @@ export function NuiField(props: {
   const a11y = () => ({
     "aria-labelledby": label,
     "aria-describedby": describedBy(),
-    "aria-invalid": !!props.error,
+    "aria-invalid": props.error ? ("true" as const) : ("false" as const),
   });
   const [selectOpen, setSelectOpen] = createSignal(false);
-  createEffect(() => {
-    if (props.active === false) setSelectOpen(false);
-  });
+  createEffect(
+    () => props.active,
+    (active) => {
+      if (active === false) setSelectOpen(false);
+    }
+  );
   return (
     <Field.Root
       class="tlib-nui-field"
@@ -125,7 +128,9 @@ export function NuiField(props: {
               {(option) => (
                 <RadioGroup.Item value={option.value} class="tlib-nui-control tlib-nui-segment">
                   <RadioGroup.ItemText>{option.label}</RadioGroup.ItemText>
-                  <RadioGroup.ItemHiddenInput aria-required={props.field.required} />
+                  <RadioGroup.ItemHiddenInput
+                    aria-required={props.field.required ? "true" : "false"}
+                  />
                 </RadioGroup.Item>
               )}
             </For>
@@ -146,7 +151,7 @@ export function NuiField(props: {
             <Select.Control>
               <Select.Trigger
                 {...a11y()}
-                aria-required={props.field.required}
+                aria-required={props.field.required ? "true" : "false"}
                 class={`${inputClass} tlib-nui-select-trigger`}
               >
                 <Select.ValueText placeholder={props.field.placeholder ?? "Select…"} />
@@ -163,7 +168,16 @@ export function NuiField(props: {
               <Portal>
                 <Select.Positioner
                   class="tlib-nui-surface tlib-nui-select-positioner"
-                  ref={(el) => createEffect(() => applyNuiTheme(props.theme, el))}
+                  ref={(el) =>
+                    createEffect(
+                      // See nuiThemeDeps: its revision reads must be in compute.
+                      () => {
+                        nuiThemeDeps();
+                        return props.theme;
+                      },
+                      (theme) => applyNuiTheme(theme, el)
+                    )
+                  }
                 >
                   <Select.Content class="tlib-nui-select-content">
                     <For each={collection().items}>

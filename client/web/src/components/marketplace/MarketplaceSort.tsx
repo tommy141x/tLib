@@ -1,7 +1,7 @@
 import { createListCollection, Select } from "@ark-ui/solid/select";
 import { Check, ChevronDown } from "lucide-solid";
 import { createSignal, For, Show } from "solid-js";
-import { Portal } from "solid-js/web";
+import { Portal } from "@solidjs/web";
 
 const collection = createListCollection({
   items: [

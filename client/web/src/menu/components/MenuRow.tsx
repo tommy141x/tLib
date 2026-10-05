@@ -64,15 +64,17 @@ export function MenuRow(props: Props) {
   };
   return (
     <div
-      class="menu-row"
-      aria-busy={props.pending || undefined}
-      classList={{
-        "is-active": props.active,
-        "is-disabled": props.item.disabled,
-        "is-pending": props.pending,
-        "is-danger": props.item.danger,
-        "is-status": props.item.kind === "status",
-      }}
+      class={[
+        "menu-row",
+        {
+          "is-active": props.active,
+          "is-disabled": props.item.disabled,
+          "is-pending": props.pending,
+          "is-danger": props.item.danger,
+          "is-status": props.item.kind === "status",
+        },
+      ]}
+      aria-busy={props.pending ? "true" : undefined}
     >
       <Show
         when={props.item.kind !== "status"}
@@ -87,9 +89,11 @@ export function MenuRow(props: Props) {
           class="row-main"
           type="button"
           aria-current={props.active ? "true" : undefined}
-          aria-pressed={props.item.kind === "toggle" ? on() : undefined}
+          aria-pressed={
+            props.item.kind === "toggle" ? (on() ? "true" : "false") : undefined
+          }
           title={name()}
-          aria-disabled={props.item.disabled || props.pending}
+          aria-disabled={props.item.disabled || props.pending ? "true" : "false"}
           aria-label={
             props.item.kind === "toggle"
               ? t(on() ? "{{ label }}, on" : "{{ label }}, off", { label: name() })

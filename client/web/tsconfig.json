@@ -3,10 +3,21 @@
     "target": "ESNext",
     "module": "ESNext",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "unplugin-icons/types/solid"],
+    // `unplugin-icons/types/solid` is DELIBERATELY ABSENT. It declares
+    // `~icons/*` as `(props: ComponentProps<"svg">) => JSX.Element` against
+    // `solid-js`, and under Solid 2 `ComponentProps<"svg">` is `never` —
+    // core's `ValidComponent` no longer admits a tag name. src/icons.d.ts
+    // replaces it; no JSX augmentation can fix the shipped one.
+    "types": ["vite/client"],
     "moduleResolution": "bundler",
     "jsx": "preserve",
-    "jsxImportSource": "solid-js",
+    // @solidjs/web, NOT solid-js. Solid 2.0 moved the whole DOM/JSX runtime out
+    // of `solid-js` into `@solidjs/web`, and solid-js@2's published `exports`
+    // map has no `./jsx-runtime` at all. Leaving this as "solid-js" produces
+    // TS2875 ("requires the module path 'solid-js/jsx-runtime' to exist") plus
+    // a TS7026 on EVERY intrinsic element, because the JSX namespace is missing
+    // rather than wrong — this one line is worth tens of errors on its own.
+    "jsxImportSource": "@solidjs/web",
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
@@ -18,7 +29,51 @@
     "paths": {
       "@/*": ["./src/*"],
       "@tlib/shared": ["../../shared/ts/index.ts"],
-      "@tlib/shared/*": ["../../shared/ts/*"]
+      "@tlib/shared/*": ["../../shared/ts/*"],
+
+      /* ⚠️ THIS REDIRECT IS WHAT MAKES @ark-ui/solid TYPE-CHECK ON SOLID 2.
+         DO NOT REMOVE IT WITHOUT READING src/types/solid-js.d.ts.
+
+         Ark builds EVERY part's props from
+         `HTMLProps<E> = JSX.IntrinsicElements[E]`, importing `JSX` from
+         `solid-js` — a namespace Solid 2 does not ship. Without it `HTMLProps`
+         contributes nothing and every Ark part rejects `class` and `children`,
+         which reads as our call sites being wrong and is the namespace being
+         empty. Measured here: 144 TS2322s across Dialog, Tabs, Toast, Select,
+         Checkbox, Field, RadioGroup and Slider, all from that one absence.
+
+         A `declare module "solid-js"` augmentation (src/solid-1-compat-jsx.d.ts,
+         which tCAD, tDetector, tRadio and shared/ts each carry) was tried FIRST
+         here and MEASURED NOT TO WORK: an augmentation may only patch
+         declarations the target already has, and `solid-js` exports no `JSX`
+         whatsoever, so TS accepts it silently and merges nothing. Probed
+         directly — `import type { JSX } from "solid-js"` still reports TS2305
+         "has no exported member 'JSX'" with that file in the program, and
+         `tsc --listFiles` confirms it IS in the program. The same probe reports
+         the same thing inside shared/ts, so the augmentation is not carrying
+         those trees either; they simply never hand an Ark part `children`.
+
+         This redirect re-exports the real package and adds only the missing
+         namespace. Nothing is widened to `any`, so vendor props stay checked.
+         It is the arrangement ha-dash already uses, for the same reason.
+
+         Delete this, src/types/solid-js.d.ts and patches/ together when
+         @ark-ui/solid publishes Solid 2 types. */
+      "solid-js": ["./src/types/solid-js.d.ts"],
+
+      /* Same redirect, for the subpath Solid 2 also stopped shipping.
+         `lucide-solid`'s own `types.d.ts` opens with
+         `import { JSX } from "solid-js/jsx-runtime"` and builds
+         `SVGAttributes = Partial<JSX.SvgSVGAttributes<SVGSVGElement>>` from it,
+         so without this `LucideProps` keeps only its eight explicit keys and
+         every standard SVG attribute silently disappears. Measured: it surfaced
+         as one error on `role` at a single <Dynamic> call site, which reads as
+         that call site being wrong rather than as a props type that has lost
+         most of itself.
+
+         Our own JSX does NOT go through here — `jsxImportSource` is
+         `@solidjs/web` — so this serves vendor declarations only. */
+      "solid-js/jsx-runtime": ["./src/types/solid-js.d.ts"]
     }
   },
   "include": ["src"]

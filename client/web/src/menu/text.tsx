@@ -1,4 +1,4 @@
-import { Index } from "solid-js";
+import { createMemo, Repeat } from "solid-js";
 import { t } from "./i18n";
 import { formattedParts } from "./markup";
 
@@ -8,10 +8,17 @@ import { formattedParts } from "./markup";
 // resolves through CommonJS -- can import './markup' directly instead.
 export { formattedParts, plainText } from "./markup";
 
-// <Index>, not <For>: formattedParts allocates fresh objects every call, so a
+// <Repeat>, not <For>: formattedParts allocates fresh objects every call, so a
 // reference diff never matches and every description change rebuilt every span.
 // The part count is stable far more often than the contents, so the span
 // survives and only its text and style are written.
+//
+// <Repeat count> is Solid 2's replacement for Solid 1's <Index each>, and it is
+// index-addressed rather than item-addressed: the child is handed a plain
+// number, not an accessor. `parts` is therefore a memo and each read goes
+// through `part()`, which is what keeps the text and style reactive while the
+// span itself survives — doing `const p = parts()[index]` once in the child
+// would snapshot it and freeze the row at its first value.
 //
 // White space is deliberately not set here. An inline style beats every
 // stylesheet rule, so a hard-coded pre-line overrode .row-label's nowrap and let
@@ -24,19 +31,23 @@ export { formattedParts, plainText } from "./markup";
 // the lookup reactive, so a 'menu:locale' push repaints without the game
 // resending a single menu.
 export function FormattedText(props: { text: string | undefined }) {
+  const parts = createMemo(() => formattedParts(t(props.text)));
   return (
-    <Index each={formattedParts(t(props.text))}>
-      {(part) => (
-        <span
-          style={{
-            color: part().color,
-            "font-style": part().italic ? "italic" : undefined,
-            "font-weight": part().bold ? "700" : undefined,
-          }}
-        >
-          {part().text}
-        </span>
-      )}
-    </Index>
+    <Repeat count={parts().length}>
+      {(index) => {
+        const part = () => parts()[index]!;
+        return (
+          <span
+            style={{
+              color: part().color,
+              "font-style": part().italic ? "italic" : undefined,
+              "font-weight": part().bold ? "700" : undefined,
+            }}
+          >
+            {part().text}
+          </span>
+        );
+      }}
+    </Repeat>
   );
 }

@@ -1,11 +1,25 @@
 import { createSignal } from "solid-js";
 import { onNuiEvent } from "@/lib/nui";
-import { applyScopedTheme } from "@/stores/theme-store";
+import { applyScopedTheme, themeRevision } from "@/stores/theme-store";
 
 // The existing global theme host changes root styles on setTheme without bumping
 // its registration revision. Observe that event locally; do not change menu theming.
 const [globalRevision, setGlobalRevision] = createSignal(0);
 onNuiEvent("setTheme", () => setGlobalRevision((value) => value + 1));
+
+/**
+ * Every reactive dependency `applyNuiTheme` has, as one accessor.
+ *
+ * Solid 2's `createEffect(compute, apply)` only tracks `compute`, so the two
+ * revision reads buried inside `applyNuiTheme` (its own, and the one inside
+ * `applyScopedTheme`) no longer subscribe to anything from an `apply` half.
+ * Callers read this in compute; forgetting it leaves the panel on a stale
+ * theme after `setTheme`, silently.
+ */
+export function nuiThemeDeps(): void {
+  globalRevision();
+  themeRevision();
+}
 
 /** Neutral stock NUI controls; an explicitly registered HSL primary still wins.
  * Do not infer an override from computed --primary: :root's stock value is blue.

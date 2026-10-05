@@ -27,11 +27,13 @@ export default function LayoutProxy(props: {
   const label = () => props.component.label;
   return (
     <div
-      class="tlib-layout__proxy"
-      classList={{
-        "tlib-layout__proxy--selected": props.selected,
-        "tlib-layout__proxy--hidden": !props.layout.visible,
-      }}
+      class={[
+        "tlib-layout__proxy",
+        {
+          "tlib-layout__proxy--selected": props.selected,
+          "tlib-layout__proxy--hidden": !props.layout.visible,
+        },
+      ]}
       style={{
         width: `${rect().width}px`,
         height: `${rect().height}px`,

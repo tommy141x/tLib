@@ -1,17 +1,15 @@
 import {
   createEffect,
   createMemo,
-  createSelector,
   createSignal,
+  createStore,
   For,
-  on,
-  onCleanup,
-  onMount,
+  onSettled,
+  reconcile,
   Show,
   untrack,
 } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
-import { applyScopedTheme } from "../stores/theme-store";
+import { applyScopedTheme, themeRevision } from "../stores/theme-store";
 import {
   accentFor,
   bannerFor,
@@ -132,10 +130,20 @@ export default function Menu() {
   // here would be a token with no readers.
   const rawPartners = new Set(["text", "panel", "border", "selected", "selected-ink"]);
   let themeAliases: string[] = [];
-  createEffect(() => {
+  // Two-argument form. The ONLY reactive read in this whole effect is the theme
+  // id, so it is the entire compute half; everything below is DOM measurement
+  // and DOM writes, which must not subscribe to anything.
+  createEffect(
+    () => {
+      // themeRevision() belongs in compute: applyScopedTheme reads it
+      // internally and would subscribe to nothing from the apply half.
+      themeRevision();
+      return themeIdFor(state.branding, menuId());
+    },
+    (themeId) => {
     for (const property of themeAliases) root.style.removeProperty(property);
     themeAliases = [];
-    applyScopedTheme(themeIdFor(state.branding, menuId()), root);
+    applyScopedTheme(themeId, root);
     const color = (value: string) =>
       CSS.supports("color", value)
         ? value
@@ -211,7 +219,8 @@ export default function Menu() {
         }
       } else if (own) root.style.removeProperty(property);
     }
-  });
+    }
+  );
   let dialog!: HTMLDivElement;
   let noticeTimer: number | undefined;
   let disposed = false;
@@ -316,7 +325,13 @@ export default function Menu() {
       ? previous
       : rows[Math.min(positions.get(menuId()) ?? 0, rows.length - 1)]?.id;
   });
-  const isSelected = createSelector(selectedId);
+  // Solid 2 does not ship `createSelector`, so this is a plain comparison.
+  // The difference is real and accepted: `createSelector` kept one signal per
+  // key, so changing the cursor notified exactly the two rows involved, while
+  // this notifies every row's `active` prop and lets each one settle. The page
+  // is a menu — tens of rows, not thousands — and the previous version's only
+  // claim was that O(1) narrowing, not any behaviour the player can see.
+  const isSelected = (id: string | undefined) => selectedId() === id;
   const selectedIndex = createMemo(() => items().findIndex((item) => item.id === selectedId()));
   const selected = createMemo(() => items()[selectedIndex()]);
   // MenuAPI's ShowColorPanel/ShowOpacityPanel. Both follow the live draft, so the
@@ -521,7 +536,9 @@ export default function Menu() {
   function move(direction: number) {
     const next = moveSelection(items(), selectedId(), direction);
     if (next !== undefined) play("nav");
-    setSelections(menuId(), next);
+    setSelections((draft) => {
+      draft[menuId()] = next;
+    });
   }
 
   function changeSlider(item: MenuEntry, next: number) {
@@ -539,7 +556,9 @@ export default function Menu() {
     // A slider clamps rather than wraps, and marks that dead end with the error
     // sound instead of the navigation one.
     play(next === previous ? "error" : "cycle");
-    setDrafts(key(item), next);
+    setDrafts((draft) => {
+      draft[key(item)] = next;
+    });
     if (next !== previous && (item.apply === "change" || item.apply === "both"))
       submit(item, "change", next);
   }
@@ -584,7 +603,9 @@ export default function Menu() {
           : item.options.length - 1
         : (index + direction + item.options.length) % item.options.length;
     const nextValue = item.options[next]!.value;
-    setDrafts(key(item), nextValue);
+    setDrafts((draft) => {
+      draft[key(item)] = nextValue;
+    });
     // Only an explicitly changed selection applies; snapshots never dispatch.
     if (nextValue !== value && (item.apply === "change" || item.apply === "both"))
       submit(item, "change", nextValue);
@@ -594,8 +615,13 @@ export default function Menu() {
     if (pending() || closing() || !validAction(target)) return;
     const actionKey = JSON.stringify([target.request.menuId, target.request.itemId]);
     setPending(actionKey);
-    if (target.kind === "toggle" && typeof target.request.value === "boolean")
-      setToggleDrafts(actionKey, target.request.value);
+    // Hoisted: the `typeof` narrowing above does not survive into the draft
+    // callback, which is a separate closure the checker re-widens inside.
+    const toggleValue = target.request.value;
+    if (target.kind === "toggle" && typeof toggleValue === "boolean")
+      setToggleDrafts((draft) => {
+        draft[actionKey] = toggleValue;
+      });
     const result = await request("action", target.request);
     if (disposed) return;
     const stillCurrent = Boolean(validAction(target));
@@ -604,14 +630,21 @@ export default function Menu() {
     const applied = !(result.menus && stillCurrent && !updateMenus(result.menus));
     // Released only once the authoritative value is in the store, so the row never
     // flashes the old checkmark on its way to the new one.
-    setToggleDrafts(actionKey, undefined);
+    setToggleDrafts((draft) => {
+      draft[actionKey] = undefined;
+    });
     if (!applied) {
       notify("Unable to apply menu update.", true);
       return;
     }
-    if (target.event === "change") setDrafts(actionKey, undefined);
+    if (target.event === "change")
+      setDrafts((draft) => {
+        draft[actionKey] = undefined;
+      });
     if (result.ok) {
-      setDrafts(actionKey, undefined);
+      setDrafts((draft) => {
+        draft[actionKey] = undefined;
+      });
       // The response snapshot is authoritative: never invent a detail page, or
       // reopen one the player backed out of while the request was pending.
       const currentItem = menu()?.items.find((item) => item.id === target.request.itemId);
@@ -655,7 +688,9 @@ export default function Menu() {
       void openHit(item.hit);
       return;
     }
-    setSelections(menuId(), item.id);
+    setSelections((draft) => {
+      draft[menuId()] = item.id;
+    });
     if (item.kind === "submenu") {
       if (item.menu) navigate(item.menu);
       return;
@@ -681,7 +716,10 @@ export default function Menu() {
     // they chose under the cursor, not on one still filtered.
     if (disposed || menuId() !== hit.menuId) return;
     const row = untrack(items).find((entry) => entry.canonicalId === hit.itemId);
-    if (row) setSelections(hit.menuId, row.id);
+    if (row)
+      setSelections((draft) => {
+        draft[hit.menuId] = row.id;
+      });
   }
 
   function submit(item: MenuEntry, event: CapturedAction["event"], value?: ActionRequest["value"]) {
@@ -877,112 +915,125 @@ export default function Menu() {
   // keyboard, so the box being open and the grab being held are one state. Held
   // here rather than at each of the five exits, where only the ones that remembered
   // to call back into the game released it.
-  createEffect(
-    on(searchOpen, (open) => {
-      if (!inGame || open === textEditing()) return;
-      void request("input", { active: open });
-    })
-  );
-  createEffect(() => {
-    for (const entry of state.menus) parents.set(entry.id, entry.parent);
+  createEffect(searchOpen, (open) => {
+    if (!inGame || open === textEditing()) return;
+    void request("input", { active: open });
   });
+  createEffect(
+    () => state.menus,
+    (menus) => {
+      for (const entry of menus) parents.set(entry.id, entry.parent);
+    }
+  );
   // Only the page vanishing matters: tracking the fallback lookup too would make
   // this effect re-run its own setMenuId write.
-  createEffect(
-    on(menu, (current) => {
-      if (current) return;
-      const fallback = untrack(() => nearestAncestor(menuId(), parents, state.menus));
-      setConfirmation(undefined);
-      if (fallback) showMenu(fallback);
-    })
-  );
+  createEffect(menu, (current) => {
+    // No `untrack` needed any more: the apply half does not track at all, which
+    // is exactly what the comment above was asking `on()` for.
+    if (current) return;
+    const fallback = nearestAncestor(menuId(), parents, state.menus);
+    setConfirmation(undefined);
+    if (fallback) showMenu(fallback);
+  });
   let highlighted = "";
-  createEffect(() => {
-    const item = selected();
-    // A search hit is not a row on this page, so its synthetic id would report a
-    // highlight on an item the game has never heard of.
-    const data =
-      item && !item.hit
-        ? {
-            menuId: menuId(),
-            itemId: item.canonicalId,
-            value:
-              item.chosenValue ??
-              (item.kind === "select" ? selectedOptionValue(item, drafts[key(item)]) : undefined),
-            contextKey: menu()?.contextKey,
-          }
-        : undefined;
-    // Blank while hidden as well as closed: nothing is highlighted behind the pause
-    // menu, and blanking makes the identical highlight a change again on restore,
-    // which is how the game's marker comes back with the panel.
-    const signature = shown() && data ? JSON.stringify(data) : "";
-    if (signature !== highlighted) {
-      highlighted = signature;
-      if (signature && data) void request("highlight", data);
+  createEffect(
+    () => {
+      const item = selected();
+      // A search hit is not a row on this page, so its synthetic id would report a
+      // highlight on an item the game has never heard of.
+      const data =
+        item && !item.hit
+          ? {
+              menuId: menuId(),
+              itemId: item.canonicalId,
+              value:
+                item.chosenValue ??
+                (item.kind === "select" ? selectedOptionValue(item, drafts[key(item)]) : undefined),
+              contextKey: menu()?.contextKey,
+            }
+          : undefined;
+      // Blank while hidden as well as closed: nothing is highlighted behind the pause
+      // menu, and blanking makes the identical highlight a change again on restore,
+      // which is how the game's marker comes back with the panel.
+      return { data, signature: shown() && data ? JSON.stringify(data) : "" };
+    },
+    ({ data, signature }) => {
+      if (signature !== highlighted) {
+        highlighted = signature;
+        if (signature && data) void request("highlight", data);
+      }
     }
-  });
-  createEffect(() => {
-    const id = selectedId();
-    const page = menuId();
-    // The same index space selectedId() reads it back in: selectable rows, status
-    // headings excluded. selectedIndex() counts into items(), which includes the
-    // headings, so storing that put the restored cursor one row low per heading.
-    const index = selectable().findIndex((item) => item.id === id);
-    if (index >= 0) positions.set(page, index);
-    // The guard reads the store path this effect writes, so it is untracked.
-    if (untrack(() => selections[page]) !== id) setSelections(page, id);
-  });
+  );
+  createEffect(
+    () => {
+      // The same index space selectedId() reads it back in: selectable rows, status
+      // headings excluded. selectedIndex() counts into items(), which includes the
+      // headings, so storing that put the restored cursor one row low per heading.
+      const id = selectedId();
+      return { id, page: menuId(), index: selectable().findIndex((item) => item.id === id) };
+    },
+    ({ id, page, index }) => {
+      if (index >= 0) positions.set(page, index);
+      // The guard reads the store path this effect writes. It needs no `untrack`
+      // now: apply does not track, so reading it here subscribes to nothing.
+      if (selections[page] !== id)
+        setSelections((draft) => {
+          draft[page] = id;
+        });
+    }
+  );
   // Visibility only: menuId() and state.menus are read inside and setMenuId is
   // called, so tracking them would run the whole reset twice on close.
   createEffect(
-    on(
-      () => state.visible,
-      (visible) => {
-        if (visible) queueMicrotask(() => panel?.focus());
-        else {
-          setEpoch((value) => value + 1);
-          setTextEditing(false);
-          setConfirmation(undefined);
-          setNotice(undefined);
-          // Closing resets the game to the main menu, so the page resets too, and an
-          // uncommitted draft must not reappear as the live value on the next open.
-          setQuery("");
-          setSearchOpen(false);
-          setDrafts(reconcile({}));
-          setToggleDrafts(reconcile({}));
-          if (menuId() !== "main" && state.menus.some((entry) => entry.id === "main"))
-            setMenuId("main");
-        }
+    () => state.visible,
+    (visible) => {
+      if (visible) queueMicrotask(() => panel?.focus());
+      else {
+        setEpoch((value) => value + 1);
+        setTextEditing(false);
+        setConfirmation(undefined);
+        setNotice(undefined);
+        // Closing resets the game to the main menu, so the page resets too, and an
+        // uncommitted draft must not reappear as the live value on the next open.
+        setQuery("");
+        setSearchOpen(false);
+        setDrafts(reconcile({}));
+        setToggleDrafts(reconcile({}));
+        if (menuId() !== "main" && state.menus.some((entry) => entry.id === "main"))
+          setMenuId("main");
       }
-    )
+    }
   );
   // A new banner is unmeasured; keeping the previous ink would paint the title
   // against the wrong one until the replacement loads.
-  createEffect(on(banner, () => setBannerInk(undefined)));
+  createEffect(banner, () => setBannerInk(undefined));
   // The exact inverse of hiding: no epoch bump, no draft reset, no page reset.
   // Only focus has to go back, to whichever of the two the player was in.
   createEffect(
-    on(
-      () => state.hidden,
-      (hidden) => {
-        if (hidden || !untrack(() => state.visible)) return;
-        queueMicrotask(() => {
-          if (untrack(confirmedItem)) dialog?.querySelector<HTMLButtonElement>("button")?.focus();
-          else panel?.focus();
-        });
-      },
-      { defer: true }
-    )
+    () => state.hidden,
+    (hidden) => {
+      if (hidden || !state.visible) return;
+      queueMicrotask(() => {
+        if (confirmedItem()) dialog?.querySelector<HTMLButtonElement>("button")?.focus();
+        else panel?.focus();
+      });
+    },
+    // `defer` is an option on the two-argument form now, rather than a third
+    // argument to `on()`. Same meaning: skip the first run.
+    { defer: true }
   );
-  createEffect(() => {
-    if (confirmation() && !confirmedItem()) setConfirmation(undefined);
-    // The shade is absolute inside the panel, so on a short viewport it covers the
-    // top of the content rather than what is in view. Returning to the top pins the
-    // two together, and is-blocked holds them there while the dialog is up.
-    if (confirmedItem() && panel) panel.scrollTop = 0;
-    if (confirmedItem())
-      queueMicrotask(() => dialog?.querySelector<HTMLButtonElement>("button")?.focus());
-  });
+  createEffect(
+    () => ({ pending: confirmation(), confirmed: confirmedItem() }),
+    ({ pending, confirmed }) => {
+      if (pending && !confirmed) setConfirmation(undefined);
+      // The shade is absolute inside the panel, so on a short viewport it covers the
+      // top of the content rather than what is in view. Returning to the top pins the
+      // two together, and is-blocked holds them there while the dialog is up.
+      if (confirmed && panel) panel.scrollTop = 0;
+      if (confirmed)
+        queueMicrotask(() => dialog?.querySelector<HTMLButtonElement>("button")?.focus());
+    }
+  );
 
   // A rejected push means this copy of the menu is stale, and a stale page can no
   // longer be navigated or exited.
@@ -1004,7 +1055,7 @@ export default function Menu() {
     await refreshFromGame();
   }
 
-  onMount(() => {
+  onSettled(() => {
     const unlisten = listen(runtimeMessage, (reason) => void resync(reason));
     window.addEventListener("keydown", onKey);
     void request("ready").then((result) => {
@@ -1012,13 +1063,15 @@ export default function Menu() {
       if (result.snapshot) applySnapshot(result.snapshot);
       if (!result.ok) notify(result.error ?? "Unable to initialize the menu.", true);
     });
-    onCleanup(() => {
+    // Solid 2's `onSettled` takes its teardown as the RETURNED function rather
+    // than through `onCleanup` inside the body.
+    return () => {
       disposed = true;
       unlisten();
       window.removeEventListener("keydown", onKey);
       window.clearTimeout(noticeTimer);
       window.clearTimeout(navigationTimer);
-    });
+    };
   });
 
   return (
@@ -1045,18 +1098,20 @@ export default function Menu() {
             focus target and drafts, and a screen reader still stops reading it. */}
         <section
           ref={panel}
-          class="menu-panel"
+          class={[
+            "menu-panel",
+            {
+              "is-blocked": Boolean(confirmedItem()),
+              "is-hidden": state.hidden,
+              "has-accent": Boolean(accent()),
+              [`align-${state.align}`]: true,
+            },
+          ]}
           style={brandStyle()}
-          classList={{
-            "is-blocked": Boolean(confirmedItem()),
-            "is-hidden": state.hidden,
-            "has-accent": Boolean(accent()),
-            [`align-${state.align}`]: true,
-          }}
-          aria-hidden={state.hidden || undefined}
+          aria-hidden={state.hidden ? "true" : undefined}
           tabindex="-1"
           aria-label={menu()?.title ?? "Menu"}
-          aria-busy={Boolean(pending())}
+          aria-busy={pending() ? "true" : "false"}
         >
           <header class="menu-brand">
             {/* Decorative: the word beside it is the accessible name. */}
@@ -1072,7 +1127,7 @@ export default function Menu() {
                 />
               )}
             </Show>
-            <span class="brand-word" classList={{ "source-title": Boolean(menu()?.subtitle) }}>
+            <span class={["brand-word", { "source-title": Boolean(menu()?.subtitle) }]}>
               <FormattedText
                 text={menu()?.subtitle ? menu()?.title : (state.menus[0]?.title ?? "Menu")}
               />
@@ -1159,7 +1214,11 @@ export default function Menu() {
                       (option) => option.value === selectedOptionValue(item, drafts[key(item)])
                     )?.label ?? (item.disabled ? "Unavailable" : "Choose…")
                   }
-                  onSelect={() => setSelections(menuId(), item.id)}
+                  onSelect={() =>
+                    setSelections((draft) => {
+                      draft[menuId()] = item.id;
+                    })
+                  }
                   onActivate={() => activate(item)}
                   onCycle={(direction) => cycle(item, direction)}
                 />
@@ -1333,8 +1392,7 @@ export default function Menu() {
                       <For each={colors().swatches}>
                         {(colour, index) => (
                           <span
-                            class="swatch"
-                            classList={{ "is-current": index() === colors().index }}
+                            class={["swatch", { "is-current": index() === colors().index }]}
                             style={{ background: `#${colour}` }}
                             aria-hidden="true"
                           />
@@ -1349,8 +1407,7 @@ export default function Menu() {
           <Show when={notice()}>
             {(message) => (
               <div
-                class="notice"
-                classList={{ "notice-error": message().error }}
+                class={["notice", { "notice-error": message().error }]}
                 role={message().error ? "alert" : "status"}
               >
                 <Show when={message().error} fallback={<Info aria-hidden="true" />}>
@@ -1384,7 +1441,7 @@ export default function Menu() {
                 type="button"
                 onClick={openSearch}
                 aria-label={t("Search this menu")}
-                aria-expanded={searchOpen()}
+                aria-expanded={searchOpen() ? "true" : "false"}
               >
                 <Search aria-hidden="true" /> {t("Search")}
               </button>

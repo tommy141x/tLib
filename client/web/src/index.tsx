@@ -1,6 +1,6 @@
 import "virtual:uno.css";
 import "./global.css";
-import { render } from "solid-js/web";
+import { render } from "@solidjs/web";
 import { fetchNui } from "@/lib/nui";
 import App from "./App";
 
