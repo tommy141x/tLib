@@ -8,13 +8,18 @@ import { omit } from "solid-js";
  * ⚠️ `elevated` no longer elevates, and `default` and `elevated` now resolve to the
  * same classes.
  *
- * Every `shadow-*` in `shared/ts/ui/*` was stripped, here and in badge, switch,
- * hover-card, color-picker and select. FiveM's CEF does not composite a blurred
- * drop shadow usefully: it costs a compositor pass — over a moving 3D scene, in the
- * overlay case — and puts nothing on the screen. The variants below were therefore
- * already visually identical at runtime; removing the classes only makes that
- * legible in the source. `shadow-none` on `outlined`/`ghost` went with them: it was
- * cancelling a shadow that no longer exists.
+ * Every elevation utility in `shared/ts/ui/*` was stripped, here and in badge,
+ * switch, hover-card, color-picker and select. FiveM's CEF does not composite a
+ * blurred one usefully: it costs a compositor pass — over a moving 3D scene, in
+ * the overlay case — and puts nothing on the screen. The variants below were
+ * therefore already visually identical at runtime; removing the classes only makes
+ * that legible in the source. The cancelling utility on `outlined`/`ghost` went
+ * with them: it was cancelling something that no longer exists.
+ *
+ * Since 0.12.1 the shared preset BLOCKLISTS the whole family for every
+ * `target: "nui"` build, so this is now enforced rather than remembered — and so
+ * is the second-order defect, which is that naming one of those utilities in a
+ * sentence like this one is enough for UnoCSS's extractor to emit it.
  *
  * If a card needs to read as raised, separate it with `--border`, which is above
  * every fill on the elevation ladder and composites. See `.panel` in

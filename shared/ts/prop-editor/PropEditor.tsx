@@ -68,22 +68,29 @@ export interface PropEditorProps {
 /**
  * The card surface every panel of this editor sits on.
  *
- * ── Why this is a constant, and why it carries a shadow ─────────────────────
+ * ── Why this is a constant, and why it is opaque and flat ───────────────
  *
- * Each panel used to spell out `bg-card/90 border border-border/40 rounded` for
- * itself, and they drifted: `border-border/40` over `--card` is a 4-point step
- * in luminance on tRadio's palette (rgba(69,73,84,.4) composited on rgb(38,39,44)
- * is rgb(50,53,60)), so the "border" was invisible and the panels read as flat
- * rectangles floating on the game rather than as raised surfaces. tLib's own card
- * — `.settings-panel`, and `ui/card.tsx` — has always carried a drop shadow; this
- * editor was the one surface in the stack without one.
+ * Each panel used to spell out its own fill, its own fractional border and its
+ * own corner, and they drifted: a 40%-alpha border over `--card` is a 4-point
+ * step in luminance on tRadio's palette (rgba(69,73,84,.4) composited on
+ * rgb(38,39,44) is rgb(50,53,60)), so the "border" was invisible and the panels
+ * read as flat rectangles floating on the game. One constant fixes that drift.
  *
- * The shadow is spelled out rather than `shadow-lg` on purpose: wind3's `shadow-*`
- * scale is built for a page with an opaque background, and its 10%-black default
- * is invisible over a TRANSPARENT NUI composited on the game. The value here is
- * the one `.settings-panel` uses.
+ * What it is NOT, any more, is translucent with an elevation under it. That
+ * spelling contradicted the policy written at `shared/css/surface.css:54-58`,
+ * the one this editor's own `.panel` class already obeys: an opaque `--card`
+ * fill, a full-strength `--border` edge, and no compositor effect of any kind,
+ * because CEF does not composite one usefully over a moving 3D scene. And it was
+ * not merely inert — because this is a SHARED component, the arbitrary elevation
+ * value it named was measured in tDetector's shipped stylesheet: a consumer that
+ * never asked for it, paying for a rule CEF then declines to paint.
+ *
+ * Depth comes from the ladder instead: `--card` (6.67%) inside a `--border`
+ * (20.39%) edge is a 14-point step and is visible without any of that. The
+ * fractional fill went with the elevation for the same reason — an alpha fill
+ * over the game is what made the border need help in the first place.
  */
-const PANEL_SURFACE = "bg-card/95 border border-border/60 shadow-[0_4px_24px_rgba(0,0,0,0.45)]";
+const PANEL_SURFACE = "bg-card border border-border";
 
 /**
  * Sizes live in `prop-editor.css`, colours live here.
@@ -97,9 +104,9 @@ const PANEL_SURFACE = "bg-card/95 border border-border/60 shadow-[0_4px_24px_rgb
  * recur, and the sizes it used to hard-code scale with the viewport instead.
  *
  * The contrast decisions those constants carried are unchanged and deliberate:
- * a panel keeps a visible border and a real drop shadow so it reads as a raised
- * surface over the game rather than a flat rectangle, and no label is faded with
- * an opacity modifier — `text-muted-foreground/50` measured 2.2:1 and
+ * a panel keeps an opaque fill and a full-strength border so it reads as a
+ * surface over the game rather than a tinted rectangle, and no label is faded
+ * with an opacity modifier — `text-muted-foreground/50` measured 2.2:1 and
  * photographed as a blank strip.
  */
 /** A hint pair. No size of its own — it inherits the hint bar's. */
@@ -113,7 +120,7 @@ const SECTION_LABEL = "font-mono text-muted-foreground uppercase tracking-wide t
  * The toolbar used to hand-roll both states as class strings. They are now the
  * shared button kit's own variants, which is what the save/cancel pair in tELS
  * uses and what this editor was asked to look like: a real hover step, a
- * `data-[pressed]` state and a `focus-visible` ring, none of which the
+ * `data-[pressed]` state and a `focus-visible` outline, none of which the
  * hand-rolled versions had.
  *
  * Idle is `secondary` and NOT `ghost`. Ghost is transparent, and an unlit
@@ -395,12 +402,14 @@ export function PropEditor(props: PropEditorProps) {
             {/* The kit's `destructive` variant rather than the hand-mixed
                 `bg-destructive/20` wash this used to carry: that wash composited
                 to a barely-tinted panel over the game, and it had neither a
-                perceptible hover step nor a focus ring. The drop shadow is kept
-                because this button floats free of any panel. */}
+                perceptible hover step nor a visible focus state. It floats free
+                of any panel, and the variant's own opaque fill is what separates
+                it from the game — there is no compositor effect under it, here or
+                anywhere else in the shared kit. */}
             <Button
               data-prop-editor-remove=""
               variant="destructive"
-              class="tlib-pe-remove font-mono font-semibold shadow-[0_4px_24px_rgba(0,0,0,0.45)]"
+              class="tlib-pe-remove font-mono font-semibold"
               onClick={() => nui("propEditorRemove")}
             >
               {T("btn_remove_prop")}
