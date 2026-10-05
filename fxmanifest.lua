@@ -5,6 +5,108 @@ lua54 'yes'
 author 'Tommy Johnston'
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM)'
+-- 0.15.0 is the shared answer to two cross-cutting duplications a
+-- filename-based scan cannot see: Escape ownership, and settings persistence.
+--
+-- `shared/ts/escape-layer.ts` -- `createEscapeLayer()`, one Escape owner for a
+-- page. FIVE resources bound Escape independently across 23 files and three
+-- separate mechanisms had been invented for the same question, each knowing
+-- something the others did not: tELS's `data-editor-modal` DOM marker (works,
+-- but every modal is equally blocking, so a stack cannot say which is on top),
+-- tRadio's sample-ownership-on-capture (the one insight neither other had --
+-- without it a panel that closes on keydown lets the keyup ALSO hide the radio
+-- underneath: one press, two dismissals), and tLib's internal-layer-first plus
+-- an `active` gate for a component with two mounts. The registry is all three.
+-- `registerEscapeGuard` is the DOM marker's real content, kept because Ark UI's
+-- popovers and listboxes handle Escape themselves and can never register.
+--
+-- The briefing for this work recorded tCAD as a fourth and better model, "Lua
+-- owns Escape and the page never binds it". Re-measured: tCAD's own comment
+-- says the opposite ("The NUI owns its own Escape handling because it also has
+-- to close a dialog without closing the whole CAD") and its page binds Escape
+-- in more files than any other resource. There is no fourth model.
+--
+-- NUI focus release is now ONE sequence. There were three orderings of
+-- `SetNuiFocus(false,false)` and `SetNuiFocusKeepInput(false)` in this tree,
+-- two of them in `shared/imports/platform/client.lua` itself, with two
+-- mutually incompatible comments justifying them -- neither carrying a
+-- measurement. Neither can be settled offline: those two natives are not in
+-- the native reference at all. So `releaseNuiFocus` clears keepInput on BOTH
+-- sides of the release, which is correct under either comment's premise, and
+-- `tests/lua/nui-focus-release.lua` proves each two-call form leaks under one
+-- of them while the three-call form leaks under neither.
+--
+-- `platform.releaseCursorDeferred(session, current)` folds in the defer-a-frame
+-- release and its session-generation guard -- discovered three times (tELS's
+-- editor, tVDJ's menu, warned about in tLib's own cl_layout.lua) and present in
+-- no shared helper. Both halves matter: SetNuiFocus from inside a NUI callback
+-- can fail silently, and a UI that reopens before the thread resumes has
+-- already taken focus synchronously, so an unguarded release revokes the NEW
+-- session's.
+--
+-- `kvp.view(opts)` / `kvp.serverTag()` / `settings`' `serverScoped` -- the
+-- settings-persistence half. Two forks existed, each for exactly one missing
+-- option, so the options are here now rather than the forks:
+--   * tRadio needed per-server key scoping and implemented it TWICE, in
+--     `cl_bridge.lua` and again in TypeScript. `serverScoped` is that, and
+--     `tests/lua/kvp-views.lua` pins the composed key strings as
+--     byte-identical to BOTH forks -- they are persisted on players' machines,
+--     so a shared implementation that namespaced them differently would pass
+--     every behavioural test and silently reset everyone on upgrade.
+--   * tAFK needed a namespace and reads that answer `nil` rather than a type
+--     zero, because its prefs are tri-state. `prefix` + `nilWhenUnset`.
+-- One safety divergence was resolved to the stricter side while moving:
+-- tRadio's tag hashed an unresolved endpoint to `00001505` (djb2's seed), a
+-- plausible-looking tag for no server. An empty endpoint now yields no tag and
+-- the key stays unscoped, which is what tRadio's TypeScript half already said.
+--
+-- Additive: `kvp.key(key)` with no options, and every existing accessor, are
+-- byte-for-byte what they were. The module's own accessors ARE a no-option
+-- view, so `tlib.kvp.getBool` cannot drift from `tlib.kvp.view({}).getBool`.
+--
+-- 0.15.0 also adds `framerelay` (shared/imports/framerelay/client.lua): the
+-- statebag relay that puts a device's finished PICTURE on the props of clients
+-- that are not running it. tDetector and tRadar had the whole mechanism each,
+-- and a content diff put the two files at 70% with 62 contiguous identical
+-- lines: the controller election, the sequence numbering, the heartbeat, the
+-- stale expiry, and the withdraw-on-vehicle-change.
+--
+-- The election is the part that is expensive to rediscover and impossible to
+-- notice missing alone: BOTH FRONT-SEAT OCCUPANTS run their own NUI and both
+-- have a frame, so two writers on one statebag key alternate two devices'
+-- pictures into everyone else's prop. The reader's half is the pair of facts
+-- that `seq` and the stale window exist for -- a statebag is not withdrawn when
+-- its writer disconnects, and the write only lands while the writer owns the
+-- entity, so ownership migration stops it silently.
+--
+-- What stayed in the consumers is the PAYLOAD, which is genuinely different:
+-- tDetector's frame is 27 flat scalars done with two field lists, tRadar's is a
+-- nested cells-and-lamps tree walked by shape. `sanitise` and `differs` are
+-- therefore parameters. The relay touches exactly three fields of a payload and
+-- says so at the top of the file: it writes `seq` and `netId`, and it READS
+-- `powered` -- a switched-off device publishes nothing rather than an off frame,
+-- because the prop's baked artwork already is the off state.
+--
+-- `tests/lua/framerelay-election.lua` is the oracle, and the two-client case it
+-- drives is the one no resource suite could reach: a correctness regression in
+-- the election only manifests with two players in one vehicle.
+--
+-- 0.15.0 also adds `runtimetxd` (shared/imports/runtimetxd/client.lua): the
+-- create-once lifecycle for CREATE_RUNTIME_TXD. That native permanently consumes
+-- and pins one of the game's finite `ytd` streaming slots, has no destructor
+-- bound in the engine, and is NOT idempotent across resource loads -- a second
+-- registration of a name yields a SECOND dictionary and every later
+-- AddReplaceTexture silently resolves to the one that does not hold the
+-- textures. Measured in tRadar 2026-09-25: the same name handed out handle 20
+-- and handle 6, minutes apart.
+--
+-- That fact was written down twice, in tDetector and tRadar, and the two copies
+-- disagreed: tDetector's comment said the dictionary name was "deliberately NOT
+-- tokenised" four lines above the code that tokenises it. tRadar's was the one
+-- with the measurement, so tRadar's is what moved. `textureName` came with it,
+-- because the rule it enforces -- a runtime texture name must carry the per-load
+-- tag -- is one a name built by hand can forget.
+--
 -- 0.14.0 adds `diag.command` (shared/imports/diag/shared.lua): the whole of the
 -- `<resource>_diag` console command the config standard's §13 asks every
 -- resource for, which EIGHT resources had written by hand -- tDetector, tRadar,
@@ -97,7 +199,7 @@ description 'tLib — shared UI and utility library (FiveM)'
 -- Both are additive — nothing that worked against 0.11.0 behaves differently. The bump
 -- exists so a consumer can PIN them via tlib_min_version, which is what imports.lua's
 -- header calls the real guarantee: a capability probe cannot report its own absence.
-version '0.14.0'
+version '0.15.0'
 
 -- Layout note: the top-level folder is the VM a file is loaded into, matching
 -- every other resource here. Where one module spans VMs -- the platform adapter

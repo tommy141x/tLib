@@ -17,11 +17,14 @@
     "check:fix": "biome check --write .",
     "test": "bun test",
     "test:lua": "bun run scripts/test-lua.ts",
+  "//test:lua:control": "Negative control for tests/lua/framerelay-election.lua, the two-client relay suite, and for tests/lua/runtimetxd-create-once.lua. Two planted defects, each of which must turn an EXACT named set of assertions red: `election` makes both clients report themselves the controller (planted in the real code path -- publishTick computes `mine` from tlib.occupancy.isController, so the module genuinely admits two writers on one statebag key, which is the pre-election bug replayed), and `clock` stops the world clock, the module's only notion of time and the one way a relay reasoned entirely about elapsed milliseconds can look perfect while measuring nothing. The runtimetxd half plants its two defects (`nocache`, `notag`) in the MODULE'S OWN SOURCE -- patched into the OS temp dir, since fengari ships no `io` -- and asserts each substitution matched exactly once, because a gsub that matched nothing hands the suite the unmodified module and the control then asserts that correct code is correct. Both runners also check each mode exits NON-ZERO with the control's own summary line rather than an unrelated crash, and that the suite is GREEN at baseline.",
+  "test:lua:control": "bun run scripts/framerelay-control.ts && bun run scripts/runtimetxd-control.ts",
     "typecheck": "bunx tsc --noEmit -p client/web/tsconfig.json",
     "typecheck:shared": "cd shared/ts && bunx tsc --noEmit -p tsconfig.json",
     "check:imports": "bun run scripts/check-relative-imports.ts",
     "scan:solid2": "bun run scripts/solid2-scan.ts",
-    "check:regression": "bun run typecheck && bun run typecheck:shared && bun run check:imports && bun run test && bun run test:lua",
+    "probe:escape": "bun run scripts/probe-escape-layer.ts",
+    "check:regression": "bun run typecheck && bun run typecheck:shared && bun run check:imports && bun run test && bun run test:lua && bun run test:lua:control",
     "verify": "bun run lint && bun run check:regression && bun run build"
   },
   "dependencies": {

@@ -30,7 +30,41 @@ export function getKvpPrefix(): string | null {
   return resolvePrefix();
 }
 
+/** Where a key sits: whose community, and which server. */
+export interface KvpScope {
+  /** The community prefix. Already sanitized; `null` means none. */
+  community?: string | null;
+  /**
+   * This server's tag, as `tlib.kvp.serverTag()` computes it. `null` or `""`
+   * means no server has been resolved, in which case a `serverScoped` key is
+   * left UNSCOPED rather than gaining a bare trailing underscore — a dev session
+   * or an environment that never received a tag then keeps what the player tuned
+   * instead of silently reverting them.
+   */
+  serverTag?: string | null;
+}
+
+/**
+ * Compose a KVP key. The one implementation of the composition, shared by the
+ * Lua side (`shared/imports/kvp/client.lua`'s `kvp.key`) and by every
+ * TypeScript caller.
+ *
+ * It exists because tRadio had the arithmetic three times — a `settingKvpKey`
+ * wrapper in `cl_bridge.lua`, a second copy for scan state in the same file,
+ * and `SettingsStore`'s `prefix` + `suffix` in TypeScript — and the comment on
+ * the Lua one said out loud that "the two lists must agree or the engine reads a
+ * key Lua never loaded". Agreement by inspection, across two runtimes, over
+ * strings that are already persisted on players' machines.
+ *
+ * `tLib/tests/unit/kvp-prefix.test.ts` pins these against the same vectors
+ * `tests/lua/kvp-views.lua` pins the Lua side against.
+ */
+export function composeKvpKey(key: string, scope: KvpScope = {}, serverScoped = false): string {
+  let composed = key;
+  if (serverScoped && scope.serverTag) composed = `${composed}_${scope.serverTag}`;
+  return scope.community ? `${scope.community}_${composed}` : composed;
+}
+
 export function kvpKey(key: string): string {
-  const prefix = resolvePrefix();
-  return prefix ? `${prefix}_${key}` : key;
+  return composeKvpKey(key, { community: resolvePrefix() });
 }

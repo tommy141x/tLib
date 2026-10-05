@@ -338,10 +338,37 @@ function platform.showCursor()
     SetNuiFocus(true, true)
 end
 
-function platform.releaseCursor()
+--- Give focus back to the game, in the one order that is safe either way.
+---
+--- There were three orderings of these two natives in this tree, two of them in
+--- THIS file, and a comment in `shared/lib/adapter/ui.lua` asserting that the
+--- wrong one leaks `keepInput` into the next focus cycle. That comment names no
+--- measurement and its history was squashed in the layout refactor (a226c76),
+--- so it is an assertion, not evidence — and the comment on
+--- `setKeepInputActive` right below it asserts the opposite premise ("no-op
+--- until focus has been granted"), which if true would make clearing keepInput
+--- *after* the release the leaking order. The two cannot both be right.
+---
+--- Neither can be checked from outside the game: `SET_NUI_FOCUS` and
+--- `SET_NUI_FOCUS_KEEP_INPUT` are not in the native reference at all (only the
+--- `IsNuiFocused` / `IsNuiFocusKeepingInput` readers are), and the stack has no
+--- offline NUI focus oracle.
+---
+--- So this takes the strictest reading of both claims instead of picking one:
+--- clear keepInput while focus is still held, release focus, clear it again.
+--- The second clear is a no-op under one semantics and the load-bearing one
+--- under the other, it is idempotent under both, and it costs one native call
+--- on a path that runs when a UI closes. That is cheaper than being wrong.
+---
+--- ⚠️ Do not "simplify" this back to two calls without a measurement in the
+--- game. `IsNuiFocusKeepingInput()` is the oracle; read it after a release.
+local function releaseNuiFocus()
     SetNuiFocusKeepInput(false)
     SetNuiFocus(false, false)
+    SetNuiFocusKeepInput(false)
 end
+
+platform.releaseCursor = releaseNuiFocus
 
 -- NUI focus with mode-level control. Mode 1 = cursor visible + UI input;
 -- mode 0 = cursor hidden, game input. Mirrors Platform.setInputMode in the
@@ -350,8 +377,7 @@ function platform.setInputMode(mode)
     if mode == 1 then
         SetNuiFocus(true, true)
     else
-        SetNuiFocus(false, false)
-        SetNuiFocusKeepInput(false)
+        releaseNuiFocus()
     end
 end
 
@@ -362,17 +388,60 @@ function platform.setKeepInputActive(state)
     SetNuiFocusKeepInput(state == true)
 end
 
-function platform.releaseCursorSuppressPause()
-    SetNuiFocusKeepInput(false)
-    SetNuiFocus(false, false)
+--- Hold the pause menu shut for `frames` frames. The in-flight Escape that
+--- closed a UI otherwise reaches the game and opens the map.
+local function suppressPause(frames, stillMine)
     Citizen.CreateThread(function()
-        for _ = 1, 15 do
+        for _ = 1, frames do
+            if stillMine and not stillMine() then return end
             DisableControlAction(0, 199, true)
             DisableControlAction(0, 200, true)
             DisableControlAction(2, 199, true)
             DisableControlAction(2, 200, true)
             Citizen.Wait(0)
         end
+    end)
+end
+
+function platform.releaseCursorSuppressPause()
+    releaseNuiFocus()
+    suppressPause(15)
+end
+
+--- Release focus on the NEXT frame, and only if the session that asked for it
+--- is still the current one.
+---
+--- Three resources discovered both halves of this independently and none of
+--- them was in the shared helper:
+---
+--- - `tELS/client/cl_editor.lua` — calling SetNuiFocus from inside a NUI
+---   callback can fail silently, so the release has to yield first.
+--- - the same file, and `tVDJ/client/nui.lua` — the generation guard. A UI that
+---   reopens before the deferred thread resumes has already taken focus
+---   synchronously, so an ungated release revokes the NEW session's focus. The
+---   symptom is a fully-drawn editor with no cursor whose gizmo ignores every
+---   click, and the only cure is exiting and re-entering. Exit-then-reopen
+---   inside one frame is an ordinary user action: `/telsedit` is a toggle, and
+---   tELS's settings dialog opens the editor immediately after closing itself.
+--- - `tLib/client/cl_layout.lua` warns about the third part: never try to
+---   re-acquire focus from a deferred thread. This only ever releases.
+---
+--- `session` is a snapshot of the caller's generation counter and `current` a
+--- function returning the live one. Pass neither and the guard is skipped,
+--- which is correct for a UI that cannot reopen within a frame.
+---
+---     platform.releaseCursorDeferred(mySession, function() return session end)
+function platform.releaseCursorDeferred(session, current, suppressPauseFrames)
+    local stillMine = function()
+        if current == nil then return true end
+        return current() == session
+    end
+    Citizen.CreateThread(function()
+        Citizen.Wait(0)
+        if not stillMine() then return end
+        releaseNuiFocus()
+        local frames = suppressPauseFrames or 15
+        if frames > 0 then suppressPause(frames, stillMine) end
     end)
 end
 

@@ -25,6 +25,8 @@
  * marketplace host sends no Access-Control-Allow-Origin.
  */
 
+import type { JSX } from "@solidjs/web";
+import { createEscapeLayer } from "@tlib/shared/escape-layer";
 import {
   browseMarketplace,
   ErrorPane,
@@ -42,7 +44,6 @@ import {
   summarizeInspection,
 } from "@tlib/shared/marketplace/ui";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
-import type { JSX } from "@solidjs/web";
 import { fetchNui, onNuiEvent } from "@/lib/nui";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconSearch from "~icons/lucide/search";
@@ -408,23 +409,33 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     void fetchNui("marketplaceUninstall", { type, slug, resource: resourceFilter() ?? "" });
   }
 
-  // A preview is dismissed here in BOTH mounts, because it is this component's
-  // own layer. Only the outer Escape — nothing open, dismiss the host — differs,
-  // and that is `onEscape`'s whole job. The embedded mount passes none, so the
-  // key falls through to the dialog and closes it, exactly as on any other tab.
-  function onKeyDown(e: KeyboardEvent) {
-    if (e.key !== "Escape" || !props.active || e.defaultPrevented) return;
-    if (previewItem()) {
-      e.preventDefault();
+  // A preview is dismissed in BOTH mounts, because it is this component's own
+  // layer — that is what `onInternal` means. Only the outer Escape — nothing
+  // open, dismiss the host — differs, and that is `onEscape`'s whole job. The
+  // embedded mount passes none, so the key falls through to the dialog and
+  // closes it, exactly as on any other tab.
+  //
+  // `depth: 1` puts this above a host that registers its own layer at 0, and
+  // `active` is why the registry has that option at all: this component has two
+  // mounts and the one on an unselected dialog tab must not shadow the dialog.
+  //
+  // `active` also requires there to be something to do. Owning the key and then
+  // doing nothing is not the same as not owning it: the embedded mount passes no
+  // `onEscape`, and if this layer claimed the press anyway the dialog would stop
+  // closing on Escape while the Marketplace tab was open.
+  const disposeEscapeLayer = createEscapeLayer({
+    label: "marketplace-browser",
+    depth: 1,
+    active: () => props.active && (previewItem() !== null || props.onEscape !== undefined),
+    onInternal: () => {
+      if (!previewItem()) return false;
       setPreviewItem(null);
-    } else if (props.onEscape) {
-      e.preventDefault();
-      props.onEscape();
-    }
-  }
-  window.addEventListener("keydown", onKeyDown);
+      return true;
+    },
+    onEscape: () => props.onEscape?.(),
+  });
   onCleanup(() => {
-    window.removeEventListener("keydown", onKeyDown);
+    disposeEscapeLayer();
     invalidateRequests();
   });
 

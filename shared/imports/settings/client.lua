@@ -9,11 +9,24 @@
 --   })
 --
 -- A server default only lands on a setting the player has not set themselves.
+--
+-- `serverScoped = true` on a definition stores it under this server's tag, so a
+-- value that is only meaningful against one server's configuration does not
+-- follow the player to the next one. tRadio's Radio FX overrides are the case
+-- that produced it: they are a correction dialled in on top of one server's
+-- radioFx chain, and carried elsewhere they correct a chain that was never
+-- wrong. tRadio had this as a private `SERVER_SCOPED_SETTINGS` set in
+-- `cl_bridge.lua` plus a second copy in TypeScript; the option is the shared
+-- form of both.
 
 local settingsMod = {}
 
 function settingsMod.create(defs)
     local kvp = tlib.kvp
+    -- One view per scope rather than one per definition: the views are
+    -- stateless and the only difference is how `key` resolves.
+    local scopedKvp = kvp.view({ serverScoped = true })
+    local function storeFor(def) return def.serverScoped and scopedKvp or kvp end
 
     local meta = {}       -- key -> { type, default, clamp }
     local values = {}     -- key -> current effective value
@@ -28,24 +41,25 @@ function settingsMod.create(defs)
         local default = def.default
         local clamp   = def.clamp
 
-        meta[key] = { type = typ, default = default, clamp = clamp }
+        meta[key] = { type = typ, default = default, clamp = clamp, store = storeFor(def) }
         keyOrder[#keyOrder + 1] = key
 
-        local hasKvp = kvp.has(key)
+        local store = meta[key].store
+        local hasKvp = store.has(key)
         userSet[key] = hasKvp
 
         if hasKvp then
             if typ == 'float' or typ == 'number' then
-                values[key] = tonumber(kvp.getString(key)) or default
+                values[key] = tonumber(store.getString(key)) or default
             elseif typ == 'int' then
-                local v = tonumber(kvp.getString(key))
+                local v = tonumber(store.getString(key))
                 values[key] = v and math.floor(v) or default
             elseif typ == 'bool' then
-                values[key] = kvp.getBool(key, default)
+                values[key] = store.getBool(key, default)
             elseif typ == 'json' then
-                values[key] = kvp.getJson(key, default)
+                values[key] = store.getJson(key, default)
             else
-                values[key] = kvp.getString(key, default)
+                values[key] = store.getString(key, default)
             end
         else
             values[key] = default
@@ -65,23 +79,24 @@ function settingsMod.create(defs)
     function inst:set(key, value)
         local m = meta[key]
         if not m then return end
+        local store = m.store
 
         if m.type == 'float' or m.type == 'number' then
             value = tonumber(value) or m.default
             if m.clamp then value = math.max(m.clamp[1], math.min(m.clamp[2], value)) end
-            kvp.setString(key, tostring(value))
+            store.setString(key, tostring(value))
         elseif m.type == 'int' then
             value = math.floor(tonumber(value) or m.default)
             if m.clamp then value = math.max(m.clamp[1], math.min(m.clamp[2], value)) end
-            kvp.setString(key, tostring(value))
+            store.setString(key, tostring(value))
         elseif m.type == 'bool' then
             value = (value == true)
-            kvp.setBool(key, value)
+            store.setBool(key, value)
         elseif m.type == 'json' then
-            kvp.setJson(key, value)
+            store.setJson(key, value)
         else
             value = tostring(value)
-            kvp.setString(key, value)
+            store.setString(key, value)
         end
 
         values[key] = value
@@ -123,13 +138,22 @@ function settingsMod.create(defs)
         return keyOrder
     end
 
+    --- The resolved KVP key a setting is stored under, scope included. The
+    --- engine-side store has to be handed these, and deriving them a second
+    --- time is how tRadio's two copies came to need to agree by hand.
+    function inst:storageKey(key)
+        local m = meta[key]
+        if not m then return nil end
+        return m.store.key and m.store.key(key) or kvp.key(key)
+    end
+
     --- Back to the default, and no longer user-set.
     function inst:reset(key)
         local m = meta[key]
         if not m then return end
         values[key] = m.default
         userSet[key] = false
-        kvp.delete(key)
+        m.store.delete(key)
     end
 
     return inst
