@@ -141,16 +141,73 @@ export interface TPresetOptions {
    */
   typography?: boolean | Record<string, unknown>;
   /**
-   * Whether `bg-background` also carries the backdrop-filter variables.
+   * Whether `bg-background` also carries the compositor-effect variables.
    *
-   * nui only, and on by default. The NUI shells paint their panel background
-   * through a blurred backdrop, driven by `--backdrop-blur`/`--backdrop-saturate`
-   * so a layout can turn the blur off without restyling the surface. tAFK opts
-   * out: it draws over a clear screen, where a backdrop filter costs a
-   * compositing pass for nothing.
+   * nui only, and **off** by default since 0.12.1.
+   *
+   * It used to default ON, with a doc claiming the NUI shells painted their
+   * panel background through a filtered backdrop. They do not. Every shell here
+   * paints an opaque `--card` fill behind a `--border` edge -- that is the whole
+   * recipe written down in `shared/css/surface.css`, and the reason is in the
+   * same file: FiveM's CEF does not composite a filtered surface usefully, so
+   * it costs a compositor pass per frame over a moving 3D scene and puts
+   * nothing on the screen. tAFK was recorded as "the one that opts out, for a
+   * performance reason"; it was in fact the only bundle whose config agreed with
+   * the policy.
+   *
+   * So the default is now the policy, and the flag is the deviation. A `web`
+   * consumer that genuinely wants it -- a real browser DOES composite this --
+   * passes `backdropBackground: true` together with `backgroundRule: true`.
    */
   backdropBackground?: boolean;
 }
+
+/**
+ * The utility families a nui bundle may not contain, at all.
+ *
+ * Promoted out of `tUnit/client/web/uno.config.ts`, which had worked out the
+ * whole argument and then applied it to one bundle of nine.
+ *
+ * Two separate reasons, and the second is the one that makes this a build rule
+ * rather than a review note:
+ *
+ *  1. CEF does not composite elevation or a translucency effect usefully. The
+ *     measurement is in `shared/css/surface.css`; the short version is that a
+ *     24px-radius elevation over a moving 3D scene costs a compositor pass every
+ *     frame and buys nothing visible, and that every focus affordance in this
+ *     stack is therefore an `outline`.
+ *
+ *  2. UnoCSS's extractor reads raw file text and cannot tell code from a
+ *     COMMENT, so a sentence that NAMES one of these utilities in order to
+ *     explain why it was removed is itself enough to emit the rule. Measured in
+ *     the built stylesheets before this landed: `.shadow`, `.shadow-sm`,
+ *     `.shadow-md`, `.shadow-lg` and `.blur` were present in bundles whose
+ *     source contained no such class -- only prose about one. That is dead CSS
+ *     rather than a visible defect, which is worse: it defeats the one check
+ *     anybody runs on a built file ("search the CSS for a blurred box-shadow")
+ *     and makes it cry wolf until someone stops running it.
+ *
+ * Each entry allows an arbitrary variant prefix (`hover:`, `group-focus:`,
+ * `lg:`), because a variant is part of the raw candidate the blocklist is
+ * matched against and a prefixed spelling is otherwise waved straight through.
+ *
+ * `ring-*` is deliberately NOT here, and that ordering is the whole point.
+ * UnoCSS composes `box-shadow` out of
+ * `var(--un-ring-offset-shadow), var(--un-ring-shadow), var(--un-shadow)` and
+ * only the last of the three is the blurred one, so a ring is not elevation --
+ * but under presetWind3 it is still a `box-shadow`, and a box-shadow inside an
+ * `overflow: hidden` ancestor paints nothing. The fix for that is to make focus
+ * an outline, which `shared/ts/ui/*` now is. Blocking `ring-*` before the
+ * consumers that still spell focus that way have followed would delete their
+ * focus indication outright instead of correcting it, so it waits for them.
+ */
+const NUI_BLOCKLIST = [
+  // Elevation, in both namespaces, with or without a variant prefix.
+  /(?:^|:)(?:drop-)?shadow(?:-|$)/,
+  // The translucency effect, and the standalone chain that feeds it.
+  /(?:^|:)backdrop-/,
+  /(?:^|:)blur(?:-|$)/,
+];
 
 /** The families every bundle here has, in both dialects, with no `-foreground`. */
 const SHARED_COLORS = ["border", "input", "ring", "background", "foreground"] as const;
@@ -233,7 +290,7 @@ export function tPreset(options: TPresetOptions): Preset[] {
     extraPresets = [],
     attributify = true,
     typography = true,
-    backdropBackground = true,
+    backdropBackground = false,
   } = options;
 
   const presets: Preset[] = [target === "nui" ? unocss.presetWind3() : unocss.presetWind4()];
@@ -269,6 +326,9 @@ export function tPreset(options: TPresetOptions): Preset[] {
 
   presets.push({
     name: "@tlib/uno-preset",
+    // nui only. A web bundle runs in a real browser, which composites all three
+    // families perfectly well; the ban is a CEF fact, not a taste.
+    ...(target === "nui" ? { blocklist: NUI_BLOCKLIST as Preset["blocklist"] } : {}),
     transformers: [
       unocss.transformerDirectives(),
       unocss.transformerVariantGroup(),
