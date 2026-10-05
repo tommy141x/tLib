@@ -446,6 +446,40 @@ end
 local Gate = {}
 Gate.__index = Gate
 
+-- Every gate this resource has built, so a disconnect can drop that player's
+-- memoised answer from all of them.
+--
+-- ⚠️ WITHOUT THIS A GATE IS A MEMORY LEAK, and a silent one. `Gate:allowed`
+-- memoises one entry per player it has EVER been asked about, keyed by src, and
+-- nothing in the gate itself ever removes one: the TTL makes an entry STALE, it
+-- does not make it go away. On a busy server that is one table entry per unique
+-- player per gate, held for the life of the process.
+--
+-- It was found because two resources happened to notice it and swept their own
+-- gates by hand from their own `playerDropped` handlers (tDetector's
+-- sv_admin.lua did `accessGate:invalidate(src)` and `toggleGate:invalidate(src)`
+-- there). Every other gate in the tree leaked. A consumer cannot reasonably be
+-- expected to know that a gate needs sweeping, so the gate sweeps itself, and
+-- the hand-written calls become redundant rather than wrong.
+--
+-- Weak KEYS, not an array: a gate the consumer has dropped must be collectable,
+-- and a weak ARRAY would leave holes that `#` cannot be asked about safely. The
+-- handler is installed once, lazily, on the first gate — `playerDropped` is an
+-- ordinary event and one handler per gate would mean N dispatches per
+-- disconnect.
+local liveGates = setmetatable({}, { __mode = 'k' })
+local gateSweepInstalled = false
+
+local function installGateSweep()
+    if gateSweepInstalled then return end
+    gateSweepInstalled = true
+    AddEventHandler('playerDropped', function()
+        local src = source
+        if src == nil then return end
+        for gate in pairs(liveGates) do gate:invalidate(src) end
+    end)
+end
+
 --- Recomputes from scratch. Never cached, never trusted from a client.
 function Gate:evaluate(src)
     if src == nil then return false end
@@ -627,6 +661,11 @@ function access.gate(block, opts)
         -- clients.
         event  = ('%s:tlib:access:%s'):format(RESOURCE, key),
     }, Gate)
+
+    -- Self-sweeping on disconnect; see `liveGates`. Registered here rather than
+    -- left to the consumer because the leak is invisible from the call site.
+    installGateSweep()
+    liveGates[self] = true
 
     -- The client mirror asks through this. It is a REQUEST for a fresh answer,
     -- never an assertion of one -- the payload is ignored on purpose.

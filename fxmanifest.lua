@@ -13,7 +13,22 @@ description 'tLib — shared UI and utility library (FiveM)'
 -- comment prose or whitespace. It is `shared.lua` rather than `client.lua`
 -- because the registry rules are asked on both sides: the client builds it to
 -- decide what to SPAWN, the server to decide what a save may STORE.
--- Additive -- nothing that worked against 0.12.0 behaves differently.
+--
+-- 0.13.0 also adds `ratelimit` (shared/imports/ratelimit/server.lua): the
+-- twelve-line per-player floor on request-shaped net events that existed as
+-- SEVEN byte-identical copies, in tELS, tRadio, tDetector x2, tRadar x2 and
+-- tUnit. The disconnect sweep -- without which every bucket keeps one
+-- timestamp per player who has ever connected, for the life of the server --
+-- is inside it, because that is the half a hand-written copy forgets.
+--
+-- And `access.gate` now sweeps itself on playerDropped. Gate:allowed memoises
+-- one answer per player it is ever asked about and the TTL only makes an entry
+-- stale, so every gate was a slow leak; exactly two resources had noticed and
+-- swept their own by hand. That is a BEHAVIOUR change, but only in the
+-- direction of a gate re-evaluating sooner for a player who left and came
+-- back, which is what it should have done all along.
+--
+-- Additive otherwise -- nothing that worked against 0.12.0 behaves differently.
 --
 -- 0.12.0 adds two things a consumer can need and cannot probe for:
 --   * tLib:HasPermissionBatch — resolves many permission keys in ONE export round trip

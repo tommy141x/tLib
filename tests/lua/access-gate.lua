@@ -13,6 +13,7 @@ local printed = {}
 local clientEvents = {}      -- { event, target, value }
 local netHandlers = {}
 local resourceStartHandlers = {}
+local playerDroppedHandlers = {}
 local timers = {}
 local gameTime = 0
 
@@ -25,6 +26,7 @@ TriggerClientEvent = function(event, target, value)
 end
 AddEventHandler = function(name, fn)
     if name == 'onResourceStart' then resourceStartHandlers[#resourceStartHandlers + 1] = fn end
+    if name == 'playerDropped' then playerDroppedHandlers[#playerDroppedHandlers + 1] = fn end
 end
 SetTimeout = function(ms, fn) timers[#timers + 1] = { ms = ms, fn = fn } end
 
@@ -579,6 +581,68 @@ reset()
 local nilSrc = access.gate({ mode = 'everyone' }, { key = 'd3', label = 'the radio' })
 demoOn = true
 assert(nilSrc:allowed(nil) == false, 'demo mode still refuses a nil source')
+
+-- ── A GATE SWEEPS ITSELF ON DISCONNECT ──────────────────────────────────────
+--
+-- Gate:allowed memoises one answer per player it has ever been asked about, and
+-- the TTL makes an entry stale rather than making it go away. Nothing in the
+-- gate ever removed one, so every gate in the tree was a slow leak: one table
+-- entry per unique player per gate, held for the life of the process.
+--
+-- It was found because exactly two resources happened to notice and swept their
+-- own gates by hand from their own playerDropped handlers. A consumer cannot
+-- reasonably be expected to know a gate needs sweeping, so the gate does it.
+--
+-- Asserted through the OBSERVABLE consequence -- the memo is private -- by
+-- flipping what the gate reads underneath it. Inside the TTL a memoised answer
+-- survives that flip; after a disconnect it must not.
+
+reset()
+local sweepGate = access.gate({ mode = 'ace', ace = 'tprobe.admin' },
+    { key = 'sweep', label = 'the radio' })
+
+assert(#playerDroppedHandlers == 1,
+    'the disconnect sweep must be installed exactly once, not once per gate; got '
+    .. #playerDroppedHandlers)
+
+local function dropPlayer(src)
+    source = src
+    for _, fn in ipairs(playerDroppedHandlers) do fn() end
+    source = nil
+end
+
+gameTime = 1000
+aceGrants['11|tprobe.admin'] = true
+assert(sweepGate:allowed(11), 'precondition: the ace grant opens the gate')
+
+aceGrants['11|tprobe.admin'] = nil
+assert(sweepGate:allowed(11),
+    'precondition: inside the TTL the memoised answer is reused, so there IS '
+    .. 'something for the sweep to drop')
+
+dropPlayer(11)
+assert(sweepGate:allowed(11) == false,
+    'a disconnected player kept their memoised answer; the gate leaks one entry '
+    .. 'per unique player for the life of the server')
+
+-- Every gate, not just the most recent one.
+local second = access.gate({ mode = 'ace', ace = 'tprobe.admin' },
+    { key = 'sweep2', label = 'the radio' })
+assert(#playerDroppedHandlers == 1, 'a second gate registered a second handler')
+aceGrants['12|tprobe.admin'] = true
+assert(second:allowed(12) and sweepGate:allowed(12), 'precondition: both gates memoised 12')
+aceGrants['12|tprobe.admin'] = nil
+dropPlayer(12)
+assert(second:allowed(12) == false and sweepGate:allowed(12) == false,
+    'the sweep reached only some of the live gates')
+
+-- A disconnect with no source must not wipe every player from every gate.
+aceGrants['13|tprobe.admin'] = true
+assert(sweepGate:allowed(13), 'precondition')
+aceGrants['13|tprobe.admin'] = nil
+dropPlayer(nil)
+assert(sweepGate:allowed(13),
+    'a sourceless playerDropped invalidated everyone')
 
 print = realPrint
 print('PASS access-gate')
