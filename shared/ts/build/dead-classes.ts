@@ -614,6 +614,42 @@ export async function findDeadClasses(options: DeadClassOptions): Promise<DeadCl
     .sort((a, b) => a.token.localeCompare(b.token));
 }
 
+/**
+ * The whole `check:classes` script: find, report, set the exit status.
+ *
+ * ── Why this is here and not copied into each bundle ──
+ *
+ * UnoCSS has no failure mode for a class it does not recognise — it emits
+ * nothing, so a typo, or a spelling from the *other* preset, reads as perfectly
+ * normal source and silently does nothing in the browser. That is what the
+ * check exists for, and the three lines that turn `findDeadClasses` into a
+ * usable gate (print, then exit non-zero on a finding) were copied verbatim
+ * into seven bundles — five of them byte-identical files. Adding anything to
+ * the protocol, a count or a machine-readable mode, meant seven edits.
+ *
+ * ── Why the caller constructs the generator ──
+ *
+ * `uno` is taken as an argument rather than built from a config here, and that
+ * is load-bearing rather than tidiness. The point of the check is that it
+ * reflects *the preset this bundle actually ships*: a generator built against
+ * tLib's own `unocss` would answer for tLib's resolved version and tLib's
+ * presets, not the consumer's. So `createGenerator` stays in the consumer,
+ * beside the `uno.config.ts` it reads, and only the protocol is shared.
+ *
+ * `roots` defaults to `["src"]` because every caller passes exactly that; the
+ * bundles that need more — tLib reaches into `shared/ts` for the stylesheets
+ * that define its `mp-*` hooks, tRadio's dispatch panel excludes the theme
+ * SDK's uncompiled starter template — pass their own options and explain why
+ * at the call site, which is where that reasoning belongs.
+ */
+export async function runDeadClassCheck(
+  options: Omit<DeadClassOptions, "roots"> & { roots?: string[] },
+): Promise<void> {
+  const dead = await findDeadClasses({ roots: ["src"], ...options });
+  console.log(formatDeadClasses(dead));
+  if (dead.length > 0) process.exit(1);
+}
+
 export function formatDeadClasses(dead: DeadClass[]): string {
   if (dead.length === 0) return "No dead utility classes.";
   const lines = dead.map(({ token, files }) => {

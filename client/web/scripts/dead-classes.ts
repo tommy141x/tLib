@@ -1,13 +1,14 @@
 /**
- * Fails when a class name in this bundle generates no CSS.
+ * `check:classes` for this bundle — fails when a class name here generates no CSS.
  *
- * The generator is built from this project's own uno.config.ts on purpose: the
- * bugs worth catching here are preset-specific spellings. `data-disabled:` and
- * `bg-linear-to-r` are correct Tailwind v4 / presetWind4, and produce nothing
- * at all under the presetWind3 this NUI bundle has to use for CEF 103.
+ * The mechanism, and why the check exists at all, is documented on
+ * `runDeadClassCheck` in `shared/ts/build/dead-classes.ts`. `createGenerator`
+ * is deliberately called HERE rather than inside that module: the check has to
+ * answer for the preset and the `unocss` version THIS bundle ships, which is
+ * the whole point of it.
  */
 import { createGenerator } from "unocss";
-import { findDeadClasses, formatDeadClasses } from "../../../shared/ts/build/index.ts";
+import { runDeadClassCheck } from "../../../shared/ts/build/index.ts";
 import config from "../uno.config.ts";
 
 /**
@@ -25,7 +26,6 @@ import config from "../uno.config.ts";
  */
 const THEMING_HOOKS = [/^tlib-/, "mp-preview", "weapon-stats"];
 
-const uno = await createGenerator(config);
 /**
  * `cssRoots` reaches outside `src` because the stylesheets that declare these
  * names no longer live in this app. `nui.css` and `marketplace.css` moved into
@@ -34,15 +34,11 @@ const uno = await createGenerator(config);
  * resource. Without this, every `mp-*` class MarketplacePanel.tsx uses is
  * reported dead because its definition is simply out of scope.
  *
- * `roots` stays `src`: this check is about class names THIS bundle ships, and
- * the shared package's own usages are its own business.
+ * `roots` stays the default `src`: this check is about class names THIS bundle
+ * ships, and the shared package's own usages are its own business.
  */
-const dead = await findDeadClasses({
-  uno,
-  roots: ["src"],
+await runDeadClassCheck({
+  uno: await createGenerator(config),
   cssRoots: ["src", "../../shared/ts"],
   extraAlive: THEMING_HOOKS,
 });
-
-console.log(formatDeadClasses(dead));
-if (dead.length > 0) process.exit(1);

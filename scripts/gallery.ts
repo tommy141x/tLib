@@ -45,6 +45,7 @@
 
 import { mkdirSync, readdirSync, rmSync, unlinkSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
+import { cliArg } from "../shared/ts/build/argv.ts";
 import {
   DIALOGS,
   LAYOUT_OPEN,
@@ -56,14 +57,6 @@ import {
 } from "./gallery-fixtures.ts";
 
 const ROOT = join(import.meta.dir, "..");
-
-function arg(name: string, dflt: string): string {
-  const i = process.argv.indexOf(`--${name}`);
-  if (i < 0) return dflt;
-  const v = process.argv[i + 1];
-  if (!v || v.startsWith("--")) throw new Error(`--${name} needs a value`);
-  return v;
-}
 
 const SURFACES = ["menu", "dialog", "toast", "marketplace", "layout", "propeditor"] as const;
 type Surface = (typeof SURFACES)[number];
@@ -78,11 +71,11 @@ type Surface = (typeof SURFACES)[number];
  */
 const PROP_EDITOR_HOSTS = ["tRadio", "tRadar", "tDetector"] as const;
 
-const outDir = arg("out", join(ROOT, "assets", "gallery"));
-const dist = resolve(arg("dist", join(ROOT, "client", "ui")));
-const [vpW, vpH] = arg("viewport", "1600x900").split("x").map(Number);
+const outDir = cliArg("out", join(ROOT, "assets", "gallery"));
+const dist = resolve(cliArg("dist", join(ROOT, "client", "ui")));
+const [vpW, vpH] = cliArg("viewport", "1600x900").split("x").map(Number);
 if (!Number.isFinite(vpW) || !Number.isFinite(vpH)) throw new Error("--viewport must be WxH");
-const only = arg("only", SURFACES.join(","))
+const only = cliArg("only", SURFACES.join(","))
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean) as Surface[];
@@ -91,7 +84,7 @@ for (const s of only) {
 }
 /** The NUI is transparent over the game. On a white page half of it is invisible; this is a
  *  neutral mid-grey so both the light and the dark parts of every surface can be judged. */
-const background = arg("background", "#3a3f47");
+const background = cliArg("background", "#3a3f47");
 
 const want = (s: Surface) => only.includes(s);
 

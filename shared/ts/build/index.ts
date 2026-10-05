@@ -1,3 +1,4 @@
+export { cliArg } from "./argv.ts";
 export type { BuildResult } from "./bun-builder.ts";
 export {
   buildServerBundle,
@@ -20,7 +21,7 @@ export {
   step,
 } from "./core.ts";
 export type { DeadClass, DeadClassOptions } from "./dead-classes.ts";
-export { findDeadClasses, formatDeadClasses } from "./dead-classes.ts";
+export { findDeadClasses, formatDeadClasses, runDeadClassCheck } from "./dead-classes.ts";
 export type { DevConfig, WatcherDef } from "./dev.ts";
 export { startDevMode } from "./dev.ts";
 export type {
@@ -92,6 +93,8 @@ export {
   throwIfMissed,
   toSemver,
 } from "./version.ts";
+export type { NuiBundleOptions } from "./nui-vite.ts";
+export { nuiBundleOptions } from "./nui-vite.ts";
 export type {
   SelfHostWebFontsOptions,
   SelfHostWebFontsResult,
