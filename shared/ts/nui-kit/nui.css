@@ -1,6 +1,6 @@
 /* Scoped HSL aliases preserve public themes and never touch menu full-color tokens.
  *
- * ── Why every token carries a fallback ──────────────────────────────────────
+ * ── Why every token carries a fallback, and when that stops ─────────────
  *
  * These controls are imported by tELS, tDetector and tRadar, not just tLib.
  * `shared/css/theme-tokens.css` is meant to be the one token file every NUI
@@ -11,9 +11,29 @@
  * nothing. The fallbacks below are the values from `theme-tokens.css`, so a host
  * that imports it is unaffected and a host that does not still renders.
  *
- * This is the same reasoning `admin-ui/index.tsx` already documents for its own
- * palette; the fallback there is load-bearing for exactly the same two hosts.
- * Do not "clean up" a fallback because tLib looks fine without it.
+ * ⚠️ That is a BUG DESCRIBED AS A FEATURE, and it is recorded here as debt, not
+ * as a design. A component should not ship a copy of the theme; the host should
+ * define the theme, and then a component simply works. The fallbacks survive
+ * this phase for one reason only: tDetector and tRadar would render nothing
+ * without them TODAY.
+ *
+ * The follow-up, which phase 2 owns and which must happen in this order:
+ *
+ *   1. `@import "@tlib/shared/css/theme-tokens.css"` in tDetector's and
+ *      tRadar's `src/global.css`. Both already import this file, so the import
+ *      has somewhere to go; neither declares `--card`, `--border`,
+ *      `--foreground`, `--input`, `--muted-foreground`, `--secondary` or
+ *      `--background` today.
+ *   2. Build both and diff the stylesheet. Every token the fallbacks were
+ *      standing in for now has a declared value, so the rendered colours must
+ *      not move — the fallbacks ARE those values.
+ *   3. Then, and only then, strip the `, <triplet>` fallback from every
+ *      `var(--x, ...)` in this file. Doing it before step 1 blanks two shipped
+ *      UIs, and doing it without step 2 hides whether a token drifted.
+ *
+ * Until then: do not "clean up" a fallback because tLib looks fine without it.
+ * The same reasoning, and the same debt, applies to `admin-ui/index.tsx`'s own
+ * inline palette, for exactly the same two hosts.
  */
 .tlib-nui-surface {
   --nui-surface: hsl(var(--card, 0 0% 6.67%));
@@ -81,18 +101,45 @@
   font-family: var(--font-sans);
   font-size: 14px;
 }
+/* ── Focus is an outline, and only an outline ───────────────────────────────
+ *
+ * This used to paint focus with a 3px zero-blur elevation over a transparent
+ * 2px outline, and it rendered ONLY because that blur radius was zero. That is
+ * the exact state `shared/css/surface.css:54-58` says it refuses to depend on,
+ * for two reasons that are both real here:
+ *
+ *   - CEF 103 does not composite a blurred one usefully, so the moment anybody
+ *     widens the radius to make focus more visible, focus stops rendering.
+ *   - An elevation inside an `overflow: hidden` ancestor is clipped away
+ *     entirely. That is not hypothetical: it is already happening in tELS's own
+ *     `ui/select.tsx`.
+ *
+ * So: two signals, border-colour AND an outline, which is what the Ark kit in
+ * `shared/ts/ui/*` now does as well. The border survives clipping; the outline
+ * survives a host that restyles the border. `outline-offset` is negative so the
+ * ring draws INSIDE the box and a dense row's neighbours do not move, and the
+ * transition names `outline-color` rather than the `outline` shorthand, which
+ * would animate the width and jitter the pixels beside it.
+ *
+ * The token namespace stays `--nui-accent-raw`. Only the mechanism is shared
+ * with the Ark kit's `--ring`, not the tokens.
+ *
+ * The transparent-at-rest form, rather than `outline: none`, is what makes both
+ * the colour transition and the `forced-colors` override at the bottom of this
+ * file possible: neither can act on an outline that does not exist.
+ */
 .tlib-nui-control {
   outline: 2px solid transparent;
-  outline-offset: 2px;
+  outline-offset: -1px;
   transition:
     background-color 100ms ease-out,
     border-color 100ms ease-out,
-    box-shadow 100ms ease-out;
+    outline-color 100ms ease-out;
 }
 .tlib-nui-control:focus-visible,
 .tlib-nui-control[data-focus-visible] {
   border-color: var(--nui-accent);
-  box-shadow: 0 0 0 3px hsl(var(--nui-accent-raw) / 0.24);
+  outline-color: hsl(var(--nui-accent-raw) / 0.4);
 }
 .tlib-nui-control:disabled,
 .tlib-nui-control[data-disabled] {
@@ -352,14 +399,19 @@
   border-radius: 50%;
   background: var(--nui-accent);
   cursor: grab;
+  /* The drag halo is an outline for the same reason the focus state above is
+     one. Offset is POSITIVE here, unlike the control: the halo is emphasis
+     around a 17px dot rather than an affordance inside a dense box. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   transition:
-    box-shadow 100ms ease-out,
+    outline-color 100ms ease-out,
     scale 100ms ease-out;
 }
 .tlib-nui-slider-thumb[data-dragging] {
   scale: 1.1;
   cursor: grabbing;
-  box-shadow: 0 0 0 4px hsl(var(--nui-accent-raw) / 0.18);
+  outline-color: hsl(var(--nui-accent-raw) / 0.4);
 }
 .tlib-nui-slider-value {
   min-width: 3ch;

@@ -27,8 +27,9 @@ export function PropField(props: PropFieldProps) {
       <span class="font-mono text-muted-foreground text-right shrink-0 tlib-pe-field-label">
         {props.label}
       </span>
-      {/* Sizes, the hover step and the focus ring are all in `prop-editor.css`,
-          which is also where the ring is matched to the shared button kit's —
+      {/* Sizes, the hover step and the focus outline are all in
+          `prop-editor.css`, which is also where that outline is matched to the
+          shared button kit's —
           same token, same width, same offset. The old `focus:outline-none` with
           only a border tint left this the one control in the editor a keyboard
           user could not see they were on. */}

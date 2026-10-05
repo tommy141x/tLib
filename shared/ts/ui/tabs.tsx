@@ -33,12 +33,12 @@ import { type Component, createSignal, omit, onSettled } from "solid-js";
  * ── The other differences ──────────────────────────────────────────────────
  *
  * Trigger text is 12px, not `text-sm` (14px) — the body step of the scale at the
- * top of `shared/css/surface.css`. The `default` indicator lost its `shadow-sm`:
- * CEF does not composite it, so it was never on screen anyway.
+ * top of `shared/css/surface.css`. The `default` indicator lost its own
+ * elevation: CEF does not composite it, so it was never on screen anyway.
  */
 
 const tabTriggerVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-[12px] font-medium ring-offset-background transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 relative",
+  "inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-[12px] font-medium transition-all duration-200 ease-out outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:pointer-events-none disabled:opacity-50 relative",
   {
     variants: {
       variant: {
@@ -118,7 +118,7 @@ export const TabsContent: Component<{
   return (
     <ArkTabs.Content
       class={cn(
-        "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1",
         "mt-4",
         props.class
       )}

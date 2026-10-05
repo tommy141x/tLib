@@ -60,12 +60,12 @@ const SIZES = {
 } as const;
 
 const CONTROL_BASE =
-  "peer shrink-0 rounded-sm border border-primary ring-offset-background transition-colors duration-200 ease-out hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground";
+  "peer shrink-0 rounded-sm border border-primary transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-200 ease-out hover:border-ring outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground";
 
 const INDICATOR_BASE = "flex items-center justify-center w-full h-full [&[hidden]]:hidden";
 
 const LABEL_BASE =
-  "font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 transition-colors duration-150 cursor-pointer select-none";
+  "font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-150 cursor-pointer select-none";
 
 export const Checkbox = (props: CheckboxProps & { size?: keyof typeof SIZES }) => {
   const others = omit(props, "children", "class", "size");

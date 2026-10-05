@@ -39,8 +39,8 @@ export const Switch: Component<SwitchProps> = (props) => {
       id={switchId}
       class={cn("inline-flex items-center gap-2 cursor-pointer", props.class)}
     >
-      <ArkSwitch.Control class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed data-[disabled]:opacity-60 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input">
-        <ArkSwitch.Thumb class="pointer-events-none block h-5 w-5 rounded-full bg-background ring-0 transition-transform duration-200 ease-in-out data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0" />
+      <ArkSwitch.Control class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-200 ease-in-out outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:cursor-not-allowed data-[disabled]:opacity-60 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input">
+        <ArkSwitch.Thumb class="pointer-events-none block h-5 w-5 rounded-full bg-background transition-transform duration-200 ease-in-out data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0" />
       </ArkSwitch.Control>
       <ArkSwitch.Label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
         {props.children}

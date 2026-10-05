@@ -24,8 +24,8 @@ import { omit } from "solid-js";
  *
  * One class also means this control, the Select trigger and any hand-rolled field
  * in a consumer are one surface that cannot drift apart. `.prop-input` carries its
- * own 12px, its own disabled state, and its own focus ring — an `outline`, never a
- * blurred `box-shadow`, because CEF does not composite one.
+ * own 12px, its own disabled state, and its own focus outline — a real `outline`,
+ * never a blurred elevation, because CEF does not composite one.
  *
  * ── There is no `xs` ────────────────────────────────────────────────────────
  *

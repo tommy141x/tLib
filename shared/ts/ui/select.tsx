@@ -35,9 +35,10 @@ import IconChevronDown from "~icons/lucide/chevron-down";
  *      `ui/input.tsx` uses, so the dropdown and the text field beside it are
  *      visibly the same kind of thing and cannot drift apart.
  *
- * Also: no `shadow-md` on the Content. FiveM's CEF does not composite a blurred
- * drop shadow usefully; it costs a compositor pass over a moving 3D scene and buys
- * nothing. Nothing in `shared/ts/ui/*` carries one any more.
+ * Also: no elevation on the Content. FiveM's CEF does not composite a blurred one
+ * usefully; it costs a compositor pass over a moving 3D scene and buys nothing.
+ * Nothing in `shared/ts/ui/*` carries one any more, and the shared preset now
+ * blocklists the family outright for a nui build.
  *
  * Consumers must import `@tlib/shared/css/surface.css` for `.prop-input`, and have
  * `unplugin-icons` configured — the two `~icons/lucide/*` imports are synthesised
@@ -129,8 +130,8 @@ export function Select(props: SelectProps) {
         <ArkSelect.Trigger
           aria-label={props.label}
           class={cn(
-            // `.prop-input` already carries the `[data-state="open"]` focus ring
-            // that Ark sets here.
+            // `.prop-input` already carries the `[data-state="open"]` focus
+            // outline that Ark sets here.
             "prop-input inline-flex items-center justify-between gap-1.5 text-left",
             sz().trigger,
             props.class
