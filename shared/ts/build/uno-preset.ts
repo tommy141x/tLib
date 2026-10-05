@@ -160,6 +160,28 @@ export interface TPresetOptions {
    * passes `backdropBackground: true` together with `backgroundRule: true`.
    */
   backdropBackground?: boolean;
+  /**
+   * Keeps the elevation/translucency families on a `target: "nui"` bundle.
+   *
+   * **This is ONE documented exception, not a switch.** Nine bundles build with
+   * `target: "nui"` and eight of them must keep the ban non-negotiable: for them
+   * these families are bytes that paint nothing, and the extractor reading a
+   * COMMENT about one is enough to emit it (see `NUI_BLOCKLIST`). Do not reach
+   * for this flag to make a gate go green.
+   *
+   * The one caller is `tRadio/server/web`, the dispatch panel -- the only
+   * DUAL-HOME app here. It is served to a real browser AND embedded in a CEF
+   * iframe in game, and it is on `target: "nui"` for the Wind3 reason recorded
+   * in its own config (CEF 103 drops `color-mix`/`oklch`), not because NUI is
+   * its only home. In the browser half these families composite properly and
+   * the design uses them: translucent modal scrims, raised modal/toast edges,
+   * and the deliberate indicator glows in `DispatchSidebar`, `Zone` and `User`.
+   *
+   * Accepted cost: in the CEF half they still will not paint. They are carried
+   * for the browser audience, and the game half simply renders the flat surface
+   * underneath -- which is the same recipe every other bundle ships.
+   */
+  nuiElevationException?: boolean;
 }
 
 /**
@@ -220,15 +242,15 @@ export interface TPresetOptions {
  * ⚠️ And the largest of them is the one that must not be changed:
  * `tRadio/server/web` is the only DUAL-HOME app -- a CEF iframe AND a real
  * browser, where its elevation genuinely composites -- yet it builds with
- * `target: "nui"`, so this blocklist reaches it. Its `check:classes:dispatch`
- * failure is a known, deliberate, user-pending decision. Adding `ring-*` here
- * would silently strip ~37 focus affordances out of that app as a side effect of
- * a tLib commit, which is the opposite of letting that decision be made.
+ * `target: "nui"`, so this blocklist reaches it. It is now the single caller of
+ * `nuiElevationException`, which exempts it from this list entirely; see that
+ * option's doc for the reasoning and the accepted cost. Adding `ring-*` here
+ * would still silently strip ~37 focus affordances out of the other four as a
+ * side effect of a tLib commit.
  *
- * The honest order is therefore: migrate those five onto the outline spelling
- * (or give this preset a per-consumer opt-out, which is itself part of the
- * pending tRadio decision and must NOT be invented here first), re-run the count
- * above, and only then add the entry. Counting is cheap -- do it, don't assume.
+ * The honest order is therefore: migrate those four remaining consumers onto the
+ * outline spelling, re-run the count above, and only then add the entry.
+ * Counting is cheap -- do it, don't assume.
  */
 const NUI_BLOCKLIST = [
   // Elevation, in both namespaces, with or without a variant prefix.
@@ -320,6 +342,7 @@ export function tPreset(options: TPresetOptions): Preset[] {
     attributify = true,
     typography = true,
     backdropBackground = false,
+    nuiElevationException = false,
   } = options;
 
   const presets: Preset[] = [target === "nui" ? unocss.presetWind3() : unocss.presetWind4()];
@@ -357,7 +380,14 @@ export function tPreset(options: TPresetOptions): Preset[] {
     name: "@tlib/uno-preset",
     // nui only. A web bundle runs in a real browser, which composites all three
     // families perfectly well; the ban is a CEF fact, not a taste.
-    ...(target === "nui" ? { blocklist: NUI_BLOCKLIST as Preset["blocklist"] } : {}),
+    //
+    // `nuiElevationException` is the single dual-home carve-out documented on the
+    // option itself -- tRadio's dispatch panel, which is on this target for the
+    // Wind3 reason and is also served to a browser. Eight other nui bundles pass
+    // nothing here and keep the ban.
+    ...(target === "nui" && !nuiElevationException
+      ? { blocklist: NUI_BLOCKLIST as Preset["blocklist"] }
+      : {}),
     transformers: [
       unocss.transformerDirectives(),
       unocss.transformerVariantGroup(),
