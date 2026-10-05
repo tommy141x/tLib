@@ -482,7 +482,14 @@ if CONTROL then
     -- something the `redact` flag does not actually control -- which is how the
     -- first draft of this file came to "pass" its own control while three of
     -- its five redaction checks were measuring an unrelated layer.
-    local expected = 7
+    -- ⚠️ RAISE THIS WHEN YOU ADD A `redactsValue`. 43cc768 added the two
+    -- unquoted-numeric-credential cases and left the count at 7, so the control
+    -- reported "9 of 7 ... flipped" and REFUSED the run -- a control that cannot
+    -- pass gets ignored, which is how the gate it guards stops being proved.
+    -- The direction mattered in diagnosing it: MORE assertions flipped than the
+    -- counter expected, so nothing had stopped measuring; only the counter was
+    -- stale. There are 9 `redactsValue` call sites in this file.
+    local expected = 9
     if flipped ~= expected or #failures > 0 then
         realPrint(('CONTROL FAILED: %d of %d value-redaction assertions flipped with redact=false.')
             :format(flipped, expected))
