@@ -133,27 +133,44 @@ export function cn(...classLists: ClassValue[]) {
 const LENGTH = String.raw`\[(?:[-+.\d]|(?:clamp|calc|min|max)\()[^\]]*\]`;
 
 /**
- * ⚠️ The two `ring-offset-*` groups below STAY. Re-checked 2026-10-05; do not retire them.
+ * ⚠️ The two `ring-offset-*` groups below STAY. Re-checked 2026-10-05, AFTER the focus
+ * migration finished and `ring-*` was blocklisted in the shared preset's nui branch.
+ * Do not retire them. The reason changed; the answer did not.
  *
- * It is tempting to drop them now that the shared kit draws focus as an outline and spells
- * no offset at all -- tLib's own `shared/ts/ui/*` has zero `ring-offset-*` left. But the
- * shield is not for tLib; it is for every CALLER of `cn`, and a repo-wide count over source
- * files (not built assets) still finds live call sites:
+ * The live-call-site argument that used to hold them up is GONE, and the previous version of
+ * this note overstated it. Of the projects it listed, only tLib, tAFK, tELS, tUnit and
+ * tRadio/server import THIS `cn` at all -- tCinematics, tWeb and every `internal/*` project
+ * call `unoMerge` directly or vendor their own copy, so tLib's groups never governed them.
+ * Within the real caller set the count is now:
  *
  *   tRadio/server/web/src/components/ui/  switch, select, input, color-picker, button, badge
- *   tRadio/client/web/src/components/     ExportBadge.tsx          <- not in the earlier list
- *   tAFK/client/web/src/components/       EditorHud.tsx
- *   internal/tWeb/src/components/docs/    docs-search.tsx          (vendors its own cn.ts)
- *   plus tCinematics and four `internal/*` projects
+ *                                         -> 0, all migrated to the outline spelling
+ *   tAFK/client/web/src/components/       EditorHud.tsx   -> 0, migrated
+ *   tRadio/client/web/src/components/     ExportBadge.tsx -> 0, and it was ALREADY 0 when
+ *                                         re-counted; that line was stale when written
+ *   tLib's own shared/ts/ui/*             0 throughout
  *
- * Retiring the groups while those exist re-opens Gap 3 exactly as described above: the
- * offset's colour gets filed under the RING's colour group and the ring silently loses its
- * own colour, on every focusable element whose focus is assembled through this function. The
- * failure is invisible in review because every class involved is real and resolves to CSS.
+ * So by a live-site test these groups are dead weight. They stay for a different and
+ * stronger reason: the failure mode is still REACHABLE in shipped code.
+ *
+ * `tRadio/server/web` carries `nuiElevationException: true`, which exempts it from the nui
+ * blocklist entirely -- deliberately, because it is dual-home and a real browser composites
+ * its elevation. It is therefore the ONE nui bundle where `ring-*` still compiles, and it is
+ * a caller of this function. Retiring the groups there re-opens Gap 3 exactly as described
+ * above: the offset's colour gets filed under the RING's colour group and the ring silently
+ * loses its own colour, on every focusable element whose focus is assembled here. Every class
+ * involved is real and resolves to CSS, so the defect is invisible in review.
+ *
+ * Retiring them would also make this copy and tWeb's vendored one disagree about a
+ * correctness rule, in the direction of the weaker of the two.
  *
  * Note also that `tests/unit/cn-contract.test.ts:174-199` and `:356-391` assert this split
  * DIRECTLY, so retiring it means editing a 34-test contract suite -- which is a reason to be
- * sure, not a reason to delete the tests. The shield is cheap; the bug it prevents is not.
+ * sure, not a reason to delete the tests. The shield costs four lines and nothing at runtime;
+ * the bug it prevents costs a focus colour nobody will spot.
+ *
+ * What WOULD make this retirable: `nuiElevationException` ceasing to exist, or the preset
+ * blocklisting `ring-*` with no exemption. Count then, do not assume.
  */
 const SHIELDED: Array<[group: string, match: RegExp]> = [
   // Ring offset, width before colour: a bare number or a bracketed length is the width.

@@ -213,44 +213,52 @@ export interface TPresetOptions {
  * `lg:`), because a variant is part of the raw candidate the blocklist is
  * matched against and a prefixed spelling is otherwise waved straight through.
  *
- * `ring-*` is deliberately NOT here, and that ordering is the whole point.
- * UnoCSS composes `box-shadow` out of
+ * `ring-*` is here as of 2026-10-05, and the delay before adding it was the
+ * whole point rather than an oversight. UnoCSS composes `box-shadow` out of
  * `var(--un-ring-offset-shadow), var(--un-ring-shadow), var(--un-shadow)` and
  * only the last of the three is the blurred one, so a ring is not elevation --
- * but under presetWind3 it is still a `box-shadow`, and a box-shadow inside an
- * `overflow: hidden` ancestor paints nothing. The fix for that is to make focus
- * an outline, which `shared/ts/ui/*` now is. Blocking `ring-*` before the
- * consumers that still spell focus that way have followed would delete their
- * focus indication outright instead of correcting it, so it waits for them.
+ * but under presetWind3 it is still a `box-shadow`, and a box-shadow painted
+ * outward from an element that fills an `overflow: hidden` ancestor is clipped
+ * to nothing. MEASURED in Chromium 103 by `scripts/probe-focus-paint.ts`: in
+ * that geometry the outward box-shadow a `ring-2` compiles to paints 0 accent
+ * pixels, and so does the same outline pushed to a POSITIVE offset, while the
+ * outline at `-1px` paints 404. The fix is therefore to make focus an outline,
+ * which `shared/ts/ui/*` already was.
  *
- * ── Re-measured 2026-10-05: IT IS STILL WAITING. Do not add it yet. ─────────
+ * Blocking this list before the consumers that still spelt focus with a ring
+ * had followed would have DELETED their focus indication rather than corrected
+ * it, so it waited for them. The condition was a count, not a date:
  *
- * The gate above is a condition, not a date, and the condition is unmet. Every
- * `target: "nui"` bundle was counted for real `ring-*` CANDIDATES (prose and the
- * `ring` COLOUR token -- `border-ring`, `outline-ring/40` -- excluded, since an
- * anchored `(?:^|:)ring(?:-|$)` would not match those):
+ *                      2026-10-05 before   after
+ *   tRadio/server/web           ~37          1   (exempt; see below)
+ *   tELS/client/web             ~17          0
+ *   tAFK/client/web             ~16          0
+ *   tRadio/client/web             4          0   (already 0 when re-counted)
+ *   tCAD/client/web               2          0
+ *   tLib, tUnit, tDetector, tRadar: none throughout
  *
- *   tRadio/server/web  ~37   incl. 9x <kbd-focus>:ring-2, 5x :ring-ring
- *   tELS/client/web    ~17   incl. ring-inset, ring-primary, :ring-1
- *   tAFK/client/web    ~16   incl. 6x :ring-2 + 6x :ring-ring
- *   tRadio/client/web    4   ExportBadge.tsx
- *   tCAD/client/web      2   ring-white, ring-1
- *   tLib, tUnit, tDetector, tRadar: none
+ * Counted with `(?<![\w-])ring-[a-z0-9/.\[\]#%+-]+` over `.ts`/`.tsx`/`.css`,
+ * which excludes prose and the `ring` COLOUR token (`border-ring`,
+ * `outline-ring/40`) exactly as an anchored `(?:^|:)ring(?:-|$)` would. All four
+ * blocklisted bundles are at zero and every migrated affordance is proven to
+ * paint; `bun run probe:focus` re-measures all ten on demand.
  *
- * So five of nine consumers would lose focus indication the moment this lands.
+ * ⚠️ `tRadio/server/web`'s residual 1 is `components/CallQueue.tsx`, deliberately
+ * not migrated with the rest: that file was checked out and in flight in another
+ * session. It does not matter here, because that bundle is the only DUAL-HOME app
+ * -- a CEF iframe AND a real browser, where its elevation genuinely composites --
+ * and it is the single caller of `nuiElevationException`, which exempts it from
+ * this list entirely. See that option's doc. Everything else in it was migrated
+ * anyway, and for a reason worth keeping: in the CEF half a ring there was
+ * clipped just as it is anywhere else, and its Ark `Switch.Control` spelt focus
+ * `focus-visible:` on a part that is a div and is never the focused element, so
+ * that control had no focus affordance in EITHER home.
  *
- * ⚠️ And the largest of them is the one that must not be changed:
- * `tRadio/server/web` is the only DUAL-HOME app -- a CEF iframe AND a real
- * browser, where its elevation genuinely composites -- yet it builds with
- * `target: "nui"`, so this blocklist reaches it. It is now the single caller of
- * `nuiElevationException`, which exempts it from this list entirely; see that
- * option's doc for the reasoning and the accepted cost. Adding `ring-*` here
- * would still silently strip ~37 focus affordances out of the other four as a
- * side effect of a tLib commit.
- *
- * The honest order is therefore: migrate those four remaining consumers onto the
- * outline spelling, re-run the count above, and only then add the entry.
- * Counting is cheap -- do it, don't assume.
+ * A side effect worth knowing: the anchored pattern also matches a BARE `ring`,
+ * which is what the extractor emits for the English word in a comment. Nothing
+ * uses `ring` as a utility, and `.ring` was measurably present in tCAD's built
+ * sheet from the phrase "a managed focus ring" alone -- so that is reason 2
+ * above, caught rather than conceded.
  */
 const NUI_BLOCKLIST = [
   // Elevation, in both namespaces, with or without a variant prefix.
@@ -258,6 +266,10 @@ const NUI_BLOCKLIST = [
   // The translucency effect, and the standalone chain that feeds it.
   /(?:^|:)backdrop-/,
   /(?:^|:)blur(?:-|$)/,
+  // Focus, and every other hard edge, is an `outline`. Anchored, so the `ring`
+  // COLOUR token survives -- `border-ring` and `outline-ring/40` are how the
+  // settled spelling names its colour and must keep resolving.
+  /(?:^|:)ring(?:-|$)/,
 ];
 
 /** The families every bundle here has, in both dialects, with no `-foreground`. */
