@@ -420,6 +420,51 @@ function Diag.harvest(config, extraNames)
     return found
 end
 
+--- The NAMES of every credential-looking key present in a config table, whatever
+--- the type of the value.
+---
+--- `harvest` cannot supply these. It collects VALUES for the substring filter, and
+--- a value only qualifies as a string of six or more characters. A credential
+--- written without its quotes is a number, and a number is exactly the case the
+--- name rule exists for: the validator masks it ("read as 0"), so the value
+--- filter has nothing to find, and with names derived from `harvest` the name
+--- rule had nothing to match either. Both layers went blind to the same input.
+--- A present, non-empty, non-table value is enough to make its name count --
+--- an unset key has no value to disclose, and withholding its messages would
+--- hide "authToken is required" for no gain.
+--- @param config table|nil
+--- @param extraNames table|nil  extra key names to treat as credentials
+--- @return table list of key names, de-duplicated
+function Diag.secretKeys(config, extraNames)
+    local names, listed, seen = {}, {}, {}
+
+    local extra = {}
+    for _, name in ipairs(extraNames or {}) do
+        extra[tostring(name):lower()] = true
+        local leaf = tostring(name):match('[^.]+$')
+        if leaf then extra[leaf:lower()] = true end
+    end
+
+    local function walk(tbl, depth)
+        if type(tbl) ~= 'table' or depth > 4 or seen[tbl] then return end
+        seen[tbl] = true
+        for key, value in pairs(tbl) do
+            if type(value) == 'table' then
+                walk(value, depth + 1)
+            elseif value ~= nil and value ~= '' then
+                local name = tostring(key)
+                if not listed[name] and (Diag.isSecretName(key) or extra[name:lower()]) then
+                    listed[name] = true
+                    names[#names + 1] = name
+                end
+            end
+        end
+    end
+
+    walk(config, 1)
+    return names
+end
+
 --- The line filter a report is passed through.
 ---
 --- Returns function(line) -> line. A line carrying a harvested credential is
@@ -611,7 +656,12 @@ function Diag.command(opts)
 
         local function emit(text) out[#out + 1] = filter(text) end
 
-        local secretNames = {}
+        -- Derived from the config's key NAMES, not from what `harvest` found: see
+        -- `secretKeys` for why a name rule fed by the value harvest misses the
+        -- unquoted-credential case it exists for.
+        local secretNames = redact
+            and Diag.secretKeys(type(config) == 'table' and config or nil, opts.secrets)
+            or {}
         for _, entry in ipairs(secrets) do secretNames[#secretNames + 1] = entry.key end
 
         local ctx = {

@@ -408,6 +408,29 @@ local badLoader = table.concat(commands.tprobe_badloader.fn(0), '\n')
 must(badLoader:find('still printed', 1, true),
     'a raising config loader took the whole report down with it')
 
+-- ── Layer 3 for a credential that is NOT a string ──────────────────────────
+--
+-- A credential written without its quotes is a number. `harvest` only collects
+-- strings, so the value filter has nothing to match, and the validator's message
+-- has masked the value -- so neither layer would fire if the name rule were fed
+-- from `harvest`. It is fed from the config's key names instead. The numeric
+-- value below must not appear anywhere, and the message must be withheld.
+local numeric = { authToken = 8675309000111222, band = 'ka' }
+Diag.command({
+    name = 'tprobe_numeric',
+    config = numeric,
+    redact = not CONTROL,
+    report = function(ctx)
+        ctx.messages({ errors = { 'Config.authToken must be text in quotes. Found 0 (a number).' } })
+    end,
+})
+printed = {}
+local numericText = table.concat(commands.tprobe_numeric.fn(0), '\n')
+redactsValue(numericText:find('a problem with authToken', 1, true) ~= nil,
+    'a message naming an unquoted (numeric) credential was not withheld')
+redactsValue(not numericText:find('Found 0', 1, true),
+    'a message naming an unquoted (numeric) credential was echoed')
+
 -- ── The pcall guard, and the partial report ────────────────────────────────
 
 Diag.command({
