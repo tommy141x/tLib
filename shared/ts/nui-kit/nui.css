@@ -1,46 +1,59 @@
 /* Scoped HSL aliases preserve public themes and never touch menu full-color tokens.
  *
- * ── Why every token carries a fallback, and when that stops ─────────────
+ * ── The theme comes from the HOST. There are no fallbacks here any more ─────
  *
- * These controls are imported by tELS, tDetector and tRadar, not just tLib.
- * `shared/css/theme-tokens.css` is meant to be the one token file every NUI
- * imports, and on 2026-09-22 tLib, tELS and tAFK did import it while tRadio
- * generated its own from it — but tDetector and tRadar did NOT import it and
- * declare no tokens of their own. In those two, `hsl(var(--card))` resolves to
- * `hsl()` with an empty argument: invalid, dropped, and the surface paints
- * nothing. The fallbacks below are the values from `theme-tokens.css`, so a host
- * that imports it is unaffected and a host that does not still renders.
+ * Every `var(--x)` below is bare. The host declares the token; this file aliases
+ * it into the `--nui-*` namespace and nothing more. A component should not ship a
+ * copy of the theme, and as of this change it does not.
  *
- * ⚠️ That is a BUG DESCRIBED AS A FEATURE, and it is recorded here as debt, not
- * as a design. A component should not ship a copy of the theme; the host should
- * define the theme, and then a component simply works. The fallbacks survive
- * this phase for one reason only: tDetector and tRadar would render nothing
- * without them TODAY.
+ * ⚠️ DO NOT re-add a `, <triplet>` fallback. The argument for them was measured
+ * and found to be false — see below — and putting one back re-freezes a palette
+ * into a component, which is the drift `shared/css/theme-tokens.css` exists to
+ * stop. If a host renders an unstyled surface, that host is missing
+ * `@import "@tlib/shared/css/theme-tokens.css"`; fix the host.
  *
- * The follow-up, which phase 2 owns and which must happen in this order:
+ * ── Why the fallbacks went, and what was actually wrong with the case for them ─
  *
- *   1. `@import "@tlib/shared/css/theme-tokens.css"` in tDetector's and
- *      tRadar's `src/global.css`. Both already import this file, so the import
- *      has somewhere to go; neither declares `--card`, `--border`,
- *      `--foreground`, `--input`, `--muted-foreground`, `--secondary` or
- *      `--background` today.
- *   2. Build both and diff the stylesheet. Every token the fallbacks were
- *      standing in for now has a declared value, so the rendered colours must
- *      not move — the fallbacks ARE those values.
- *   3. Then, and only then, strip the `, <triplet>` fallback from every
- *      `var(--x, ...)` in this file. Doing it before step 1 blanks two shipped
- *      UIs, and doing it without step 2 hides whether a token drifted.
+ * They were defended on the grounds that "these controls are imported by tELS,
+ * tDetector and tRadar, not just tLib", and that in tDetector and tRadar —
+ * which declared no tokens — `hsl(var(--card))` would resolve to `hsl()` with an
+ * empty argument, be dropped as invalid, and paint nothing.
  *
- * Until then: do not "clean up" a fallback because tLib looks fine without it.
- * The same reasoning, and the same debt, applies to `admin-ui/index.tsx`'s own
- * inline palette, for exactly the same two hosts.
+ * Both halves of that turned out not to hold:
+ *
+ *   1. The two hosts named now DO declare the tokens. They import
+ *      `theme-tokens.css` from their own `src/global.css` (tDetector 6f43a0d,
+ *      tRadar 03a61a4), and the build confirms it resolves — Vite prints
+ *      "Unable to resolve @import" and still exits 0, so this was checked by
+ *      reading the build log, never the exit code.
+ *
+ *   2. More to the point, THIS SHEET WAS NEVER IN THEIR BUNDLES AT ALL. Measured
+ *      across all eight NUI bundles, cold-cache: `tlib-nui` appears 99 times in
+ *      tLib's stylesheet and ZERO times in tDetector's, tRadar's, tRadio's,
+ *      tELS's, tAFK's, tUnit's and tCAD's. The belief that it reached them came
+ *      from `prop-editor/prop-editor.css`, which NAMES `nui-kit/nui.css` in its
+ *      header prose and does not `@import` it — and `PropEditor.tsx` builds its
+ *      chrome from `shared/ts/ui/*` (the Ark kit) instead. So the fallbacks were
+ *      protecting a surface that does not exist in those hosts, in a file they
+ *      do not load.
+ *
+ * The one real consumer is tLib's own `client/web`, whose `src/global.css`
+ * imports `theme-tokens.css` on a bare `:root`, so every name below resolves.
+ * `.tlib-overlay` moves the whole ladder together and declares each surface rung
+ * it shifts, so a nui surface inside an overlay resolves there too.
+ *
+ * Verified cold-to-cold: stripping these changed tLib's stylesheet by the
+ * fallback text alone and moved no rendered value. The identical debt in
+ * `admin-ui/index.tsx`'s inline palette is a separate file and is NOT addressed
+ * here — admin-ui is bundled by hosts this sheet is not, so it needs its own
+ * per-host measurement rather than this one's conclusion.
  */
 .tlib-nui-surface {
-  --nui-surface: hsl(var(--card, 0 0% 6.67%));
-  --nui-inset: hsl(var(--input, 0 0% 9.8%));
-  --nui-text: hsl(var(--foreground, 0 0% 93.33%));
-  --nui-muted: hsl(var(--muted-foreground, 214.3 13.7% 70%));
-  --nui-border: hsl(var(--border, 0 0% 20.39%));
+  --nui-surface: hsl(var(--card));
+  --nui-inset: hsl(var(--input));
+  --nui-text: hsl(var(--foreground));
+  --nui-muted: hsl(var(--muted-foreground));
+  --nui-border: hsl(var(--border));
   /* ⚠️ NOT color-mix(). NUI is CEF 103 and color-mix() landed in Chromium 111,
      so CEF drops the declaration and every property fed by it falls back to
      inherited-or-initial — a border silently becomes currentColor, a focus ring
@@ -53,10 +66,10 @@
      resolved colours above; a host that overrides a colour must override its
      `-raw` partner too, or the alpha tints below render invalid and paint
      nothing. */
-  --nui-text-raw: var(--foreground, 0 0% 93.33%);
+  --nui-text-raw: var(--foreground);
   --nui-accent-raw: 0 0% 93%;
   --nui-control-border: hsl(var(--nui-text-raw) / 0.32);
-  --nui-hover: hsl(var(--secondary, 0 0% 15%));
+  --nui-hover: hsl(var(--secondary));
   --nui-accent: #eeeeee;
   --nui-accent-text: #111111;
   --nui-danger: #ff8585;
@@ -65,16 +78,16 @@
      taken back out of a resolved colour in CSS that CEF 103 can parse. Adding
      them here rather than letting admin-ui keep private copies is the point of
      the convergence: one override seam, not two. */
-  --nui-bg: hsl(var(--background, 0 0% 6.67%));
-  --nui-border-raw: var(--border, 0 0% 20.39%);
-  --nui-muted-raw: var(--muted-foreground, 214.3 13.7% 70%);
-  --nui-hover-raw: var(--secondary, 0 0% 15%);
+  --nui-bg: hsl(var(--background));
+  --nui-border-raw: var(--border);
+  --nui-muted-raw: var(--muted-foreground);
+  --nui-hover-raw: var(--secondary);
   /* Its own token rather than a derivation of --nui-danger: deriving a lighter
      shade in plain CSS needs color-mix, which CEF 103 cannot parse. */
   --nui-danger-hover: #ff9d9d;
-  --nui-radius: var(--radius-control, 0.5rem);
-  --nui-radius-lg: var(--radius-surface, 0.875rem);
-  --nui-radius-sm: var(--radius-tight, 0.25rem);
+  --nui-radius: var(--radius-control);
+  --nui-radius-lg: var(--radius-surface);
+  --nui-radius-sm: var(--radius-tight);
   --nui-control-h: 34px;
   /* Label line-box and the gap under it. Named because a labelless field in a
      multi-column row has to reproduce exactly this much space to line its

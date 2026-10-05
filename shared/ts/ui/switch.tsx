@@ -39,10 +39,20 @@ export const Switch: Component<SwitchProps> = (props) => {
       id={switchId}
       class={cn("inline-flex items-center gap-2 cursor-pointer", props.class)}
     >
-      <ArkSwitch.Control class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-200 ease-in-out outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:cursor-not-allowed data-[disabled]:opacity-60 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input">
+      {/* The state selectors are data attributes, for the reason written up at
+          length in `checkbox.tsx`: `Switch.Control` is a span, so the
+          keyboard-focus and disabled pseudo-class variants compile to selectors
+          it can never match, and this control had no focus affordance at all.
+          zag mirrors the machine onto every part — Ark's styling guide lists
+          those attributes on Root, Control, Thumb and Label alike. The
+          attribute-based disabled opacity below was already here and already
+          correct, which is why only the FOCUS half of this control was broken.
+          (Variant names are described rather than spelled: UnoCSS scans this
+          comment and would emit a rule for one.) */}
+      <ArkSwitch.Control class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-200 ease-in-out outline-none data-[focus-visible]:border-ring data-[focus-visible]:outline-2 data-[focus-visible]:outline-solid data-[focus-visible]:outline-ring/40 data-[focus-visible]:-outline-offset-1 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input">
         <ArkSwitch.Thumb class="pointer-events-none block h-5 w-5 rounded-full bg-background transition-transform duration-200 ease-in-out data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0" />
       </ArkSwitch.Control>
-      <ArkSwitch.Label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+      <ArkSwitch.Label class="text-sm font-medium leading-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70">
         {props.children}
       </ArkSwitch.Label>
       <ArkSwitch.HiddenInput />

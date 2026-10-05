@@ -59,13 +59,52 @@ const SIZES = {
   lg: { control: "h-5 w-5", icon: "h-3.5 w-3.5", label: "text-[13px]" },
 } as const;
 
+/**
+ * ⚠️ THE STATE SELECTORS HERE ARE DATA ATTRIBUTES, NOT PSEUDO-CLASSES.
+ *    DO NOT "TIDY" THEM BACK.
+ *
+ * (Written in words below rather than spelled out: UnoCSS scans this comment, and
+ * the keyboard-focus variant followed by a colon is itself extracted as a utility.
+ * Measured — an earlier draft of this paragraph shipped a stray visibility rule
+ * into tELS and tUnit. The hazard is the whole reason the note at the bottom of
+ * this header exists; it caught this file twice.)
+ *
+ * `Checkbox.Control` is a `<div>`. It is never the focused element, and it is
+ * never a disabled form control — Ark's `Checkbox.HiddenInput` is the real input,
+ * and that is what takes focus and carries the disabled attribute. So the
+ * keyboard-focus and disabled PSEUDO-CLASS variants, written on this part,
+ * compile to selectors a div can never match. The rules were emitted into every
+ * consumer's stylesheet and then never applied once: the box had no focus
+ * affordance whatsoever.
+ *
+ * It was equally dead when focus was drawn as an elevation, so this is not a
+ * regression — it is the bug that outlived the elevation-to-outline change. The
+ * reason it survived review twice is that the string looks exactly like
+ * `button.tsx`'s, where the same spelling is correct, because a `<button>` really
+ * does take focus.
+ *
+ * What works instead: zag mirrors the machine's state onto EVERY part as data
+ * attributes. Verified against Ark's own styling guide rather than assumed —
+ * Root, Control, Label and Indicator each carry the keyboard-focus, disabled,
+ * hover, state and invalid attributes. Presence form, hence the bracketed
+ * attribute variants used below.
+ *
+ * The pointer-hover variant is deliberately left as a pseudo-class: a div
+ * genuinely does hover, and only the pointer can cause it.
+ *
+ * The label follows the same rule for the same reason. Its old sibling-based
+ * variant asked the Control to match the disabled pseudo-class — a div again — so
+ * a disabled checkbox's label never dimmed either. It reads its own attribute now
+ * and needs no sibling. `peer` stays on the Control only because consumers' own
+ * markup (tELS's, via the composable parts below) may still target it.
+ */
 const CONTROL_BASE =
-  "peer shrink-0 rounded-sm border border-primary transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-200 ease-out hover:border-ring outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground";
+  "peer shrink-0 rounded-sm border border-primary transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-200 ease-out hover:border-ring outline-none data-[focus-visible]:border-ring data-[focus-visible]:outline-2 data-[focus-visible]:outline-solid data-[focus-visible]:outline-ring/40 data-[focus-visible]:-outline-offset-1 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground";
 
 const INDICATOR_BASE = "flex items-center justify-center w-full h-full [&[hidden]]:hidden";
 
 const LABEL_BASE =
-  "font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-150 cursor-pointer select-none";
+  "font-medium leading-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70 transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-150 cursor-pointer select-none";
 
 export const Checkbox = (props: CheckboxProps & { size?: keyof typeof SIZES }) => {
   const others = omit(props, "children", "class", "size");
