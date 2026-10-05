@@ -200,6 +200,35 @@ export interface TPresetOptions {
  * an outline, which `shared/ts/ui/*` now is. Blocking `ring-*` before the
  * consumers that still spell focus that way have followed would delete their
  * focus indication outright instead of correcting it, so it waits for them.
+ *
+ * ── Re-measured 2026-10-05: IT IS STILL WAITING. Do not add it yet. ─────────
+ *
+ * The gate above is a condition, not a date, and the condition is unmet. Every
+ * `target: "nui"` bundle was counted for real `ring-*` CANDIDATES (prose and the
+ * `ring` COLOUR token -- `border-ring`, `outline-ring/40` -- excluded, since an
+ * anchored `(?:^|:)ring(?:-|$)` would not match those):
+ *
+ *   tRadio/server/web  ~37   incl. 9x <kbd-focus>:ring-2, 5x :ring-ring
+ *   tELS/client/web    ~17   incl. ring-inset, ring-primary, :ring-1
+ *   tAFK/client/web    ~16   incl. 6x :ring-2 + 6x :ring-ring
+ *   tRadio/client/web    4   ExportBadge.tsx
+ *   tCAD/client/web      2   ring-white, ring-1
+ *   tLib, tUnit, tDetector, tRadar: none
+ *
+ * So five of nine consumers would lose focus indication the moment this lands.
+ *
+ * ⚠️ And the largest of them is the one that must not be changed:
+ * `tRadio/server/web` is the only DUAL-HOME app -- a CEF iframe AND a real
+ * browser, where its elevation genuinely composites -- yet it builds with
+ * `target: "nui"`, so this blocklist reaches it. Its `check:classes:dispatch`
+ * failure is a known, deliberate, user-pending decision. Adding `ring-*` here
+ * would silently strip ~37 focus affordances out of that app as a side effect of
+ * a tLib commit, which is the opposite of letting that decision be made.
+ *
+ * The honest order is therefore: migrate those five onto the outline spelling
+ * (or give this preset a per-consumer opt-out, which is itself part of the
+ * pending tRadio decision and must NOT be invented here first), re-run the count
+ * above, and only then add the entry. Counting is cheap -- do it, don't assume.
  */
 const NUI_BLOCKLIST = [
   // Elevation, in both namespaces, with or without a variant prefix.

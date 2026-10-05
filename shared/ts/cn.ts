@@ -132,6 +132,29 @@ export function cn(...classLists: ClassValue[]) {
  */
 const LENGTH = String.raw`\[(?:[-+.\d]|(?:clamp|calc|min|max)\()[^\]]*\]`;
 
+/**
+ * ⚠️ The two `ring-offset-*` groups below STAY. Re-checked 2026-10-05; do not retire them.
+ *
+ * It is tempting to drop them now that the shared kit draws focus as an outline and spells
+ * no offset at all -- tLib's own `shared/ts/ui/*` has zero `ring-offset-*` left. But the
+ * shield is not for tLib; it is for every CALLER of `cn`, and a repo-wide count over source
+ * files (not built assets) still finds live call sites:
+ *
+ *   tRadio/server/web/src/components/ui/  switch, select, input, color-picker, button, badge
+ *   tRadio/client/web/src/components/     ExportBadge.tsx          <- not in the earlier list
+ *   tAFK/client/web/src/components/       EditorHud.tsx
+ *   internal/tWeb/src/components/docs/    docs-search.tsx          (vendors its own cn.ts)
+ *   plus tCinematics and four `internal/*` projects
+ *
+ * Retiring the groups while those exist re-opens Gap 3 exactly as described above: the
+ * offset's colour gets filed under the RING's colour group and the ring silently loses its
+ * own colour, on every focusable element whose focus is assembled through this function. The
+ * failure is invisible in review because every class involved is real and resolves to CSS.
+ *
+ * Note also that `tests/unit/cn-contract.test.ts:174-199` and `:356-391` assert this split
+ * DIRECTLY, so retiring it means editing a 34-test contract suite -- which is a reason to be
+ * sure, not a reason to delete the tests. The shield is cheap; the bug it prevents is not.
+ */
 const SHIELDED: Array<[group: string, match: RegExp]> = [
   // Ring offset, width before colour: a bare number or a bracketed length is the width.
   ["ring-offset-width", new RegExp(String.raw`^ring-offset-(?:\d|${LENGTH}$)`)],
