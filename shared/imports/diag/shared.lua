@@ -461,11 +461,25 @@ end
 ---
 --- `order` is presentation only. It is NOT the list of what gets printed, which
 --- is what a hand-maintained list silently becomes.
---- @param spec table|nil  a tlib.config spec; `spec.keys` is read
+--- A FUNCTION is accepted as well as a table and called, because both shapes
+--- are already in the tree: tRadar's `tradarConfigSpec` is a table and
+--- tDetector's `tdetConfigSpec` is a function that builds one. Making every
+--- caller normalise it would be one more thing to get right in eight places --
+--- and getting it wrong is SILENT: a function lands as `spec.keys == nil`, the
+--- first two passes produce nothing, and the dump still looks complete because
+--- the third pass lists the config's own keys. Measured, on tDetector.
+--- @param spec table|function|nil  a tlib.config spec; `spec.keys` is read
 --- @param order table|nil
 --- @param config table|nil
 --- @return table
 function Diag.configKeys(spec, order, config)
+    if type(spec) == 'function' then
+        -- A spec builder that RAISES degrades to "no spec" rather than taking
+        -- the report down: a validator that throws is exactly the condition
+        -- somebody runs this command to understand.
+        local ok, built = pcall(spec)
+        spec = ok and built or nil
+    end
     local keys = (type(spec) == 'table' and type(spec.keys) == 'table') and spec.keys or {}
     local seen, out = {}, {}
 

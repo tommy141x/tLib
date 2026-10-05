@@ -232,6 +232,20 @@ must(keys[5] == 'undeclaredKey',
 local misordered = Diag.configKeys(spec, { 'notInSpec', 'band' }, {})
 must(misordered[1] == 'band', 'an order entry outside the spec was printed as a spec key')
 
+-- A spec given as a FUNCTION is called. Both shapes are already in the tree:
+-- tRadar's `tradarConfigSpec` is a table, tDetector's `tdetConfigSpec` is a
+-- function that builds one. Getting this wrong is SILENT -- a function lands as
+-- `spec.keys == nil`, the order and spec passes produce nothing, and the dump
+-- still looks complete because the third pass lists the config's own keys. It
+-- was measured on tDetector, whose suite passed for exactly that wrong reason.
+local fromFn = Diag.configKeys(function() return spec end, { 'band' }, {})
+must(fromFn[1] == 'band' and #fromFn == 4, 'a spec supplied as a function was not called')
+-- And a spec function that raises degrades to "no spec" rather than taking the
+-- key list with it.
+local threw = Diag.configKeys(function() error('spec is broken') end, {}, { onlyKey = 1 })
+must(#threw == 1 and threw[1] == 'onlyKey',
+    'a raising spec function took the key list with it')
+
 -- ── command: the defaults nobody has to remember ───────────────────────────
 
 local tradarSpec = { keys = { band = true, maxRange = true } }
