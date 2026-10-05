@@ -72,25 +72,30 @@
  * asks this module for. Re-adding a third is one line, and should be done when
  * a consumer appears rather than in anticipation of one.
  */
-export { createStore } from "./solid-1-compat";
 /**
- * ⚠️ `reconcile` COMES FROM REAL SOLID 2, NOT FROM THE SHIM, AND THE SPELLING
- * MATTERS EVEN THOUGH BOTH WOULD RUN.
+ * ⚠️ BOTH NAMES COME FROM THE SHIM, AND `reconcile` DOING SO IS A REVERSAL.
  *
- * It used to be on the line above, beside `createStore`. `solid-1-compat.ts` does
- * not DEFINE a `reconcile` — the name only resolved because that file does
- * `export * from` the real package, so it was passing straight through anyway.
- * `tsc` reports that as TS2305 ("Module './solid-1-compat' has no exported member
- * 'reconcile'"); the bundler does not, because a wildcard re-export satisfies it.
- * So this is a real defect that only one of the two gates can see — keep the
- * two spellings distinct here, and run a consumer's `tsc --noEmit` and not only
- * its build after touching this file.
+ * It used to read `export { reconcile } from "virtual:solid-1-compat-real/
+ * solid-js"`, on the argument that Solid 2 kept `reconcile` unchanged and
+ * merely moved it out of this subpath into core, so there was nothing to
+ * adapt. That argument held while no installed vendor passed the Solid 1
+ * options-object second argument. One does now — `@tanstack/solid-virtual`
+ * calls `reconcile(items, { key: "index" })` twice — and Solid 2 reads that
+ * second parameter as the key itself, so the object reaches the diff walk and
+ * is called: `TypeError: keyFn is not a function`, inside a store setter
+ * inside a tracked callback, which halts the whole reactive system.
  *
- * Solid 2 kept `reconcile` with the same semantics and simply moved it from
- * `solid-js/store` into `solid-js` core, so the real one is the correct thing to
- * hand back — there is nothing for the shim to adapt. See the block comment where
- * a `reconcile` wrapper used to be in solid-1-compat.ts for the measurement that
- * retired it (measured across every consumer's installed tree: no vendor passes
- * a second argument at all).
+ * THIS SUBPATH IS THE ONLY PATH THOSE CALLS TRAVEL — `@tanstack/solid-virtual`
+ * imports `{ createStore, reconcile }` from `solid-js/store` and nothing else
+ * — so a wrapper in `solid-1-compat.ts` that this file does not re-export is a
+ * wrapper that is never reached. See that file's `reconcile` block for the
+ * measurement and for what the wrapper does and does not translate.
+ *
+ * ⚠️ THE OLD SPELLING ALSO GUARDED AGAINST A REAL TS2305, and that hazard is
+ * gone rather than ignored: `solid-1-compat.ts` now DEFINES `reconcile` as a
+ * named export, so `tsc` resolves it without falling back to the wildcard
+ * re-export that only the bundler accepted. Run a consumer's `tsc --noEmit`
+ * and not only its build after touching this file; the two gates still see
+ * different things here.
  */
-export { reconcile } from "virtual:solid-1-compat-real/solid-js";
+export { createStore, reconcile } from "./solid-1-compat";

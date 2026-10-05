@@ -117,6 +117,7 @@ import {
   // `ErrorBoundary`/`SuspenseList`, which nothing imported.
   createRenderEffect as realCreateRenderEffect,
   createTrackedEffect,
+  reconcile as realReconcile,
 } from "virtual:solid-1-compat-real/solid-js";
 export * from "virtual:solid-1-compat-real/solid-js";
 
@@ -860,20 +861,30 @@ export function on(
 // used to accept it inline). Detect the legacy multi-arg call and translate
 // it into an equivalent draft mutation; a true single-function call (the 2.0
 // native form) passes straight through.
+//
+// ⚠️ EVERY CALL HERE GOES THROUGH `withStoreWritePermit`. A Solid 1 vendor
+// writes its store from inside a tracked callback as a matter of course, and
+// this file's own tracked-effect wrapper takes away the runtime's permit for
+// that — see the long note beside `storeWriteScopes` for the measurement and
+// for why the permit is put back here rather than the clear being narrowed.
+// The permit is inert outside such a body, so a write from a component or from
+// an event handler still meets the real guard unchanged.
 export function createStore<T extends object>(init: T, options?: any) {
   const [get, realSet] = (realCreateStore as any)(init, options);
   function set(...args: any[]) {
     if (args.length === 1 && typeof args[0] === "function") {
-      return realSet(args[0]);
+      return withStoreWritePermit(() => realSet(args[0]));
     }
     const value = args[args.length - 1];
     const path = args.slice(0, -1);
-    return realSet((draft: any) => {
-      let target = draft;
-      for (let i = 0; i < path.length - 1; i++) target = target[path[i]];
-      const lastKey = path[path.length - 1];
-      target[lastKey] = typeof value === "function" ? value(target[lastKey]) : value;
-    });
+    return withStoreWritePermit(() =>
+      realSet((draft: any) => {
+        let target = draft;
+        for (let i = 0; i < path.length - 1; i++) target = target[path[i]];
+        const lastKey = path[path.length - 1];
+        target[lastKey] = typeof value === "function" ? value(target[lastKey]) : value;
+      }),
+    );
   }
   return [get, set];
 }
@@ -947,7 +958,93 @@ export function createStore<T extends object>(init: T, options?: any) {
  * `filter: blur(6px)` and `getAnimations().length === 0`. A blank-looking page
  * with a perfect console. DO NOT REINTRODUCE `runWithOwner` HERE.
  */
+/*
+ * ── ⚠️ THE SAME BIT IS ALSO SOLID 2's WRITE PERMIT, AND CLEARING IT REVOKED
+ *      ONE ─────────────────────────────────────────────────────────────────
+ *
+ * `CONFIG_CHILDREN_FORBIDDEN` is not only "no primitives here". It is how the
+ * runtime recognises a tracked-effect scope AT ALL, and eight separate places
+ * read it. Enumerated in `@solidjs/signals/dist/dev-shared.js`, rc.13:
+ *
+ *   3427, 5636  PRIMITIVE_IN_FORBIDDEN_SCOPE          — the one we want off
+ *   6651        devGuardStoreSetterWrite              — EXEMPTS a store write
+ *   6741        setSignal                             — EXEMPTS a signal write
+ *   6968        markRefresh                           — EXEMPTS a refresh()
+ *   6442        PENDING_ASYNC_FORBIDDEN_SCOPE
+ *   6186, 6328, 6377  readerSeesCommitted / readNodeFast / read
+ *                                                     — committed-vs-staged reads
+ *
+ * Read the store guard, which is the whole of it. Note the NEGATION:
+ *
+ *     function devGuardStoreSetterWrite() {
+ *       if (context && !(context._config & CONFIG_CHILDREN_FORBIDDEN)) {
+ *         … throw new Error(ownedScopeWriteMessage(context));
+ *
+ * So the bit being SET is precisely what makes a store write legal inside a
+ * tracked effect. Clearing it for the duration of the body — which is what the
+ * save/restore above does — hands the vendor a scope that may nest primitives
+ * and may no longer write a store. The docblock above this function claimed
+ * "only the one bit that forbids children turned off"; that was read off the
+ * primitive guard alone and is wrong about the other seven call sites.
+ *
+ * ⛔ MEASURED on `@tanstack/solid-virtual`, which is the vendor in this set
+ * that writes a store from a `createComputed` body (see `createComputed`):
+ *
+ *     [REACTIVE_WRITE_IN_OWNED_SCOPE] … (in trackedEffect)
+ *       at devGuardStoreSetterWrite
+ *       at set                     (the `createStore` shim below)
+ *       at @tanstack/solid-virtual/dist/esm/index.js:42
+ *     → [REACTIVITY_HALTED]
+ *
+ * and `REACTIVITY_HALTED` is the expensive half: after the first throw NOTHING
+ * in the page updates again, so a later click handler runs and renders nothing.
+ * tELS's editor gallery counted 14 of these across two scenarios, plus 4
+ * overlays that never opened because the graph was already down.
+ *
+ * THE FIX: PUT THE BIT BACK FOR THE DURATION OF A STORE WRITE. The two needs
+ * are disjoint in time — a primitive is created at one moment, a setter runs at
+ * another — so each gets the bit in the state it needs and neither is traded
+ * away. `storeWriteScopes` is how the setter below knows which owner node is
+ * one of ours; re-arming any other node would legalise a write Solid 2 means
+ * to reject.
+ *
+ * ⚠️ WHY ONLY THE STORE SETTER, AND NOT ALL SEVEN. Signals are already covered
+ * by `CONFIG_OWNED_WRITE`, which `setSignal` tests FIRST and which the shimmed
+ * `createSignal` below forces on every vendor signal; `markRefresh` and the
+ * pending-async guard have no vendor call site in this set. The three READ
+ * sites are a genuine remaining divergence — a read inside the body may see a
+ * staged value where stock Solid 2 would hand back the committed one — and are
+ * recorded in the README as unproven rather than patched, because no consumer
+ * has produced a case and a speculative wrapper around every read is not free.
+ *
+ * ⛔ NOT: "stop clearing the bit, and clear it only inside the shim's own
+ * primitive constructors instead". That looks strictly better and it has a
+ * hole — `createMemo` is NOT shimmed in this file, it arrives through the
+ * `export *` passthrough, so a vendor nesting a memo would start throwing
+ * PRIMITIVE_IN_FORBIDDEN_SCOPE where it does not today. The nested-primitive
+ * rescue is load-bearing for a consumer this tree cannot run (solid-motionone's
+ * `<BlurFade>`), so it is not something to narrow on an argument.
+ */
 const CONFIG_CHILDREN_FORBIDDEN = 1 << 4; // dev-shared.js:104
+
+/** Owner nodes this file cleared the bit on, and may therefore put it back. */
+const storeWriteScopes = new WeakSet<object>();
+
+/**
+ * Runs `fn` with `CONFIG_CHILDREN_FORBIDDEN` restored, if and only if the
+ * current owner is a tracked-effect node whose bit this file cleared. Anything
+ * else is left exactly as Solid 2 built it.
+ */
+function withStoreWritePermit<T>(fn: () => T): T {
+  const owner = (getOwner as any)() as { _config?: number } | null;
+  if (!owner || !storeWriteScopes.has(owner)) return fn();
+  owner._config! |= CONFIG_CHILDREN_FORBIDDEN;
+  try {
+    return fn();
+  } finally {
+    owner._config! &= ~CONFIG_CHILDREN_FORBIDDEN;
+  }
+}
 
 function trackedEffectAllowingNestedPrimitives(compute: any, options?: any) {
   return (createTrackedEffect as any)(() => {
@@ -955,14 +1052,20 @@ function trackedEffectAllowingNestedPrimitives(compute: any, options?: any) {
     const owner = (getOwner as any)() as { _config?: number } | null;
     const forbidden =
       !!owner && typeof owner._config === "number" && !!(owner._config & CONFIG_CHILDREN_FORBIDDEN);
-    if (forbidden) owner!._config! &= ~CONFIG_CHILDREN_FORBIDDEN;
+    if (forbidden) {
+      owner!._config! &= ~CONFIG_CHILDREN_FORBIDDEN;
+      storeWriteScopes.add(owner!);
+    }
     try {
       // Returned verbatim: `createTrackedEffect` takes the return value as the
       // cleanup it runs before the next run and on disposal, which is where a
       // Solid 1 body's own returned teardown belongs.
       return compute();
     } finally {
-      if (forbidden) owner!._config! |= CONFIG_CHILDREN_FORBIDDEN;
+      if (forbidden) {
+        owner!._config! |= CONFIG_CHILDREN_FORBIDDEN;
+        storeWriteScopes.delete(owner!);
+      }
     }
   }, options);
 }
@@ -1069,44 +1172,66 @@ export function batch<T>(fn: () => T): T {
 }
 
 /*
- * ── NO `reconcile` SHIM. THE REAL SOLID 2 ONE IS HANDED BACK UNCHANGED ──────
+ * ── `reconcile`: THE OPTIONS-OBJECT SECOND ARGUMENT, BACK AGAIN ─────────────
  *
- * There was a wrapper here that ALSO accepted Solid 1's options-object second
- * argument — `reconcile(items, { key: "index", merge?: boolean })` — and
- * unwrapped it to `key`, because passing the object straight through reaches
- * Solid 2 as a `key` that is neither a string nor a function and the caller dies
- * with `TypeError: keyFn is not a function` inside a halted reactive system.
+ * Solid 1 took `reconcile(items, { key?: string | null, merge?: boolean })`.
+ * Solid 2 kept `reconcile` with the same semantics and merely moved it out of
+ * `solid-js/store` into core — but it also changed the second parameter to the
+ * key ITSELF: `reconcile(value, key?: string | ((item) => any) | null)`, read
+ * from `@solidjs/signals/dist/types/store/index.d.ts`. Hand it the Solid 1
+ * object and the object BECOMES the key, and the diff walk then calls it:
  *
- * Deleted, because the only consumer it was ever written for is no longer
- * installed anywhere. Re-measured at the UNION of every consumer's installed
- * vendor tree rather than inherited from one project's conclusion:
+ *     let i = n === null ? null : typeof n === "string" ? e => e?.[n] : n;
+ *     … const t = i(e);                   (prod/store/next/reconcile.js:44,66)
  *
- *  · `reconcile` IS imported by vendor code in every consumer (2 to 7 call
- *    sites each), so the NAME is load-bearing and must keep resolving.
- *  · NOT ONE of those call sites passes a second argument at all. Every one is
- *    `@ark-ui/solid`'s `setSnapshot(reconcile(stack.getSnapshot()))`
- *    (dist/chunk/UOW5TC4Q.jsx:273, dist/chunk/YNGV22BH.js:211).
- *  · `@tanstack/solid-virtual`, which is what passed `{ key: "index" }` and is
- *    the sole reason the wrapper was written, is installed in NO consumer.
+ * — `TypeError: keyFn is not a function`, thrown inside a store setter inside a
+ * tracked callback, so it takes the reactive system down with it rather than
+ * failing locally.
  *
- * So the name resolves through this file's `export * from
- * "virtual:solid-1-compat-real/solid-js"` to real Solid 2's own `reconcile`,
- * which Solid 2 kept with unchanged semantics and merely moved out of
- * `solid-js/store` into core. There is nothing left to adapt — and the wrapper
- * was indistinguishable from the real thing for a one-argument call anyway
- * (`realReconcile(value, undefined)` takes Solid 2's own `t = "id"` default).
+ * ── ⚠️ THIS WRAPPER WAS DELETED ONCE AND ITS REASON WENT STALE ──────────────
  *
- * ⚠️ `solid-1-compat-store.ts` TAKES IT FROM THE REAL PACKAGE EXPLICITLY rather
- * than re-exporting it from here, and that is deliberate — see its own comment.
- * A `export { reconcile } from "./solid-1-compat"` there compiles only because
- * of the wildcard above; `tsc` catches it as TS2305 and the bundler does not.
+ * The deletion note said, correctly when written: every `reconcile` call site
+ * in every consumer's vendor tree was `@ark-ui/solid`'s one-argument
+ * `setSnapshot(reconcile(stack.getSnapshot()))`, and the one package that
+ * passes the object form, `@tanstack/solid-virtual`, "is installed in NO
+ * consumer". A consumer installs it now. Re-measured 2026-10-04 at the union
+ * of the installed trees:
  *
- * If a vendor that passes the object form ever comes back, restore the wrapper
- * from history (`git log -S "key.key ?? "` in any consumer that predates the
- * shared copy) rather than rewriting it: it also recorded that Solid 1's
- * `merge` option has no Solid 2 equivalent and is dropped rather than
- * approximated.
+ *     @tanstack/solid-virtual/dist/esm/index.js:33   reconcile(…, { key: "index" })
+ *     @tanstack/solid-virtual/dist/esm/index.js:42   reconcile(…, { key: "index" })
+ *
+ * ⚠️ IT WAS INVISIBLE UNDERNEATH AN EARLIER FAULT, which is the part worth
+ * keeping. `devGuardStoreSetterWrite` rejected those same two writes at the
+ * setter's front door — see the long note beside `storeWriteScopes` — so the
+ * diff walk was never reached and the only error anyone saw was
+ * `REACTIVE_WRITE_IN_OWNED_SCOPE`. Repairing that one turned all 14 of tELS's
+ * editor-gallery page errors into 14 of `keyFn is not a function`: same count,
+ * same two scenarios, same four overlays still unopened. A guard that throws
+ * early conceals whatever stands behind it, so a shorter error list after one
+ * repair is worth less than it looks.
+ *
+ * Solid 1's `merge` has no Solid 2 equivalent and is DROPPED rather than
+ * approximated. That was the original wrapper's finding and it is carried
+ * forward deliberately; no vendor in this set passes it.
+ *
+ * A one-argument call is unchanged in behaviour: `realReconcile(value,
+ * undefined)` takes Solid 2's own `"id"` default, which was Solid 1's default
+ * as well.
+ *
+ * ⚠️ `solid-1-compat-store.ts` MUST NOW TAKE IT FROM HERE, not from the real
+ * package. `@tanstack/solid-virtual` imports `reconcile` from the
+ * `solid-js/store` subpath, so that file is the only path its calls travel;
+ * re-exporting the real one there leaves this wrapper unreached and the error
+ * exactly as it was. The TS2305 hazard its own comment records is gone with
+ * the wildcard-only resolution: this is a genuine named export now.
  */
+export function reconcile(value: any, key?: any) {
+  // Solid 1's options object. `null` IS a legal Solid 2 key (positional
+  // matching, `n === null` above) and must not be mistaken for one, which is
+  // why this tests for it explicitly rather than trusting `typeof`.
+  if (key !== null && typeof key === "object") return (realReconcile as any)(value, key.key);
+  return (realReconcile as any)(value, key);
+}
 
 /*
  * ── NO `produce`/`isProducer` SHIM ANY MORE ──────────────────────────────────

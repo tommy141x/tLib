@@ -177,11 +177,17 @@ survives. The build failure for one arrives from a different plugin, blames
 
 ## Public API
 
-`shared/ts/package.json` exports exactly one entry:
+`shared/ts/package.json` exports exactly two entries:
 
 ```json
-"./solid-compat/plugin": "./solid-compat/solid-1-compat-plugin.ts"
+"./solid-compat/plugin":        "./solid-compat/solid-1-compat-plugin.ts",
+"./solid-compat/surface-suite": "./solid-compat/solid-compat-surface-suite.ts"
 ```
+
+⚠️ The second is the test suite (see *Testing*), and exporting it does **not**
+widen the shim surface: it takes the runner and the real Solid imports as
+arguments and reads the shim files as *text*. It never imports a shim module, so
+it cannot become the supported back door the resolve-time throw exists to forbid.
 
 The shim modules are **deliberately not exported.** They are reachable only
 through the plugin's own `resolveId`, which hands them to vendor importers and
@@ -196,36 +202,114 @@ for anything else in the monorepo that may want it.
 
 ## Testing
 
-**Nothing in this directory has a test of its own, and that is a gap rather than
-a design.** The rule under *Changing anything here* — "every export must have a
-vendor call site, count it in `node_modules` or delete it" — is enforced by hand
-today.
+`solid-compat-surface-suite.ts` is the shared suite. It enforces the rule under
+*Changing anything here* — "every export must have a vendor call site, count it
+in `node_modules` or delete it" — which until now was enforced by hand across
+165 KB of shim and five consumers. That is how `createResource` survived as ~170
+lines of dead code behind a live-looking justification: the counts in its docblock
+predated the migration and were never marked historical, so reading it argued
+*for* keeping it.
 
-⚠️ **One consumer has already written the suite this layer wants.** tWeb's
-`vite/solid-1-compat-surface.test.ts` (402 lines) asserts, mechanically and
-against its own installed tree:
+**Adopt it in one file.** Assertions are shared; the tree is yours:
 
-- every shim export has a named vendor consumer (the rule above)
-- every name a vendor imports is actually supplied (the dangerous direction — a
-  missing one fails as `"./web" is not exported …` naming no importer)
-- the vendor-only gate is real: an application importer resolves to `null`, a
-  vendor importer resolves to the shim, and `ariaAttributeFix` redirects bare
-  `@solidjs/web` to `solid-2-aria-attributes.ts`
-- a control that the vendor scan found imports *at all*, so a silent empty walk
+```ts
+// scripts/solid-compat-surface.test.ts  (or wherever your test globs reach)
+import { describe, expect, test } from "vitest";
+import { solidCompatSurfaceSuite } from "<path>/solid-compat/solid-compat-surface-suite";
+import { VENDOR_PACKAGES } from "../vite/solid-compat-vendors";
+
+solidCompatSurfaceSuite(
+  { describe, test, expect },
+  {
+    vendorPackages: VENDOR_PACKAGES,
+    realSurfaces: {
+      "solid-js": () => import("solid-js"),
+      "@solidjs/web": () => import("@solidjs/web"),
+    },
+    undeclaredTypeImports: [],
+    exportsWantedOnlyByOtherConsumers: [],
+  },
+);
+```
+
+⛔ **The runner and those two imports are passed in, and both are forced rather
+than stylistic.** This file sits inside tLib, so a bare import here resolves
+against tLib. Measured in `tLib/shared/ts/node_modules`: `solid-js` **is**
+installed there on **1.9.12**, and `vitest` is not installed at all. A bare
+`import("solid-js")` would therefore compute every "is this name supplied" answer
+against the Solid 1 surface — and *pass*, because Solid 1 has more names than
+Solid 2 — while a bare `import "vitest"` would fail to resolve and the suite
+could not load. Written at the consumer's call site, both resolve where the real
+Solid 2 and the real runner are. Same trap as the one in the plugin header, where
+`createRequire` resolving the "real" Solid from tLib kept a build green while 40
+of one consumer's test files died at collection.
+
+### ⚠️ "Unused" is a union question — the suite's first run proved it
+
+Run against a second consumer for the first time, it failed on `batch`,
+`createComputed` and `observable` as exports with no vendor consumer. All three
+are **live elsewhere**, measured in the other consumer's `node_modules`:
+
+```
+batch          <- @solid-primitives/rootless, @solid-primitives/static-store, @tanstack/solid-table
+createComputed <- @solid-devtools/logger, @solid-primitives/refs, @tanstack/solid-form
+observable     <- @tanstack/solid-table
+```
+
+⛔ So a strict per-project "unused" verdict is a **false failure for a shared
+layer**, and acting on it would have deleted exports the wider consumer needs —
+the exact opposite of rule 2 ("re-measure at the union"). Hence
+`exportsWantedOnlyByOtherConsumers`, asserted as an **exact set** rather than an
+allowlist: a name that becomes locally wanted must be removed from it, a newly
+orphaned export must be added, and either way someone has to look. An allowlist
+would only grow and would silence the `createResource` case entirely.
+
+**An export is only dead when it appears in every consumer's list.** That is the
+delete signal, and no single repo can see it.
+
+### Status
+
+| Consumer | Adopted | `undeclaredTypeImports` | Exports wanted only elsewhere |
+| --- | --- | --- | --- |
+| tWeb | its own local copy, 402 lines | `JSXElement` | — (widest tree) |
+| web-next | ✅ shared suite, 9 tests | *(none)* | `batch`, `createComputed`, `observable` |
+
+tWeb's local copy is the original and still passes; it is worth retiring in favour
+of the shared one so both trees are checked by the same assertions. The two
+`undeclaredTypeImports` values differing is not a discrepancy — web-next depends
+on none of `@tanstack/solid-form`, `@tanstack/solid-table` or `lucide-solid`,
+which are what still import `JSXElement`.
+
+⚠️ **Verified to fail closed**, because a check that cannot fail is worse than no
+check: given a bogus `undeclaredTypeImports` entry and an emptied
+`exportsWantedOnlyByOtherConsumers`, both exact-set assertions fail.
+
+### What it asserts
+
+- **every shim export is wanted by a vendor somewhere** — the rule above, now
+  mechanical rather than hand-counted
+- **every name a vendor imports is actually supplied** — the dangerous
+  direction, and the silent one: a missing VALUE resolved to `undefined` once
+  (`Index`, imported from `"solid-js/web"` by two `@ark-ui/solid` chunks and
+  re-exported by neither the shim nor real `@solidjs/web`), surfacing as a JSX
+  call on a non-function nowhere near the import at fault
+- **the vendor-only gate is real, in both directions** — application code asking
+  for a dropped specifier throws, asking for bare `solid-js` is left alone, a
+  vendor importer gets the shim, a build-tooling importer does not, and
+  `@solidjs/web` follows `ariaAttributeFix`
+- **a control that the vendor scan found imports at all**, so a silent empty walk
   cannot pass every assertion beneath it
 
-It is parameterised on `VENDOR_PACKAGES` and the project root, so it is
-promotable: the assertions belong here, the environment stays per-consumer. The
-natural shape is a module here exporting the suite, which each consumer's vitest
-picks up in one line — every project then checks the shared layer against *its
-own* `node_modules`, which is exactly what rule 2 under *Changing anything here*
-asks for and what no single project can do alone.
-
-⛔ **The tests cannot simply run here.** tLib is on Solid 1.9.12, so a runner
-started in this directory resolves the wrong Solid — the same trap recorded at
-the top of this file, where `createRequire` resolving the shim's "real" Solid
-from tLib kept a build green while 40 test files vanished at collection. The
-suite has to execute in a consumer, against Solid 2.
+⚠️ Two details worth keeping if this is ever rewritten. The type/value split is
+read off the **import position**, not off the package: deciding it by scanning
+installed `.d.ts` reported seven false positives as missing values (`Accessor`,
+`JSX`, `JSXElement`, `Component`, `ComponentProps`, `Context`, `ParentProps`),
+every one sourced from a declaration file where nothing has a runtime. And the
+vendor file used to prove "a vendor importer gets the shim" is **discovered by
+walking**, not pinned — a hashed path like `@ark-ui/solid/dist/chunk/EIZK5ZYY.js`
+is correct for one installed version and then silently tests nothing, because the
+walk returns `[]` for an absent path and the assertion is skipped rather than
+failed.
 
 ## Formatting
 
