@@ -5,6 +5,16 @@ lua54 'yes'
 author 'Tommy Johnston'
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM)'
+-- 0.13.0 adds `vehicleprop` (shared/imports/vehicleprop/shared.lua): the whole
+-- of the in-vehicle prop -- model registry, placement store, ownership mark and
+-- the lifecycle pass -- which tDetector and tRadar each carried as their own
+-- 591-line client/cl_props.lua. Normalising only the prefix, the model name and
+-- the device noun left 80 differing lines between the two, every one of them
+-- comment prose or whitespace. It is `shared.lua` rather than `client.lua`
+-- because the registry rules are asked on both sides: the client builds it to
+-- decide what to SPAWN, the server to decide what a save may STORE.
+-- Additive -- nothing that worked against 0.12.0 behaves differently.
+--
 -- 0.12.0 adds two things a consumer can need and cannot probe for:
 --   * tLib:HasPermissionBatch — resolves many permission keys in ONE export round trip
 --     (server/lib/adapter/permission.lua). tRadio was making 40+ consecutive export calls
@@ -15,7 +25,7 @@ description 'tLib — shared UI and utility library (FiveM)'
 -- Both are additive — nothing that worked against 0.11.0 behaves differently. The bump
 -- exists so a consumer can PIN them via tlib_min_version, which is what imports.lua's
 -- header calls the real guarantee: a capability probe cannot report its own absence.
-version '0.12.0'
+version '0.13.0'
 
 -- Layout note: the top-level folder is the VM a file is loaded into, matching
 -- every other resource here. Where one module spans VMs -- the platform adapter
