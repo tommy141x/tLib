@@ -98,6 +98,10 @@ tlib = {
     fs          = dofile('shared/imports/fs/server.lua'),
     assets      = dofile('shared/imports/assets/shared.lua'),
     marketplace = dofile('shared/imports/marketplace/server.lua'),
+    -- The real one: soundstore is no longer A writer of data.json, it is a
+    -- caller of THE writer, and a stub here would quietly make this suite the
+    -- oracle for a second implementation.
+    jsonstore   = dofile('shared/imports/jsonstore/server.lua'),
 }
 
 local soundstore = dofile('shared/imports/soundstore/server.lua')
@@ -118,6 +122,11 @@ local function reset()
     -- cases here: without a fresh copy, the first case that makes the native
     -- fail pins every later one onto the bridge.
     tlib.fs = dofile('shared/imports/fs/server.lua')
+    -- And jsonstore memoises one store per resource-and-file for the life of
+    -- the server, which is the whole point of it there and wrong here: a case
+    -- that left a write in flight, or that tripped the once-per-store
+    -- unparseable-JSON notice, would carry both into the next one.
+    tlib.jsonstore.reset()
 end
 
 local KEYS = { 'BEEP', 'LOCK', 'FAST_LOCK' }

@@ -28,6 +28,17 @@ description 'tLib — shared UI and utility library (FiveM)'
 -- direction of a gate re-evaluating sooner for a player who left and came
 -- back, which is what it should have done all along.
 --
+--
+-- 0.13.0 also adds `jsonstore` (shared/imports/jsonstore/server.lua): THE
+-- writer of a consumer's data.json. tDetector's and tRadar's server/sv_data.lua
+-- were identical in all 46 code lines and tUnit had a third copy of the same
+-- shape, alongside soundstore writing two sections of the same document --
+-- four writers, safe together only because of an invariant restated in prose
+-- in two headers and asserted in two suites. `open` memoises per
+-- resource-and-file and soundstore now goes through it, so there is one
+-- writer, one re-entrancy flag and one queue: the invariant is removed rather
+-- than restated. soundstore's own API is unchanged.
+--
 -- Additive otherwise -- nothing that worked against 0.12.0 behaves differently.
 --
 -- 0.12.0 adds two things a consumer can need and cannot probe for:

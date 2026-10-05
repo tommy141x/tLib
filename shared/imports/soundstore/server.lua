@@ -38,59 +38,24 @@ local soundstore = {}
 local Store = {}
 Store.__index = Store
 
---- Read the whole data file, not just our two keys.
----
---- Consumers keep unrelated settings in the same file, so a save has to be a
---- read-modify-write or it silently truncates them.
-local function loadDataFile(resource, file)
-    local raw = LoadResourceFile(resource, file)
-    if not raw or raw == "" then
-        return { soundWavMap = {}, installedSounds = {} }
-    end
-    local ok, data = pcall(json.decode, raw)
-    if not ok or type(data) ~= "table" then
-        return { soundWavMap = {}, installedSounds = {} }
-    end
-    data.soundWavMap     = data.soundWavMap     or {}
-    data.installedSounds = data.installedSounds or {}
-    return data
-end
-
 --- Persist the tone map and the installed-sound list.
 ---
---- Re-entrant rather than queued: a save arriving while one is in flight sets a
---- flag and is replayed once, so a burst of admin edits collapses into one
---- extra write instead of a stack of them.
+--- Through tlib.jsonstore, which is THE writer of this document. It used to be
+--- one of two: this module owned `soundWavMap` and `installedSounds`, the
+--- consumer's own sv_data.lua owned every other section, and the two were safe
+--- together only because both were read-modify-write over the whole file with
+--- no yield in between. That was true, and it was an invariant restated in
+--- prose in two places and tested in two more -- the kind of true a later
+--- "simplification" to a plain write destroys silently.
+---
+--- `jsonstore.open` memoises per resource-and-file, so this store and the
+--- consumer's are the SAME object: one re-entrancy flag, one queue. The
+--- invariant is removed rather than restated.
 function Store:save()
-    if self._saving then self._pending = true; return end
-    self._saving = true
-    local ok, err = pcall(function()
-        local d = loadDataFile(self.resource, self.file)
-        d.soundWavMap     = self.toneWavMap
-        d.installedSounds = self.installedSounds
-        local encOk, encoded = pcall(json.encode, d)
-        if not encOk then
-            self._log("saveData: json.encode failed (" .. tostring(encoded) .. ") — " .. self.file .. " NOT written", self._levels.ERROR)
-            return
-        end
-        -- Through tlib.fs rather than SaveResourceFile directly: the native
-        -- answers false rather than raising on FiveM for GTAV Enhanced, where it
-        -- is refused for some resources outright, and tlib.fs falls back to
-        -- this resource's own Node fs bridge when it is. Swallowing the refusal leaves the
-        -- admin panel showing changes that vanish on restart with nothing in the
-        -- console to explain it, so a failure that even the bridge cannot fix is
-        -- still said out loud — with the bridge's errno, which names which of
-        -- EACCES / EROFS / ENOSPC the owner actually has to fix.
-        local wrote, werr = tlib.fs.writeResourceFile(self.file, encoded, self.resource, self._log)
-        if not wrote then
-            self._log("saveData: could not write " .. self.file ..
-                " — sound settings will not survive a restart. " .. tostring(werr),
-                self._levels.ERROR)
-        end
-    end)
-    if not ok then self._log("saveData: " .. tostring(err), self._levels.ERROR) end
-    self._saving = false
-    if self._pending then self._pending = nil; self:save() end
+    self._store:write({
+        soundWavMap     = self.toneWavMap,
+        installedSounds = self.installedSounds,
+    })
 end
 
 --- The payload the settings panel and every client broadcast carries.
@@ -193,17 +158,24 @@ function soundstore.open(opts)
     end
 
     local levels = tlib.logger
-    local data = loadDataFile(resource, opts.file or "data.json")
+    local file  = opts.file or "data.json"
+
+    -- The one writer of this document; see Store:save. Reading the WHOLE file
+    -- rather than our two keys is still the rule, because the consumer keeps
+    -- unrelated sections in it.
+    local store = tlib.jsonstore.open({ resource = resource, file = file, log = log })
+    local data = store:read()
 
     local self = setmetatable({
         resource        = resource,
-        file            = opts.file or "data.json",
+        file            = file,
         dir             = dir,
         keys            = keys,
-        toneWavMap      = data.soundWavMap or {},
-        installedSounds = data.installedSounds or {},
+        toneWavMap      = type(data.soundWavMap) == "table" and data.soundWavMap or {},
+        installedSounds = type(data.installedSounds) == "table" and data.installedSounds or {},
         _log            = log,
         _levels         = levels,
+        _store          = store,
     }, Store)
 
     local dirty = tlib.marketplace.migrateBuiltinSlugs(self.installedSounds)
