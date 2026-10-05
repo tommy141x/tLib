@@ -25,7 +25,6 @@
     "./hud-template": "./hud-template.ts",
     "./latest-request": "./latest-request.ts",
     "./ui-manifest": "./ui-manifest.ts",
-    "./manifests": "./manifests.ts",
     "./admin-ui": "./admin-ui/index.tsx",
     "./nui-kit": "./nui-kit/NuiButton.tsx",
     "./nui-kit/nui.css": "./nui-kit/nui.css",

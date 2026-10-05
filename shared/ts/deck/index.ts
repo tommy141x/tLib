@@ -9,11 +9,18 @@
  * and all three decks are wrong the same way, which is the point — they were
  * previously wrong in three places independently.
  *
- * It does **not** own what a key means. Palettes, state colours, which flags a
- * product shows and what its keys say all stay with the product. tELS is a
- * lightbar, tRadar is a radar gun and tRadio is a radio; they should share a
- * material, not a vocabulary. The seam is {@link Surface} (structural greys only)
- * plus a colour argument on every primitive that expresses a state.
+ * It does **not** own what a key means. State colours, which flags a product
+ * shows and what its keys say all stay with the product. tELS is a lightbar,
+ * tRadar is a radar gun and tRadio is a radio; they should share a material, not
+ * a vocabulary. The seam is {@link Surface} (structural greys only) plus a colour
+ * argument on every primitive that expresses a state.
+ *
+ * It owns **the material itself** — `material.ts`. That sentence above was true
+ * of the drawing but not of the greys: the fourteen structural values were
+ * measured byte-identical in all three products and duplicated anyway, so they
+ * now live here, and {@link bindKey} supplies the {@link Surface} the primitives
+ * all take as argument one. What a product still writes for itself is its state
+ * colours, its exceptional washes, and how its own cards are composed.
  *
  * ── Consuming it ──
  *
@@ -50,6 +57,15 @@ export {
 	offlineCard,
 	type Shell,
 } from "./card.ts";
+export {
+	bindKey,
+	type BindOptions,
+	type BoundKey,
+	type KeyMaterial,
+	LCD_MATERIAL,
+	materialInk,
+	materialShell,
+} from "./material.ts";
 export {
 	chevron,
 	glyphRow,

@@ -17,6 +17,29 @@
 // and it cannot use a registry anyway, because it runs with no game attached.
 // Do not reintroduce one speculatively; add it when something reads it.
 //
+// ⚠️ There was also a STATIC registry here — `shared/ts/manifests.ts`, exported as
+// `@tlib/shared/manifests`, holding hand-copied bodies of `uiRadioManifest` and
+// `uiTelsHudManifest` under a comment saying "kept in sync manually". It is gone,
+// and the two reasons it went are both reasons not to write another one:
+//
+//   1. It had already drifted, materially. 148 lines standing in for tRadio's 323
+//      and 83 for tELS' 213: it defaulted the radio display to `ln01: "CH 01"` /
+//      `ln02: "CITY PD"` and the softkeys to "ZN"/"CH"/"ST" — text tRadio has
+//      never rendered on any screen — and had no `topLine1`, `topLine2` or
+//      `zoneBankLetter` at all, which are the keys the painted heads bind. This is
+//      the same defect tWeb's `scripts/sync-hud-sdk.ts` header describes finding
+//      in its own hand-written port, inherited from tg-new's.
+//   2. It could not be fixed by gating it the way `shared/ts/deck` is gated. That
+//      vendoring runs from this PUBLIC library into private consumers. A manifest
+//      sync would run the other way — tLib reading tRadio and tELS — which
+//      inverts the dependency tLib exists to keep one-directional and puts two
+//      paid resources' manifests in a public repo.
+//
+// Its only consumer was `internal/tgstudios-v2`, which now reads the real
+// manifests off disk through its own sibling alias. A project that CANNOT see the
+// siblings at build time should port tWeb's `hud-sdk:sync`/`hud-sdk:check` pair
+// rather than copy a manifest by hand.
+//
 // Keys are dot-pathed so `leds.R1` resolves through HudBinder's `read()`.
 
 // Open string: a consumer wanting compile-time narrowing augments the module on
