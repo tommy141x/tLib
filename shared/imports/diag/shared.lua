@@ -543,9 +543,12 @@ end
 ---   report   function  called with a `ctx` (below) to build the report. Required.
 ---   title    string|nil  header line; defaults to '<scope> diagnostics'.
 ---   scope    string|nil  label; defaults to the current resource name.
----   config   table|nil   the table credentials are harvested from. Defaults to
+---   config   table|function|false|nil
+---                        the table credentials are harvested from. Defaults to
 ---                        the global `Config` when there is one; `false`
----                        harvests nothing.
+---                        harvests nothing; a FUNCTION is called per invocation,
+---                        for a resource whose state is loaded rather than a
+---                        global (tAFK's data.json, tELS's serverDefaults).
 ---   spec     table|nil   a tlib.config spec, enabling `ctx.configKeys()`.
 ---   order    table|nil   presentation order for `ctx.configKeys()`.
 ---   secrets  table|nil   extra credential key names beyond SECRET_PATTERNS.
@@ -590,6 +593,17 @@ function Diag.command(opts)
         -- covered. This runs once per human-typed command, so the walk is free.
         local config = opts.config
         if config == nil then config = rawget(_G, 'Config') end
+        -- A resource whose settings are LOADED rather than global -- tAFK reads
+        -- data.json, tELS keeps serverDefaults -- cannot hand a table in at
+        -- registration, because at that point there is nothing to hand. pcall'd
+        -- because this runs before the report does: a loader that throws must
+        -- not take the command down before it has printed the version lines
+        -- somebody asked for. It degrades to harvesting nothing, which is why
+        -- the name-keyed layer in `describe` is unconditional.
+        if type(config) == 'function' then
+            local ok, loaded = pcall(config)
+            config = ok and loaded or nil
+        end
         local secrets = redact
             and Diag.harvest(type(config) == 'table' and config or nil, opts.secrets)
             or {}

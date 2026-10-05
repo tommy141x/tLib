@@ -374,6 +374,40 @@ must(#clientEvents > 0, 'the in-game caller was told nothing')
 must(clientEvents[1].event == 'chat:addMessage' and clientEvents[1].target == 7,
     'the report did not reach the caller')
 
+-- ── A config supplied as a function, resolved per invocation ───────
+--
+-- tAFK reads its settings out of data.json and tELS keeps serverDefaults, so
+-- neither has a table to hand in at registration time. The loader is called per
+-- invocation, which is also what makes a credential written into that state
+-- AFTER boot covered.
+
+local loaded = { authToken = 'loaded-token-value' }
+local loaderCalls = 0
+Diag.command({
+    name = 'tprobe_loaded',
+    config = function() loaderCalls = loaderCalls + 1; return loaded end,
+    redact = not CONTROL,
+    report = function(ctx) ctx.line('echo: %s', loaded.authToken) end,
+})
+printed = {}
+local loadedText = table.concat(commands.tprobe_loaded.fn(0), '\n')
+must(loaderCalls == 1, 'the config loader was not called once per invocation')
+redactsValue(not loadedText:find('loaded-token-value', 1, true),
+    'a credential in loaded state was printed')
+
+-- A loader that RAISES must not take the command down before it has printed the
+-- version lines somebody asked for. It degrades to harvesting nothing, which is
+-- why the name-keyed layer in `describe` has no switch.
+Diag.command({
+    name = 'tprobe_badloader',
+    config = function() error('data.json is corrupt') end,
+    report = function(ctx) ctx.line('still printed') end,
+})
+printed = {}
+local badLoader = table.concat(commands.tprobe_badloader.fn(0), '\n')
+must(badLoader:find('still printed', 1, true),
+    'a raising config loader took the whole report down with it')
+
 -- ── The pcall guard, and the partial report ────────────────────────────────
 
 Diag.command({
@@ -425,7 +459,7 @@ if CONTROL then
     -- something the `redact` flag does not actually control -- which is how the
     -- first draft of this file came to "pass" its own control while three of
     -- its five redaction checks were measuring an unrelated layer.
-    local expected = 6
+    local expected = 7
     if flipped ~= expected or #failures > 0 then
         realPrint(('CONTROL FAILED: %d of %d value-redaction assertions flipped with redact=false.')
             :format(flipped, expected))
