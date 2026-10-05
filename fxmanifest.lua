@@ -5,6 +5,52 @@ lua54 'yes'
 author 'Tommy Johnston'
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM)'
+-- 0.14.0 adds `diag.command` (shared/imports/diag/shared.lua): the whole of the
+-- `<resource>_diag` console command the config standard's §13 asks every
+-- resource for, which EIGHT resources had written by hand -- tDetector, tRadar,
+-- tUnit, tAFK, tChirp, tRadio, tCAD and tELS, with tRadio and tCAD sharing 54
+-- lines of literal copy-paste including byte-identical `meta()` and
+-- `convarSet()` helpers.
+--
+-- The report CONTENT stays with the consumer and is a callback; it is the half
+-- that was never duplicated. What moves here is the half where the copies had
+-- drifted apart on SAFETY, and in each case the strictest copy's behaviour is
+-- now the default:
+--   * Redaction, which only tDetector and tRadio had at all and which tRadar,
+--     tUnit, tAFK and tChirp each omitted on the grounds that "this config
+--     holds no secrets" -- the exact assumption tDetector's own comment says is
+--     unsafe over time. It is DERIVED rather than hand-listed: `harvest` walks
+--     the config for values under credential-looking key names and no line
+--     carrying one survives, so a config that gains a credential next year is
+--     covered without anybody editing anything.
+--   * The pcall guard, which only tRadar, tAFK and tELS had -- "a diagnostic
+--     that dies mid-report is worse than none" -- and which now also FLUSHES
+--     the partial report rather than discarding it.
+--   * Spec-derived key listing, which only tDetector had. A hand-listed dump
+--     silently omits every key added after it was written.
+--   * `RegisterCommand(..., true)`, applied here so copy nine cannot forget it.
+-- Routing is the union of the three the copies had, not a pick between them:
+-- the server console always (it is the copy that survives the caller
+-- disconnecting) and the caller too when there was one.
+--
+-- 0.14.0 also adds `marketplace.standardTypes` / `registerType` /
+-- `soundConflict` (shared/imports/marketplace/server.lua). Four resources --
+-- tDetector, tRadar, tELS, tRadio -- each declared the same two item types at
+-- the same two install paths inside the same pcall wrapper, then branched a
+-- pair of lifecycle handlers on an event name that was nothing but their own
+-- resource name with a suffix; tRadio's two halves are 1,100 lines apart in one
+-- file. `soundConflict` is the reason it is worth a module rather than a
+-- comment: the sound-overwrite warning was fired at `-1` -- every player on the
+-- server, about an admin action -- and in three of the four nothing anywhere
+-- registered the event. tELS deleted its copy rather than fix it. The targeted
+-- send at `meta.src`, and the UNCONDITIONAL server log that has to survive the
+-- admin disconnecting mid-install, are now one implementation with
+-- tests/lua/marketplace-standard-types.lua pinning both.
+--
+-- Additive: nothing that worked against 0.13.0 behaves differently. `diag`'s
+-- existing wrap/fatal/error/warn/info are untouched, as is marketplace's
+-- upsertSound/removeSound/migrateBuiltinSlugs.
+--
 -- 0.13.0 adds `vehicleprop` (shared/imports/vehicleprop/shared.lua): the whole
 -- of the in-vehicle prop -- model registry, placement store, ownership mark and
 -- the lifecycle pass -- which tDetector and tRadar each carried as their own
@@ -51,7 +97,7 @@ description 'tLib — shared UI and utility library (FiveM)'
 -- Both are additive — nothing that worked against 0.11.0 behaves differently. The bump
 -- exists so a consumer can PIN them via tlib_min_version, which is what imports.lua's
 -- header calls the real guarantee: a capability probe cannot report its own absence.
-version '0.13.0'
+version '0.14.0'
 
 -- Layout note: the top-level folder is the VM a file is loaded into, matching
 -- every other resource here. Where one module spans VMs -- the platform adapter
