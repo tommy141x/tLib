@@ -57,6 +57,30 @@ check(timers[#timers].delay == 23)
 timers[#timers].fn()
 check(not exports.UpdateToast('same', { title = 'Expired' }))
 check(last().name == 'dismissToast' and last().data.id == alphaKey)
+-- The short spellings. `warn` and `err` are what three consumers actually pass
+-- (the copy-pasted "Sound Overwritten" notice in tDetector, tRadio and tRadar),
+-- and before resolveType mapped them each one fell through to info -- neutral at
+-- 4000ms where it had asked for amber at 5000ms. Asserted on BOTH the wire type
+-- and the scheduled delay, because the delay alone was already right for `info`
+-- and the type alone does not prove the deadline followed it.
+check(exports.ShowToast('short-warn', 'warn', 'Aliased') == 'short-warn')
+check(last().data.type == 'warning', 'warn maps to warning on the wire')
+check(timers[#timers].delay == 5000, 'warn gets warning\'s 5000ms deadline')
+check(exports.ShowToast('short-err', 'err', 'Aliased') == 'short-err')
+check(last().data.type == 'error', 'err maps to error on the wire')
+check(timers[#timers].delay == 6000, 'err gets error\'s 6000ms deadline')
+-- A genuine typo is still a typo: it must NOT be mapped to anything, so the
+-- aliases cannot quietly become "whatever the caller said".
+check(exports.ShowToast('short-bogus', 'warnign', 'Typo') == 'short-bogus')
+check(last().data.type == 'info', 'an unknown type still falls back to info')
+check(timers[#timers].delay == 4000)
+-- UpdateToast shares resolveType, so the alias has to reach it too.
+check(exports.UpdateToast('short-bogus', { type = 'warn' }))
+check(last().data.changes.type == 'warning', 'UpdateToast resolves the alias too')
+check(timers[#timers].delay == 5000)
+check(exports.DismissToast('short-warn') and exports.DismissToast('short-err'))
+check(exports.DismissToast('short-bogus'))
+
 check(exports.ShowToast('stopping', 'loading', 'Stop cleanup'))
 local stoppingKey = last().data.id
 stops.onClientResourceStop('alpha')

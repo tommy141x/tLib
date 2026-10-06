@@ -21,8 +21,34 @@ local function validDuration(value)
     return type(value) == 'number' and value >= 0 and value <= 2147483647
 end
 
+-- The short spellings, mapped rather than refused.
+--
+-- `durations` above is the whole type vocabulary, and `warn` is not in it. Three
+-- resources pass it anyway -- tDetector cl_hud.lua, tRadio cl_bridge.lua and
+-- tRadar cl_hud.lua, the same copy-pasted "Sound Overwritten" notice -- so each
+-- one fell through to `info` and rendered neutral at 4000ms where it had asked
+-- for amber at 5000ms. Nothing failed: the fallback is correct behaviour for a
+-- genuinely unknown type, and the log line it writes is one of hundreds.
+--
+-- Mapping closes the class instead of the three instances. `warn`/`warning` and
+-- `err`/`error` are the two pairs any Lua author will reach for interchangeably
+-- -- `warn` is a global in several runtimes and `err` is the idiomatic name of
+-- the second return value -- so the next call site spelt that way is correct by
+-- construction rather than being the fourth instance of this bug.
+--
+-- The log stays for anything NOT in here. An alias is a spelling of a type that
+-- exists; a typo is still a typo, and silently rendering it as info is the
+-- behaviour that hid these three for as long as it did.
+local ALIASES = { warn = 'warning', err = 'error' }
+
 local function resolveType(value)
-    if type(value) == 'string' and durations[value] ~= nil then return value end
+    if type(value) ~= 'string' then
+        log('Unknown toast type, defaulting to info', 3)
+        return 'info'
+    end
+    if durations[value] ~= nil then return value end
+    local aliased = ALIASES[value]
+    if aliased and durations[aliased] ~= nil then return aliased end
     log('Unknown toast type, defaulting to info', 3)
     return 'info'
 end

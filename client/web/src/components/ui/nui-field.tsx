@@ -35,7 +35,15 @@ export function NuiField(props: {
   error?: string;
   theme?: string;
   active?: boolean;
+  /** Commit: local state AND the `dialogChange` push to Lua. */
   onChange: (value: DialogValue) => void;
+  /**
+   * Local state only, no wire traffic. For a continuous control, where the
+   * in-flight value is worth drawing and not worth telling the game about yet.
+   * Falls back to `onChange` if a host does not provide it, so the behaviour of
+   * an older caller is unchanged rather than silently dropped.
+   */
+  onPreview?: (value: DialogValue) => void;
   onBlur: () => void;
   onAction: () => void;
 }) {
@@ -53,6 +61,28 @@ export function NuiField(props: {
     "aria-invalid": props.error ? ("true" as const) : ("false" as const),
   });
   const [selectOpen, setSelectOpen] = createSignal(false);
+  // Plain `let`, not a signal: nothing renders from it. It only has to remember
+  // what was last put on the wire so an identical value is not put there twice.
+  //
+  // `previewSlider` CLEARS it, and that is what keeps the de-duplication honest
+  // without an effect watching `props.value`. The memory must not outlive the
+  // value it describes: commit 10, let Lua push the field back to 5 with
+  // `UpdateDialogField`, then drag to 10 again, and a bare `last === next` guard
+  // drops a commit the game is waiting for. zag moves the value through
+  // `onValueChange` before `onValueChangeEnd` on every path that actually changes
+  // it -- drag and keyboard alike -- so "the value moved" and "clear the memory"
+  // are the same event. The only path that reaches the commit WITHOUT it is a
+  // keypress against a boundary, which is exactly the one to drop.
+  let committedSlider: number | undefined;
+  const previewSlider = (value: number | undefined) => {
+    committedSlider = undefined;
+    if (value !== undefined) (props.onPreview ?? props.onChange)(value);
+  };
+  const commitSlider = (value: number | undefined) => {
+    if (value === undefined || value === committedSlider) return;
+    committedSlider = value;
+    props.onChange(value);
+  };
   createEffect(
     () => props.active,
     (active) => {
@@ -204,7 +234,30 @@ export function NuiField(props: {
             step={props.field.step ?? 1}
             value={[Number(props.value ?? props.field.min ?? 0)]}
             disabled={props.field.disabled}
-            onValueChange={(d) => props.onChange(d.value[0])}
+            /* ⚠️ The DISPLAY value only. zag fires this on every pointer move of a
+               drag, so committing from here was one `dialogChange` per step —
+               and `tRadar/client/cl_settings.lua` answers each one with an
+               `UpdateDialogField` push back, making a single drag a full
+               NUI→Lua→NUI round trip per pixel in every resource using a tLib
+               dialog. This is the only field type with that property; everything
+               else here fires once per discrete interaction. */
+            onValueChange={(d) => previewSlider(d.value[0])}
+            /* The commit. zag calls this on pointer-up AND on each keyboard
+               increment/decrement/home/end — verified in
+               `@zag-js/slider/dist/slider.machine.mjs`, where `invokeOnChangeEnd`
+               is an action on all of those transitions. So keyboard driving still
+               commits per keypress, which is what it always did, and only the
+               continuous pointer path is debounced to its end.
+
+               `commitSlider` drops a commit whose value equals the last one sent,
+               and that is not belt-and-braces. Measured on the drag probe: an
+               ArrowRight pressed with the thumb ALREADY at max used to send
+               nothing (zag fires no `onValueChange` when the value does not move)
+               and would now send one `dialogChange` per keypress, because
+               `invokeOnChangeEnd` runs on the transition whether the value moved
+               or not. Held against a boundary that is a stream of identical
+               writes, which is the bug this whole change is about, just slower. */
+            onValueChangeEnd={(d) => commitSlider(d.value[0])}
             onFocusOut={props.onBlur}
           >
             <div class="tlib-nui-slider">

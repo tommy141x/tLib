@@ -68,10 +68,39 @@
    */
   --tlib-pe-u: calc(5vmin / 9);
 
-  /* Type. The three steps the editor had as 9/10/12px at 1080p. */
-  --tlib-pe-fs-xs: calc(var(--tlib-pe-u) * 2.25);
-  --tlib-pe-fs-sm: calc(var(--tlib-pe-u) * 2.5);
-  --tlib-pe-fs-md: calc(var(--tlib-pe-u) * 3);
+  /* ── Type ──────────────────────────────────────────────────────────────
+   *
+   * ⚠️ The comment here said "the three steps the editor had as 9/10/12px at
+   * 1080p" and the multipliers do not produce that. Measured: at a 1080px short
+   * side `vmin` is 10.8px, so `u` is exactly 6px, and 2.25/2.5/3 render
+   * **13.5 / 15 / 18px**. 9/10/12 is what these same multipliers give at a
+   * 720px short side, so what the comment had wrong was the reference
+   * resolution, not the numbers.
+   *
+   * The MULTIPLIERS are what stay, and the comment is what was corrected,
+   * because 9/10/12 is precisely what the type floor at the top of
+   * `shared/css/surface.css` forbids — a 10px webfont on a dark surface in CEF
+   * 103 has almost no stem left, and "the fonts are poor" has been reported
+   * twice against exactly that. Restoring the documented sizes would have been
+   * re-introducing the bug the scale exists to prevent.
+   *
+   * ── Why this surface is not ON the five-step scale ──
+   *
+   * That scale is five fixed pixel steps. This editor is a ring of panels around
+   * a full-screen 3D view and is deliberately RESOLUTION-RELATIVE — the whole
+   * point of `--tlib-pe-u` above — so it cannot hold fixed values without
+   * breaking the thing it was built to do. What it owes the scale is the RULE,
+   * not the steps: nothing below 11px.
+   *
+   * `max(11px, …)` is what makes that true at every resolution rather than only
+   * above 1080p. Unclamped, a 1366x768 client renders `xs` at 9.5px and a 720p
+   * one at 9px. It is a floor on TYPE only — note the objection above to
+   * `clamp()` on the quantum, which flattened the geometry's scaling across most
+   * real resolutions. `min()`/`max()` are Chrome 79, so CEF 103 parses them;
+   * this is not the `color-mix()` class of hazard. */
+  --tlib-pe-fs-xs: max(11px, calc(var(--tlib-pe-u) * 2.25));
+  --tlib-pe-fs-sm: max(11px, calc(var(--tlib-pe-u) * 2.5));
+  --tlib-pe-fs-md: max(12px, calc(var(--tlib-pe-u) * 3));
 
   /* Geometry. */
   --tlib-pe-edge: calc(var(--tlib-pe-u) * 2);

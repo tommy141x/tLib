@@ -45,8 +45,10 @@ import {
 } from "@tlib/shared/marketplace/ui";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import { fetchNui, onNuiEvent } from "@/lib/nui";
-import IconLoaderCircle from "~icons/lucide/loader-circle";
-import IconSearch from "~icons/lucide/search";
+// See the note on the Lucide imports in `../MarketplacePanel.tsx`: the package
+// form in an app, `~icons/lucide` in `shared/ts/**`, and nothing mixed.
+import IconLoaderCircle from "lucide-solid/icons/loader-circle";
+import IconSearch from "lucide-solid/icons/search";
 import { NuiButton } from "../ui/nui-field";
 import { MarketplaceSort } from "./MarketplaceSort";
 
