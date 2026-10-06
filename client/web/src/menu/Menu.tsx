@@ -9,6 +9,10 @@ import {
   Show,
   untrack,
 } from "solid-js";
+// One notification timing table for the whole bundle. See `notify()` below for
+// why this surface is not itself a toast.
+import { TOAST_DURATIONS } from "../lib/toast-lifetime";
+import { createEscapeLayer } from "@tlib/shared/escape-layer";
 import { applyScopedTheme, themeRevision } from "../stores/theme-store";
 import {
   accentFor,
@@ -406,11 +410,46 @@ export default function Menu() {
     );
   }
 
+  /**
+   * The menu's own in-panel notice strip.
+   *
+   * ── Why this is NOT a toast, having been asked ─────────────────────────────
+   *
+   * tLib shipped two notification lifetimes with two sets of numbers: this one
+   * (error 7000, everything else 2500) and `lib/toast-lifetime.ts`'s
+   * `TOAST_DURATIONS` (error 6000, warning 5000, success/info 4000). Two tables
+   * is one table too many and the duplicate is gone -- the deadline below is read
+   * out of `TOAST_DURATIONS` now, so there is one place a timing changes.
+   *
+   * The SURFACE stays, deliberately, and it is not a near-miss of the toast:
+   *
+   *   1. The toast host is a HUD element whose anchor the PLAYER positions, in
+   *      the layout editor. It can legitimately sit in any corner, including
+   *      behind this panel. A refusal reason is the answer to the keypress just
+   *      made and has to be beside the row that refused it; "somewhere the player
+   *      chose, earlier, for a different purpose" is not that.
+   *   2. This menu is driven entirely by ↑↓/↵ with the eye on the panel. A corner
+   *      toast is exactly what gets missed, and `role="alert"` on the strip is
+   *      what announces it to a screen reader in the menu's own reading order.
+   *   3. Mechanically there is nothing to call. `createToastLifetime` is
+   *      instantiated inside `components/Toast.tsx` and fed only by Lua's
+   *      `showToast` NUI event; reaching it from here needs either a new
+   *      cross-component bus or a NUI→Lua→NUI round trip for a string that is
+   *      already in the browser. Both are new mechanisms, which is the thing not
+   *      to add.
+   *
+   * So: one timing table, two surfaces, each where it belongs. `error` picks the
+   * `error` deadline and anything else picks `info`'s; this strip has no
+   * success/warning/loading states to key off.
+   */
   function notify(text: string, error = false) {
     if (error) play("error");
     window.clearTimeout(noticeTimer);
     setNotice({ text, error });
-    noticeTimer = window.setTimeout(() => setNotice(undefined), error ? 7000 : 2500);
+    noticeTimer = window.setTimeout(
+      () => setNotice(undefined),
+      TOAST_DURATIONS[error ? "error" : "info"]
+    );
   }
 
   function showMenu(id: string) {
@@ -837,8 +876,31 @@ export default function Menu() {
     } else receive(message);
   }
 
+  /*
+   * Escape is NOT in here. It is a registered layer; see `createEscapeLayer`
+   * below.
+   *
+   * This handler had two Escape branches — one for the confirmation, one for the
+   * page — and no `defaultPrevented` check. That matters specifically here,
+   * because `MarketplaceBrowser` mounts a REGISTERED layer beside this host, so
+   * a press the registry consumed still arrived and still ran `back()`: one
+   * press, two dismissals.
+   *
+   * Adding `if (event.defaultPrevented) return` would NOT have fixed it, and
+   * that is worth writing down because it is the obvious fix. Both this listener
+   * and the registry's deciding listener are bubble-phase on `window`, and
+   * within one target and phase the order is REGISTRATION order. This one is
+   * added in `onSettled` at app start; the registry attaches lazily on its first
+   * `add()`, which is when the browser mounts — strictly later. The registry's
+   * capture handler runs first but only SAMPLES; the `preventDefault()` happens
+   * in its bubble handler, after this one. So the guard would have read `false`
+   * every time: a check that can never fire, which is worse than no check.
+   *
+   * The guard below is still here, for anything that does prevent in capture.
+   */
   function onKey(event: KeyboardEvent) {
-    if (!shown() || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (!shown() || event.defaultPrevented) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
     // The one key the field never sees: it is how the player gets back out, and in
     // game it is also the key the game bound.
     if (searchOpen() && (event.key === "F3" || event.key === "Tab")) {
@@ -847,10 +909,6 @@ export default function Menu() {
       return;
     }
     if (confirmation()) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        back();
-      }
       if (event.key === "Tab") {
         const buttons = dialog?.querySelectorAll<HTMLButtonElement>("button");
         if (buttons?.length) {
@@ -859,11 +917,6 @@ export default function Menu() {
           next?.focus();
         }
       }
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      back();
       return;
     }
     if (event.key === "F1") {
@@ -1058,6 +1111,28 @@ export default function Menu() {
   onSettled(() => {
     const unlisten = listen(runtimeMessage, (reason) => void resync(reason));
     window.addEventListener("keydown", onKey);
+    /*
+     * Escape, as the one arbitrated layer rather than two branches of the raw
+     * handler above.
+     *
+     * `back()` already distinguishes the three things Escape can mean here — it
+     * dismisses the confirmation, else leaves search taking the query with it,
+     * else walks up the page stack and finally closes — so there is nothing for
+     * `onInternal` to split out. Depth 0: this is the HOST, and the marketplace
+     * browser mounted inside it registers at depth 1 and wins while it is open,
+     * which is the whole arrangement the registry exists to express.
+     *
+     * `blocked` carries the modifier rule the raw handler had, and it is
+     * `blocked` rather than `active` on purpose: a `Ctrl`-Escape is "not mine",
+     * so the layer below should get a chance at it, not "mine, do nothing".
+     */
+    const disposeEscape = createEscapeLayer({
+      label: "menu",
+      depth: 0,
+      active: () => shown(),
+      blocked: (event) => Boolean(event.ctrlKey || event.metaKey || event.altKey),
+      onEscape: back,
+    });
     void request("ready").then((result) => {
       if (disposed) return;
       if (result.snapshot) applySnapshot(result.snapshot);
@@ -1069,6 +1144,7 @@ export default function Menu() {
       disposed = true;
       unlisten();
       window.removeEventListener("keydown", onKey);
+      disposeEscape();
       window.clearTimeout(noticeTimer);
       window.clearTimeout(navigationTimer);
     };
@@ -1487,14 +1563,17 @@ export default function Menu() {
                   <p id="confirm-description">
                     <FormattedText text={item().confirm} />
                   </p>
+                  {/* ⚠️ AFFIRMATIVE LEFT, deliberately. The source order is the
+                      visual order and the Tab order both; the reasoning and the
+                      count behind it are in `layout/LayoutEditor.tsx`. */}
                   <div class="flex gap-2 mt-5">
-                    <button type="button" class="dialog-cancel" onClick={back}>
-                      <X aria-hidden="true" />
-                      {t("Cancel")}
-                    </button>
                     <button type="button" class="dialog-confirm" onClick={confirm}>
                       <Check aria-hidden="true" />
                       {t("Confirm")}
+                    </button>
+                    <button type="button" class="dialog-cancel" onClick={back}>
+                      <X aria-hidden="true" />
+                      {t("Cancel")}
                     </button>
                   </div>
                 </div>

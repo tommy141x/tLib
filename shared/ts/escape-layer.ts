@@ -102,12 +102,24 @@ export interface EscapeTarget {
   ): void;
 }
 
-/** The subset of `KeyboardEvent` this registry reads. */
+/**
+ * The subset of `KeyboardEvent` this registry reads, plus what it HANDS ON.
+ *
+ * The modifiers are not read here — nothing in resolution cares about them. They
+ * are declared because `blocked` is given this event, and a layer that declines
+ * `Ctrl`/`Alt`-modified presses (the menu, whose own raw handler did exactly
+ * that before it was registered) should be able to say so without casting the
+ * argument back to `KeyboardEvent`. Optional, so a test can keep passing a
+ * three-field literal.
+ */
 export interface EscapeKeyEvent {
   readonly key: string;
   readonly repeat?: boolean;
   readonly defaultPrevented: boolean;
   readonly target?: unknown;
+  readonly ctrlKey?: boolean;
+  readonly metaKey?: boolean;
+  readonly altKey?: boolean;
   preventDefault(): void;
 }
 

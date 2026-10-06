@@ -22,6 +22,7 @@
  * config export. The last of those is `slots.toolbar`.
  */
 
+import { createEscapeLayer } from "@tlib/shared/escape-layer";
 import { Button } from "@tlib/shared/ui/button";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import { fetchNui, onNuiEvent } from "../nui";
@@ -158,8 +159,27 @@ export function PropEditor(props: PropEditorProps) {
     };
   });
 
+  /*
+   * Escape is NOT in here. It is a registered layer -- see `createEscapeLayer`
+   * in the `onSettled` below.
+   *
+   * Two things were wrong with it as a branch of this raw `window` listener, and
+   * they compound. There was no `defaultPrevented` check, so a press another
+   * layer had already consumed still cancelled the edit -- and cancelling this
+   * editor throws a placement away, which is the most expensive thing Escape can
+   * do anywhere in the stack. And there was no `repeat` check, so a HELD Escape
+   * fired `propEditorCancel` once per key-repeat tick.
+   *
+   * It is also why `tRadio/client/web/src/App.tsx` carries an
+   * `escapeOwnedElsewhere` opt-out keyed on `propEditorState.open`: a host had to
+   * stand down manually because this editor could not be arbitrated with. With
+   * the editor on the registry at a depth, that opt-out is removable.
+   *
+   * The `defaultPrevented` guard below covers anything that prevents in the
+   * capture phase before this listener is reached.
+   */
   function handleKeyDown(e: KeyboardEvent) {
-    if (!propEditorState.open) return;
+    if (!propEditorState.open || e.defaultPrevented) return;
     // Numeric fields must still receive plain typing, and the top-row numpad
     // emulation below would otherwise eat every digit.
     if ((e.target as HTMLElement)?.tagName === "INPUT") return;
@@ -179,12 +199,6 @@ export function PropEditor(props: PropEditorProps) {
       return;
     }
 
-    if (e.code === "Escape") {
-      e.preventDefault();
-      nui("propEditorCancel");
-      return;
-    }
-
     // Editor shortcuts are gated off in WASD cam mode — Lua reads WASD per-frame
     // there, and W would otherwise also switch the gizmo to translate.
     if (!wasdCamMode()) {
@@ -196,7 +210,27 @@ export function PropEditor(props: PropEditorProps) {
 
   onSettled(() => {
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    /*
+     * Depth 1, because this editor is mounted OVER a host -- tRadio's settings
+     * app, tRadar's, tDetector's -- and while it is open it is the innermost
+     * thing on screen. `active` is the host's own `open` flag, so the closed
+     * mount cannot shadow the host it is mounted in. `repeat` is handled by the
+     * registry: a held key arrives as a stream of keydowns sharing one sample,
+     * and only the first of them acts.
+     *
+     * No `onInternal`: nothing inside this editor is dismissed by Escape short
+     * of the editor itself.
+     */
+    const disposeEscape = createEscapeLayer({
+      label: "prop-editor",
+      depth: 1,
+      active: () => propEditorState.open,
+      onEscape: () => nui("propEditorCancel"),
+    });
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      disposeEscape();
+    };
   });
 
   function updatePosition(axis: "x" | "y" | "z", v: number) {

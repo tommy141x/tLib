@@ -1,4 +1,4 @@
-import { Check, Grip, LayoutDashboard, Redo2, RotateCcw, Undo2, X } from "lucide-solid";
+import { Check, Grip, LayoutDashboard, Redo2, RotateCcw, ShieldAlert, Undo2, X } from "lucide-solid";
 import {
   createMemo,
   createRenderEffect,
@@ -8,6 +8,7 @@ import {
   onSettled,
   Show,
 } from "solid-js";
+import { createEscapeLayer } from "@tlib/shared/escape-layer";
 import { NuiButton } from "@/components/ui/nui-field";
 import { applyNuiTheme, nuiThemeDeps } from "@/components/ui/nui-theme";
 import { fetchNui, onNuiEvent } from "@/lib/nui";
@@ -79,6 +80,24 @@ export default function LayoutEditor() {
   const [historyVersion, setHistoryVersion] = createSignal(0);
   const [finishing, setFinishing] = createSignal(false);
   const [notice, setNotice] = createSignal("");
+  /**
+   * Whether the discard question is up.
+   *
+   * ── Why this editor now has one ───────────────────────────────────────────
+   *
+   * Cancel called `finish(false)` straight out, which cancels every pending
+   * preview and tells the game `save: false` — the backend rolls the HUD back and
+   * the whole positioning session is gone. Hand-placing a HUD is minutes of work
+   * with no undo once the editor closes, and this was the only surface in the
+   * stack that threw it away without asking: tELS prompts, the prop editor
+   * prompts, tAFK prompts.
+   *
+   * Gated on `canUndo()`, so Cancel on a session where nothing was touched still
+   * closes in one click. The question is only worth asking when there is
+   * something to lose, and asking it every time is how a prompt gets dismissed
+   * without being read.
+   */
+  const [discarding, setDiscarding] = createSignal(false);
   const [panelPosition, setPanelPosition] = createSignal<{ x: number; y: number } | null>(null);
   const [panelDragging, setPanelDragging] = createSignal(false);
 
@@ -463,13 +482,20 @@ export default function LayoutEditor() {
     ArrowUp: [0, -1],
     ArrowDown: [0, 1],
   };
+  /*
+   * Escape is NOT handled here. It is a registered layer — see the
+   * `createEscapeLayer` call in `onSettled` below.
+   *
+   * It was a branch in this raw `window` listener, which is the pattern the
+   * registry exists to replace: a raw listener has no notion of depth, so a key
+   * another layer has already consumed still reaches it. This handler does check
+   * `event.defaultPrevented`, which is what kept it honest in the meantime, and
+   * the registry sets exactly that — but "honest by luck of listener order" is
+   * not a contract. The rest of the keys below are editor-local (arrows, Tab
+   * cycling, undo/redo) and have no stack to arbitrate.
+   */
   function keyDown(event: KeyboardEvent) {
     if (session() === null || event.defaultPrevented) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      void finish(false);
-      return;
-    }
     if (event.key === "Tab" && surface) {
       const controls = [...surface.querySelectorAll<HTMLElement>("button:not(:disabled)")].filter(
         (control) => control.tabIndex >= 0
@@ -585,6 +611,25 @@ export default function LayoutEditor() {
       );
     }
   }
+  /**
+   * What Cancel and Escape both go through, so neither can discard silently.
+   *
+   * `canUndo()` is the dirty flag: the history is cleared on every `layoutOpen`
+   * and records an entry for every move, resize, visibility toggle and nudge, so
+   * "there is something in it" and "this session changed something" are the same
+   * statement. Using it rather than a second `dirty` signal is deliberate — a
+   * parallel flag is a thing to forget to set, and there are five call sites that
+   * mutate a layout.
+   */
+  function requestCancel() {
+    if (session() === null || finishing()) return;
+    if (canUndo()) {
+      setDiscarding(true);
+      return;
+    }
+    void finish(false);
+  }
+
 
   onSettled(() => {
     const offOpen = onNuiEvent<LayoutOpen>("layoutOpen", (data) => {
@@ -649,6 +694,23 @@ export default function LayoutEditor() {
     window.addEventListener("pointercancel", pointerCancel);
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
+    /*
+     * `onInternal` first: while the discard question is up, Escape answers THAT
+     * and nothing else. Dismissing the question is the conservative answer —
+     * Escape can then never throw a positioning session away, however many times
+     * it is pressed, which is the whole point of the question existing.
+     */
+    const disposeEscape = createEscapeLayer({
+      label: "hud-layout-editor",
+      depth: 1,
+      active: () => session() !== null,
+      onInternal: () => {
+        if (!discarding()) return false;
+        setDiscarding(false);
+        return true;
+      },
+      onEscape: requestCancel,
+    });
     window.addEventListener("resize", resized);
     window.addEventListener("blur", blurred);
     // Solid 2's `onSettled` takes its teardown as the RETURNED function rather
@@ -663,6 +725,7 @@ export default function LayoutEditor() {
       window.removeEventListener("pointercancel", pointerCancel);
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
+      disposeEscape();
       window.removeEventListener("resize", resized);
       window.removeEventListener("blur", blurred);
       stop();
@@ -810,15 +873,27 @@ export default function LayoutEditor() {
               {notice()}
             </p>
           </Show>
+          {/*
+           * ⚠️ AFFIRMATIVE LEFT, and all four of tLib's affirmative/cancel pairs
+           * were moved together to get there.
+           *
+           * Counted rather than assumed. Before: this editor, the dialog footer
+           * and the menu's confirmation all put Cancel left / affirmative right;
+           * the shared prop editor put Save left. So tLib was 3–1 the other way,
+           * and the audit that raised this counted five surfaces when there are
+           * six — it missed the dialog footer and the menu confirmation. Reversing
+           * only this one would have left tLib 2–2, which is worse than either
+           * convention.
+           *
+           * Affirmative-left is the side the rest of the stack is already on — the
+           * prop editor (tLib's own, mounted by three consumers), tELS and tAFK —
+           * and it is the native order on Windows, which is the only OS a FiveM
+           * client runs on. A player who confirms in the prop editor and then
+           * meets a tLib dialog must not have to re-read the buttons; that
+           * inversion is the same class of defect as the accent repainting
+           * between two surfaces.
+           */}
           <footer>
-            <NuiButton
-              class="tlib-layout__discard"
-              disabled={finishing()}
-              onClick={() => void finish(false)}
-            >
-              <X aria-hidden="true" />
-              Cancel
-            </NuiButton>
             <NuiButton
               tone="primary"
               class="tlib-layout__finish"
@@ -829,7 +904,66 @@ export default function LayoutEditor() {
               <Check aria-hidden="true" />
               {finishing() ? "Saving…" : "Save"}
             </NuiButton>
+            <NuiButton
+              class="tlib-layout__discard"
+              disabled={finishing()}
+              onClick={requestCancel}
+            >
+              <X aria-hidden="true" />
+              Cancel
+            </NuiButton>
           </footer>
+          {/*
+           * The discard question, drawn with nui-kit's `.tlib-nui-confirm*`
+           * recipe — the same one the dialog's `confirm` field uses and the same
+           * shape the menu has always had. One confirmation design in the
+           * product, three surfaces that reach for it.
+           *
+           * `tlib-nui-surface` on the shade rather than relying on an ancestor:
+           * this panel is themed from `--tlib-layout-*`, so the `--nui-*` tokens
+           * the recipe reads are not otherwise in scope here and every colour in
+           * it would resolve to nothing.
+           */}
+          <Show when={discarding()}>
+            <div class="tlib-nui-surface tlib-nui-confirm-shade">
+              <div
+                class="tlib-nui-confirm"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="tlib-layout-discard-title"
+                aria-describedby="tlib-layout-discard-question"
+              >
+                <p class="tlib-nui-confirm-eyebrow">
+                  <ShieldAlert aria-hidden="true" />
+                  CONFIRM ACTION
+                </p>
+                <h2 id="tlib-layout-discard-title" class="tlib-nui-confirm-title">
+                  Discard layout changes
+                </h2>
+                <p id="tlib-layout-discard-question" class="tlib-nui-confirm-question">
+                  The HUD goes back to where it was before you opened the editor. This cannot be
+                  undone.
+                </p>
+                <div class="tlib-nui-confirm-actions">
+                  <NuiButton
+                    tone="primary"
+                    autofocus
+                    onClick={() => {
+                      setDiscarding(false);
+                      void finish(false);
+                    }}
+                  >
+                    <Check aria-hidden="true" />
+                    Discard
+                  </NuiButton>
+                  <NuiButton onClick={() => setDiscarding(false)}>
+                    <X aria-hidden="true" />
+                    Keep editing
+                  </NuiButton>
+                </div>
+              </div>
+            </div>
+          </Show>
         </aside>
       </div>
     </Show>
