@@ -20,6 +20,23 @@ export {
   stageFiles,
   step,
 } from "./core.ts";
+export type {
+  CssContractOptions,
+  CssRule,
+  ShadowFinding,
+  SurfaceCollision,
+} from "./css-contract.ts";
+export {
+  blurredShadow,
+  cssRules,
+  findBlurredShadows,
+  findSurfaceCollisions,
+  formatBlurredShadows,
+  formatSurfaceCollisions,
+  SURFACE_CSS,
+  subjectClasses,
+  surfaceClassNames,
+} from "./css-contract.ts";
 export type { DeadClass, DeadClassOptions } from "./dead-classes.ts";
 export { findDeadClasses, formatDeadClasses, runDeadClassCheck } from "./dead-classes.ts";
 export type { DevConfig, WatcherDef } from "./dev.ts";

@@ -43,7 +43,14 @@ function paletteBlocks(css: string): { selector: string; body: string }[] {
   const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const out: { selector: string; body: string }[] = [];
   for (const m of stripped.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const selector = m[1].trim();
+    // `[^{}]+` swallows every statement since the previous block, so the prelude
+    // of the first one carries the file's `@layer base, components;` and its
+    // `@import "./surface.css";` as well as `:root`. Keep only what follows the
+    // last statement terminator. Without this the first block's selector reads
+    // `@layer base, components; @import …; :root`, no block matches `:root`, and
+    // the ladder assertions throw "no :root palette to inherit from" — which
+    // looks like a missing palette rather than a parse that moved.
+    const selector = (m[1].split(";").at(-1) ?? "").trim();
     const body = m[2];
     if (LADDER.some((t) => body.includes(`${t}:`))) out.push({ selector, body });
   }

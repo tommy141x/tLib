@@ -1,5 +1,12 @@
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { CssContractOptions } from "./css-contract.ts";
+import {
+  findBlurredShadows,
+  findSurfaceCollisions,
+  formatBlurredShadows,
+  formatSurfaceCollisions,
+} from "./css-contract.ts";
 
 /**
  * Finds utility class names that generate no CSS at all.
@@ -576,10 +583,10 @@ export async function findDeadClasses(options: DeadClassOptions): Promise<DeadCl
             matchedBlocks(code, opener, open, close).map((block) =>
               blankComparisonOperands(
                 blankDefaultVariants(
-                  nestedObjects === "arguments" ? blankNestedObjects(block) : block,
-                ),
-              ),
-            ),
+                  nestedObjects === "arguments" ? blankNestedObjects(block) : block
+                )
+              )
+            )
           );
       for (const region of regions) {
         for (const m of region.matchAll(STRING_OR_KEY)) {
@@ -641,13 +648,36 @@ export async function findDeadClasses(options: DeadClassOptions): Promise<DeadCl
  * that define its `mp-*` hooks, tRadio's dispatch panel excludes the theme
  * SDK's uncompiled starter template — pass their own options and explain why
  * at the call site, which is where that reasoning belongs.
+ *
+ * ── The two CSS-contract gates that ride along ──
+ *
+ * This is also where `findSurfaceCollisions` and `findBlurredShadows` run, and
+ * the reason is reach rather than tidiness: `check:classes` is the ONE gate
+ * every resource already has in its own `verify`, and it already walks exactly
+ * the files those two read. Adding them here gates seven bundles with no edit
+ * in any of them. See the header of `css-contract.ts` for what each catches and
+ * why neither was visible before.
+ *
+ * All three run before anything exits, so one run reports everything rather
+ * than making a consumer fix the first class of problem to discover the second.
  */
 export async function runDeadClassCheck(
-  options: Omit<DeadClassOptions, "roots"> & { roots?: string[] },
+  options: Omit<DeadClassOptions, "roots"> &
+    Omit<CssContractOptions, "cssRoots"> & { roots?: string[] }
 ): Promise<void> {
-  const dead = await findDeadClasses({ roots: ["src"], ...options });
+  const resolved = { roots: ["src"], ...options };
+  const dead = await findDeadClasses(resolved);
+  const contract: CssContractOptions = {
+    cssRoots: resolved.cssRoots ?? resolved.roots,
+    allowSurfaceCollisions: resolved.allowSurfaceCollisions,
+    allowShadowSelectors: resolved.allowShadowSelectors,
+  };
+  const collisions = findSurfaceCollisions(contract);
+  const shadows = findBlurredShadows(contract);
   console.log(formatDeadClasses(dead));
-  if (dead.length > 0) process.exit(1);
+  console.log(formatSurfaceCollisions(collisions));
+  console.log(formatBlurredShadows(shadows));
+  if (dead.length > 0 || collisions.length > 0 || shadows.length > 0) process.exit(1);
 }
 
 export function formatDeadClasses(dead: DeadClass[]): string {

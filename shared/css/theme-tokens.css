@@ -1,3 +1,56 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE LAYER ORDER, DECLARED BEFORE ANYTHING CAN IMPLY ONE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * A `@layer a, b;` statement fixes the order of those two layers no matter where
+ * either one is later opened. Without it the order is FIRST APPEARANCE, and the
+ * line below — the surface.css re-export — appears at whatever line the host put
+ * `@import` of this file on, which in tLib, tELS and tAFK is ABOVE their own
+ * `@layer base { … }`. That would silently invert base and components: every
+ * `@layer base` rule would start beating `.prop-input`, `.panel`, `.segment` and
+ * the rest of the surface recipe, which is the opposite of what surface.css's own
+ * header says the layer is for.
+ *
+ * Measured positions at the time this was added — the import of this file, then
+ * where each host opens its own layers:
+ *
+ *   tLib   global.css:4  · base :35  · components :98
+ *   tELS   global.css:22 · base :96  · components :158
+ *   tAFK   global.css:11 · base :66  · components :105
+ *   tUnit  global.css:27 ·  (no base) · components :147
+ *
+ * So three of the four hosts would have flipped. Declaring the order here costs
+ * nothing and cannot be undone by an import landing somewhere unexpected. Keep
+ * this statement ABOVE the `@import`: `@import` may only be preceded by `@charset`
+ * and by `@layer` STATEMENT rules, so this is the one thing allowed in front of it.
+ */
+@layer base, components;
+
+/* ── The surface layer is not optional ──────────────────────────────────────
+ *
+ * `surface.css` is the type scale and the surface/control recipe, and every
+ * component in `shared/ts/ui/*` states in its own header that the consumer must
+ * import it. Stating it is not enforcing it: when this re-export was added, ONE
+ * of the six resources (tUnit) actually did, and in tELS's shipped stylesheet
+ * `.field-hint`, `.segment`, `.segment-track`, `.list-row` and `.row-action` had
+ * ZERO rules while being used in markup — unstyled markup renders, so nothing
+ * failed and nobody saw it.
+ *
+ * Re-exporting it from here makes adopting the TOKENS adopt the layer that uses
+ * them, which is the only pairing that was ever meaningful: every rule in
+ * surface.css is `hsl(var(--card))`, `var(--radius-control)` and friends, so the
+ * two files are useless apart.
+ *
+ * A consumer that already imports `surface.css` itself is fine and does not
+ * double-emit — the bundler resolves both to one file and inlines it once; tUnit
+ * imports both and its built sheet carries one copy of each rule.
+ *
+ * Importing it here rather than from each host also fixes the ORDER for free: it
+ * lands immediately after the tokens it reads, which is what surface.css's header
+ * asks for, instead of wherever a host happened to put the line.
+ */
+@import "./surface.css";
+
 /*
  * The tLib surface theme, as the one file every resource's NUI imports.
  *
