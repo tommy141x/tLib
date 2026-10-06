@@ -31,10 +31,21 @@
  * `surface.css` is the type scale and the surface/control recipe, and every
  * component in `shared/ts/ui/*` states in its own header that the consumer must
  * import it. Stating it is not enforcing it: when this re-export was added, ONE
- * of the six resources (tUnit) actually did, and in tELS's shipped stylesheet
- * `.field-hint`, `.segment`, `.segment-track`, `.list-row` and `.row-action` had
- * ZERO rules while being used in markup — unstyled markup renders, so nothing
- * failed and nobody saw it.
+ * of the six resources (tUnit) actually did.
+ *
+ * ⚠️ The audit that prompted this said tELS was USING `.field-hint`, `.segment`,
+ * `.segment-track`, `.list-row` and `.row-action` in markup while they painted
+ * nothing. Re-measured in tELS's shipped sheet and across the 41 tLib components
+ * it imports, that is wrong: the five were simply absent, referenced by neither.
+ * Do not go looking for the broken usage in another consumer without measuring
+ * it there first — it may not exist either.
+ *
+ * The missing import is still the thing to fix, for the reason below rather than
+ * for an unstyled element: a consumer that has the tokens and not the recipe
+ * cannot use `ui/input.tsx`, `ui/select.tsx`, `ui/field.tsx` or `ui/segmented.tsx`
+ * at all, because every one of them styles itself entirely from a class in this
+ * layer. Unstyled markup renders, so adopting one would have looked like the
+ * component was broken rather than like the sheet was missing.
  *
  * Re-exporting it from here makes adopting the TOKENS adopt the layer that uses
  * them, which is the only pairing that was ever meaningful: every rule in

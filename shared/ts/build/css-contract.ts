@@ -279,9 +279,15 @@ export interface CssContractOptions {
   /** Directories to walk for `.css`, relative to cwd or absolute. */
   cssRoots: string[];
   /**
-   * Surface class names this bundle is allowed to re-declare. Each entry needs
-   * a reason at the call site; there are none today and the gate is meant to be
-   * satisfied by deleting the local rule, not by listing it.
+   * Surface class names this bundle is allowed to re-declare BARE. Each entry
+   * needs a reason at the call site, and the gate is meant to be satisfied by
+   * deleting the local rule rather than by listing it.
+   *
+   * It should be empty almost everywhere: a scoped override
+   * (`.my-sidebar .prop-input`) and a compounded variant (`.panel.compact`) are
+   * not collisions and need no entry — see `redeclaredSurfaceClass`. If a
+   * consumer is accumulating entries here, the rule being guarded is wrong, not
+   * the consumer.
    */
   allowSurfaceCollisions?: string[];
   /** Selectors whose blurred shadow is intentional. Same rule: none today. */
@@ -319,16 +325,64 @@ const rel = (file: string): string => {
   return (file.startsWith(cwd + sep) ? file.slice(cwd.length + 1) : file).replace(/\\/g, "/");
 };
 
+/**
+ * The class a selector REDECLARES, as opposed to one it merely mentions.
+ *
+ * Exactly one name, and only when the selector is a single compound built on a
+ * single class. `.panel`, `.panel:hover` and `.prop-input[data-state="open"]`
+ * qualify; everything else returns nothing.
+ *
+ * ── Why an ancestor disqualifies it ──
+ *
+ * `.workspace-content > .panel { min-height: … }` is not a fork of `.panel`. It
+ * is a local constraint on where one particular panel sits, under a selector
+ * scoped to one resource's own markup, and it is how shared CSS is SUPPOSED to be
+ * adjusted. The first version of this gate took the rightmost compound whatever
+ * preceded it, and the first consumer to meet it had two such rules
+ * (`.workspace-content > .panel` and `.workspace-light-sidebar .prop-input`,
+ * both a lone `min-height`) and had to allowlist them. That is the failure mode
+ * to design out rather than document: a gate that fires on correct CSS gets an
+ * allowlist per consumer, and an allowlist per consumer is a gate nobody obeys.
+ *
+ * Nothing the audit actually measured is lost. tELS's real forks were all bare —
+ * `.panel`, `.prop-input`, `.prop-input:hover`, `.prop-input:focus`,
+ * `.section-label` — and a bare redeclaration is the only form that silently
+ * replaces the shared rule wholesale for every element that carries the class.
+ *
+ * ── Why a second class also disqualifies it ──
+ *
+ * `.panel.compact { … }` adds a variant to the shared class; it does not replace
+ * it. This is the same rule `surfaceClassNames()` applies on the other side,
+ * where `.list-row.selected` contributes neither name, and the two sides have to
+ * agree or the gate means different things at each end.
+ *
+ * A scoped or compounded rule CAN still re-skin the whole recipe, and this gate
+ * will not catch that. It is the price of not firing on the normal case, and it
+ * is a smaller problem: a scope is visible in the selector, so a reader can see
+ * what it applies to. A bare redeclaration is invisible.
+ */
+function redeclaredSurfaceClass(selector: string, surface: Set<string>): string | undefined {
+  // One selector only -- a list is handled by the caller, since each entry in it
+  // stands or falls separately.
+  if (lastCompound(selector) !== selector.trim()) return undefined;
+  const classes = subjectClasses(selector);
+  if (classes.length !== 1) return undefined;
+  const name = classes[0];
+  return name && surface.has(name) ? name : undefined;
+}
+
 export function findSurfaceCollisions(options: CssContractOptions): SurfaceCollision[] {
   const surface = surfaceClassNames();
   const allowed = new Set(options.allowSurfaceCollisions ?? []);
   const hits = new Map<string, string[]>();
   for (const file of localCssFiles(options.cssRoots)) {
     for (const rule of cssRules(readFileSync(file, "utf8"), file)) {
-      for (const name of subjectClasses(rule.selector)) {
-        if (!surface.has(name) || allowed.has(name)) continue;
+      for (const selector of splitSelectorList(rule.selector)) {
+        const name = redeclaredSurfaceClass(selector, surface);
+        if (!name || allowed.has(name)) continue;
         const sites = hits.get(name) ?? [];
-        sites.push(`${rel(file)}:${rule.line}`);
+        const site = `${rel(file)}:${rule.line}`;
+        if (!sites.includes(site)) sites.push(site);
         hits.set(name, sites);
       }
     }

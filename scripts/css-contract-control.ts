@@ -86,6 +86,16 @@ writeFileSync(
   /* A shared class named only inside :not() / an attribute value. */
   .toolbar:not(.panel) { margin: 0; }
   .toolbar[data-of=".segment"] { margin: 0; }
+  /* The two forms the first consumer to meet this gate actually had: a lone
+     constraint on where one shared element sits, scoped to that resource's own
+     markup. Normal CSS, and flagging it is what makes a gate get routed around
+     with a per-consumer allowlist. */
+  .workspace-content > .panel { min-height: 120px; }
+  .workspace-light-sidebar .prop-input { min-height: 26px; }
+  /* A variant compounded onto the shared class ADDS to it; it does not replace
+     it. The same rule the surface side applies to .list-row.selected. */
+  .panel.compact { padding: 2px; }
+  .list-row.is-dragging { opacity: .5; }
   /* Zero-blur shadows: hard-edged, composite fine, explicitly allowed. */
   .thumb { box-shadow: 0 0 0 2px hsl(var(--background)); }
   .bar   { box-shadow: inset 3px 0 currentColor; }
@@ -104,8 +114,9 @@ writeFileSync(
 @layer components {
   /* Overriding only a state is still a fork of the rule. */
   .prop-input:focus-visible { outline: none; }
-  /* Rightmost compound, under a descendant selector. */
-  .editor .list-row { color: red; }
+  /* A bare STATE override is still a fork: it replaces the shared rule for that
+     state on every element carrying the class, wherever it is. */
+  .list-row:hover { color: red; }
   /* A selector list: both subjects count, the non-surface one is ignored. */
   .segment, .whatever { font-weight: 700; }
   /* Media-nested, to prove at-rules are descended into. */
@@ -201,6 +212,16 @@ try {
       .map((c) => c.name),
     ["panel", "prop-input", "list-row", "segment", "field-hint"]
   );
+  // Its own case rather than left implicit in the green fixture above: this is
+  // the rule the gate was corrected for after the first consumer met it, and a
+  // regression here is the gate going back to firing on correct CSS.
+  setCheck(
+    "a scoped or compounded use of a surface class is NOT a redeclaration",
+    findSurfaceCollisions(correct)
+      .flatMap((collision) => collision.sites)
+      .filter((site) => site.includes("correct.css")),
+    []
+  );
   setCheck(
     "planted blurs are reported, by selector",
     findBlurredShadows(correct)
@@ -233,14 +254,24 @@ try {
   setCheck(
     "DRILL: the naive every-class reading goes red on the correct fixture",
     [...naiveHits],
-    ["panel", "segment"]
+    ["panel", "prop-input", "list-row", "segment"]
   );
+  // The two readings must DISAGREE on this fixture. If they ever agree, the
+  // green case above stopped exercising the rule and proves nothing — which is
+  // the whole reason a drill is here rather than only a passing assertion.
   check(
-    "DRILL: the real reading disagrees with the naive one on that fixture",
+    "DRILL: the real gate finds none of what the naive reading finds there",
     naiveHits.size > 0 &&
-      cssRules(await Bun.file(join(root, "correct.css")).text(), "correct.css")
-        .flatMap((r) => subjectClasses(r.selector))
-        .every((n) => !surface.has(n))
+      findSurfaceCollisions({ cssRoots: [root] }).every((collision) =>
+        collision.sites.every((site) => !site.includes("correct.css"))
+      )
+  );
+  // And the subject rule itself still holds on its own, for the forms where the
+  // subject is the whole selector.
+  setCheck(
+    "DRILL: the subject of `.editor .list-row` is the row, not the editor",
+    subjectClasses(".editor .list-row"),
+    ["list-row"]
   );
 
   // ── 6. The blur predicate, on the two values the audit's regex got wrong ───
