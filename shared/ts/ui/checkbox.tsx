@@ -53,10 +53,26 @@ export interface CheckboxProps {
  * the top of surface.css: a 10px webfont on a dark surface in CEF 103 has almost no
  * stem left, and that is what every "the fonts are poor" report has been.
  */
+/**
+ * ⚠️ The BOX does not scale with the label, and that is the fix rather than an
+ * oversight.
+ *
+ * It was 14/16/20px across the three tiers. nui-kit's checkbox — the same control,
+ * drawn by `.tlib-nui-checkbox-control` for the same product — was a single 17px
+ * box, so the two kits disagreed in three ways at once and at no size were they
+ * the same object. A checkbox is a fixed-size hit target with a glyph in it; the
+ * only thing a label step should move is the label.
+ *
+ * 16px, in both kits, with a 12px glyph. nui-kit's 17 came down to 16; the odd
+ * pixel bought nothing and made the two impossible to compare.
+ */
+const CONTROL = "h-4 w-4";
+const ICON = "h-3 w-3";
+
 const SIZES = {
-  sm: { control: "h-3.5 w-3.5", icon: "h-2.5 w-2.5", label: "text-[11px]" },
-  md: { control: "h-4 w-4", icon: "h-3 w-3", label: "text-[12px]" },
-  lg: { control: "h-5 w-5", icon: "h-3.5 w-3.5", label: "text-[13px]" },
+  sm: { label: "text-[11px]" },
+  md: { label: "text-[12px]" },
+  lg: { label: "text-[13px]" },
 } as const;
 
 /**
@@ -98,8 +114,26 @@ const SIZES = {
  * and needs no sibling. `peer` stays on the Control only because consumers' own
  * markup (tELS's, via the composable parts below) may still target it.
  */
+/*
+ * `rounded-[var(--radius-tight)]`, NOT `rounded-sm`.
+ *
+ * On the web target `rounded-sm` is `calc(var(--radius) * 0.5)` — 5px on a 16px
+ * box, which is most of the way to a circle and reads as a radio button. No named
+ * step equals `--radius-tight` (`rounded-xs` is 2.5px, `rounded-sm` is 5px), so
+ * the token is named directly. That is the same 4px nui-kit's
+ * `--nui-radius-sm: var(--radius-tight)` resolves to, which is the point: one
+ * shape, two kits.
+ *
+ * The edge at REST is the neutral border token, not `--primary`. It was the accent
+ * colour, so an unchecked box advertised itself as the affirmative control before
+ * anybody had affirmed anything — and nui-kit's equivalent was neutral, so the two
+ * disagreed about the one state a checkbox is usually in. `border-border` is what
+ * `.prop-input` in surface.css draws its edge with, so this box now matches the
+ * field beside it rather than only the other checkbox. The accent still arrives on
+ * hover, on keyboard focus, and as the checked fill.
+ */
 const CONTROL_BASE =
-  "peer shrink-0 rounded-sm border border-primary transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-200 ease-out hover:border-ring outline-none data-[focus-visible]:border-ring data-[focus-visible]:outline-2 data-[focus-visible]:outline-solid data-[focus-visible]:outline-ring/40 data-[focus-visible]:-outline-offset-1 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground";
+  "peer shrink-0 rounded-[var(--radius-tight)] border border-border transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-200 ease-out hover:border-ring outline-none data-[focus-visible]:border-ring data-[focus-visible]:outline-2 data-[focus-visible]:outline-solid data-[focus-visible]:outline-ring/40 data-[focus-visible]:-outline-offset-1 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground";
 
 const INDICATOR_BASE = "flex items-center justify-center w-full h-full [&[hidden]]:hidden";
 
@@ -112,9 +146,9 @@ export const Checkbox = (props: CheckboxProps & { size?: keyof typeof SIZES }) =
 
   return (
     <ArkCheckbox.Root class={cn("flex items-center gap-2", props.class)} {...others}>
-      <ArkCheckbox.Control class={cn(CONTROL_BASE, sz().control)}>
+      <ArkCheckbox.Control class={cn(CONTROL_BASE, CONTROL)}>
         <ArkCheckbox.Indicator class={INDICATOR_BASE}>
-          <IconCheck class={sz().icon} />
+          <IconCheck class={ICON} />
         </ArkCheckbox.Indicator>
       </ArkCheckbox.Control>
       <Show when={props.children}>
@@ -138,7 +172,7 @@ export const CheckboxLabel = (props: { children?: JSX.Element; class?: string })
 export const CheckboxControl = (props: { children?: JSX.Element; class?: string }) => {
   const others = omit(props, "class");
   return (
-    <ArkCheckbox.Control class={cn(CONTROL_BASE, SIZES.md.control, props.class)} {...others} />
+    <ArkCheckbox.Control class={cn(CONTROL_BASE, CONTROL, props.class)} {...others} />
   );
 };
 
@@ -155,8 +189,8 @@ export const CheckboxIndicator = (props: {
       {...others}
     >
       {props.children || (
-        <Show when={props.indeterminate} fallback={<IconCheck class={SIZES.md.icon} />}>
-          <IconMinus class={SIZES.md.icon} />
+        <Show when={props.indeterminate} fallback={<IconCheck class={ICON} />}>
+          <IconMinus class={ICON} />
         </Show>
       )}
     </ArkCheckbox.Indicator>

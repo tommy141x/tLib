@@ -57,6 +57,22 @@ import { type ParentProps, Show } from "solid-js";
  * there is one, which is what `applyNuiTheme` in tLib's `nui-theme.ts` already
  * intends for every other control — and it resolves the complaint at the top of
  * this comment, where these were "the only blue things left on a grey screen".
+ *
+ * ── The accent half of that was undone, and why that is not a flip-flop ─────
+ *
+ * `--nui-accent` is the blue again. The complaint above was never about the hue,
+ * it was about an ISOLATED one, and neutralising this sheet was only one of the
+ * two ways to end the isolation. It was the wrong one, because the five other
+ * bundles kept painting `hsl(var(--ring))` out of `shared/ts/ui/*` and never
+ * followed: measured in the built stylesheets, tLib's emitted
+ * `hsl(var(--nui-accent-raw) / .4)` for a focus outline while the other five
+ * emitted `hsl(var(--ring) / .4)`, so a tLib confirm dialog opened from inside
+ * the tELS editor repainted the primary button mid-flow. The same complaint,
+ * from the other side, and bigger.
+ *
+ * So the accent moved to `211 80% 55%` everywhere instead. `--nui-danger` is
+ * UNCHANGED — nothing ever disagreed with it, and `#ff8585` is the readable red
+ * on a near-black card that `--destructive` is not.
  */
 const C = {
   bg: "var(--nui-bg, hsl(var(--background, 225 8% 12%)))",
@@ -66,7 +82,10 @@ const C = {
   muted: "var(--nui-muted, hsl(var(--muted-foreground, 220 8% 58%)))",
   mutedFaint: "hsl(var(--nui-muted-raw, var(--muted-foreground, 220 8% 58%)) / 0.5)",
   mutedFainter: "hsl(var(--nui-muted-raw, var(--muted-foreground, 220 8% 58%)) / 0.35)",
-  accent: "var(--nui-accent, #eeeeee)",
+  // The fallbacks track nui.css's declared values, so a host that defines no
+  // tokens at all renders the same accent as one that does. They were #eeeeee /
+  // #111111 and moved with it.
+  accent: "var(--nui-accent, #3089e8)",
   accentFg: "var(--nui-accent-text, #111111)",
   secondary: "hsl(var(--nui-hover-raw, var(--secondary, 225 10% 26%)) / 0.6)",
   secondaryHover: "hsl(var(--nui-hover-raw, var(--secondary, 225 10% 26%)))",

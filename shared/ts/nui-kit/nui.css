@@ -67,10 +67,50 @@
      `-raw` partner too, or the alpha tints below render invalid and paint
      nothing. */
   --nui-text-raw: var(--foreground);
-  --nui-accent-raw: 0 0% 93%;
+  /* ── The accent is the SAME blue `shared/ts/ui/*` paints ──────────────────
+   *
+   * `211 80% 55%`, which is `--primary` in theme-tokens.css and `--ring` in the
+   * components built on it. Only the VALUE is shared: the `--nui-*` namespace is
+   * deliberately separate from `--ring`, because this sheet has to resolve in a
+   * host that declares no tLib tokens at all. Do not collapse the two names.
+   *
+   * It was `#eeeeee` until now, and that neutral was a signed-off repaint, not an
+   * accident — the note in `../admin-ui/index.tsx` records it. What that note was
+   * fixing, though, was that the admin-ui controls "became the only blue things
+   * left on a grey screen": the defect was an ISOLATED blue, and neutralising it
+   * was one of the two ways to end the isolation. It turned out to be the wrong
+   * one, because the other five bundles kept painting `hsl(var(--ring))` from
+   * `shared/ts/ui/*` and never moved. Measured in the built sheets: tLib's bundle
+   * emits `outline-color: hsl(var(--nui-accent-raw) / .4)` and the other five emit
+   * `hsl(var(--ring) / .4)`. So a player opening a tLib confirm dialog from inside
+   * the tELS editor watched the primary button change colour, which is the same
+   * complaint from the other end.
+   *
+   * Converging on the blue ends the isolation the other way, and ends it
+   * everywhere rather than in one sheet.
+   *
+   * ⚠️ `--nui-accent-text` stays `#111111`, and that is the ONE thing deliberately
+   * not matched to `shared/ts/ui/*`, which paints `--primary-foreground` (white)
+   * on this same blue.
+   *
+   * Measured in `tests/browser/dialog.ts`, which asserts a hard 4.5:1 floor on
+   * every text part of the dialog including the submit button: white on `#3089e8`
+   * is **3.58:1** and failed that assertion outright the first time this token
+   * moved with the fill. Black on it is 5.81:1 and passes.
+   *
+   * So the divergence that remains is a glyph colour on an identical fill, which
+   * is not the defect this change closes — the defect was the FILL repainting
+   * between a tLib dialog and a tELS editor, and it no longer does. The proper
+   * resolution is to move `--primary-foreground` in theme-tokens.css to match, so
+   * all seven bundles use the readable ink; that token is on five other bundles'
+   * primary buttons and badges and needs their galleries, so it is a separate
+   * change. Until then: `shared/ts/ui`'s primary button is the 3.58:1 one, not
+   * this. Do NOT "fix the inconsistency" by whitening this token — it will trip
+   * the dialog harness, which is where that number came from. */
+  --nui-accent-raw: 211 80% 55%;
   --nui-control-border: hsl(var(--nui-text-raw) / 0.32);
   --nui-hover: hsl(var(--secondary));
-  --nui-accent: #eeeeee;
+  --nui-accent: #3089e8;
   --nui-accent-text: #111111;
   --nui-danger: #ff8585;
   /* The rest of the `-raw` partners. These exist because admin-ui's palette
@@ -267,8 +307,12 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 17px;
-  height: 17px;
+  /* 16px, matching `shared/ts/ui/checkbox.tsx` exactly. It was 17: an odd pixel
+     that bought nothing and made the two kits' checkboxes impossible to compare
+     side by side. `--nui-radius-sm` is `var(--radius-tight)`, which is the radius
+     that file now names directly for the same reason. */
+  width: 16px;
+  height: 16px;
   border: 1px solid var(--nui-control-border);
   border-radius: var(--nui-radius-sm);
   background: var(--nui-inset);
@@ -542,6 +586,71 @@
 .tlib-nui-dialog[inert],
 .tlib-nui-dialog-positioner[data-state="closed"] {
   pointer-events: none !important;
+}
+/* ── The in-dialog confirmation ─────────────────────────────────────────────
+ *
+ * A `button` field's `confirm` string, rendered OVER the dialog's own body and
+ * inside it — never as a second dialog. A feature reached from an open UI
+ * renders in that UI; a stacked modal is two things with one Escape key.
+ *
+ * Geometry mirrors the menu's `.confirmation-shade` / `.confirmation` in
+ * `client/web/src/menu/menu.css`, which has rendered the same two buttons from
+ * the same field name since the beginning. Those classes are scoped under
+ * `.tlib-menu` and resolve to nothing here, so the recipe is restated against
+ * the `--nui-*` tokens rather than the menu's. Same shape, same reading order:
+ * eyebrow, what you are about to do, the question, then the pair.
+ *
+ * `background` is the OPAQUE surface, not a translucent scrim. The form behind
+ * is `inert` while this is up, and showing a greyed copy of controls that cannot
+ * be operated is the thing that reads as a stuck UI.
+ */
+.tlib-nui-confirm-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  background: var(--nui-surface);
+  animation: tlib-nui-rise 140ms var(--nui-ease-entrance);
+}
+.tlib-nui-confirm {
+  width: 100%;
+}
+.tlib-nui-confirm-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--nui-muted);
+}
+.tlib-nui-confirm-eyebrow svg {
+  width: 14px;
+  height: 14px;
+}
+.tlib-nui-confirm-title {
+  margin: 10px 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--nui-text);
+}
+.tlib-nui-confirm-question {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--nui-muted);
+}
+.tlib-nui-confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+/* Both buttons share the width, so neither is the one the eye lands on by being
+   bigger. Which one is affirmative is said by its tone and by being FIRST. */
+.tlib-nui-confirm-actions .tlib-nui-button {
+  flex: 1;
 }
 .tlib-nui-field-row {
   display: flex;

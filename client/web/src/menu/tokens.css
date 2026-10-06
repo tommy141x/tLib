@@ -16,12 +16,26 @@
   /* Set to 0 for a zero-animation build. Needed because CEF reports
      prefers-reduced-motion as no-preference whatever the host OS says. */
   --motion: 1;
-  --accent: #eeeeee;
+  /* `#3089e8` is `hsl(211 80% 55%)` — `--primary` in theme-tokens.css, `--ring`
+     in every component in `shared/ts/ui/*`, and `--nui-accent` in nui-kit as of
+     the same change. One affirmative/selected/focus colour across all seven
+     bundles; see the long note beside `--nui-accent` in nui-kit/nui.css for why
+     it moved to the blue rather than the other five moving to the grey.
+
+     These are the STOCK SKIN only. A server owner's theme still overrides every
+     one of them through Menu.tsx's theme effect, which reads the incoming value
+     and never any default here. */
+  --accent: #3089e8;
   --text: #eeeeee;
   --muted: #aaaaaa;
   --panel: #171717;
   --border: #343434;
-  --selected: #eeeeee;
+  --selected: #3089e8;
+  /* Near-black, NOT the white `--primary-foreground` that `shared/ts/ui/*` puts
+     on this same blue: white on #3089e8 measures 3.58:1 and trips the hard 4.5:1
+     floor tests/browser/dialog.ts asserts on every text part. Black is 5.81:1.
+     The full reasoning, and what the proper cross-bundle fix is, is beside
+     --nui-accent-text in nui-kit/nui.css. */
   --selected-ink: #111111;
   /* ⚠️ Bare HSL triplets for the colours above that something below needs a
      translucent share of. NUI is CEF 103 and color-mix() landed in Chromium 111,
@@ -54,10 +68,12 @@
   --panel-raw: 0 0% 9.02%;
   --border-raw: 0 0% 20.39%;
   --selected-ink-raw: 0 0% 6.67%;
-  /* Equal to --text-raw only because the stock --selected and --text happen to be
-     the same white. Its own token because they are separate theme knobs, and the
-     focus ring further down follows the selection, not the ink. */
-  --selected-raw: 0 0% 93.33%;
+  /* Its own token because --selected and --text are separate theme knobs, and the
+     focus ring further down follows the SELECTION, not the ink. They used to hold
+     the same white, which made this look like a duplicate of --text-raw; now that
+     --selected is the shared blue they differ, which is what the token was always
+     for. */
+  --selected-raw: 211 80% 55%;
   /* Enough of the world to know it is there, not enough to read through. The
      rows have no fill of their own, so this alpha is what a row sits on, and
      88% left a bright daytime street legible straight through the list. */
