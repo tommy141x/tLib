@@ -331,6 +331,29 @@ if (want("dialog")) {
     await send("closeDialog", { id: dialog.id });
     await page.waitForTimeout(200);
   }
+
+  // The `confirm` question on a button field, which only exists once the button
+  // has been pressed. Shot separately rather than by teaching the loop above
+  // about field interactions: it is one dialog, and the shape of the step is
+  // "press this specific control", which does not generalise.
+  const guarded = DIALOGS.find((entry) => entry.id === "gallery:button-confirm");
+  const guardedField = guarded?.fields.find((field) => field.confirm);
+  if (guarded && guardedField) {
+    await send("showDialog", guarded);
+    await page.waitForTimeout(350);
+    const button = page.getByRole("button", { name: guardedField.label, exact: true });
+    if (await button.count()) {
+      await button.first().click();
+      await page.waitForTimeout(300);
+      await shoot("dialog--button-confirm", "[role=dialog]");
+    } else {
+      flags.push(`dialog--button-confirm: no button labelled ${guardedField.label}`);
+    }
+    await send("closeDialog", { id: guarded.id });
+    await page.waitForTimeout(200);
+  } else {
+    flags.push("dialog--button-confirm: the gallery:button-confirm fixture is gone");
+  }
 }
 
 if (want("toast")) {

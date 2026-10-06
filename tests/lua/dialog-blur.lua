@@ -277,6 +277,13 @@ h.show('owned', { fields = {
     { id = 'choice', type = 'select', options = { { value = 'a', label = 'A' } } },
     { id = 'locked', type = 'button', disabled = true },
     { id = 'action', type = 'button' },
+    -- The confirmation question, which the serialiser is a WHITELIST over: an
+    -- unnamed key never reaches the page at all, so a `confirm` that survives
+    -- normalisation is the whole Lua side of the feature.
+    { id = 'guarded', type = 'button', confirm = 'Really?' },
+    { id = 'blankConfirm', type = 'button', confirm = '' },
+    { id = 'longConfirm', type = 'button', confirm = string.rep('x', 513) },
+    { id = 'valueConfirm', type = 'checkbox', confirm = 'Not a button' },
 }, tabs = { { id = 'page' }, { id = 'actionTab', action = true } },
     onChange = function() changes = changes + 1 end,
     onButtonClick = function() buttons = buttons + 1 end,
@@ -292,7 +299,10 @@ h.exports.UpdateDialogFields('owned', {})
 result = h.exports.ShowDialog('owned', {})
 eq(result, nil, 'other owner cannot reuse active public id')
 eq(DialogState.get('owned'), owned, 'cross-owner close does not remove state')
-eq(#owned.schema.fields, 5, 'cross-owner field replacement rejected')
+-- 9, not 5: four `confirm` fixtures were added to the schema above. The count
+-- is incidental here -- what this asserts is that the cross-owner
+-- `UpdateDialogFields({})` did NOT empty it.
+eq(#owned.schema.fields, 9, 'cross-owner field replacement rejected')
 eq(owned.schema.fields[5].label, '', 'cross-owner field patch rejected')
 h.owner = 'consumer'
 reply('dialogChange', 'missing', true)
@@ -317,6 +327,14 @@ reply('dialogButtonClick', 'actionTab')
 eq(buttons, 2, 'button fields and action tabs are allowed')
 h.exports.UpdateDialogField('owned', 'action', { variant = 'destructive', label = 'Stop' })
 eq(owned.schema.fields[5].variant, 'destructive', 'button variant patch updates normalized schema')
+eq(owned.schema.fields[6].confirm, 'Really?', 'a button confirm survives normalization')
+eq(owned.schema.fields[7].confirm, nil, 'an empty confirm is no confirm, not a blank question')
+eq(owned.schema.fields[8].confirm, nil, 'a confirm over 512 chars is dropped, as a menu row is')
+eq(owned.schema.fields[9].confirm, nil, 'confirm is button-only: a value field has no click to gate')
+-- A confirmed button still fires through the same path; the question lives in
+-- the page, so Lua must not gate the click a second time.
+reply('dialogButtonClick', 'guarded')
+eq(buttons, 3, 'a confirmed button still reaches onButtonClick when the page says so')
 h.exports.UpdateDialogField('owned', 'choice', { options = { { value = 'b', label = 'B' } } })
 reply('dialogChange', 'choice', 'a')
 reply('dialogChange', 'choice', 'b')

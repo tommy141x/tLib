@@ -2,7 +2,7 @@ import { Dialog as ArkDialog } from "@ark-ui/solid/dialog";
 import { Tabs } from "@ark-ui/solid/tabs";
 import { createForm } from "@tanstack/solid-form";
 import type { OpenData } from "@tlib/shared/marketplace/ui";
-import { ArrowUpRight, Check, Settings2, X } from "lucide-solid";
+import { ArrowUpRight, Check, Settings2, ShieldAlert, X } from "lucide-solid";
 import {
   createEffect,
   createMemo,
@@ -89,6 +89,16 @@ function DialogSession(props: {
   const [attempted, setAttempted] = createSignal(false);
   const [touched, setTouched] = createSignal<Set<string>>(new Set());
   const [notice, setNotice] = createSignal("");
+  /**
+   * The button field awaiting confirmation, if any. See `confirm` in
+   * `dialog-model.ts` for why a dialog button needed this at all.
+   *
+   * Held as the field ID plus the question, not as the field object: the schema
+   * can be replaced under us by `updateDialogFields` while the question is on
+   * screen, and confirming against a field that no longer exists has to be
+   * impossible rather than merely unlikely. `fire()` re-looks-up the ID.
+   */
+  const [confirming, setConfirming] = createSignal<{ fieldId: string; question: string }>();
   // Where this dialog id was last left. Read once, here, because everything it
   // seeds is owned by the session from now on.
   const remembered = recallDialogView(props.initial.id);
@@ -170,6 +180,9 @@ function DialogSession(props: {
       (data) => {
         if (!isCurrent(data.dialogId, data.instance)) return;
         setDialog((d) => ({ ...d, fields: data.fields }));
+        // The button being asked about may not exist in the new schema, and a
+        // question left standing over replaced fields is asking about nothing.
+        setConfirming(undefined);
         form.setFieldValue("values", initialValues(data.fields, values()));
         if (!tabs().some((tab) => !tab.action && tab.id === activeTab())) setActiveTab(firstTab());
       }
@@ -203,16 +216,44 @@ function DialogSession(props: {
         });
     })
   );
-  function updateField(id: string, value: DialogValue) {
+  /**
+   * The local half: the form value, the validation errors and whatever the field
+   * draws from them. No wire traffic.
+   *
+   * Split out of `updateField` for the slider, and only the slider calls it. Ark
+   * fires `onValueChange` on every pointer move of a drag, so wiring the two
+   * together meant one `dialogChange` round trip PER STEP of a drag — and
+   * `tRadar/client/cl_settings.lua` answers each one with an `UpdateDialogField`
+   * push back, so a single drag of a slider was a NUI→Lua→NUI round trip per
+   * pixel, in every resource that uses a tLib dialog.
+   */
+  function previewField(id: string, value: DialogValue) {
     if (!alive || !props.open) return;
     form.setFieldValue("values", (previous) => ({ ...previous, [id]: value }));
+  }
+  function updateField(id: string, value: DialogValue) {
+    previewField(id, value);
+    if (!alive || !props.open) return;
     const d = dialog();
     void fetchNui("dialogChange", { id: d.id, instance: d.instance, fieldId: id, value });
   }
-  function action(fieldId: string) {
+  function fire(fieldId: string) {
     if (!alive || !props.open) return;
     const d = dialog();
+    const field = d.fields.find((entry) => entry.id === fieldId);
+    // Re-checked here and not only at the click: the schema can be replaced, or
+    // the button disabled, between the question being asked and answered.
+    if (!field || field.type !== "button" || field.disabled) return;
     void fetchNui("dialogButtonClick", { id: d.id, instance: d.instance, fieldId });
+  }
+  function action(fieldId: string) {
+    if (!alive || !props.open) return;
+    const field = dialog().fields.find((entry) => entry.id === fieldId);
+    if (field?.confirm) {
+      setConfirming({ fieldId, question: field.confirm });
+      return;
+    }
+    fire(fieldId);
   }
   function cancel() {
     if (!alive || !props.open) return;
@@ -352,6 +393,26 @@ function DialogSession(props: {
       onOpenChange={(details) => {
         if (!details.open) cancel();
       }}
+      /*
+       * Escape answers the innermost thing on screen, which while a button's
+       * `confirm` question is up is the question — not the dialog.
+       *
+       * Ark's own hook rather than `createEscapeLayer`, and that is the correct
+       * seam here rather than a shortcut: zag's dismissable handler runs on
+       * `document` in the CAPTURE phase and only dismisses
+       * `if (!event.defaultPrevented)` (measured in
+       * `@zag-js/dismissable/dist/dismissable-layer.mjs:52-59`). So preventing
+       * it here both stops the dialog closing AND marks the event, which is
+       * exactly what the escape registry checks before standing down — the
+       * registry's own header says Ark's dismissables are handled "from the
+       * other direction" for this reason. A layer registered beside Ark's
+       * capture handler would be racing it on listener order.
+       */
+      onEscapeKeyDown={(event) => {
+        if (!confirming()) return;
+        event.preventDefault();
+        setConfirming(undefined);
+      }}
       initialFocusEl={() =>
         panel?.querySelector<HTMLElement>(
           "form input:not([type=hidden]):not(:disabled), form textarea:not(:disabled), form [role=combobox]:not([data-disabled])"
@@ -381,7 +442,7 @@ function DialogSession(props: {
           }}
           inert={!props.open}
           aria-hidden={!props.open ? "true" : undefined}
-          class="tlib-nui-surface tlib-nui-dialog tlib-nui-lit pointer-events-auto flex max-w-full flex-col overflow-hidden rounded-[var(--nui-radius-lg)] border border-[var(--nui-border)] bg-[var(--nui-surface)] outline-none"
+          class="tlib-nui-surface tlib-nui-dialog tlib-nui-lit pointer-events-auto relative flex max-w-full flex-col overflow-hidden rounded-[var(--nui-radius-lg)] border border-[var(--nui-border)] bg-[var(--nui-surface)] outline-none"
           style={{
             width: SIZE_W[dialog().size] ?? SIZE_W.md,
             "max-height": "85vh",
@@ -413,7 +474,17 @@ function DialogSession(props: {
               <X size={16} />
             </ArkDialog.CloseTrigger>
           </header>
-          <form class="flex min-h-0 flex-col" novalidate onSubmit={submit}>
+          <form
+            class="flex min-h-0 flex-col"
+            novalidate
+            onSubmit={submit}
+            /* The question is modal WITHIN the dialog — no stacked dialogs, a
+               feature reached from an open UI renders inside it. `inert` is what
+               keeps the form behind it off the Tab ring and out of reach of a
+               click; it is the same attribute this content root already uses for
+               the closed state, so the support question is already settled. */
+            inert={!!confirming()}
+          >
             <Tabs.Root
               value={activeTab()}
               orientation="vertical"
@@ -519,13 +590,71 @@ function DialogSession(props: {
                   {notice()}
                 </p>
               </Show>
-              <NuiButton onClick={cancel}>{dialog().cancelLabel ?? "Cancel"}</NuiButton>
+              {/* ⚠️ AFFIRMATIVE LEFT. See the note in `layout/LayoutEditor.tsx`
+                  for the count behind that and why all four of tLib's
+                  affirmative/cancel pairs moved together rather than one. */}
               <NuiButton type="submit" tone="primary" disabled={submitting()}>
                 <Check size={14} />
                 {submitting() ? "Submitting…" : (dialog().submitLabel ?? "Submit")}
               </NuiButton>
+              <NuiButton onClick={cancel}>{dialog().cancelLabel ?? "Cancel"}</NuiButton>
             </footer>
           </form>
+          {/*
+           * The confirmation for a button field's `confirm` string.
+           *
+           * The SAME two buttons the menu has rendered from the same field name
+           * since the beginning (`menu/Menu.tsx`, `.dialog-cancel` /
+           * `.dialog-confirm`) — same eyebrow, same heading-then-question, same
+           * pair — restated in nui-kit's own classes because the menu's are
+           * scoped under `.tlib-menu` and resolve to nothing here. There is no
+           * second confirm design and there must not be one.
+           */}
+          <Show when={confirming()}>
+            {(pending) => (
+              <div class="tlib-nui-confirm-shade">
+                <div
+                  class="tlib-nui-confirm"
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby={`${tabIds}-confirm-title`}
+                  aria-describedby={`${tabIds}-confirm-question`}
+                >
+                  <p class="tlib-nui-confirm-eyebrow">
+                    <ShieldAlert aria-hidden="true" />
+                    CONFIRM ACTION
+                  </p>
+                  <h2 id={`${tabIds}-confirm-title`} class="tlib-nui-confirm-title">
+                    {dialog().fields.find((field) => field.id === pending().fieldId)?.label ?? ""}
+                  </h2>
+                  <p id={`${tabIds}-confirm-question`} class="tlib-nui-confirm-question">
+                    {pending().question}
+                  </p>
+                  <div class="tlib-nui-confirm-actions">
+                    {/* Affirmative left, as everywhere else. Autofocused because
+                        the form behind is inert and focus would otherwise be
+                        stranded on an unreachable element. */}
+                    <NuiButton
+                      tone="primary"
+                      autofocus
+                      onClick={() => {
+                        const target = pending().fieldId;
+                        setConfirming(undefined);
+                        fire(target);
+                      }}
+                    >
+                      <Check size={15} />
+                      Confirm
+                    </NuiButton>
+                    <NuiButton onClick={() => setConfirming(undefined)}>
+                      <X size={15} />
+                      Cancel
+                    </NuiButton>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Show>
         </ArkDialog.Content>
       </ArkDialog.Positioner>
     </ArkDialog.Root>
@@ -568,6 +697,7 @@ function DialogSession(props: {
                             if (props.open) setTouched((previous) => new Set([...previous, id]));
                           }}
                           onChange={(value) => updateField(id, value)}
+                          onPreview={(value) => previewField(id, value)}
                           onAction={() => action(id)}
                         />
                       </div>

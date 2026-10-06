@@ -76,6 +76,19 @@ local function serialiseField(f)
         s.defaultValue = f.defaultValue == true
     elseif fieldType == 'button' then
         s.variant = type(f.variant) == 'string' and f.variant or 'default'
+        -- The confirmation question. `variant = 'destructive'` is COLOUR and
+        -- nothing else, so a button that deletes something looked like one and
+        -- was still one click away from doing it.
+        --
+        -- This serialiser is a WHITELIST -- a key it does not name never reaches
+        -- the page -- which is why this line is the whole feature on the Lua
+        -- side, and why `view` on a tab had to be added for the same reason a
+        -- few lines below. Bounded at 512 like a menu row's `confirm` in
+        -- `shared/lib/menu/schema.lua`: it is the same key with the same meaning
+        -- on a different surface, and the page renders the same two buttons for
+        -- both. An empty string is nil, not a question with no text.
+        s.confirm = type(f.confirm) == 'string' and f.confirm ~= ''
+            and #f.confirm <= 512 and f.confirm or nil
     end
 
     return s

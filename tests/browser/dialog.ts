@@ -174,9 +174,30 @@ try {
   assert.equal(await page.getByText("Live preview stays in the game.").count(), 1);
   await pause();
   const desktop = await measure("desktop-form");
-  assert.equal(desktop.primary?.background, "rgb(238, 238, 238)", "stock primary is neutral");
-  assert.equal(desktop.input?.border, "rgb(238, 238, 238)", "stock focus border is neutral");
-  assert.notEqual(desktop.input?.shadow, "none", "focused input has a visible soft ring");
+  // rgb(48, 137, 232) is #3089e8 == hsl(211 80% 55%), i.e. --primary in
+  // theme-tokens.css and --ring in `shared/ts/ui/*`. These two lines used to pin
+  // the neutral #eeeeee, which is the 2026-09-22 repaint recorded in
+  // `shared/ts/admin-ui/index.tsx`; it was reverted because the other five
+  // bundles never followed it and a tLib dialog opened over a tELS editor
+  // repainted the primary button. Pinned as a literal on purpose: a token read
+  // would agree with whatever the sheet says.
+  assert.equal(desktop.primary?.background, "rgb(48, 137, 232)", "stock primary is the shared blue");
+  assert.equal(desktop.input?.border, "rgb(48, 137, 232)", "stock focus border is the shared blue");
+  // ⚠️ This asserted `shadow !== "none"` — "focused input has a visible soft
+  // ring" — and had been failing since a9695a2 ("one focus mechanism, and it is
+  // an outline") without anyone noticing, because this harness is not in
+  // `verify`. The affordance is deliberately an `outline`: an outward
+  // `box-shadow` is clipped to nothing inside an `overflow: hidden` ancestor,
+  // which is the geometry `probe:focus` exists to measure. So the shadow being
+  // absent is now the thing asserted, and the outline being the accent at 40%
+  // beside it. `probe:focus` is what proves it paints pixels; this proves the
+  // declaration is the one that ships.
+  assert.equal(desktop.input?.shadow, "none", "focus is an outline, never an elevation");
+  assert.equal(
+    desktop.input?.outline,
+    "rgba(48, 137, 232, 0.4)",
+    "the focus outline is the shared accent at 40%"
+  );
   await screenshot("dialog-form-1600x900");
   await page.setViewportSize({ width: 800, height: 450 });
   await pause();
@@ -490,12 +511,51 @@ try {
     3,
     "slider emits number"
   );
+  // ── A DRAG commits ONCE, at its end ───────────────────────────────────────
+  //
+  // zag fires `onValueChange` on every pointer move, so wiring `dialogChange`
+  // to it meant one NUI call per step of a drag — and tRadar's cl_settings.lua
+  // answers each one with an `UpdateDialogField` push back, so a drag was a full
+  // round trip per pixel in every resource using a tLib dialog. The commit is on
+  // `onValueChangeEnd` now, with `onValueChange` kept for the local value.
+  //
+  // Both halves are asserted. The count alone would also pass if the thumb never
+  // moved at all, and the position alone would also pass if every step committed.
+  let draggedLevel = 3;
+  {
+    const level = () =>
+      calls.filter((c) => c.event === "dialogChange" && c.data.fieldId === "level");
+    const before = level().length;
+    const slider = page.getByRole("slider");
+    const box = await slider.boundingBox();
+    assert.ok(box, "the slider thumb has a box to drag");
+    const track = await page.locator('[data-scope="slider"][data-part="track"]').boundingBox();
+    assert.ok(track, "the slider track has a box to drag along");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    const start = Number(await slider.getAttribute("aria-valuenow"));
+    for (let step = 1; step <= 8; step++) {
+      await page.mouse.move(
+        box.x + box.width / 2 + (track.width / 10) * step,
+        box.y + box.height / 2
+      );
+    }
+    const mid = Number(await slider.getAttribute("aria-valuenow"));
+    assert.ok(mid > start, "the thumb tracks the pointer mid-drag without committing");
+    assert.equal(level().length, before, "no dialogChange is sent during the drag");
+    await page.mouse.up();
+    await pause();
+    assert.equal(level().length, before + 1, "a slider drag sends exactly one dialogChange");
+    assert.equal(level().at(-1)?.data.value, mid, "and it carries the value the drag landed on");
+    draggedLevel = mid;
+  }
   await page.getByRole("button", { name: "Submit", exact: true }).click();
   await pause();
   assert.deepEqual(calls.filter((c) => c.event === "dialogSubmit").at(-1)?.data.values, {
     toggle: false,
     secret: "Configured",
-    level: 3,
+    // Whatever the drag above landed on, which is the value the dialog now holds.
+    level: draggedLevel,
   });
   await send("addTheme", {
     id: "explicit-primary",

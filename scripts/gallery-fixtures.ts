@@ -168,6 +168,28 @@ export const MENUS: ReadonlyArray<{ id: string; snapshot: Snapshot; branding: Br
 
 export const DIALOGS: readonly DialogData[] = [
   {
+    /**
+     * A `button` field carrying `confirm`. The gallery shoots this one twice —
+     * the dialog, and then the question after the button is pressed — because
+     * the question is the whole feature and it is not on screen until then.
+     */
+    id: "gallery:button-confirm",
+    title: "Lightbar patterns",
+    description: "Stored on this vehicle.",
+    size: "md",
+    submitLabel: "Done",
+    fields: [
+      { id: "preset", type: "text", label: "Preset name", defaultValue: "Code 3" },
+      {
+        id: "wipe",
+        type: "button",
+        label: "Clear all patterns",
+        variant: "destructive",
+        confirm: "Every pattern on this vehicle is deleted. This cannot be undone.",
+      },
+    ],
+  },
+  {
     id: "gallery:confirm",
     title: "Sell this vehicle?",
     description: "You will be paid $18,400. This cannot be undone.",

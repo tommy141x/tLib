@@ -24,6 +24,28 @@ export interface DialogField {
   step?: number;
   options?: { value: string; label: string }[];
   variant?: "default" | "primary" | "destructive";
+  /**
+   * On a `button` field: require an explicit confirmation before
+   * `onButtonClick` fires, and use this string as the question.
+   *
+   * ── Why `variant` was not enough, and why this is not a second mechanism ───
+   *
+   * `variant: "destructive"` is COLOUR. It makes a button that deletes something
+   * look like one and does nothing else, so "Clear all patterns" and "Rename"
+   * were one click apart and one of them was unrecoverable.
+   *
+   * The confirmation itself is not new. The MENU has had it since the beginning:
+   * an item's `confirm` string is schema-validated in
+   * `shared/lib/menu/schema.lua` and documented in `docs/content/exports.mdx`,
+   * and `menu/Menu.tsx` renders the Cancel/Confirm pair from it. It was simply
+   * never wired to dialog buttons — built, validated, documented and, across six
+   * resources, passed by none of them. This is the same field name, the same
+   * meaning and the same two buttons, on the surface that was missing it.
+   *
+   * Only `button` fields read it. A value on any other type is ignored rather
+   * than rejected: a confirmation on a text input has no click to gate.
+   */
+  confirm?: string;
   section?: string;
   row?: string;
   flex?: "shrink";

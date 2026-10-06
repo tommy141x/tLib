@@ -174,8 +174,30 @@ in the NUI page in memory only, so restarting tLib or reconnecting forgets it. P
 | `select`, `radio` | `options` (`{ value, label }[]`), `placeholder`, `defaultValue` |
 | `slider` | `min`, `max`, `step`, `defaultValue` |
 | `checkbox` | `defaultValue` (boolean) |
+| `button` | `variant` (`default` / `primary` / `destructive`), `confirm` |
 
 All fields share: `id` (required), `type`, `label`, `description`, `required`, `disabled`.
+
+#### Confirming a dialog button
+
+A `button` field fires `onButtonClick` the moment it is pressed. Give it a `confirm`
+string and the press instead asks that question first, and only a second, explicit press
+of **Confirm** fires the callback. Escape and **Cancel** both answer the question without
+firing anything; the dialog itself stays open either way.
+
+It is the same key, with the same meaning, as a menu row's `confirm` above — one
+confirmation design in the product rather than two. `variant = 'destructive'` is colour
+and nothing else, so a button that cannot be undone wants both.
+
+```lua
+{
+    id = 'wipe',
+    type = 'button',
+    label = 'Clear all patterns',
+    variant = 'destructive',
+    confirm = 'Every pattern on this vehicle is deleted. This cannot be undone.',
+}
+```
 
 One of each type in a single `lg` dialog. `select` with two options renders as a segmented
 control rather than the `Dropdown` list:
