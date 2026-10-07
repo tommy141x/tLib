@@ -62,8 +62,28 @@ export function parsePreviewCanvasSize(
     }
   }
 
-  const attrW = parseInt(html.match(/data-radio-width="(\d+)"/)?.[1] ?? "", 10);
-  const attrH = parseInt(html.match(/data-radio-height="(\d+)"/)?.[1] ?? "", 10);
+  /**
+   * ⚠️ FRACTIONAL, and this was a real silent defect until 2026-10-07.
+   *
+   * These were `(\d+)` with `parseInt`, so a half-pixel canvas did not match
+   * the regex AT ALL — tier 2 reported nothing and the value fell through to
+   * tier 3, which takes the largest CSS px in the document and therefore
+   * picks some inner element. Measured on tRadio's shipped heads: **six of
+   * eleven** declare a fractional height, and QRX-720 resolved to **98x96**
+   * against its real **209.5x426.5**.
+   *
+   * That is the dangerous shape of wrong — not a blank preview that announces
+   * itself, but a confidently-rendered one at a quarter scale, with nothing
+   * reporting a failure.
+   *
+   * tWeb's own reader (`src/lib/studio/codec.ts`) already used `([^"]*)` and
+   * handled decimals correctly, so the two sides disagreed about the same
+   * attribute. This matches its behaviour; `[\d.]+` with `parseFloat` is
+   * narrower than tWeb's catch-all while accepting every value a real layout
+   * emits.
+   */
+  const attrW = Number.parseFloat(html.match(/data-radio-width="([\d.]+)"/)?.[1] ?? "");
+  const attrH = Number.parseFloat(html.match(/data-radio-height="([\d.]+)"/)?.[1] ?? "");
   if (attrW > 0 && attrH > 0) return { w: attrW, h: attrH };
 
   const largest = (re: RegExp) => {
