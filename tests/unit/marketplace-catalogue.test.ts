@@ -54,6 +54,8 @@ const {
   MARKETPLACE_RESOURCE_SECRET,
   marketplaceApiV2,
   marketplaceHeaders,
+  MARKETPLACE_IDENTITY_HEADER,
+  setCatalogueLike,
   toCatalogueItem,
 } = await import("../../shared/ts/marketplace/catalogue");
 
@@ -70,6 +72,12 @@ beforeEach(() => {
 interface Captured {
   url: string;
   headers: Record<string, string>;
+  /**
+   * ⚠️ Captured because the like path's METHOD is its verb — POST adds and
+   * DELETE withdraws, with no body either way. A test that only looked at the
+   * URL could not tell a like from an un-like.
+   */
+  method: string;
 }
 
 function captureFetch(body: unknown, status = 200): Captured[] {
@@ -79,7 +87,7 @@ function captureFetch(body: unknown, status = 200): Captured[] {
     for (const [k, v] of Object.entries((init.headers ?? {}) as Record<string, string>)) {
       headers[k.toLowerCase()] = v;
     }
-    calls.push({ url: String(input), headers });
+    calls.push({ url: String(input), headers, method: String(init.method ?? "GET") });
     return new Response(typeof body === "string" ? body : JSON.stringify(body), { status });
   }) as typeof fetch;
   return calls;
@@ -427,5 +435,203 @@ describe("item ownership", () => {
       return new Response("{}", { status: 200 });
     }) as typeof fetch;
     await expect(fetchCatalogueItem("midnight", 5)).rejects.toThrow(/request_timed_out/);
+  });
+});
+
+/* ── Likes ─────────────────────────────────────────────────────────────────── */
+
+describe("the like count on the wire", () => {
+  const base = {
+    id: "itm_1",
+    slug: "midnight",
+    type: "theme",
+    resource: "tRadio",
+    name: "Midnight",
+    description: "d",
+    creatorName: "Ada",
+    currentVersion: "1",
+    sizeBytes: 4096,
+    downloads: 12,
+    createdAt: "2026-09-01T00:00:00.000Z",
+  };
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ⚠️ `likes` MUST NOT GO THROUGH `num()` THE WAY `downloads` DOES.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * `num()` maps a missing value to `0`, and `0` is a real like count — so
+   * coercing would make a host that predates likes indistinguishable from an
+   * item nobody has liked, and `ItemCard` would print a confident "0 likes" on
+   * every card against any older or self-hosted backend. These two tests are
+   * the pair that catches it; neither alone would.
+   */
+  test("omits likes entirely when the host does not send it", () => {
+    const item = toCatalogueItem(base);
+    expect("likes" in item).toBe(false);
+  });
+
+  test("carries a real zero, because zero likes is a fact about the item", () => {
+    const item = toCatalogueItem({ ...base, likes: 0 });
+    expect("likes" in item).toBe(true);
+    expect(item.likes).toBe(0);
+  });
+
+  test("carries a real count", () => {
+    expect(toCatalogueItem({ ...base, likes: 9 }).likes).toBe(9);
+  });
+
+  test("drops a nonsense count rather than zeroing it", () => {
+    for (const value of [NaN, Infinity, "9", null]) {
+      expect("likes" in toCatalogueItem({ ...base, likes: value })).toBe(false);
+    }
+  });
+
+  /**
+   * ⚠️ `liked` is a PRESENCE check and not a truthiness one. Absent means "no
+   * identity was asserted" and renders no control at all; `false` means "you
+   * have not liked this" and renders a working empty heart. Collapsing them
+   * takes the control away from everybody who has not yet liked the item.
+   */
+  test("keeps a false liked flag and omits an absent one", () => {
+    expect("liked" in toCatalogueItem(base)).toBe(false);
+    const no = toCatalogueItem({ ...base, liked: false });
+    expect("liked" in no).toBe(true);
+    expect(no.liked).toBe(false);
+    expect(toCatalogueItem({ ...base, liked: true }).liked).toBe(true);
+  });
+});
+
+describe("the identity a browse carries", () => {
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ⚠️ A PLAYER LICENSE IS A HEADER AND NEVER A QUERY PARAMETER.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * A URL is a cache key and a URL is what gets logged. Serialising a per-player
+   * identifier into the query string would give every player on a server a
+   * distinct URL for the same catalogue page — and would write a durable
+   * per-human identifier into every access log on the path.
+   */
+  test("never serialises the identity into the query string", () => {
+    const qs = catalogueQuery({ resource: "tRadio", identity: "a1b2c3d4" });
+    expect(qs).not.toContain("a1b2c3d4");
+    expect(qs).not.toContain("identity");
+    expect(qs).toContain("resource=tRadio");
+  });
+
+  test("sends it as a header when there is one, alongside the credential", async () => {
+    const calls = captureFetch(emptyPage);
+    await browseCatalogue({ identity: "a1b2c3d4" });
+    const headers = calls[0]?.headers ?? {};
+    expect(headers[MARKETPLACE_IDENTITY_HEADER.toLowerCase()]).toBe("a1b2c3d4");
+    // ⚠️ The secret must still be there. The identity is an ADDITION to the
+    // request, not a replacement for the credential — and `marketplaceHeaders`
+    // merges caller extras last, so a careless spread could have dropped it.
+    expect(headers["x-resource-secret"]).toBe(MARKETPLACE_RESOURCE_SECRET);
+  });
+
+  test("sends no identity header at all when there is no player", async () => {
+    const calls = captureFetch(emptyPage);
+    await browseCatalogue({});
+    expect(MARKETPLACE_IDENTITY_HEADER.toLowerCase() in (calls[0]?.headers ?? {})).toBe(false);
+  });
+});
+
+describe("setCatalogueLike", () => {
+  const state = { likes: 4, liked: true };
+
+  test("POSTs to the slug's like endpoint to like", async () => {
+    const calls = captureFetch(state);
+    await setCatalogueLike("midnight", "a1b2c3d4", true);
+    expect(calls[0]?.url).toBe(`${marketplaceApiV2()}/items/midnight/like`);
+    expect(calls[0]?.method).toBe("POST");
+  });
+
+  test("DELETEs the same URL to withdraw", async () => {
+    const calls = captureFetch({ likes: 3, liked: false });
+    await setCatalogueLike("midnight", "a1b2c3d4", false);
+    expect(calls[0]?.method).toBe("DELETE");
+  });
+
+  test("escapes the slug rather than pasting it into a path", async () => {
+    const calls = captureFetch(state);
+    await setCatalogueLike("a/../b", "a1b2c3d4", true);
+    expect(calls[0]?.url).toContain("a%2F..%2Fb");
+  });
+
+  /**
+   * ⚠️ The identity goes in the header the backend's write path reads, and the
+   * SECRET is still sent. The secret is what gets the request past the door; the
+   * identity is what names the player once inside. Losing either one is a
+   * different failure and both are silent at the panel.
+   */
+  test("carries the identity header and the resource secret", async () => {
+    const calls = captureFetch(state);
+    await setCatalogueLike("midnight", "a1b2c3d4", true);
+    const headers = calls[0]?.headers ?? {};
+    expect(headers[MARKETPLACE_IDENTITY_HEADER.toLowerCase()]).toBe("a1b2c3d4");
+    expect(headers["x-resource-secret"]).toBe(MARKETPLACE_RESOURCE_SECRET);
+  });
+
+  /**
+   * ⚠️ REFUSED BEFORE ANY REQUEST IS MADE. A caller that forgot to resolve the
+   * license is a bug in the caller; letting it through would produce a 400 from
+   * the host that reads, at the panel, as "the marketplace is down".
+   */
+  test("refuses to call at all without an identity", async () => {
+    const calls = captureFetch(state);
+    await expect(setCatalogueLike("midnight", "", true)).rejects.toThrow("identity_required");
+    expect(calls.length).toBe(0);
+  });
+
+  test("refuses an empty slug without calling", async () => {
+    const calls = captureFetch(state);
+    await expect(setCatalogueLike("", "a1b2c3d4", true)).rejects.toThrow("slug_required");
+    expect(calls.length).toBe(0);
+  });
+
+  /**
+   * ⚠️ The SERVER'S numbers, read as-is. The caller must not keep its own ±1 —
+   * the count may have moved for other reasons, and the write is idempotent, so
+   * a second like answers the SAME count rather than one more.
+   */
+  test("returns the server's own state", async () => {
+    captureFetch({ likes: 41, liked: true });
+    expect(await setCatalogueLike("midnight", "a1b2c3d4", true)).toEqual({
+      likes: 41,
+      liked: true,
+    });
+  });
+
+  test("reads a missing liked as false and a missing count as 0", async () => {
+    captureFetch({});
+    expect(await setCatalogueLike("midnight", "a1b2c3d4", true)).toEqual({
+      likes: 0,
+      liked: false,
+    });
+  });
+
+  /**
+   * The refusal the IDENTITY GATE produces — a caller trying to like as an
+   * account on the website rather than as a FiveM license. It must reach the
+   * panel as the backend's own sentence rather than as `http_403`, because that
+   * sentence is the only thing that tells whoever is looking what went wrong.
+   */
+  test("surfaces the host's refusal, not the bare status", async () => {
+    captureFetch(
+      { error: "A game server may only like as a FiveM license, never as an account on this site." },
+      403,
+    );
+    await expect(setCatalogueLike("midnight", "a1b2c3d4", true)).rejects.toThrow(
+      /may only like as a FiveM license/,
+    );
+  });
+
+  test("reports a non-JSON body as an unexpected response", async () => {
+    captureFetch("<html>502</html>");
+    await expect(setCatalogueLike("midnight", "a1b2c3d4", true)).rejects.toThrow(
+      "unexpected_response",
+    );
   });
 });

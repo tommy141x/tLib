@@ -54,6 +54,13 @@ const exhaustive: Required<CatalogueItem> = {
   previewColors: ["wire-colour"],
   thumbnail: "wire-thumbnail",
   previewUrl: "wire-preview-url",
+  likes: 444,
+  // ⚠️ `true`, not `false`. The exhaustiveness test below compares JSON-stringified
+  // VALUES, and `false` collides with nothing here while `true` is unique — but
+  // more importantly a `false` that was silently dropped would be
+  // indistinguishable from an omitted key, which is the one distinction this
+  // field exists to preserve.
+  liked: true,
 };
 
 describe("exhaustiveness: no wire field may be silently dropped", () => {
@@ -131,6 +138,79 @@ describe("optional fields are omitted, not set to undefined", () => {
     const item = toCanonicalItem({ ...base, previewColors: [] });
     expect("preview_colors" in item).toBe(true);
     expect(item.preview_colors).toEqual([]);
+  });
+});
+
+describe("likes: omission means \"this host has no likes\", not zero", () => {
+  /*
+   * ═══════════════════════════════════════════════════════════════════════
+   * ⚠️ THE ONE RULE ON THIS FIELD THAT IS EASY TO BREAK AND SILENT WHEN BROKEN.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * `downloads` and `size_bytes` go through `num()`, which maps a missing value
+   * to `0`. Doing the same to `likes` would be the obvious consistency — and it
+   * would make a backend that predates likes indistinguishable from an item
+   * nobody has liked, printing a confident "0 likes" on every card in the
+   * catalogue against any older or self-hosted host.
+   *
+   * `ItemCard` branches on PRESENCE for exactly that reason, so these tests use
+   * `in` rather than comparing against `undefined` — see this file's header.
+   */
+  test("likes is absent when the wire omits it, NOT coerced to 0", () => {
+    const item = toCanonicalItem(base);
+    expect("likes" in item).toBe(false);
+    expect(item.likes).toBeUndefined();
+  });
+
+  test("a real zero IS carried, because zero likes is a fact", () => {
+    const item = toCanonicalItem({ ...base, likes: 0 });
+    expect("likes" in item).toBe(true);
+    expect(item.likes).toBe(0);
+  });
+
+  test("a real count is carried", () => {
+    expect(toCanonicalItem({ ...base, likes: 12 }).likes).toBe(12);
+  });
+
+  test.each([
+    ["NaN", NaN],
+    ["Infinity", Infinity],
+    ["a string", "12" as unknown as number],
+  ])("%s likes is dropped rather than becoming 0", (_label, value) => {
+    // Dropped and not zeroed: a host sending nonsense is a host we know nothing
+    // about, and "no data" is the honest rendering of that. Zeroing it would
+    // assert something about the item.
+    const item = toCanonicalItem({ ...base, likes: value });
+    expect("likes" in item).toBe(false);
+  });
+});
+
+describe("liked: absence means \"we did not ask\", and false must survive", () => {
+  /*
+   * ⚠️ A PRESENCE CHECK, NOT A TRUTHINESS ONE. `liked: false` means "you have
+   * not liked this" and renders a working empty heart; an ABSENT `liked` means
+   * no identity was asserted and renders no heart at all. A `raw.liked ? … : {}`
+   * spread would collapse the first into the second, which takes the control
+   * away from every player who has not yet liked the item — i.e. from everybody
+   * the control exists for.
+   */
+  test("absent when the wire omits it", () => {
+    expect("liked" in toCanonicalItem(base)).toBe(false);
+  });
+
+  test("a false is CARRIED, not dropped", () => {
+    const item = toCanonicalItem({ ...base, liked: false });
+    expect("liked" in item).toBe(true);
+    expect(item.liked).toBe(false);
+  });
+
+  test("a true is carried", () => {
+    expect(toCanonicalItem({ ...base, liked: true }).liked).toBe(true);
+  });
+
+  test("a non-boolean is dropped rather than coerced", () => {
+    const item = toCanonicalItem({ ...base, liked: "yes" as unknown as boolean });
+    expect("liked" in item).toBe(false);
   });
 });
 

@@ -47,3 +47,32 @@ describe("parsePreviewCanvasSize", () => {
     expect(parsePreviewCanvasSize("<div></div>", { w: 300, h: 406 })).toEqual({ w: 300, h: 406 });
   });
 });
+
+describe("the second attribute family", () => {
+  /**
+   * tWeb's own reader (`src/lib/studio/codec.ts`'s `CANVAS_SIZE_ATTRS`) has
+   * carried `data-radar-*` all along while this one did not, so for every tRadar
+   * layout the two sides of the same marketplace disagreed about the same
+   * document — tWeb read the declared canvas, this fell through to tier 3's
+   * largest-CSS-px guess.
+   */
+  it("reads data-radar-* as tier 2, not as nothing", () => {
+    const html = `<div data-radar-width="520" data-radar-height="157" style="width: 900px; height: 900px"></div>`;
+    expect(parsePreviewCanvasSize(html)).toEqual({ w: 520, h: 157 });
+  });
+
+  it("handles a fractional radar canvas, for the same reason radio needed it", () => {
+    const html = `<div data-radar-width="519.5" data-radar-height="157.5"></div>`;
+    expect(parsePreviewCanvasSize(html)).toEqual({ w: 519.5, h: 157.5 });
+  });
+
+  it("still requires both halves of the radar pair", () => {
+    const html = `<div data-radar-width="520" style="width: 640px; height: 480px"></div>`;
+    expect(parsePreviewCanvasSize(html)).toEqual({ w: 640, h: 480 });
+  });
+
+  it("prefers radio when a document somehow declares both", () => {
+    const html = `<div data-radio-width="300" data-radio-height="406" data-radar-width="520" data-radar-height="157"></div>`;
+    expect(parsePreviewCanvasSize(html)).toEqual({ w: 300, h: 406 });
+  });
+});

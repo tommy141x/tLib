@@ -82,9 +82,34 @@ export function parsePreviewCanvasSize(
    * narrower than tWeb's catch-all while accepting every value a real layout
    * emits.
    */
-  const attrW = Number.parseFloat(html.match(/data-radio-width="([\d.]+)"/)?.[1] ?? "");
-  const attrH = Number.parseFloat(html.match(/data-radio-height="([\d.]+)"/)?.[1] ?? "");
-  if (attrW > 0 && attrH > 0) return { w: attrW, h: attrH };
+  /**
+   * ⚠️ TWO ATTRIBUTE FAMILIES, because two products declare a canvas.
+   *
+   * `data-radar-*` was missing here while tWeb's own reader
+   * (`src/lib/studio/codec.ts`'s `CANVAS_SIZE_ATTRS`) has carried both all
+   * along — so for every tRadar layout the two sides of the same marketplace
+   * disagreed about the same document: tWeb read the declared canvas, this
+   * read nothing and fell through to tier 3's largest-CSS-px guess. That is the
+   * identical silent mis-scale the fractional fix above was written for, one
+   * product over, and it is why the pairs are a TABLE now rather than a literal
+   * anybody has to remember to duplicate.
+   *
+   * Tried in order, first complete pair wins. A document carrying both families
+   * is not a real case; if one ever appears, radio wins because it is the
+   * older declaration.
+   */
+  const CANVAS_ATTR_PAIRS: readonly (readonly [RegExp, RegExp])[] = [
+    [/data-radio-width="([\d.]+)"/, /data-radio-height="([\d.]+)"/],
+    [/data-radar-width="([\d.]+)"/, /data-radar-height="([\d.]+)"/],
+  ];
+  for (const [wRe, hRe] of CANVAS_ATTR_PAIRS) {
+    // Both required, per the tier's contract above: a document carrying only one
+    // has a stray attribute, not a declared canvas, and pairing a real width
+    // with a guessed height distorts the aspect.
+    const attrW = Number.parseFloat(html.match(wRe)?.[1] ?? "");
+    const attrH = Number.parseFloat(html.match(hRe)?.[1] ?? "");
+    if (attrW > 0 && attrH > 0) return { w: attrW, h: attrH };
+  }
 
   const largest = (re: RegExp) => {
     const values = [...html.matchAll(re)].map((m) => parseInt(m[1] ?? "", 10));

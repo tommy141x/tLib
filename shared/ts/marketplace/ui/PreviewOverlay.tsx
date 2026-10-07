@@ -15,7 +15,14 @@ import {
 } from "../install-machine";
 import { previewMarketplaceHtml } from "./browse";
 import { InstallError } from "./InstallError";
-import { parsePreviewCanvasSize } from "./preview-canvas";
+import {
+  fitScale,
+  PREVIEW_FRAME_ATTRS,
+  PREVIEW_FRAME_STYLE,
+  parsePreviewCanvasSize,
+  previewBoxStyle,
+  resolvePreviewState,
+} from "./preview-frame";
 import { fmtTime, formatBytes, type InstallState, type MarketplaceItem } from "./types";
 
 export function PreviewOverlay(props: {
@@ -454,12 +461,29 @@ function UiPreviewFrame(props: {
         // For those, `hud-preview-script` applies the full `data-hud-*` grammar
         // inside the frame, so the preview shows a working device rather than
         // every state stacked on top of each other.
-        const state = props.previewState;
-        if (state) {
-          const previewScript = buildHudPreviewScript(props.previewFn, state);
-          rewritten = rewritten.replace(/<\/body>/i, `${previewScript}</body>`);
-          if (!/<\/body>/i.test(rewritten)) rewritten += previewScript;
-        }
+        /**
+         * ⚠️ `resolvePreviewState` and NOT `if (state)`, which is the fix for the
+         * reported blank previews.
+         *
+         * `previewState` is optional all the way down and the binder used to be
+         * injected only when a host supplied one — so "this host has no preset"
+         * and "render this layout unbound" were the same code path. Surveyed
+         * 2026-10-07, exactly three resources supply a preset, each as a
+         * hand-written Lua table: tRadio (`cl_bridge.lua`'s
+         * `MARKETPLACE_PREVIEW_STATE`), tRadar and tDetector. **tELS supplies
+         * none**, so every tELS layout previewed here rendered with every
+         * `data-hud-show` element visible at once and every readout left at
+         * whatever placeholder its author typed.
+         *
+         * A resource's own preset still wins, and should — tRadio derives one
+         * through `deriveBinderState` + `RADIO_PREVIEW_SCENARIOS`, which can only
+         * express states the engine can actually produce. This is what a surface
+         * gets when it has nothing, instead of a dead device.
+         */
+        const state = resolvePreviewState(props.previewState);
+        const previewScript = buildHudPreviewScript(props.previewFn, state);
+        rewritten = rewritten.replace(/<\/body>/i, `${previewScript}</body>`);
+        if (!/<\/body>/i.test(rewritten)) rewritten += previewScript;
 
         setHtml(rewritten);
       })
@@ -477,10 +501,13 @@ function UiPreviewFrame(props: {
     return h ? parsePreviewCanvasSize(h) : { w: 400, h: 400 };
   });
 
-  const scale = createMemo(() => {
-    const { w, h } = canvasSize();
-    return Math.min(containerW() / w, containerH() / h, 1);
-  });
+  // The same `fitScale` tRadio's admin grid uses, so the two surfaces cannot
+  // drift on the geometry again. `allowUpscale` is left at its default `false`
+  // here: this is a full-size overlay, and blowing a 200px skin up to fill a
+  // 1080p dialog shows nothing but interpolation artefacts. The grid passes
+  // `true`, because its box is smaller than most canvases — the two call sites
+  // genuinely want different answers, which is why it is a parameter.
+  const scale = createMemo(() => fitScale(canvasSize(), { w: containerW(), h: containerH() }));
 
   return (
     <div
@@ -494,21 +521,16 @@ function UiPreviewFrame(props: {
         <span class="text-sm mp-muted">Preview unavailable</span>
       </Show>
       <Show when={html()}>
-        <div
-          style={{
-            width: `${canvasSize().w}px`,
-            height: `${canvasSize().h}px`,
-            transform: `scale(${scale()})`,
-            "transform-origin": "center center",
-            overflow: "hidden",
-            "flex-shrink": "0",
-          }}
-        >
+        {/* The `overflow: hidden` + `flex-shrink: 0` pair this file already had
+            is now `previewBoxStyle`, because tRadio's grid was missing both and
+            therefore grew scrollbars inside its previews where this surface
+            never did. Shared so that cannot recur. */}
+        <div style={previewBoxStyle(canvasSize(), scale())}>
           <iframe
             title={`${props.item.name} preview`}
             srcdoc={html()!}
-            sandbox="allow-scripts"
-            style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+            {...PREVIEW_FRAME_ATTRS}
+            style={PREVIEW_FRAME_STYLE}
           />
         </div>
       </Show>
