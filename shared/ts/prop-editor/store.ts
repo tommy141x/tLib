@@ -13,6 +13,7 @@
  */
 
 import { createStore } from "solid-js";
+import { clampUniformScale } from "../gizmo/types";
 import type {
   PropEditorInitMessage,
   PropEditorMode,
@@ -24,7 +25,7 @@ const [propEditorState, setPropEditorState] = createStore<PropEditorState>({
   open: false,
   vehicleKey: "",
   vehicleDisplayName: "",
-  propData: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 },
+  propData: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, scale: 1 },
   vehicleMatrix: null,
   hasExisting: false,
   mode: "translate",
@@ -55,7 +56,11 @@ export function openPropEditor(data: PropEditorInitMessage): void {
     s.open = true;
     s.vehicleKey = data.vehicleModel;
     s.vehicleDisplayName = data.vehicleDisplayName;
-    s.propData = data.propData;
+    // `scale` is the one field the payload may omit, and a 0 or a negative from
+    // an older record has to resolve to 1 too — hence the clamp here rather than
+    // a `?? 1`, which would accept both. The spread keeps the assignment a plain
+    // write on the draft and leaves the incoming object untouched.
+    s.propData = { ...data.propData, scale: clampUniformScale(data.propData.scale) };
     s.vehicleMatrix = data.vehicleMatrix;
     s.hasExisting = data.hasExisting;
     s.mode = "translate";

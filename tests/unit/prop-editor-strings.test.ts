@@ -16,7 +16,9 @@ import type { PropEditorStringKey } from "../../shared/ts/prop-editor/types";
 describe("prop editor strings", () => {
   test("every key has a non-empty English default", () => {
     const entries = Object.entries(DEFAULT_PROP_EDITOR_STRINGS);
-    expect(entries.length).toBe(36);
+    // 36 + the uniform scale handle's four: btn_scale_title, section_scale,
+    // hint_s_key, hint_s_label.
+    expect(entries.length).toBe(40);
     for (const [key, value] of entries) {
       expect(typeof value, key).toBe("string");
       expect(value.length, key).toBeGreaterThan(0);

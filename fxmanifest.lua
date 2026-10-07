@@ -5,6 +5,53 @@ lua54 'yes'
 author 'Tommy Johnston'
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM)'
+-- 0.17.0 adds `drivenprop` (shared/imports/drivenprop/shared.lua): UNIFORM
+-- SCALE for a prop attached to a vehicle, which the prop editor now exposes as
+-- a third gizmo mode and which `vehicleprop` persists as an optional `scale` on
+-- a placement.
+--
+-- It exists because THERE IS NO `SetEntityScale`. Measured on a live Enhanced
+-- client: the native is `nil`. Scale is carried in the basis-vector LENGTHS of
+-- `SetEntityMatrix`, and the engine does not renormalise what you write.
+--
+-- ⚠️ And scale does NOT survive `AttachEntityToEntity`. Measured, three ways:
+-- attach-then-scale reads 3.000 in the same tick and 1.000 on the next frame;
+-- driving the matrix every frame WHILE ATTACHED survives one frame and 300ms of
+-- sampling and then loses it too; only an unattached, frozen prop holds a scale.
+-- The entity never detaches in any of those — `IsEntityAttached` stays true. The
+-- attach recomputation simply rebuilds the basis from the parent's matrix and
+-- has no notion of a scale. ⚠️ A SAME-TICK READ-BACK REPORTS SUCCESS FALSELY,
+-- so every assertion about scale here spans at least one frame.
+--
+-- Three things in the module are load-bearing and each is commented at the point
+-- it is enforced:
+--
+--   * THE ROTATION CONVENTION IS MEASURED, NOT ASSUMED. `localRotation`
+--     reproduces AttachEntityToEntity's own reading of (rx, ry, rz) — three
+--     standard right-handed rotations composed as Rz*Ry*Rx. It was calibrated
+--     against an axis-aligned parent across nine rotation triples, and those
+--     nine are the oracle in tests/lua/drivenprop.lua, with a broken-control
+--     drill that requires the two mixed triples to reject the opposite order.
+--     Getting it wrong reorients every existing placement the moment it gains a
+--     scale, which reads as "the editor broke my placement".
+--
+--   * HANDEDNESS IS ASSERTED, NOT COMMENTED. A left-handed basis renders the
+--     mesh inside-out, and ⚠️ THAT CANNOT BE CAUGHT BY READING THE MATRIX BACK,
+--     because a sign does not change a length — every scale assertion passes
+--     either way, and on a symmetric prop there is nothing to see.
+--
+--   * A UNIT-SCALED PROP STILL ATTACHES. Attachment is free and every placement
+--     on every server today is unit-scaled, so the per-frame cost is paid only
+--     by placements that ask for a scale. Measured at ~0.8 µs per driven prop
+--     per frame — thirty of them is ~0.15% of a 16.6ms frame — and `hasMoved`
+--     makes a parked vehicle cheaper still, since a one-shot write holds
+--     indefinitely on an unattached frozen object.
+--
+-- `vehicleprop`'s orphan sweep changed with it, and had to: it asked
+-- `attached[GetEntityAttachedTo(obj)] ~= obj`, which reads 0 for a scaled prop
+-- (attached to nothing by design) and deleted every one of them on sight. It now
+-- asks the tracking table directly.
+--
 -- 0.16.0 closes out two duplications a name-agnostic scan found and the 0.15.0
 -- settings work did NOT absorb, plus one place where two copies of the same
 -- writer disagreed about which of them was correct.
@@ -239,7 +286,7 @@ description 'tLib — shared UI and utility library (FiveM)'
 -- Both are additive — nothing that worked against 0.11.0 behaves differently. The bump
 -- exists so a consumer can PIN them via tlib_min_version, which is what imports.lua's
 -- header calls the real guarantee: a capability probe cannot report its own absence.
-version '0.16.0'
+version '0.17.0'
 
 -- Layout note: the top-level folder is the VM a file is loaded into, matching
 -- every other resource here. Where one module spans VMs -- the platform adapter

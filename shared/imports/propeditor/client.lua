@@ -471,6 +471,10 @@ function PropEditor.create(descriptor)
     local savedModel = nil
     local offset = { x = 0.0, y = 0.0, z = 0.0 }
     local rotation = { x = 0.0, y = 0.0, z = 0.0 }
+    -- Uniform scale. ONE scalar, by the owner's decision, though the matrix
+    -- underneath supports three. 1.0 is "normal size" and is what every record
+    -- written before records had a scale means.
+    local scale = tlib.drivenprop.SCALE_DEFAULT
     local panelHovered = false
     local camMode = false   -- WASD camera
     local lastTime = 0
@@ -597,16 +601,76 @@ function PropEditor.create(descriptor)
     end
 
     -- ── Prop ─────────────────────────────────────────────────────────────
+    --
+    -- ⚠️ TWO MECHANISMS, CHOSEN BY THE SCALE, AND THAT IS NOT AN OPTIMISATION
+    -- THAT COULD BE DROPPED.
+    --
+    -- `AttachEntityToEntity` cannot carry a scale. Measured: a prop attached and
+    -- then given a scaled matrix reads 3.000 in the same tick and 1.000 on the
+    -- next frame, and driving the matrix every frame WHILE ATTACHED survives one
+    -- frame and then loses it too — the attach recomputation rewrites the basis
+    -- from the parent's matrix and the stored offset, and it has no notion of
+    -- scale. The entity never detaches; `IsEntityAttached` stays true throughout.
+    --
+    -- So a scaled prop is driven instead: detached, frozen, and its matrix
+    -- written from the vehicle's. `tlib.drivenprop` is that mechanism, with the
+    -- measurements and the handedness invariant at its head.
+    --
+    -- A prop at UNIT scale stays attached, because attachment is free and every
+    -- placement that exists today is unit-scaled. The cost of this feature is
+    -- therefore paid only by the placements that use it.
+    --
+    -- The driver is created HERE and exposed on the instance so the consumer's
+    -- lifecycle can share it, for the same reason `markOwnedProp` is shared: one
+    -- prop is handed back and forth between the editor and the lifecycle through
+    -- takeProp/giveProp, and two drivers could both think they owned its matrix.
+    local driver = tlib.drivenprop.create({
+        onError = function(message) notify(tostring(message)) end,
+    })
 
+    --- Puts the prop where the state says, by whichever of the two mechanisms
+    --- the current scale calls for — and takes it off the other one.
+    ---
+    --- Both directions matter. Going scaled -> unit without `driver.remove`
+    --- leaves the driver writing the matrix of a prop the engine is also
+    --- attaching, which is the fighting-writers case; going unit -> scaled
+    --- without `DetachEntity` is the measured failure above.
     local function reattach()
         if not prop or not DoesEntityExist(prop) then return end
-        DetachEntity(prop, false, false)
-        AttachEntityToEntity(
-            prop, vehicle, 0,
-            offset.x, offset.y, offset.z,
-            rotation.x, rotation.y, rotation.z,
-            false, false, false, false, 0, true
-        )
+        if not (vehicle and DoesEntityExist(vehicle)) then return end
+
+        local placement = {
+            x = offset.x, y = offset.y, z = offset.z,
+            rx = rotation.x, ry = rotation.y, rz = rotation.z,
+            scale = scale,
+        }
+
+        if tlib.drivenprop.isUnitScale(scale) then
+            if driver.isDriven(prop) then
+                driver.remove(prop)
+                -- Frozen by the driver, and an attached entity must not be:
+                -- the attach is what positions it now.
+                FreezeEntityPosition(prop, false)
+                SetEntityCollision(prop, false, false)
+            end
+            DetachEntity(prop, false, false)
+            AttachEntityToEntity(
+                prop, vehicle, 0,
+                offset.x, offset.y, offset.z,
+                rotation.x, rotation.y, rotation.z,
+                false, false, false, false, 0, true
+            )
+            return
+        end
+
+        -- `update` rather than `add` once it is already driven: `add` would
+        -- re-detach and re-freeze an entity that is already both, every frame of
+        -- a drag.
+        if driver.isDriven(prop) then
+            driver.update(prop, placement)
+        else
+            driver.add(prop, vehicle, placement)
+        end
     end
 
     local function vehicleMatrixData()
@@ -642,19 +706,42 @@ function PropEditor.create(descriptor)
 
     local function deleteProp()
         if prop and DoesEntityExist(prop) then
+            -- Off the driver FIRST. The driver drops entries for entities that
+            -- no longer exist on its next pass anyway, but leaving a deleted
+            -- handle in its table until then is a claim on a handle the engine
+            -- is free to reuse immediately.
+            driver.remove(prop)
             DetachEntity(prop, false, false)
             DeleteObject(prop)
         end
     end
 
-    local function attachAt(pos, rot)
-        DetachEntity(prop, false, false)
-        AttachEntityToEntity(
-            prop, vehicle, 0,
-            pos.x, pos.y, pos.z,
-            rot.x, rot.y, rot.z,
-            false, false, false, false, 0, true
-        )
+    --- Hands the prop back to the consumer's lifecycle at a given transform.
+    ---
+    --- `s` is the uniform scale and is NOT optional in practice: a caller that
+    --- omits it hands the prop back at normal size, which for the cancel branch
+    --- would silently discard the scale the record was saved with.
+    local function attachAt(pos, rot, s)
+        s = tlib.drivenprop.normaliseScale(s)
+        if tlib.drivenprop.isUnitScale(s) then
+            if driver.isDriven(prop) then
+                driver.remove(prop)
+                FreezeEntityPosition(prop, false)
+            end
+            DetachEntity(prop, false, false)
+            AttachEntityToEntity(
+                prop, vehicle, 0,
+                pos.x, pos.y, pos.z,
+                rot.x, rot.y, rot.z,
+                false, false, false, false, 0, true
+            )
+        else
+            driver.add(prop, vehicle, {
+                x = pos.x, y = pos.y, z = pos.z,
+                rx = rot.x, ry = rot.y, rz = rot.z,
+                scale = s,
+            })
+        end
         giveProp(vehicle, prop)
     end
 
@@ -693,9 +780,13 @@ function PropEditor.create(descriptor)
         if existing and existing.x ~= nil then
             offset = { x = existing.x + 0.0, y = existing.y + 0.0, z = existing.z + 0.0 }
             rotation = { x = existing.rx + 0.0, y = existing.ry + 0.0, z = existing.rz + 0.0 }
+            -- Normalised rather than read raw: `scale` is absent on every record
+            -- written before this feature, and `normaliseScale(nil)` is 1.0.
+            scale = tlib.drivenprop.normaliseScale(existing.scale)
         else
             offset = { x = 0.0, y = 0.0, z = 0.0 }
             rotation = { x = 0.0, y = 0.0, z = 0.0 }
+            scale = tlib.drivenprop.SCALE_DEFAULT
         end
 
         local hash = GetHashKey(propModel)
@@ -740,6 +831,7 @@ function PropEditor.create(descriptor)
             propData = {
                 x  = offset.x,   y  = offset.y,   z  = offset.z,
                 rx = rotation.x, ry = rotation.y, rz = rotation.z,
+                scale = scale,
             },
             vehicleMatrix = vehicleMatrixData(),
             hasExisting = existing ~= nil,
@@ -764,7 +856,7 @@ function PropEditor.create(descriptor)
                 -- Hand the prop back to the consumer's lifecycle tracking, where
                 -- we found it.
                 if prop and DoesEntityExist(prop) then
-                    attachAt(offset, rotation)
+                    attachAt(offset, rotation, scale)
                 end
             else
                 -- Cancel: put the prop back at the saved position, or delete it
@@ -773,7 +865,10 @@ function PropEditor.create(descriptor)
                 if original and original.x ~= nil and prop and DoesEntityExist(prop) then
                     attachAt(
                         { x = original.x, y = original.y, z = original.z },
-                        { x = original.rx, y = original.ry, z = original.rz }
+                        { x = original.rx, y = original.ry, z = original.rz },
+                        -- The SAVED scale, not the one on screen. Cancel must
+                        -- undo a scale change like it undoes a move.
+                        original.scale
                     )
                 else
                     deleteProp()
@@ -792,6 +887,11 @@ function PropEditor.create(descriptor)
         key = ''
         displayName = ''
         savedModel = nil
+        -- Back to normal size, so the next open of a record that has no scale
+        -- does not inherit the last edit's. `open` sets it from the record
+        -- either way; this is belt and braces for the window in between, where
+        -- `currentScale()` would otherwise answer with a finished edit's value.
+        scale = tlib.drivenprop.SCALE_DEFAULT
         camMode = false
         panelHovered = false
         onStateChange(false, nil)
@@ -939,12 +1039,29 @@ function PropEditor.create(descriptor)
         reattach()
     end)
 
+    RegisterNUICallback(event('propScaled'), function(data, cb)
+        cb(1)
+        if not active then return end
+        if type(data) ~= 'table' then return end
+        scale = tlib.drivenprop.normaliseScale(data.scale)
+        reattach()
+    end)
+
     RegisterNUICallback(event('propEditorSave'), function(_, cb)
         cb(1)
         if not active then return end
         TriggerServerEvent(d.saveEvent, key, {
             x  = offset.x,   y  = offset.y,   z  = offset.z,
             rx = rotation.x, ry = rotation.y, rz = rotation.z,
+            -- `scale` is sent ONLY when it is not unit, so a record that was
+            -- never scaled is written back byte-identical to how it was found.
+            --
+            -- That is the same rule `savedModelFor` documents, for the same
+            -- reason: writing `scale = 1.0` into every record the first time
+            -- anyone nudged its position would add a key to every legacy record
+            -- on disk, and a reader cannot then tell "deliberately normal size"
+            -- from "never had an opinion". It also keeps data.json diffs honest.
+            scale = (not tlib.drivenprop.isUnitScale(scale)) and scale or nil,
             -- nil on a record that never had one, which keeps it exactly as
             -- legacy as it was. See PropEditor.savedModelFor.
             model = savedModel,
@@ -1029,6 +1146,19 @@ function PropEditor.create(descriptor)
         --- implementation that can disagree with this one.
         markOwnedProp = markOwnedProp,
         isOwnedProp = isOwnedProp,
+        --- The uniform scale of the open edit, or 1.0. Exposed for the same
+        --- reason `currentKey` is: a consumer that adds its own NUI callback
+        --- should read the editor's state rather than keep a second copy.
+        currentScale = function() return scale end,
+        --- The shared `tlib.drivenprop` driver.
+        ---
+        --- ⚠️ A CONSUMER'S LIFECYCLE MUST USE THIS ONE, not a driver of its own.
+        --- One prop is handed back and forth between the editor and the
+        --- lifecycle through takeProp/giveProp, and two drivers would both
+        --- believe they owned its matrix — which presents as a prop that
+        --- flickers between two transforms, with nothing logged, exactly like
+        --- two resources streaming one model name.
+        driver = driver,
         --- Sends an arbitrary action to the editor page, namespaced.
         send = function(payload)
             payload = payload or {}

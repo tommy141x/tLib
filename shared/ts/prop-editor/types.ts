@@ -3,10 +3,10 @@ import type { VehicleMatrix } from "../gizmo/types";
 
 export type { VehicleMatrix };
 
-export type PropEditorMode = "translate" | "rotate";
+export type PropEditorMode = "translate" | "rotate" | "scale";
 export type PropEditorSpace = "world" | "local";
 
-/** The six numbers an attachment is. Vehicle-local metres and degrees. */
+/** The seven numbers an attachment is. Vehicle-local metres and degrees. */
 export interface PropData {
   x: number;
   y: number;
@@ -14,6 +14,16 @@ export interface PropData {
   rx: number;
   ry: number;
   rz: number;
+  /**
+   * UNIFORM scale factor, clamped to [0.1, 10]. 1 is unscaled.
+   *
+   * One scalar, deliberately, even though the attachment matrix would carry
+   * three: the owner's decision is that a prop is scaled, not stretched, so the
+   * UI never offers per-axis handles and the Lua half never receives per-axis
+   * numbers. Required here because the store always holds a resolved value —
+   * the WIRE form is optional, see `PropEditorInitMessage`.
+   */
+  scale: number;
 }
 
 export interface PropEditorState {
@@ -39,7 +49,15 @@ export interface PropEditorInitMessage {
   /** Named `vehicleModel` on the wire for continuity with existing consumers. */
   vehicleModel: string;
   vehicleDisplayName: string;
-  propData: PropData;
+  /**
+   * `scale` is OPTIONAL on the wire and nothing else is.
+   *
+   * Records written before the scale handle existed simply have no such key, and
+   * a Lua table with `scale = 0` serialises the same way a missing one reads —
+   * so `openPropEditor` normalises absent, zero and negative alike to 1 rather
+   * than trusting the payload.
+   */
+  propData: Omit<PropData, "scale"> & { scale?: number };
   vehicleMatrix: VehicleMatrix;
   hasExisting: boolean;
   cameraFov?: number;
@@ -61,6 +79,7 @@ export type PropEditorStringKey =
   | "btn_cancel"
   | "btn_move_title"
   | "btn_rotate_title"
+  | "btn_scale_title"
   | "btn_space_title_format"
   | "coord_local"
   | "coord_world"
@@ -71,6 +90,7 @@ export type PropEditorStringKey =
   | "wasd_cam_off"
   | "section_position"
   | "section_rotation"
+  | "section_scale"
   | "btn_remove_prop"
   | "hint_mmb_orbit"
   | "hint_orbit_label"
@@ -86,6 +106,8 @@ export type PropEditorStringKey =
   | "hint_w_label"
   | "hint_r_key"
   | "hint_r_label"
+  | "hint_s_key"
+  | "hint_s_label"
   | "hint_x_key"
   | "hint_x_label"
   | "hint_p_key"

@@ -12,6 +12,7 @@ import type {
   Vec3,
   VehicleMatrix,
 } from "./types";
+import { clampUniformScale } from "./types";
 import { buildVehicleQuat, fivemLocalToWorld, fivemWorldToLocal } from "./vehicle-math";
 
 export class GizmoScene {
@@ -42,6 +43,14 @@ export class GizmoScene {
 
   scaleStartSw = 0;
   scaleStartSh = 0;
+  /**
+   * The scale the current handle started from, for the uniform path.
+   *
+   * Analogous to `scaleStartSw`/`scaleStartSh`: `gizmoTarget.scale` is a
+   * RELATIVE factor that is reset to 1 at every drag end, so the absolute value
+   * the host stores has to be remembered here and multiplied back in.
+   */
+  uniformScaleStart = 1;
 
   // gimbal lock tracking
   private prevYaw = 0;
@@ -57,6 +66,13 @@ export class GizmoScene {
   onRotationChange: ((a: number, b: number, c: number) => void) | null = null;
   onScaleChange: ((sw: number, sh: number) => void) | null = null;
   onMultiScale: ((indices: number[], scaleX: number, scaleY: number) => void) | null = null;
+  /**
+   * A scale drag reported as one absolute, already-clamped factor.
+   *
+   * Fires only with `features.uniformScale`, and then INSTEAD of
+   * `onScaleChange`/`onMultiScale` — never alongside them.
+   */
+  onUniformScaleChange: ((scale: number) => void) | null = null;
   onDragStart: (() => void) | null = null;
   onDragEnd: (() => void) | null = null;
   onItemClick: ((idx: number, shiftKey: boolean, ctrlKey: boolean) => void) | null = null;
@@ -65,6 +81,7 @@ export class GizmoScene {
     const { canvas, fov = 50 } = config;
     this.features = {
       scale: config.features?.scale ?? false,
+      uniformScale: config.features?.uniformScale ?? false,
       picking: config.features?.picking ?? false,
       multiSelect: config.features?.multiSelect ?? false,
       snap: config.features?.snap ?? false,
@@ -140,7 +157,31 @@ export class GizmoScene {
         this.onRotationChange?.(rot.yaw, rot.pitch, rot.roll);
       } else if (mode === "scale" && this.features.scale) {
         const s = this.gizmoTarget.scale;
-        if (this.features.multiSelect && this.selectedIndices.length > 1) {
+        if (this.features.uniformScale) {
+          /*
+           * ONE SCALAR OUT OF THREE INDEPENDENTLY DRAGGED AXES.
+           *
+           * TransformControls has four scale handles and they do different
+           * things: X/Y/Z each write their own component and leave the other two
+           * alone, while the centre XYZ handle writes all three by the same
+           * amount. `gizmoTarget.scale` is reset to (1,1,1) both when the handle
+           * is (re)attached in `updatePropGizmo` and at every drag end, so inside
+           * a single drag exactly one of three things is true: one component has
+           * left 1, all three have left 1 together, or none has.
+           *
+           * Taking the component FURTHEST FROM 1 therefore reads "the axis the
+           * user actually dragged" in all four handle cases, and it does so with
+           * no per-axis bookkeeping — diffing against a remembered triple would
+           * need the same reset discipline to be correct anyway, and would then
+           * disagree with it on the XYZ handle (three equal non-zero diffs, no
+           * winner). Ties are harmless here precisely because a tie means the
+           * axes agree.
+           */
+          const factor = [s.x, s.y, s.z].reduce((best, v) =>
+            Math.abs(v - 1) > Math.abs(best - 1) ? v : best
+          );
+          this.onUniformScaleChange?.(clampUniformScale(this.uniformScaleStart * factor));
+        } else if (this.features.multiSelect && this.selectedIndices.length > 1) {
           this.onMultiScale?.(this.selectedIndices, s.x, s.y);
         } else {
           this.onScaleChange?.(this.scaleStartSw * s.x, this.scaleStartSh * s.y);
@@ -402,6 +443,8 @@ export class GizmoScene {
     rx: number;
     ry: number;
     rz: number;
+    /** Absent is 1. Optional so a host with no scale affordance needs no change. */
+    scale?: number;
   }): void {
     this.selectedIdx = 0;
     this.selectedIndices = [0];
@@ -417,6 +460,20 @@ export class GizmoScene {
     );
     const localQuat = new THREE.Quaternion().setFromEuler(localEuler);
     this.gizmoTarget.quaternion.copy(this.vehicleQuat).multiply(localQuat);
+
+    /*
+     * The handle's own scale stays (1,1,1) and the prop's absolute scale is
+     * remembered separately. That split is what makes the drag maths above a
+     * plain multiply, and it is why the handle does not grow with the prop —
+     * a 10x prop would otherwise give an unusably large gizmo.
+     *
+     * All three axis handles are left VISIBLE (`showX/showY/showZ` untouched).
+     * Dragging any one of them scales uniformly, so hiding two would only
+     * remove two thirds of the grab area for no gain in honesty — the field in
+     * the properties panel is what tells the user there is a single number.
+     */
+    this.uniformScaleStart = clampUniformScale(propData.scale);
+    this.gizmoTarget.scale.set(1, 1, 1);
 
     this.gizmoHelper.visible = true;
     this.transformControls.enabled = true;

@@ -2,10 +2,10 @@
  * PropEditor — the full-screen 3D gizmo overlay for positioning a vehicle prop.
  *
  * Layout:
- *   - Left toolbar:  Move / Rotate / Space / Driver POV / WASD camera
+ *   - Left toolbar:  Move / Rotate / Scale / Space / Driver POV / WASD camera
  *   - Top-centre:    vehicle badge
  *   - Top-right:     optional host slot + Save + Cancel
- *   - Right panel:   X/Y/Z/RX/RY/RZ + Remove
+ *   - Right panel:   X/Y/Z/RX/RY/RZ + a single uniform Scale + Remove
  *   - Bottom:        keyboard hint bar
  *
  * ── What a host supplies ────────────────────────────────────────────────────
@@ -25,6 +25,7 @@
 import { createEscapeLayer } from "@tlib/shared/escape-layer";
 import { Button } from "@tlib/shared/ui/button";
 import { createSignal, For, onSettled, Show } from "solid-js";
+import { clampUniformScale } from "../gizmo/types";
 import { fetchNui, onNuiEvent } from "../nui";
 import { Separator } from "../ui/separator";
 import "./prop-editor.css";
@@ -204,6 +205,10 @@ export function PropEditor(props: PropEditorProps) {
     if (!wasdCamMode()) {
       if (e.code === "KeyW") setPropEditorMode("translate");
       else if (e.code === "KeyR") setPropEditorMode("rotate");
+      // `S` is free: the numpad emulation above claims only digits and
+      // `+ - . /`, `KEY_COMMANDS` claims only Home and P, and the WASD camera
+      // reads its keys per-frame in Lua while this whole branch is gated off.
+      else if (e.code === "KeyS") setPropEditorMode("scale");
       else if (e.code === "KeyX") togglePropEditorSpace();
     }
   }
@@ -244,6 +249,21 @@ export function PropEditor(props: PropEditorProps) {
     const pd = { ...propEditorState.propData, [axis]: v };
     setPropEditorPropData(pd);
     nui("propRotated", { rx: pd.rx, ry: pd.ry, rz: pd.rz });
+    getGizmoScene()?.updatePropGizmo(pd);
+  }
+
+  /**
+   * One scalar, clamped before it is stored or sent.
+   *
+   * The clamp is `clampUniformScale`, the same function the gizmo's drag path
+   * uses, so a typed 0 and a dragged 0 cannot disagree — and a typed `0` or `-2`
+   * resolves to 1 rather than to 0.1, because typing it is the same mistake as
+   * an older record carrying it.
+   */
+  function updateScale(v: number) {
+    const pd = { ...propEditorState.propData, scale: clampUniformScale(v) };
+    setPropEditorPropData(pd);
+    nui("propScaled", { scale: pd.scale });
     getGizmoScene()?.updatePropGizmo(pd);
   }
 
@@ -351,6 +371,18 @@ export function PropEditor(props: PropEditorProps) {
             >
               R
             </Button>
+            <Button
+              toggle
+              data-tool="scale"
+              data-active={propEditorState.mode === "scale" ? "" : undefined}
+              title={T("btn_scale_title")}
+              variant={toolVariant(propEditorState.mode === "scale")}
+              pressed={propEditorState.mode === "scale"}
+              onPressedChange={() => setPropEditorMode("scale")}
+              class="tlib-pe-tool font-mono font-semibold"
+            >
+              S
+            </Button>
 
             <Separator class="bg-border/60 tlib-pe-sep" />
 
@@ -431,6 +463,15 @@ export function PropEditor(props: PropEditorProps) {
                   />
                 )}
               </For>
+
+              <Separator class="bg-border/60 tlib-pe-sep" />
+
+              {/* ONE field, not three. The attachment matrix would carry a
+                  per-axis scale and this editor deliberately does not offer it:
+                  a prop is scaled, never stretched. So there is no `For` here
+                  and no axis label — `S` is the whole vocabulary. */}
+              <span class={SECTION_LABEL}>{T("section_scale")}</span>
+              <PropField label="S" value={propEditorState.propData.scale} onChange={updateScale} />
             </div>
 
             {/* The kit's `destructive` variant rather than the hand-mixed
@@ -479,6 +520,9 @@ export function PropEditor(props: PropEditorProps) {
               </span>
               <span class={HINT}>
                 <span class="text-foreground">{T("hint_r_key")}</span> {T("hint_r_label")}
+              </span>
+              <span class={HINT}>
+                <span class="text-foreground">{T("hint_s_key")}</span> {T("hint_s_label")}
               </span>
               <span class={HINT}>
                 <span class="text-foreground">{T("hint_x_key")}</span> {T("hint_x_label")}

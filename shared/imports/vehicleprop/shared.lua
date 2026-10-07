@@ -471,12 +471,36 @@ function VehicleProp.create(descriptor)
             return
         end
         editor.markOwnedProp(prop)
-        AttachEntityToEntity(
-            prop, vehicle, 0,
-            placement.x  or 0.0, placement.y  or 0.0, placement.z  or 0.0,
-            placement.rx or 0.0, placement.ry or 0.0, placement.rz or 0.0,
-            false, false, false, false, 0, true
-        )
+
+        -- ⚠️ TWO MECHANISMS, CHOSEN BY THE SCALE. See the long note on
+        -- `reattach` in tlib.propeditor: `AttachEntityToEntity` cannot carry a
+        -- scale, because the attach recomputation rewrites the basis from the
+        -- parent's matrix every frame and has no notion of one. A same-tick read
+        -- says 3.0 and the next frame says 1.0.
+        --
+        -- A prop at UNIT SCALE stays attached, which is free and is what every
+        -- placement on every server does today — none of them has a `scale` key.
+        -- The per-frame cost of the driven path (~0.8 µs per prop, measured) is
+        -- paid only by the placements that actually ask for a scale.
+        if tlib.drivenprop.isUnitScale(placement.scale) then
+            AttachEntityToEntity(
+                prop, vehicle, 0,
+                placement.x  or 0.0, placement.y  or 0.0, placement.z  or 0.0,
+                placement.rx or 0.0, placement.ry or 0.0, placement.rz or 0.0,
+                false, false, false, false, 0, true
+            )
+        else
+            -- The EDITOR'S driver, deliberately, not one of our own. The editor
+            -- and this lifecycle hand one prop back and forth through
+            -- takeProp/giveProp, and two drivers would both think they owned its
+            -- matrix.
+            editor.driver.add(prop, vehicle, {
+                x  = placement.x  or 0.0, y  = placement.y  or 0.0, z  = placement.z  or 0.0,
+                rx = placement.rx or 0.0, ry = placement.ry or 0.0, rz = placement.rz or 0.0,
+                scale = placement.scale,
+            })
+        end
+
         attached[vehicle] = prop
         SetModelAsNoLongerNeeded(propHash)
     end
@@ -495,6 +519,10 @@ function VehicleProp.create(descriptor)
     local function detachProp(vehicle)
         local prop = attached[vehicle]
         if prop and DoesEntityExist(prop) then
+            -- Off the driver first, whether or not it was ever driven: `remove`
+            -- is a no-op for an undriven prop, and leaving a deleted handle in
+            -- the driver's table is a claim on a handle the engine may reuse.
+            editor.driver.remove(prop)
             DetachEntity(prop, false, false)
             DeleteObject(prop)
         end
@@ -516,13 +544,34 @@ function VehicleProp.create(descriptor)
     --- out from under the editor. `gizmoProp` is the second half of that guard,
     --- for the window where a sweep runs before the flag has been raised.
     local function reclaimOrphanProps()
+        -- ⚠️ "IS IT IN THE TRACKING TABLE AT ALL", NOT "DOES ITS ATTACHMENT MAP
+        -- BACK TO IT". This used to read the object's parent with
+        -- `GetEntityAttachedTo(obj)` and test `attached[parent] ~= obj`.
+        --
+        -- That test is wrong for a SCALED prop, and wrong in the worst
+        -- direction: a scaled prop is deliberately NOT attached to anything (see
+        -- attachPropToVehicle), so `GetEntityAttachedTo` answers 0, `attached[0]`
+        -- is nil, and every scaled prop on the server reads as an orphan and is
+        -- deleted on the next sweep. The prop would appear, then vanish, with
+        -- nothing logged — and only for the placements that had been given a
+        -- scale, which is the hardest possible version to diagnose.
+        --
+        -- The tracking table is the ownership record either way, so asking it
+        -- directly is both correct for both mechanisms and simpler. The one
+        -- behaviour this gives up is deleting a prop that IS in `attached` but
+        -- attached to a different vehicle than the one it is filed under — a
+        -- desync the old test would have cleaned up. Nothing produces that state
+        -- (only this file writes the table, and it writes the handle it just
+        -- attached), and the next pass's own bookkeeping catches a vehicle that
+        -- has gone.
+        local tracked = {}
+        for _, prop in pairs(attached) do tracked[prop] = true end
+
         for _, obj in ipairs(GetGamePool('CObject')) do
-            if editor.isOwnedProp(obj) and obj ~= gizmoProp then
-                local parent = GetEntityAttachedTo(obj)
-                if attached[parent] ~= obj then
-                    DetachEntity(obj, false, false)
-                    DeleteObject(obj)
-                end
+            if editor.isOwnedProp(obj) and obj ~= gizmoProp and not tracked[obj] then
+                editor.driver.remove(obj)
+                DetachEntity(obj, false, false)
+                DeleteObject(obj)
             end
         end
     end
@@ -537,6 +586,7 @@ function VehicleProp.create(descriptor)
         -- Explicitly, because reclaimOrphanProps skips it. Without this the
         -- editor's working prop is the one object that survives a resource stop.
         if gizmoProp and DoesEntityExist(gizmoProp) then
+            editor.driver.remove(gizmoProp)
             DetachEntity(gizmoProp, false, false)
             DeleteObject(gizmoProp)
         end
@@ -547,6 +597,10 @@ function VehicleProp.create(descriptor)
         -- The table is empty now, so every remaining object carrying our mark
         -- is an orphan — including any a previous incarnation left behind.
         reclaimOrphanProps()
+        -- Nothing is driven once every prop is gone. Belt and braces: the
+        -- driver's own pass drops entries for deleted entities, but its thread
+        -- does not run again after a resource stop.
+        editor.driver.clear()
     end
 
     --- Drops tracking for props whose vehicle or prop handle has gone away.
@@ -603,6 +657,9 @@ function VehicleProp.create(descriptor)
     -- door, on a device other people are supposed to be able to see from
     -- outside the car.
 
+    --- True until the first completed pass. See the reclaim at the end of `tick`.
+    local firstPassDone = false
+
     --- One pass. Exposed so a suite can drive it without a thread.
     function instance.tick()
         -- Suppressed while the editor holds a prop: the thread would otherwise
@@ -638,6 +695,27 @@ function VehicleProp.create(descriptor)
             if not DoesEntityExist(vehicle) or not seen[vehicle] then
                 detachProp(vehicle)
             end
+        end
+
+        -- ── One reclaim, after the FIRST pass only ───────────────────────
+        --
+        -- For the props an unclean stop left behind that adoption cannot
+        -- rescue. Adoption keys off `IsEntityAttachedToEntity`, and a SCALED
+        -- prop is deliberately not attached to anything — so a previous
+        -- incarnation's scaled props are invisible to it, and the pass above
+        -- would spawn a second prop over the top of each one while the
+        -- original sat there forever.
+        --
+        -- ⚠️ AFTER the pass, not before, and that ordering is the whole of why
+        -- this is not simply called at startup. Before the first pass
+        -- `attached` is empty, so every prop of ours in the world reads as an
+        -- orphan — including the attached ones adoption was about to reclaim,
+        -- which it would delete and then respawn. Running it after means
+        -- adoption has already had its chance and anything still unaccounted
+        -- for genuinely is a leftover.
+        if not firstPassDone then
+            firstPassDone = true
+            reclaimOrphanProps()
         end
     end
 

@@ -27,7 +27,14 @@ export function PropEditorViewport(props: PropEditorViewportProps) {
   const nui = (name: string, data: unknown) => fetchNui(`${props.prefix}:${name}`, data);
 
   onSettled(() => {
-    const scene = new GizmoScene({ canvas: canvasRef, fov: propEditorState.cameraFov });
+    // `scale` turns the handle on; `uniformScale` makes it report ONE scalar
+    // through `onUniformScaleChange` instead of the `sw`/`sh` pair the LED and
+    // number-plate editors want. A prop is scaled, never stretched.
+    const scene = new GizmoScene({
+      canvas: canvasRef,
+      fov: propEditorState.cameraFov,
+      features: { scale: true, uniformScale: true },
+    });
     setGizmoScene(scene);
 
     if (propEditorState.vehicleMatrix) scene.setVehicleMatrix(propEditorState.vehicleMatrix);
@@ -46,6 +53,14 @@ export function PropEditorViewport(props: PropEditorViewportProps) {
       const rot = scene.extractPropRotation();
       mergePropEditorPropData(rot);
       nui("propRotated", rot);
+    };
+
+    // Already absolute and already clamped to [0.1, 10] by the scene, so there
+    // is nothing to normalise here — which is the point of the scene owning the
+    // clamp: the Lua half can never be sent a 0 or a negative from this path.
+    scene.onUniformScaleChange = (scale) => {
+      mergePropEditorPropData({ scale });
+      nui("propScaled", { scale });
     };
 
     scene.onDragStart = () => {

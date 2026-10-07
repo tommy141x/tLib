@@ -20,6 +20,7 @@ export const DEFAULT_PROP_EDITOR_STRINGS: Record<PropEditorStringKey, string> = 
   btn_cancel: "Cancel",
   btn_move_title: "Move (W)",
   btn_rotate_title: "Rotate (R)",
+  btn_scale_title: "Scale (S)",
   // `{space}` is substituted with the current space ("local" / "world").
   btn_space_title_format: "Space: {space} (X)",
   coord_local: "LOC",
@@ -32,6 +33,7 @@ export const DEFAULT_PROP_EDITOR_STRINGS: Record<PropEditorStringKey, string> = 
 
   section_position: "Position",
   section_rotation: "Rotation",
+  section_scale: "Scale",
   btn_remove_prop: "Remove Prop",
 
   hint_mmb_orbit: "MMB",
@@ -48,6 +50,8 @@ export const DEFAULT_PROP_EDITOR_STRINGS: Record<PropEditorStringKey, string> = 
   hint_w_label: "Move",
   hint_r_key: "R",
   hint_r_label: "Rotate",
+  hint_s_key: "S",
+  hint_s_label: "Scale",
   hint_x_key: "X",
   hint_x_label: "Space",
   hint_p_key: "P",
