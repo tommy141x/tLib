@@ -686,8 +686,15 @@ try {
     const top = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().top;
     return {
       dropdown: top("[data-scope=select][data-part=trigger]"),
-      reset: top(".tlib-nui-field-cell[data-labelless=true] .tlib-nui-button"),
-      standalone: top(".tlib-nui-field-cell[data-labelless=false] .tlib-nui-button"),
+      // PRESENCE, not `=true`/`=false`. Dialog.tsx binds `data-labelless` to a
+      // plain boolean, and Solid 2's setAttribute writes `true` as the EMPTY
+      // string and REMOVES the attribute on `false`. So `[data-labelless=true]`
+      // matches nothing and `[data-labelless=false]` never exists — both
+      // `querySelector(...)!` calls would deref null and this assertion would
+      // crash rather than measure. Presence/absence is the exact test: there is
+      // no third state. Same reasoning as the CSS in shared/ts/nui-kit/nui.css.
+      reset: top(".tlib-nui-field-cell[data-labelless] .tlib-nui-button"),
+      standalone: top(".tlib-nui-field-cell:not([data-labelless]) .tlib-nui-button"),
       standaloneRow: document.querySelectorAll(".tlib-nui-field-row")[1]!.getBoundingClientRect()
         .top,
     };

@@ -135,8 +135,22 @@ type ButtonProps = {
   rightIcon?: () => JSX.Element;
   // Polymorphic as prop
   as?: ValidComponent;
-  [key: string]: unknown;
-};
+} & Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "children"> & {
+    /**
+     * `data-*` must be spelled out, and this is NOT the old hole returning.
+     *
+     * TypeScript only exempts hyphenated attributes on INTRINSIC elements. On a
+     * component the prop type has to admit them, so without this the six live
+     * `data-*` call sites stop compiling — `data-hud-btn` among them, which is
+     * the whole drag guard for hand-written tRadio skins.
+     *
+     * The value type is deliberately narrow rather than `unknown`: these end up
+     * in `setAttribute`, and Solid 2 writes a boolean `true` as the EMPTY string
+     * while removing the attribute on `false`. Admitting `object` here is how a
+     * `classList={{…}}`-shaped mistake reaches the DOM as `[object Object]`.
+     */
+    [key: `data-${string}`]: string | number | boolean | undefined;
+  };
 
 const Button: Component<ButtonProps> = (props) => {
   const merged = merge(

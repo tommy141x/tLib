@@ -662,14 +662,39 @@
   min-width: min(140px, 100%);
   flex: 1 1 140px;
 }
-.tlib-nui-field-cell[data-shrink="true"] {
+/* ── Why these are PRESENCE selectors and must stay that way ──────────────
+   Both attributes are written from Dialog.tsx as a plain boolean. Solid 2
+   serialises that differently from Solid 1:
+
+     @solidjs/web  setAttribute(node, name, value)
+       value == null || value === false  ->  node.removeAttribute(name)
+       otherwise                         ->  setAttribute(name, value === true ? "" : value)
+
+   So `true` lands as the EMPTY string, not "true". Solid 1 stringified it, so
+   `[data-shrink="true"]` matched; after the migration it matches nothing and
+   the rule is simply dead -- no error, no warning, just the base rule winning.
+
+   That is what shipped: tRadio's /tradio Callsign row declares the Set button
+   `flex = "shrink"`, and with this rule dead the button fell back to
+   `flex: 1 1 140px` and took HALF the row, while the dead labelless rule below
+   dropped its padding and left it sitting a label-height above the input it
+   belongs beside. One serialisation change, both halves of the misalignment.
+
+   Presence is also the exact test, not a loose one: `false` REMOVES the
+   attribute, so there is no "false" value to exclude. It matches what Ark
+   already does here (`[data-disabled]`, `data-[focus-visible]:`). */
+.tlib-nui-field-cell[data-shrink] {
   flex: 0 0 auto;
+  /* The 140px floor above exists so a GROWING cell cannot collapse. A shrink
+     cell is declared to be exactly its content, so the floor contradicts it --
+     left on, it pinned every one-word action button to 140px. */
+  min-width: 0;
 }
 /* Buttons and checkboxes render no label, so in a row beside a labelled field
    flex-start pins them a label-height too high. Reserve the same space the
    missing label would have taken. Dialog.tsx sets the attribute only when the
    row actually has a labelled sibling to line up with. */
-.tlib-nui-field-cell[data-labelless="true"] {
+.tlib-nui-field-cell[data-labelless] {
   padding-top: calc(var(--nui-label-h, 20px) + var(--nui-field-gap, 6px));
 }
 /* Individual scale and translate never overwrite the inline `transform` the
