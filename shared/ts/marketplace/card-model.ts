@@ -101,9 +101,57 @@ export interface CardStat {
  * downloads gate pointing the other way.
  */
 export function cardStats(item: MarketplaceItem): readonly CardStat[] {
-  const stats: CardStat[] = [{ key: "downloads", value: item.downloads }];
-  if (item.likes !== undefined) stats.push({ key: "likes", value: item.likes });
-  if (item.size_bytes > 0) stats.push({ key: "size", value: item.size_bytes });
+  return cardStatsOf(item);
+}
+
+/**
+ * The counts a stats row is built from, as a structural contract rather than as
+ * `MarketplaceItem`.
+ *
+ * ── ⚠️ Why this is not just `cardStats(item)` ───────────────────────────────
+ *
+ * Because one surface's item will never be a `MarketplaceItem` and it is not
+ * going to become one. tELS's marketplace tab MERGES TWO CATALOGUES — LED
+ * layouts, patterns and vehicle setups come from `tels_community_configs`, HUD
+ * layouts and sound packs come from tLib's — into a single `CardView` so that
+ * its card never branches on which backend a listing came from. Making that
+ * shape satisfy `MarketplaceItem` would mean inventing `size_bytes`, `slug` and
+ * `created_at` for a community config that has none, which is how a card ends up
+ * printing a confident `0B` for something whose size nobody ever measured.
+ *
+ * So the contract is narrowed to the facts a stats row actually reads. This is
+ * the identical move `sort.ts` and `filter.ts` already make — they take an
+ * accessor per field instead of an item — and it is why those two already have
+ * three consumers while this file had one.
+ *
+ * ⚠️ `MarketplaceItem` satisfies this STRUCTURALLY, so `cardStats` above is a
+ * delegation and not a second implementation. That matters more than the
+ * ceremony suggests: the two rules below (`downloads` at zero, `likes` on
+ * presence) are the reported defects, and a second copy of them is a second
+ * chance for one surface to answer differently — which is the whole reason this
+ * module exists.
+ */
+export interface CardCounts {
+  /**
+   * Non-optional, because there is no "we do not know" state to represent —
+   * see the warning on `cardStats`. A host whose wire field is optional
+   * resolves it to a number before calling, exactly as `toCanonicalItem` does.
+   */
+  downloads: number;
+  /** Absent means THIS HOST HAS NO LIKES. `0` means nobody has liked it yet. */
+  likes?: number;
+  /** Absent or `0` means no size is known; neither draws a chip. */
+  size_bytes?: number;
+}
+
+export function cardStatsOf(counts: CardCounts): readonly CardStat[] {
+  const stats: CardStat[] = [{ key: "downloads", value: counts.downloads }];
+  if (counts.likes !== undefined) stats.push({ key: "likes", value: counts.likes });
+  // `?? 0` and not a presence check: unlike `likes`, a size nobody measured and
+  // a size of zero bytes are the same thing to a reader, and `0B` is noise
+  // either way. `MarketplaceItem.size_bytes` is non-optional so this branch is
+  // reached only by a host that genuinely carries no size.
+  if ((counts.size_bytes ?? 0) > 0) stats.push({ key: "size", value: counts.size_bytes as number });
   return stats;
 }
 

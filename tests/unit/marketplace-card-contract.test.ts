@@ -14,7 +14,9 @@ import { describe, expect, it } from "bun:test";
 import {
   CARD_COPY,
   cardIdentity,
+  type CardStat,
   cardStats,
+  cardStatsOf,
   likeAffordance,
   nextLikedState,
 } from "../../shared/ts/marketplace/card-model";
@@ -132,6 +134,47 @@ describe("cardStats", () => {
 
   it("words the download count as installs, which is what it means to a server owner", () => {
     expect(CARD_COPY.downloads("0")).toBe("0 installs");
+  });
+});
+
+describe("cardStatsOf — the same contract for a host with its own item type", () => {
+  /**
+   * ⚠️ These assertions are the reason `cardStatsOf` exists at all. tELS's
+   * marketplace tab merges two catalogues into one `CardView` and so will never
+   * hold a `MarketplaceItem`; without a narrowed contract its only options were
+   * to fake the fields it does not have, or to word and order the stats itself —
+   * which is what it did, printing "12 downloads" where every other surface
+   * printed "12 installs".
+   */
+  it("is what `cardStats` delegates to, so there is only one implementation", () => {
+    expect(cardStatsOf(item({ likes: 3, size_bytes: 10 }))).toEqual(
+      cardStats(item({ likes: 3, size_bytes: 10 })) as CardStat[]
+    );
+  });
+
+  it("needs nothing but a download count, which is all a merged card model has", () => {
+    expect(cardStatsOf({ downloads: 12 })).toEqual([{ key: "downloads", value: 12 }]);
+    expect(cardStatsOf({ downloads: 0 })).toEqual([{ key: "downloads", value: 0 }]);
+  });
+
+  it("keeps the presence rule for likes, so an absent field is not a confident zero", () => {
+    expect(cardStatsOf({ downloads: 1 }).some((s) => s.key === "likes")).toBe(false);
+    expect(cardStatsOf({ downloads: 1, likes: 0 })).toContainEqual({ key: "likes", value: 0 });
+  });
+
+  it("draws no size chip for a host that measures no size, and none for zero bytes", () => {
+    // Unlike `likes`, an unmeasured size and a zero size read the same to a
+    // person, and `0B` is noise either way.
+    expect(cardStatsOf({ downloads: 1 }).some((s) => s.key === "size")).toBe(false);
+    expect(cardStatsOf({ downloads: 1, size_bytes: 0 }).some((s) => s.key === "size")).toBe(false);
+  });
+
+  it("holds the order, so a host that walks the array cannot invent its own", () => {
+    expect(cardStatsOf({ downloads: 1, likes: 2, size_bytes: 3 }).map((s) => s.key)).toEqual([
+      "downloads",
+      "likes",
+      "size",
+    ]);
   });
 });
 
