@@ -106,6 +106,31 @@ RegisterNetEvent('tlib:marketplace:browseResult', function(result)
     SendNUIMessage({ action = 'marketplaceBrowseResult', data = result })
 end)
 
+-- Liking goes through the server, and NOT because of CORS.
+--
+-- ⚠️ THE REASON IS IDENTITY, WHICH IS A STRONGER ONE. A like is de-duplicated by
+-- the marketplace on the player's FiveM license, and that only stops one person
+-- boosting a count if the license is something they cannot choose. This VM
+-- cannot establish it — anything the NUI or the client knows is something the
+-- player controls — so the payload below carries a slug and a desired state and
+-- deliberately NO identity. `server/sv_marketplace.lua` resolves it from the
+-- event's `source` with `GetPlayerIdentifierByType`.
+--
+-- ⚠️ Do not add a license, an identifier or a player name to this payload, even
+-- to "save the lookup". It would hand every player the ability to like as
+-- somebody else.
+RegisterNUICallback('marketplaceLike', function(data, cb)
+    cb(1)
+    if type(data) ~= 'table' or type(data.requestId) ~= 'string' or type(data.slug) ~= 'string' then return end
+    -- `next` is the state being asked for rather than a toggle, so a retry after
+    -- a timeout cannot invert anything. `== true` keeps a missing value meaning
+    -- un-like, which is the direction that adds nothing to a public count.
+    TriggerServerEvent('tlib:marketplace:like', { requestId = data.requestId, slug = data.slug, next = data.next == true })
+end)
+RegisterNetEvent('tlib:marketplace:likeResult', function(result)
+    SendNUIMessage({ action = 'marketplaceLikeResult', data = result })
+end)
+
 -- The UI preview DOCUMENT, for the same reason. The sound preview is NOT here:
 -- it is an <audio> element pointed at the listing's absolute `preview_url`,
 -- which needs neither this round trip nor a credential.

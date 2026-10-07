@@ -11,7 +11,7 @@ import {
   assertItemBelongsToResource,
   CatalogueError,
 } from "../../../shared/ts/marketplace/catalogue";
-import { type BrowseParams, browseItems, previewHtml } from "./browse";
+import { type BrowseParams, browseItems, likeItem, previewHtml } from "./browse";
 import { fExports, fGetCurrentResourceName, fGetResourcePath } from "./fivem";
 import { installFromData, uninstallItem } from "./installer";
 import { list as listTargets, register as registerTarget, unregisterResource } from "./registry";
@@ -72,6 +72,60 @@ export function registerBridge(): void {
 
     void browseItems(params).then(
       (result) => done(true, null, JSON.stringify(result)),
+      (e: unknown) => done(false, e instanceof Error ? e.message : String(e))
+    );
+  });
+
+  //   exports.tLib:mpLike(slug, license, next, function(ok, err, stateJson) end)
+  //
+  // Like or un-like one item for one player. Same async convention as
+  // `mpBrowse`: the Lua callback is LAST, is invoked exactly once with
+  // `(ok, errorOrNil, value)`, never returns a Promise and never lets a
+  // rejection escape into the Lua VM.
+  //
+  // ══════════════════════════════════════════════════════════════════════════
+  // ⚠️ `license` IS A PLAYER IDENTITY AND THIS EXPORT CANNOT CHECK IT.
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // It is a FiveM export, so ANY resource on the server can call it with any
+  // string. That is not a hole this function can close — an export has no
+  // caller identity to check — and it is why the ONE call site that matters,
+  // `server/sv_marketplace.lua`, resolves the value from
+  // `GetPlayerIdentifierByType(src, 'license')` for the `source` of a net event
+  // rather than taking it from anywhere a client can reach.
+  //
+  // What the backend's `UNIQUE(item_id, subject)` then guarantees is "one like
+  // per license per item", which stops an ordinary PLAYER inflating a count.
+  // It does not stop the server OPERATOR, who can invent licenses here or call
+  // the HTTP endpoint directly; the shared secret on that request is public by
+  // design and identifies a server, never a person. tWeb's
+  // `src/lib/marketplace/like-identity.ts` carries the whole argument.
+  //
+  // ⚠️ DO NOT add a convar or an operator setting that feeds `license`. The
+  // per-player property depends entirely on the native being the source.
+  //
+  // The state comes back as a JSON string for the same reason `mpBrowse`'s page
+  // does: Lua↔JS marshalling of small records is where fields quietly become
+  // numeric-keyed tables, and a string cannot be misread.
+  fExports("mpLike", (slug: unknown, license: unknown, next: unknown, cb: unknown) => {
+    if (typeof cb !== "function") return;
+    const done = cb as (ok: boolean, err: string | null, value?: unknown) => void;
+    if (typeof slug !== "string" || !slug) {
+      done(false, "slug required");
+      return;
+    }
+    // Refused here as well as inside the transport, so a caller that forgot to
+    // resolve an identity gets a sentence naming its own bug rather than a 400
+    // from the host that reads, at the panel, as "the marketplace is down".
+    if (typeof license !== "string" || !license) {
+      done(false, "license required");
+      return;
+    }
+    // ⚠️ `=== true`, so anything that is not an explicit "like" is an UN-like.
+    // Lua marshals a missing boolean as `nil`, and the safe default for a
+    // missing state is the one that adds nothing to a public count.
+    void likeItem(slug, license, next === true).then(
+      (state) => done(true, null, JSON.stringify(state)),
       (e: unknown) => done(false, e instanceof Error ? e.message : String(e))
     );
   });

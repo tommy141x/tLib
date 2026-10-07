@@ -169,6 +169,48 @@
   color: var(--nui-danger);
   background: transparent;
 }
+/*
+ * The footer's LEFT group — installs, and the like count beside it.
+ *
+ * ⚠️ THIS RULE EXISTS TO CANCEL `.mp-card-footer > div` ABOVE, which sets
+ * `margin-left: auto` on every direct div child. That was written when the
+ * footer held a bare `<span>` and one `<div>` of buttons; the like count needed
+ * the stats wrapped in a div of their own, and without this both groups push to
+ * the right and the left edge of every card goes empty.
+ */
+.mp-card-footer > .mp-card-stats {
+  margin-left: 0;
+  margin-right: auto;
+}
+/*
+ * The like toggle.
+ *
+ * ⚠️ NO `backdrop-filter`, no `color-mix()`, no `oklch()` and no blurred shadow
+ * anywhere in this file — NUI is CEF 103 and every one of those is dropped
+ * silently rather than erroring. The pressed state is carried by the icon's
+ * `fill` (set in the component, through `currentColor`) plus this colour, which
+ * is the whole of the visual contract.
+ *
+ * `--nui-accent` and not `--nui-danger`: a like is approval, and red is this
+ * design system's delete colour — the Delete control sits four pixels away.
+ */
+.mp-root .mp-like {
+  gap: 5px;
+  background: transparent;
+}
+/*
+ * ⚠️ THIS SELECTOR ONLY WORKS BECAUSE THE COMPONENT PASSES A STRING.
+ *
+ * Solid 2 writes a boolean attribute as the EMPTY STRING — `aria-pressed={true}`
+ * produces `aria-pressed=""`, not `"true"` — which silently killed a whole set
+ * of `[data-x="true"]` rules during the migration. `ItemCard` therefore passes
+ * `props.item.liked ? "true" : "false"` explicitly. If that is ever "tidied" to
+ * a bare boolean, this rule stops matching and the pressed state paints nothing,
+ * with no error anywhere.
+ */
+.mp-root .mp-like[aria-pressed="true"] {
+  color: var(--nui-accent);
+}
 .mp-pagination {
   position: sticky;
   bottom: -12px;

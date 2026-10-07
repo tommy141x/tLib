@@ -334,6 +334,52 @@ local function readBackstop(settle)
     end)
 end
 
+-- ── The player's own FiveM identity, for likes ──────────────────────────────
+--
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️ THIS FUNCTION IS THE ENTIRE REASON A LIKE COUNT MEANS ANYTHING.
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- The marketplace's like endpoint de-duplicates on `(item, license)`. That rule
+-- stops one person boosting a count ONLY IF the license is something they cannot
+-- choose — so it is resolved here, server-side, from the `source` of the net
+-- event, by the native. It is never taken from the NUI payload, never from a
+-- convar, and never from an export argument.
+--
+-- `GetPlayerIdentifierByType` is used rather than walking
+-- `GetNumPlayerIdentifiers`: the typed accessor asks for exactly the identifier
+-- wanted, where the loop form has to string-match prefixes and would happily
+-- return `license2:` or `ip:` to a careless comparison.
+--
+-- ⚠️ WHAT THIS DOES NOT DO, STATED SO NOBODY ASSUMES IT: it does not make the
+-- claim verifiable BY THE MARKETPLACE. The outbound request's only credential is
+-- the shared resource secret, which is public by design and identifies a server
+-- rather than a person — so whoever runs this server can bypass this function
+-- entirely and POST any license they invent. The count is resistant to a PLAYER
+-- and not to an OPERATOR. tWeb's src/lib/marketplace/like-identity.ts carries
+-- the full argument and the design that would close it (the Cfx.re account-link
+-- flow, which produces an identity proven at the website's own origin).
+--
+-- ⚠️ AND NOTE WHO CAN REACH THIS AT ALL: every marketplace read in this file
+-- goes through `beginRead`, which requires the `tlib.admin` ACE. So the in-game
+-- like path is reachable only by server administrators. That is a mitigation
+-- (an ordinary player on somebody's server cannot spam likes through the panel)
+-- and simultaneously the sharpest form of the limitation above, because the
+-- population that CAN like in game is the same population that could forge.
+local function playerLicense(src)
+    if src == nil then return nil end
+    local ok, identifier = pcall(GetPlayerIdentifierByType, src, 'license')
+    if not ok or type(identifier) ~= 'string' then return nil end
+    -- The native answers `license:<40 hex>`. The prefix is stripped here so the
+    -- stored subject is namespaced once, by the backend, as `fivem:<hex>`. The
+    -- backend also tolerates the raw form — but relying on that would mean two
+    -- spellings of one player if either side ever changed its mind, and two
+    -- spellings defeat the uniqueness rule entirely.
+    local license = identifier:match('^license:(%x+)$')
+    if not license then return nil end
+    return license:lower()
+end
+
 RegisterNetEvent('tlib:marketplace:browse', function(opts)
     local src = source
     local settle = beginRead(src, 'browse', opts)
@@ -363,6 +409,17 @@ RegisterNetEvent('tlib:marketplace:browse', function(opts)
         sort = opts.sort == 'created_at' and 'created_at' or 'downloads',
         limit = limit,
         cursor = cursor,
+        -- ⚠️ Resolved from `src`, NEVER read off `opts`. `opts` is the NUI's
+        -- payload and a value the client sent is a value the client chose; see
+        -- `playerLicense` above for why that distinction is the whole feature.
+        --
+        -- Sending it is what makes each item's `liked` flag this player's own,
+        -- which is what lets the card draw a heart that is already filled
+        -- instead of inviting a like the backend then refuses. A nil here is
+        -- normal and harmless — the catalogue and the like COUNTS come back
+        -- either way, only `liked` is absent, and the card then shows a count
+        -- with no button.
+        identity = playerLicense(src),
     }
 
     local dispatched, dispatchErr = pcall(function()
@@ -387,6 +444,79 @@ RegisterNetEvent('tlib:marketplace:browse', function(opts)
     end)
     if not dispatched then
         log('marketplace browse bridge failed: ' .. tostring(dispatchErr), 3)
+        settle({ ok = false, error = 'marketplace bridge unavailable' })
+        return
+    end
+    readBackstop(settle)
+end)
+
+-- Like, or un-like, one catalogue item as the requesting PLAYER.
+--
+-- ⚠️ IT GOES THROUGH `beginRead` LIKE THE TWO READS, DESPITE BEING A WRITE, and
+-- that is deliberate rather than a copy-paste. `beginRead` is the shared gate
+-- for this panel, and it supplies three things a like needs for exactly the same
+-- reasons a read does: the `tlib.admin` ACE (the panel is admin-only in its
+-- entirety, so a separate weaker gate here would be the one way in), the
+-- requestId binding that stops a stale reply overwriting a newer one, and the
+-- in-flight cap that stops the panel being used to make this server issue
+-- unbounded outbound requests.
+--
+-- ⚠️ `next` IS THE STATE BEING ASKED FOR, NOT A TOGGLE. The NUI sends the state
+-- it wants, so a retry after the 20s backstop cannot invert anything — which it
+-- could if this flipped a value it read. The marketplace is idempotent in both
+-- directions for the same reason.
+RegisterNetEvent('tlib:marketplace:like', function(opts)
+    local src = source
+    local settle = beginRead(src, 'like', opts)
+    if not settle then return end
+
+    local slug = type(opts.slug) == 'string' and opts.slug or nil
+    if not slugName(slug) then
+        settle({ ok = false, error = 'invalid item slug' })
+        return
+    end
+
+    -- ⚠️ FROM `src`, not from `opts`. Read `playerLicense`'s header before
+    -- changing this line: a license taken from the payload would let any player
+    -- like as a thousand different people, which is precisely the thing the
+    -- backend's unique index exists to prevent.
+    local license = playerLicense(src)
+    if not license then
+        -- A player with no `license:` identifier cannot be de-duplicated, so
+        -- they are refused rather than counted under a fallback. A synthetic id
+        -- — the server id, a hash of the name — would be a NEW identity on every
+        -- reconnect, which turns "one like per person" into "one like per
+        -- session" and silently makes the count meaningless.
+        settle({ ok = false, error = 'no FiveM identity for this player' })
+        return
+    end
+
+    local dispatched, dispatchErr = pcall(function()
+        exports['tLib']:mpLike(slug, license, opts.next == true, function(ok, err, stateJson)
+            if not ok then
+                settle({ ok = false, error = tostring(err or 'marketplace unavailable') })
+                return
+            end
+            local decoded, parsed = pcall(json.decode, stateJson or '')
+            if not decoded or type(parsed) ~= 'table' or type(parsed.likes) ~= 'number' then
+                settle({ ok = false, error = 'unexpected marketplace response' })
+                return
+            end
+            settle({
+                ok = true,
+                slug = slug,
+                -- The SERVER'S numbers, carried through untouched. The panel
+                -- renders these rather than its own ±1, so a count cannot drift
+                -- away from the truth over a session — and the count may include
+                -- somebody else's like that landed in between, which is a more
+                -- current number rather than a wrong one.
+                likes = parsed.likes,
+                liked = parsed.liked == true,
+            })
+        end)
+    end)
+    if not dispatched then
+        log('marketplace like bridge failed: ' .. tostring(dispatchErr), 3)
         settle({ ok = false, error = 'marketplace bridge unavailable' })
         return
     end

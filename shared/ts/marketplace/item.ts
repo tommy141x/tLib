@@ -73,6 +73,40 @@ export interface CatalogueItem {
   currentVersion: string;
   sizeBytes: number;
   downloads: number;
+  /**
+   * How many distinct people have liked this item.
+   *
+   * ── ⚠️ OPTIONAL, AND THE OMISSION MEANS SOMETHING DIFFERENT FROM ZERO ─────
+   *
+   * The backend ALWAYS sends this — v2's `toV2Item` emits it unconditionally,
+   * including as `0`. So an absent `likes` does not mean "nobody liked it", it
+   * means **this host does not have likes**: a self-hosted marketplace running
+   * an older build, or a `tmarketplace_base_url` pointed somewhere else.
+   *
+   * That is exactly why it is optional here rather than defaulted to `0` on
+   * arrival. `ItemCard` renders nothing at all when it is absent, and a real
+   * `0 likes` when it is present and zero. Defaulting would turn "we do not
+   * know" into a confident, wrong number on every card — and because the number
+   * is social proof, the wrong direction is the one that reads as "nobody wants
+   * this".
+   *
+   * ⚠️ Therefore `num()` must NOT be applied to it the way it is to `downloads`.
+   * `num()` maps a missing value to 0, which is precisely the collapse above.
+   */
+  likes?: number;
+  /**
+   * Has the player this request was made FOR liked it.
+   *
+   * ⚠️ PRESENT ONLY WHEN THE CALLER ASSERTED AN IDENTITY. v2 omits the key
+   * entirely for a browse with no `X-FiveM-Identity` header, because `false`
+   * would otherwise be indistinguishable from "we did not ask" — and a card that
+   * drew an empty heart on something the player liked yesterday would invite a
+   * second like that the server then refuses.
+   *
+   * So: absent ⇒ the card shows a count and NO affordance ("never a control that
+   * cannot succeed"). Present ⇒ the card shows a working heart in that state.
+   */
+  liked?: boolean;
   createdAt: string;
   /** Sound only. Peak data the card draws a waveform from. */
   previewWaveform?: number[];
@@ -110,6 +144,23 @@ export interface MarketplaceItem {
   current_version: string;
   size_bytes: number;
   downloads: number;
+  /**
+   * How many distinct people have liked this item.
+   *
+   * ⚠️ OPTIONAL, and absence means "this host does not have likes" rather than
+   * "zero likes" — the full argument is on `CatalogueItem.likes` above and is the
+   * reason `toCanonicalItem` carries it conditionally instead of through `num()`.
+   * `ItemCard` checks presence, so getting this wrong prints a confident `0` on
+   * every card against an older host.
+   */
+  likes?: number;
+  /**
+   * Has the player this request was made for liked it.
+   *
+   * ⚠️ ABSENT means "we did not ask" and is NOT `false`. A card with no `liked`
+   * renders a count and no button; see `CatalogueItem.liked`.
+   */
+  liked?: boolean;
   created_at: string;
   /** Sound only. Peak data the card draws a waveform from. */
   preview_waveform?: number[];
@@ -150,6 +201,27 @@ export function toCanonicalItem(raw: CatalogueItem): MarketplaceItem {
     size_bytes: num(raw.sizeBytes),
     downloads: num(raw.downloads),
     created_at: raw.createdAt,
+    /**
+     * ⚠️ `typeof === "number"` AND NOT `num()`, which is the whole point.
+     *
+     * `num()` turns a missing value into `0`, and `0` is a MEANINGFUL like count
+     * — so running these two through it would make a host that has never heard
+     * of likes indistinguishable from an item nobody has liked. Every card
+     * checks presence, so that collapse would print a confident "0 likes" on
+     * everything in the catalogue against an older or self-hosted backend.
+     *
+     * This is the same rule the file header states for `preview_url` and
+     * `preview_colors`, applied to a field where it is easier to get wrong
+     * because the fallback looks harmless.
+     */
+    ...(typeof raw.likes === "number" && Number.isFinite(raw.likes)
+      ? { likes: raw.likes }
+      : {}),
+    // ⚠️ `=== true` is not enough here: a real `false` must survive, because
+    // `false` means "you have not liked this" and absence means "we did not
+    // ask". The two render differently — a working empty heart versus no heart
+    // at all — so this is a presence check and not a truthiness one.
+    ...(typeof raw.liked === "boolean" ? { liked: raw.liked } : {}),
     ...(raw.previewWaveform ? { preview_waveform: raw.previewWaveform } : {}),
     ...(raw.previewColors ? { preview_colors: raw.previewColors } : {}),
     ...(raw.previewUrl ? { preview_url: raw.previewUrl } : {}),

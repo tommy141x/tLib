@@ -37,6 +37,7 @@ import {
   type InstallState,
   ItemCard,
   inspectableIdentity,
+  likeMarketplaceItem,
   type MarketplaceItem,
   matchesInspectionReply,
   type OpenData,
@@ -402,6 +403,74 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     });
   }
 
+  /**
+   * Slugs with a like round trip in flight, so the heart can say so and cannot
+   * be double-pressed into two outbound requests.
+   *
+   * ⚠️ A SET OF SLUGS AND NOT ONE BOOLEAN. The grid renders a whole page of
+   * cards; a single flag would disable every heart on the page while one of them
+   * was waiting.
+   */
+  const [likePending, setLikePending] = createSignal<Record<string, true>>({});
+
+  /**
+   * Toggle this player's like on one item.
+   *
+   * ── ⚠️ NO OPTIMISTIC UPDATE, DELIBERATELY ──────────────────────────────────
+   *
+   * The count and the filled state are both replaced only with what the SERVER
+   * answers. An optimistic ±1 would be wrong in two ways that both show:
+   *
+   *   · The authoritative count may have moved for other reasons — somebody else
+   *     liked it a moment ago — so the server's number is more current rather
+   *     than merely safer.
+   *   · The write is idempotent by design. A second like writes nothing and
+   *     answers the SAME count, so an optimistic increment would paint a number
+   *     the next browse silently contradicts.
+   *
+   * The pending flag is what covers the latency instead, which is honest about
+   * the fact that the answer is not in yet. Same reasoning the roadmap vote seam
+   * records: reconcile against the server rather than keeping your own ±1.
+   */
+  function handleLike(item: MarketplaceItem, next: boolean) {
+    if (likePending()[item.slug]) return;
+    setLikePending((prev) => ({ ...prev, [item.slug]: true }));
+    setOperationError(null);
+    void likeMarketplaceItem(item.slug, next).then(
+      (state) => {
+        setLikePending((prev) => {
+          const { [item.slug]: _done, ...rest } = prev;
+          return rest;
+        });
+        // ⚠️ Patched by SLUG into whatever the list currently holds, rather than
+        // by index or by re-fetching the page. The player may have paged or
+        // changed the search while the round trip was out, in which case the
+        // item is simply no longer there and `map` leaves the list alone — where
+        // an index write would corrupt a different card and a re-fetch would
+        // throw away a scroll position for one number.
+        const patch = (list: MarketplaceItem[]) =>
+          list.map((entry) =>
+            entry.slug === item.slug
+              ? { ...entry, likes: state.likes, liked: state.liked }
+              : entry
+          );
+        setItems(patch);
+        setInstalledMarketplaceItems(patch);
+      },
+      (e: unknown) => {
+        setLikePending((prev) => {
+          const { [item.slug]: _done, ...rest } = prev;
+          return rest;
+        });
+        // ⚠️ The host's own sentence, not a generic one. The marketplace words
+        // its refusals to be shown to a person — "A game server may only like as
+        // a FiveM license…" is more use to whoever is looking at it than
+        // "request failed", and the rate-limit refusal names the wait.
+        setOperationError(e instanceof Error ? e.message : "Could not like this item");
+      }
+    );
+  }
+
   function handleUninstallBySlug(type: "ui" | "sound", slug: string) {
     if (inspectionBlocks(type, slug)) return;
     clearInspection();
@@ -544,6 +613,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
                               onInstall={() => handleInstall(item)}
                               onUninstall={() => handleUninstall(item)}
                               onPreview={() => setPreviewItem(item)}
+                              onLike={(next) => handleLike(item, next)}
+                              likePending={likePending()[item.slug] === true}
                             />
                           )}
                         </For>

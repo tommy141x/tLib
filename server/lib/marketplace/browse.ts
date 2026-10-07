@@ -47,8 +47,10 @@
 import {
   browseCatalogue,
   type CatalogueParams,
+  type LikeState,
   marketplaceApiV2,
   marketplaceHeaders,
+  setCatalogueLike,
 } from "../../../shared/ts/marketplace/catalogue";
 import {
   type MarketplaceItem,
@@ -106,6 +108,45 @@ export async function browseItems(params: BrowseParams): Promise<BrowseResult> {
     nextCursor: page.nextCursor,
     hasMore: page.hasMore,
   };
+}
+
+/**
+ * Like, or un-like, one item for one player.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ⚠️ `license` MUST COME FROM `GetPlayerIdentifierByType(src, 'license')` AND
+ * FROM NOWHERE ELSE.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * This is the whole integrity story of the feature on the client side, so it is
+ * stated at the one function a new caller would reach for:
+ *
+ *   · The marketplace credential on the outbound request is
+ *     `MARKETPLACE_RESOURCE_SECRET`, which is PUBLIC BY DESIGN. It identifies a
+ *     server running tLib and says nothing about a person.
+ *   · The person is named by this argument. Resolved from the `source` of a net
+ *     event, it is a value the player cannot choose, which is exactly what makes
+ *     `UNIQUE(item_id, subject)` on the backend stop a player liking twice.
+ *   · Resolved from ANY other source — a NUI payload, an export argument, a
+ *     convar — it becomes a value the caller chooses, and the per-player
+ *     guarantee is gone. `server/sv_marketplace.lua` is the only place this
+ *     should be filled in.
+ *
+ * ⚠️ AND THE RESIDUAL RISK, WHICH THIS CANNOT FIX: whoever runs the game server
+ * can call the HTTP endpoint directly with any license they invent. The backend
+ * rate-limits by calling server and by subject, which bounds how fast, not
+ * whether. So the count is resistant to a PLAYER and not to an OPERATOR. The
+ * full argument is in tWeb's `src/lib/marketplace/like-identity.ts`.
+ *
+ * `next` is the state being asked for, not a toggle, so the retry a timeout
+ * invites cannot invert anything.
+ */
+export async function likeItem(
+  slug: string,
+  license: string,
+  next: boolean
+): Promise<LikeState> {
+  return setCatalogueLike(slug, license, next, BROWSE_TIMEOUT_MS);
 }
 
 /**

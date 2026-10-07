@@ -178,6 +178,56 @@ export function browseMarketplace(params: BrowseParams, signal?: AbortSignal): P
 }
 
 /**
+ * Like, or un-like, one item — for the player at this NUI frame.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ⚠️ NOTICE WHAT IS *NOT* IN THE PAYLOAD: ANY IDENTITY.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * This sends a slug and a desired state and nothing else. The player's FiveM
+ * license is resolved SERVER-SIDE, from the `source` of the net event, by
+ * `server/sv_marketplace.lua`. That is the single reason the like count is
+ * resistant to an ordinary player at all: a value the NUI sent would be a value
+ * the player chose, and any player could then like as a thousand different
+ * people.
+ *
+ * ⚠️ So do not "optimise" this by passing a license, a server id, or any other
+ * caller-supplied identifier, however convenient. The whole guarantee lives in
+ * the fact that this function cannot say who it is.
+ *
+ * `next` is the STATE being asked for rather than a toggle, so the retry a
+ * timeout invites is free — see `setCatalogueLike` on the server side.
+ */
+export function likeMarketplaceItem(
+  slug: string,
+  next: boolean,
+  signal?: AbortSignal
+): Promise<LikeState> {
+  return nuiRequest<LikeState>(
+    "marketplaceLike",
+    "marketplaceLikeResult",
+    { slug, next },
+    (reply: { likes?: unknown; liked?: unknown }) => {
+      // ⚠️ `typeof` on BOTH. A reply that claims success but carries no numbers
+      // is a bug on the Lua side, and accepting it would paint `0 likes` over a
+      // count that was correct a moment ago — which looks like the like having
+      // DELETED every other like on the item.
+      if (typeof reply.likes !== "number" || typeof reply.liked !== "boolean") {
+        throw new Error("Invalid like response");
+      }
+      return { likes: reply.likes, liked: reply.liked };
+    },
+    signal
+  );
+}
+
+/** The authoritative state the server answers a like with. */
+export interface LikeState {
+  likes: number;
+  liked: boolean;
+}
+
+/**
  * The preview document for a UI item, as text.
  *
  * Text, and not a frame URL, because the caller reads it: it injects the

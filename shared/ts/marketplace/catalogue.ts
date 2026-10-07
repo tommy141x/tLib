@@ -248,6 +248,29 @@ export interface CatalogueParams {
    * has the most downloads. v2's own default is `created_at`.
    */
   sort?: "downloads" | "created_at";
+  /**
+   * The FiveM license of the player this browse is for, if there is one.
+   *
+   * ⚠️ IT TRAVELS AS A HEADER, NOT AS A QUERY PARAMETER, and `catalogueQuery`
+   * deliberately does not serialise it. Three reasons, in order of how much they
+   * would cost:
+   *
+   *   1. A URL is a cache key. Putting a per-player value in it would give every
+   *      player on a server a distinct URL for the same catalogue page and make
+   *      every intermediate cache useless — while ALSO risking the opposite
+   *      failure if something normalised the query string away.
+   *   2. A URL is what gets logged. A license is a durable per-human identifier;
+   *      it belongs in a header that nothing writes to an access log by default.
+   *   3. The backend reads `X-FiveM-Identity` on both the browse and the like
+   *      path, so one spelling serves both and the `liked` flag cannot disagree
+   *      with the write that set it.
+   *
+   * Supplying it makes the response carry `liked` per item and makes it
+   * `private, no-store`. Omitting it changes nothing about what comes back
+   * except that `liked` is absent — which is the state that renders a count with
+   * no button.
+   */
+  identity?: string;
 }
 
 export interface CataloguePage {
@@ -299,6 +322,18 @@ export function toCatalogueItem(raw: Record<string, unknown>): CatalogueItem {
     sizeBytes: num(raw.sizeBytes),
     downloads: num(raw.downloads),
     createdAt: str(raw.createdAt),
+    // ⚠️ NOT through `num()`, unlike `downloads` directly above, and the
+    // difference is load-bearing: `num()` maps a missing value to 0, and 0 is a
+    // real like count. Collapsing the two would make a host that predates likes
+    // indistinguishable from an item nobody has liked, and every consumer checks
+    // presence. See `likes` on `CatalogueItem` in `./item.ts`.
+    ...(typeof raw.likes === "number" && Number.isFinite(raw.likes)
+      ? { likes: raw.likes }
+      : {}),
+    // ⚠️ A presence check, not a truthiness one — a genuine `false` must
+    // survive, because it means "you have not liked this" while absence means
+    // "no identity was asserted". The two render differently.
+    ...(typeof raw.liked === "boolean" ? { liked: raw.liked } : {}),
     ...(waveform ? { previewWaveform: waveform } : {}),
     ...(colors ? { previewColors: colors } : {}),
     ...(typeof raw.thumbnail === "string" ? { thumbnail: raw.thumbnail } : {}),
@@ -326,13 +361,20 @@ function toError(status: number, body: string): CatalogueError {
  * `request_timed_out` rather than "This operation was aborted", and a non-JSON
  * body is `unexpected_response` rather than a parse crash.
  */
-async function getCatalogueJson(url: string, timeoutMs: number): Promise<unknown> {
+async function getCatalogueJson(
+  url: string,
+  timeoutMs: number,
+  extraHeaders?: Record<string, string>
+): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let status = 0;
   let body = "";
   try {
-    const res = await fetch(url, { headers: marketplaceHeaders(), signal: controller.signal });
+    const res = await fetch(url, {
+      headers: marketplaceHeaders(extraHeaders),
+      signal: controller.signal,
+    });
     status = res.status;
     body = await res.text();
     if (!res.ok) throw toError(status, body);
@@ -366,7 +408,20 @@ export function catalogueQuery(params: CatalogueParams): string {
   }
   if (params.limit) qs.set("limit", String(params.limit));
   if (params.sort) qs.set("sort", params.sort);
+  // ⚠️ `params.identity` IS DELIBERATELY NOT SERIALISED HERE. It is a header —
+  // see the field's own note for the three reasons, the first of which is that a
+  // URL is a cache key and a license is per-player. `marketplace-catalogue.test.ts`
+  // asserts its absence from this string, so adding it would fail a test rather
+  // than quietly fragmenting every cache and logging a player identifier.
   return qs.toString();
+}
+
+/** The identity header both the browse and the like path read. */
+export const MARKETPLACE_IDENTITY_HEADER = "X-FiveM-Identity";
+
+/** `{ [MARKETPLACE_IDENTITY_HEADER]: license }`, or nothing. One spelling, one place. */
+function identityHeaders(identity?: string): Record<string, string> | undefined {
+  return identity ? { [MARKETPLACE_IDENTITY_HEADER]: identity } : undefined;
 }
 
 /**
@@ -384,7 +439,7 @@ export async function browseCatalogue(
   const qs = catalogueQuery(params);
   const url = `${marketplaceApiV2()}/items${qs ? `?${qs}` : ""}`;
 
-  const parsed = (await getCatalogueJson(url, timeoutMs)) as {
+  const parsed = (await getCatalogueJson(url, timeoutMs, identityHeaders(params.identity))) as {
     items?: unknown;
     pagination?: Record<string, unknown>;
   } | null;
@@ -402,6 +457,108 @@ export async function browseCatalogue(
     nextCursor:
       typeof page.nextCursor === "number" ? page.nextCursor : (params.cursor ?? 0) + items.length,
     hasMore: page.hasMore === true,
+  };
+}
+
+/* ── Likes ─────────────────────────────────────────────────────────────────── */
+
+/** The authoritative state of one item's likes after a write. */
+export interface LikeState {
+  likes: number;
+  /** Whether the player this call was made for now holds a like on it. */
+  liked: boolean;
+}
+
+/**
+ * Like, or un-like, one item on behalf of one player.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ⚠️ `identity` IS A CLAIM THIS SERVER IS MAKING, NOT A CREDENTIAL THE PLAYER
+ * PRESENTED. READ THIS BEFORE WIRING A NEW CALLER.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The only credential on this request is `MARKETPLACE_RESOURCE_SECRET`, and that
+ * is **public by design** — see its own note above. It says "a server running
+ * tLib"; it says nothing about a person. The player is named by `identity`,
+ * which the CALLER resolved with `GetPlayerIdentifierByType(src, 'license')`.
+ *
+ * So the integrity property is bounded, and it is bounded in a way that happens
+ * to be exactly what was asked for:
+ *
+ *   · ✅ A PLAYER cannot inflate a count. They do not choose their own license —
+ *     the game server resolves it from their Cfx.re entitlement — and the
+ *     backend holds `UNIQUE(item_id, subject)`, so a second like on one item
+ *     writes nothing. This is why `identity` must come from the native and NEVER
+ *     from a NUI payload: a value the client sent is a value the client chose,
+ *     and routing one through here would hand every player the operator's
+ *     capability below.
+ *   · ❌ A SERVER OPERATOR can. Anyone who can call this function can pass any
+ *     hex string. Rate limits on the backend bound how fast; nothing bounds
+ *     whether.
+ *
+ * ⚠️ DO NOT ADD A CONVAR, AN EXPORT ARGUMENT OR ANY OTHER OPERATOR-SUPPLIED
+ * PATH TO `identity`. The one source that makes the player-level guarantee true
+ * is the native, called server-side, for the `source` of the event being
+ * handled. `server/sv_marketplace.lua` is where that happens and it is the only
+ * place it should.
+ *
+ * `next` is the STATE being asked for rather than a toggle, so a retry after a
+ * timeout is free: a second like writes nothing and answers the same numbers,
+ * and an un-like of something never liked is a success.
+ */
+export async function setCatalogueLike(
+  slug: string,
+  identity: string,
+  next: boolean,
+  timeoutMs: number = CATALOGUE_TIMEOUT_MS
+): Promise<LikeState> {
+  if (!slug) throw new CatalogueError("slug_required", 0);
+  // ⚠️ Refused here as well as at the backend. An empty identity would otherwise
+  // produce a 400 from the host that reads, at the panel, as "the marketplace is
+  // down" — and it means a caller forgot to resolve the license, which is a bug
+  // in the caller rather than a transport failure.
+  if (!identity) throw new CatalogueError("identity_required", 0);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let status = 0;
+  let body = "";
+  try {
+    const res = await fetch(`${marketplaceApiV2()}/items/${encodeURIComponent(slug)}/like`, {
+      // ⚠️ POST adds, DELETE withdraws. Not one endpoint with a body: the
+      // backend route declares both methods and takes no body at all, so there
+      // is nothing for a caller to get wrong and nothing to parse on refusal.
+      method: next ? "POST" : "DELETE",
+      headers: marketplaceHeaders(identityHeaders(identity)),
+      signal: controller.signal,
+    });
+    status = res.status;
+    body = await res.text();
+    if (!res.ok) throw toError(status, body);
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new CatalogueError("request_timed_out", 0);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  let parsed: { likes?: unknown; liked?: unknown };
+  try {
+    parsed = JSON.parse(body) as { likes?: unknown; liked?: unknown };
+  } catch {
+    throw new CatalogueError("unexpected_response", status);
+  }
+
+  // ⚠️ The SERVER'S numbers, read as-is, rather than the caller's optimistic
+  // ±1. The count after the write may include a like somebody else cast a
+  // millisecond ago, which is a more current number and not a wrong one — and
+  // using it is what stops a panel's displayed count drifting away from the
+  // truth over a session.
+  return {
+    likes: num(parsed.likes),
+    liked: parsed.liked === true,
   };
 }
 
