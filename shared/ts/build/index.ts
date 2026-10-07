@@ -21,6 +21,21 @@ export {
   step,
 } from "./core.ts";
 export type {
+  DeckCheckResult,
+  DeckPaths,
+  DeckPluginConfig,
+  DeckSourceFile,
+  DeckSourceScan,
+  DeckStamp,
+} from "./deck-pack.ts";
+export {
+  checkDeckArtifact,
+  deckPaths,
+  packDeckPlugin,
+  readDeckStamp,
+  scanDeckSources,
+} from "./deck-pack.ts";
+export type {
   CssContractOptions,
   CssRule,
   ShadowFinding,
@@ -37,6 +52,22 @@ export {
   subjectClasses,
   surfaceClassNames,
 } from "./css-contract.ts";
+/**
+ * The CEF 103 output contract — what a NUI bundle may not contain.
+ *
+ * Deliberately separate from `css-contract.ts`: that one owns the blurred
+ * `box-shadow` length parser and the surface-collision rules, and this one reads
+ * only the BUILT stylesheet for constructs the engine silently drops. Two gates,
+ * no overlap, so neither has to know the other's job.
+ *
+ * It carries two floors — `R-MEDIA-FLOOR` and `R-SIZE-FLOOR` — because "no
+ * `oklch` found" and "no CSS was read" are otherwise the same green. That earned
+ * itself immediately: pointed at a Vite staging directory emptied after assets
+ * are hoisted, it went red on both floors instead of passing confidently on
+ * nothing.
+ */
+export type { CefContractOptions, CefContractResult, CefFinding } from "./cef-output-contract.ts";
+export { checkCefOutput, formatCefResult } from "./cef-output-contract.ts";
 export type { DeadClass, DeadClassOptions } from "./dead-classes.ts";
 export { findDeadClasses, formatDeadClasses, runDeadClassCheck } from "./dead-classes.ts";
 export type { DevConfig, WatcherDef } from "./dev.ts";
