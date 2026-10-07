@@ -6,6 +6,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { assertManifestStaged } from "./manifest-coverage.ts";
+import { describeSanitize, sanitizeStagedSecrets } from "../secrets/release.ts";
 
 export function step(label: string) {
   console.log(`\n→ ${label}`);
@@ -77,9 +78,37 @@ export function addDirToZip(zip: ZipLike, dir: string, zipPrefix: string) {
   }
 }
 
-export function createZip(zip: ZipLike, dist: string, zipPath: string, folderName: string) {
+/**
+ * Layer 2 of the credential gate, applied at the one chokepoint every release
+ * passes through.
+ *
+ * ⚠️ Done HERE, inside `createZip`, on purpose. Before 2026-10-06 exactly one
+ * resource sanitized its staged config (tRadio, with a four-name hand-written
+ * array) and the other eight did not — including tCAD, whose `.env.example`
+ * declares 23 credential keys. A per-resource call is a per-resource chance to
+ * not have one. `createZip` is called by every resource that cuts a zip, with
+ * the staged tree as its second argument, so putting it here is both the
+ * shared implementation and the thin per-resource call.
+ *
+ * Values are blanked, not refused: a release is a derived artifact, so
+ * rewriting its copy is free and cannot destroy anything. (The commit-time
+ * layer refuses instead, because there the file IS the developer's.)
+ *
+ * `expectConfig: false` is for a resource that genuinely ships no config file —
+ * tLib and tAFK. Say why at the call site; the default refusal exists because a
+ * sanitizer that sanitized nothing prints a tick either way.
+ */
+export function createZip(
+  zip: ZipLike,
+  dist: string,
+  zipPath: string,
+  folderName: string,
+  opts: { expectConfig?: boolean } = {}
+) {
   step(`Creating ${folderName}.zip`);
   if (existsSync(zipPath)) rmSync(zipPath);
+  const sanitized = sanitizeStagedSecrets(dist, opts);
+  console.log(describeSanitize(sanitized));
   addDirToZip(zip, dist, folderName);
   zip.writeZip(zipPath);
 
@@ -101,6 +130,12 @@ export interface ProdConfig {
   include: string[];
   /** Required nonempty artifacts, checked before touching an existing distribution. */
   requiredFiles?: string[];
+  /**
+   * Set false only for a resource that ships NO config file. `createZip`
+   * refuses a staged tree with none by default, because a credential sanitizer
+   * that found nothing to sanitize prints the same tick as one that worked.
+   */
+  expectConfig?: boolean;
 }
 
 export function assertProductionFiles(root: string, files: string[]) {
@@ -145,5 +180,7 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
   // rule and a new artifact can never reach a release by being forgotten.
   const dist = join(root, ".build", "dist");
   stageFiles(root, dist, include);
-  createZip(new AdmZipClass(), dist, join(root, ".build", `${name}.zip`), name);
+  createZip(new AdmZipClass(), dist, join(root, ".build", `${name}.zip`), name, {
+    expectConfig: config.expectConfig,
+  });
 }

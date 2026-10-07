@@ -62,3 +62,9 @@ Thumbs.db
 .cache/
 .vite/
 .tmp/
+
+# The developer's real credentials. Never committed, never packaged.
+# The tracked config.lua holds blanks permanently; tlib.secrets overlays this
+# file onto Config at server start. See tLib/shared/imports/secrets/server.lua.
+config.local.lua
+config/config.local.lua

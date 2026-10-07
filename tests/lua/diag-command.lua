@@ -126,12 +126,46 @@ local Diag = dofile('shared/imports/diag/shared.lua')
 
 -- ── isSecretName: the whole point is that it is keyed on the NAME ───────────
 
-for _, name in ipairs({ 'authToken', 'adminPassword', 'discordBotToken', 'webhookUrl',
-                        'apiKey', 'api_key', 'clientSecret', 'licenseKey', 'privateKey' }) do
+-- Asserted as a SET OF NAMES, never as a count. A count passes the moment the
+-- total happens to be right, which is how `AccessKey` went unnoticed: the real
+-- config declares `AccessKey` beside `SecretKey`, the second matched, and any
+-- "how many did we catch" assertion was satisfied by the pair.
+local MUST_MATCH = {
+    -- The nine that were covered before 2026-10-06.
+    'authToken', 'adminPassword', 'discordBotToken', 'webhookUrl',
+    'apiKey', 'api_key', 'clientSecret', 'licenseKey', 'privateKey',
+    -- The six added 2026-10-06, each named for the real key that needs it.
+    'AccessKey',            -- tDB Advanced.S3.AccessKey — the measured miss
+    'access_key_id',        -- the snake-cased spelling of the same thing
+    'privKey',              -- abbreviated private key
+    'keyPassphrase',        -- a passphrase is not a password
+    'bearer',               -- a bare bearer value, with no `token` in the name
+    'signingKey',           -- JWT / webhook signing material
+}
+for _, name in ipairs(MUST_MATCH) do
     must(Diag.isSecretName(name), ('%q was not recognised as a credential name'):format(name))
 end
-for _, name in ipairs({ 'band', 'maxRange', 'speedUnit', 'acePermission', 'frequency' }) do
-    must(not Diag.isSecretName(name), ('%q was treated as a credential'):format(name))
+
+-- The other half of the control, and the half that is easy to omit: a pattern
+-- list widened far enough catches everything, and "everything is a secret"
+-- withholds the whole report. These are real key names from the configs in this
+-- tree and each must stay VISIBLE. `publicKey` is the pointed one — it contains
+-- `key`, so a list that had grown a bare `key` pattern would redact a value
+-- whose entire purpose is to be published.
+for _, name in ipairs({ 'band', 'maxRange', 'speedUnit', 'acePermission', 'frequency',
+                        'dispatchNacId', 'publicKey', 'keybind', 'accessRank',
+                        'keyboardLayout', 'licensePlate_x', 'tokenise' }) do
+    if name == 'licensePlate_x' or name == 'tokenise' then
+        -- Documented false positives, kept here so they are a known cost rather
+        -- than a surprise: substring matching cannot tell `license` in
+        -- `licensePlate` from `license` in `licenseKey`. Nothing in this tree
+        -- uses either name; if something ever does, the gate's per-resource
+        -- allow map is the escape, not a narrowing of the pattern list.
+        must(Diag.isSecretName(name),
+            ('%q stopped being the documented false positive it was recorded as'):format(name))
+    else
+        must(not Diag.isSecretName(name), ('%q was treated as a credential'):format(name))
+    end
 end
 -- Case-insensitive, and matched as a SUBSTRING: a key added later will be named
 -- `Config.myWebhookURL`, not `Config.webhook`.

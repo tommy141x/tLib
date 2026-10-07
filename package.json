@@ -4,12 +4,26 @@
   "license": "MIT",
   "private": true,
   "description": "Shared UI and utility library for FiveM resources",
+  "secretGate": {
+    "ignore": {
+      "tests/lua/config-validate.lua": "a tlib.config VALIDATOR fixture, not a config: its `licenseKey = 'abc123'` is a synthetic input proving a declared string key validates. The config rule matches it only because the basename contains `config`. Ignored by exact path rather than by widening the rule or by allowing `licenseKey` everywhere."
+    }
+  },
   "scripts": {
+    "//secrets:check": "Layer 3 of the credential gate, and the only layer that cannot be skipped: every credential-shaped key in every tracked config file must be BLANK at HEAD. The key set is derived from Diag.SECRET_PATTERNS in tLib (one list, parsed out of the Lua that the runtime redactor uses) rather than hand-listed -- a four-name array is exactly how Advanced.S3.AccessKey went uncovered. Layer 1 is .githooks/pre-commit, which refuses the commit; layer 2 blanks the staged copy of a release. The real value lives in the gitignored config.local.lua sidecar, so there is nothing to strip and nothing a `git pull` can overwrite. Exit 1 = a credential has a value; exit 2 = the gate could not run, which is NOT a pass.",
+    "secrets:check": "bun run scripts/secret-gate.ts",
+    "secrets:install-hooks": "bun run scripts/secret-gate.ts --install-hooks",
+    "//secrets:control": "Negative control for the whole credential gate, end to end in a real git repository: a real `git init`, the real .githooks/pre-commit bytes, a real `git commit` and a real `git show HEAD:`, no stubs. Proves BOTH directions -- a planted credential-shaped key is refused at commit and at HEAD while the working tree keeps its value, and a blank config with a gitignored sidecar passes -- and then runs a BROKEN-GATE DRILL: the same planted credential with the pattern list narrowed so it cannot match MUST go green, without which a red verdict is not evidence the rule caused it. Also runs the Lua overlay suite with SECRETS_CONTROL=1, which deletes the sidecar and requires all 8 apply-assertions to flip.",
+    "secrets:control": "bun run scripts/secret-gate-control.ts && SECRETS_CONTROL=1 bunx --bun --package fengari-node-cli fengari scripts/run-lua-suite.lua tests/lua/secrets-overlay.lua",
+    "//secrets:provision": "Writes (or with --check asserts) the per-resource secret-gate wiring in all 11 sibling resources: .githooks/pre-commit, the four secrets:* package scripts, the config.local.lua .gitignore lines and .gitea/workflows/secrets.yml. Four small things times eleven repos is forty-four chances for one to be the stale one, and a stale gate is silent. Only tLib can see every sibling, so the --check belongs in tLib verify and nowhere else.",
+    "secrets:provision": "bun run scripts/secret-gate-provision.ts",
+    "secrets:provision:check": "bun run scripts/secret-gate-provision.ts --check",
+    "secrets:check-hooks": "bun run scripts/secret-gate.ts --check-hooks",
     "build": "cd client/web && bun run build",
     "dev": "cd client/web && bunx vp dev",
     "prod": "bun run scripts/prod.ts",
     "gallery": "bun run scripts/gallery.ts",
-    "setup": "bun install && cd client/web && bun install",
+    "setup": "bun run secrets:install-hooks && bun install && cd client/web && bun install",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
     "format": "biome format --write .",
@@ -17,8 +31,8 @@
     "check:fix": "biome check --write .",
     "test": "bun test",
     "test:lua": "bun run scripts/test-lua.ts",
-  "//test:lua:control": "Negative control for tests/lua/framerelay-election.lua, the two-client relay suite, and for tests/lua/runtimetxd-create-once.lua. Two planted defects, each of which must turn an EXACT named set of assertions red: `election` makes both clients report themselves the controller (planted in the real code path -- publishTick computes `mine` from tlib.occupancy.isController, so the module genuinely admits two writers on one statebag key, which is the pre-election bug replayed), and `clock` stops the world clock, the module's only notion of time and the one way a relay reasoned entirely about elapsed milliseconds can look perfect while measuring nothing. The runtimetxd half plants its two defects (`nocache`, `notag`) in the MODULE'S OWN SOURCE -- patched into the OS temp dir, since fengari ships no `io` -- and asserts each substitution matched exactly once, because a gsub that matched nothing hands the suite the unmodified module and the control then asserts that correct code is correct. Both runners also check each mode exits NON-ZERO with the control's own summary line rather than an unrelated crash, and that the suite is GREEN at baseline.",
-  "test:lua:control": "bun run scripts/framerelay-control.ts && bun run scripts/runtimetxd-control.ts",
+    "//test:lua:control": "Negative control for tests/lua/framerelay-election.lua, the two-client relay suite, and for tests/lua/runtimetxd-create-once.lua. Two planted defects, each of which must turn an EXACT named set of assertions red: `election` makes both clients report themselves the controller (planted in the real code path -- publishTick computes `mine` from tlib.occupancy.isController, so the module genuinely admits two writers on one statebag key, which is the pre-election bug replayed), and `clock` stops the world clock, the module's only notion of time and the one way a relay reasoned entirely about elapsed milliseconds can look perfect while measuring nothing. The runtimetxd half plants its two defects (`nocache`, `notag`) in the MODULE'S OWN SOURCE -- patched into the OS temp dir, since fengari ships no `io` -- and asserts each substitution matched exactly once, because a gsub that matched nothing hands the suite the unmodified module and the control then asserts that correct code is correct. Both runners also check each mode exits NON-ZERO with the control's own summary line rather than an unrelated crash, and that the suite is GREEN at baseline.",
+    "test:lua:control": "bun run scripts/framerelay-control.ts && bun run scripts/runtimetxd-control.ts",
     "typecheck": "bunx tsc --noEmit -p client/web/tsconfig.json",
     "typecheck:shared": "cd shared/ts && bunx tsc --noEmit -p tsconfig.json",
     "check:imports": "bun run scripts/check-relative-imports.ts",
@@ -27,11 +41,13 @@
     "//check:classes:control": "Negative control for the two CSS-contract gates. Both are cheap to fool with a zero: walkCss returns [] for a directory that does not exist. Plants collisions and blurs in the OS temp dir and requires each to turn an EXACT NAMED SET red, requires a fixture of CORRECT usage (`.panel .toolbar`, a zero-blur shadow) to stay green, and runs a broken-gate drill that removes the rightmost-compound rule and requires the correct fixture to go red -- without which the green case proves nothing.",
     "check:classes:control": "bun run scripts/css-contract-control.ts",
     "scan:solid2": "bun run scripts/solid2-scan.ts",
+    "//check:boolattr": "Solid 2 writes a boolean `true` attribute as the EMPTY string and REMOVES the attribute on `false`; Solid 1 stringified both. So every `[data-x=\"true\"]` selector whose attribute is bound to a boolean in JSX went dead in the migration, silently -- no error, no lint finding, no failing test, just the base rule winning. That is what shipped tRadio's Callsign row with its Set button at half the row width and a label-height too high. Resolves how each attribute is actually PRODUCED before judging: a string ternary, a `String()`, a `dataset` write or static markup is CORRECT and is left alone, and React stringifies booleans so a React file is never a finding. Reports `unknown` and `never-emitted` without failing, because a gate that hard-fails on \"I cannot prove this\" gets routed around. Carries a per-attribute control fixture and requires BOTH readers (CSS selector and UnoCSS variant) to still find it -- deleting the variant reader left an earlier control at 7/7 and green. `--root <dir>` scans a consumer; a Solid 1 root reports `latent` and passes, and must NOT be pre-emptively converted, since presence matches the false state too while `false` still serialises to \"false\". Exit 1 = a dead selector; exit 2 = the control broke, which is NOT a pass.",
+    "check:boolattr": "bun run scripts/boolean-attr-selector-scan.ts",
     "probe:escape": "bun run scripts/probe-escape-layer.ts",
     "//probe:focus": "Proves the shared focus indicator PAINTS PIXELS, in the pinned Chromium 103, inside an overflow-hidden ancestor -- the geometry in which a ring's outward box-shadow is clipped to nothing. Reads each consumer's REAL built stylesheet and asserts every class string appears verbatim in the component source beside it, so it cannot drift into agreeing with itself. NOT in `verify`: it needs tELS, tAFK, tCAD and tRadio/server built first, and `verify` does not build them. Two controls per case, each REQUIRED to paint 0 -- the box-shadow a ring compiles to, and the same outline at a positive offset.",
     "probe:focus": "bun run scripts/probe-focus-paint.ts",
-    "check:regression": "bun run typecheck && bun run typecheck:shared && bun run check:imports && bun run check:classes && bun run check:classes:control && bun run test && bun run test:lua && bun run test:lua:control",
-    "verify": "bun run lint && bun run check:regression && bun run build"
+    "check:regression": "bun run typecheck && bun run typecheck:shared && bun run check:imports && bun run check:classes && bun run check:classes:control && bun run check:boolattr && bun run secrets:provision:check && bun run secrets:control && bun run test && bun run test:lua && bun run test:lua:control",
+    "verify": "bun run secrets:check && bun run lint && bun run check:regression && bun run build"
   },
   "dependencies": {
     "ws": "^8.21.3"

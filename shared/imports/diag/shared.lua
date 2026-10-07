@@ -261,9 +261,27 @@ function Diag.reset() _said = {} end
 -- the guarded failure is a credential key added later by somebody who did not
 -- read §13, and a redactor that has to be updated to keep working is a redactor
 -- that silently stops working.
+--
+-- ⚠️ This list is the SINGLE SOURCE for the commit/release/CI secret gate as
+-- well as for this redactor. `shared/ts/secrets/patterns.ts` PARSES the literal
+-- below out of this file rather than restating it, and
+-- `scripts/secret-gate.test.ts` asserts the two agree as a SET of names. So a
+-- pattern added here is live in the pre-commit hook, in every resource's
+-- release packager and in CI with no second edit — which is the only
+-- arrangement in which the two cannot drift apart.
+--
+-- ⛔ Keep this a flat list of single-quoted lowercase strings on contiguous
+-- lines. The TS parser is deliberately strict and will refuse (not silently
+-- return a short list) on any other shape.
+--
+-- `accesskey`/`access_key` were added 2026-10-06. `Advanced.S3.AccessKey` in
+-- tDB's config.lua is a live credential and `accesskey` is not a substring of
+-- `apikey` — a one-character-off miss that the sibling `SecretKey` masked,
+-- because the pair always appears together and the second of them matched.
 Diag.SECRET_PATTERNS = {
     'secret', 'token', 'password', 'passwd', 'apikey', 'api_key',
     'webhook', 'licence', 'license', 'credential', 'privatekey', 'private_key',
+    'accesskey', 'access_key', 'privkey', 'passphrase', 'bearer', 'signingkey',
 }
 
 --- Does this key name read like a credential?

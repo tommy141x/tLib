@@ -12,6 +12,10 @@ import { runProd } from "../shared/ts/build/index.ts";
 runProd(
   {
     name: "tLib",
+    // tLib is the library, not a configurable resource: it ships no config.lua and
+    // has no credentials of its own. Declared so `createZip`'s credential sanitizer
+    // treats "no config file staged" as expected here and as a refusal everywhere else.
+    expectConfig: false,
     root: join(import.meta.dir, ".."),
     uiBuilds: [
       {
