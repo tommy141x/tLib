@@ -259,6 +259,80 @@ function pickPath(probes: Probes, root: string, candidates: readonly string[]): 
   return "";
 }
 
+// ── The bundled loader ───────────────────────────────────────────────────────
+
+/**
+ * glibc's interpreter, by the only name it has on x86-64.
+ *
+ * Hard-coded rather than read from the binary's `PT_INTERP`, because the name is
+ * the ABI — every x86-64 glibc build names it this — and the alternative is tLib
+ * parsing an ELF header to decide what to exec. The bundling script takes the
+ * real interpreter from `PT_INTERP` and installs it under this name precisely so
+ * nothing at runtime has to look.
+ */
+const LOADER_NAME = "ld-linux-x86-64.so.2";
+
+interface BundledLoader {
+  /** Absolute, realpath'd, proven inside the caller's resource directory. */
+  path: string;
+  /** What `--library-path` is given, for a binary the gate has already resolved. */
+  searchPath(binary: string): string;
+}
+
+/**
+ * The bundled loader, or nothing — in which case the binary is exec'd directly.
+ *
+ * "Or nothing" is the important half and covers four cases, all of them the
+ * normal behaviour rather than an error: the product declares no `loaderDir`;
+ * it declares one that the release does not carry; the directory is there but
+ * holds no loader; or the directory resolves outside the resource. The first
+ * three are a release built on a glibc host for glibc hosts, which is every
+ * release today. The fourth is a symlink escape, and falling back is safe
+ * because the *binary* has already been proven contained — refusing would be
+ * defensible too, but it would mean a planted symlink could stop a working
+ * engine starting, which is a denial of service bought for nothing.
+ *
+ * The loader goes through `contained` like every other path here, not merely
+ * `join`ed onto a contained directory. A directory inside the resource can hold
+ * a symlink pointing at `/bin/sh`, and the loader is the thing that gets exec'd:
+ * checking the directory and not the file would make it the one path in this
+ * module a caller's own shipped tree could aim.
+ */
+function loaderFor(probes: Probes, root: string, loaderDir: string): BundledLoader | undefined {
+  const libraryDir = contained(probes, root, loaderDir);
+  if (!libraryDir) return undefined;
+  const loader = contained(probes, root, `${loaderDir}/${LOADER_NAME}`);
+  if (!loader || !probes.isFile(loader)) return undefined;
+
+  return {
+    path: loader,
+    /**
+     * Two directories, in that order.
+     *
+     * `--library-path` *replaces* `LD_LIBRARY_PATH` rather than adding to it —
+     * see ld.so(8) — so the bundled glibc closure being on it is not enough:
+     * each engine's own shared objects (llama.cpp's 13 dlopen'd ggml CPU
+     * backends among them) sit beside the binary, which is where the
+     * environment variable used to point them. Dropping that directory would
+     * start the process and leave it with no backend at all, which looks like a
+     * broken model rather than a missing path.
+     *
+     * The colon is ld.so's separator and a path containing one cannot be
+     * expressed on this list, so such a directory is left off rather than
+     * silently cutting the search path in half. A resource directory with a
+     * colon in it does not occur under FXServer, and if it ever does, the
+     * bundled closure alone is the safer of the two wrong answers.
+     */
+    searchPath(binary: string): string {
+      const beside = probes.join(binary, "..");
+      if (beside === libraryDir || beside.includes(":") || libraryDir.includes(":")) {
+        return libraryDir;
+      }
+      return `${libraryDir}:${beside}`;
+    },
+  };
+}
+
 // ── The decision ─────────────────────────────────────────────────────────────
 
 function strings(value: unknown): string[] | null {
@@ -404,12 +478,12 @@ export function resolveSpawn(
   let loggable = [...prefix, ...matched.loggable];
   let command = binary;
   if (platform === "linux" && program.loaderDir) {
-    const libraryDir = contained(probes, root, program.loaderDir);
-    const loader = libraryDir ? probes.join(libraryDir, "ld-linux-x86-64.so.2") : "";
-    if (loader && probes.isFile(loader)) {
-      command = loader;
-      argv = ["--library-path", libraryDir, binary, ...argv];
-      loggable = ["--library-path", libraryDir, binary, ...loggable];
+    const loader = loaderFor(probes, root, program.loaderDir);
+    if (loader) {
+      const head = ["--library-path", loader.searchPath(binary), binary];
+      command = loader.path;
+      argv = [...head, ...argv];
+      loggable = [...head, ...loggable];
     }
   }
 

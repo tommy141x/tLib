@@ -27,6 +27,7 @@
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
+import { ensureExecutable } from "./executable";
 import type { Resolved } from "./gate";
 
 /** Which pipe a line came from, because a warning and a failure read alike. */
@@ -109,6 +110,12 @@ export class SpawnHost {
     plan: Resolved,
     stdio: "ignore" | ["pipe", "pipe", "pipe"] | ["ignore", "pipe", "pipe"]
   ): { child: ChildProcess } | { error: string } {
+    // Before the spawn and not before the plan, because `plan.binary` is
+    // whatever is actually exec'd — the program on a glibc host, the bundled
+    // loader on a host that needs one — and only this side of the gate knows
+    // which it ended up being. See executable.ts for why a release arrives
+    // without the bit at all.
+    ensureExecutable(plan.binary);
     try {
       const child = spawn(plan.binary, plan.argv, {
         cwd: plan.cwd,

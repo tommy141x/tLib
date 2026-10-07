@@ -124,6 +124,43 @@ const MUTATIONS: Mutation[] = [
     to: "  let argv = [...matched.argv, ...prefix];",
   },
   {
+    name: "loader-exec-selected",
+    proves: "a bundled loader IS used when the release carries one",
+    from: '  if (platform === "linux" && program.loaderDir) {',
+    to: '  if (false && platform === "linux" && program.loaderDir) {',
+  },
+  {
+    name: "direct-exec-fallback",
+    proves:
+      "a program with no bundled loader is STILL exec'd directly — the inverse assertion, and the one that is production today",
+    from: [
+      "  const libraryDir = contained(probes, root, loaderDir);",
+      "  if (!libraryDir) return undefined;",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: gate.ts's own source text, matched literally
+      "  const loader = contained(probes, root, `${loaderDir}/${LOADER_NAME}`);",
+      "  if (!loader || !probes.isFile(loader)) return undefined;",
+    ].join(String.fromCharCode(10)),
+    to: [
+      "  const libraryDir = contained(probes, root, loaderDir) || root;",
+      "  const loader = probes.resolve(libraryDir, LOADER_NAME);",
+    ].join(String.fromCharCode(10)),
+  },
+  {
+    name: "loader-containment",
+    proves: "a loader symlinked out of the resource is not exec'd",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: gate.ts's own source text, matched literally
+    from: "  const loader = contained(probes, root, `${loaderDir}/${LOADER_NAME}`);",
+    to: "  const loader = probes.join(libraryDir, LOADER_NAME);",
+  },
+  {
+    name: "library-path-keeps-the-engine-directory",
+    proves:
+      "--library-path carries the engine's own directory as well as the bundle, since it REPLACES LD_LIBRARY_PATH",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: gate.ts's own source text, matched literally
+    from: "      return `${libraryDir}:${beside}`;",
+    to: "      return libraryDir;",
+  },
+  {
     name: "author-is-not-a-gate",
     proves: "a mismatched author warns and does NOT refuse — the inverse assertion",
     from: "  if (declared.includes(caller.author)) return undefined;",

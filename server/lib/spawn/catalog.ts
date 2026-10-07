@@ -129,6 +129,16 @@ export interface Program {
    * ships `ld-linux-x86-64.so.2` and its libraries. tLib builds that argv
    * (`<loader> --library-path <dir> <binary> …`) rather than letting the caller
    * hand over a command, which would be a path the caller aims again.
+   *
+   * **Declaring it is not the same as requiring it.** The directory is resolved
+   * through the containment rule like everything else, and when it is absent —
+   * or holds no loader, or resolves outside the resource — the gate execs the
+   * binary directly, which is what every glibc host does today. So a product
+   * can declare the loader before it ships one: a release built without the
+   * bundle behaves exactly as it did before the declaration, and a release
+   * built with it stops depending on the host's interpreter. The alternative,
+   * refusing to start when a declared loader is missing, would turn an
+   * optimisation for musl hosts into an outage on the hosts that already work.
    */
   loaderDir?: string;
   /**
@@ -342,11 +352,20 @@ export const FAMILY: Caller[] = [
   },
   {
     resource: "tRadio",
+    // tRadio ships the same three engines tAI's llama-server comes from, and
+    // execs them the same way: through the bundled loader when the release
+    // carries one, directly when it does not. The loader directory is per engine
+    // rather than one shared `server/bin/linux/lib`, for the reason
+    // vendor-local-engine.ts already keeps the engines apart — llama.cpp and
+    // whisper.cpp both ship a `libggml` built from different revisions, and the
+    // loser of a shared directory is handed a library it was not linked against.
+    // Three ~15 MB closures is the price of that not being a possibility.
     author: "TIMMYG Studios",
     programs: [
       llamaServer({
         win32: "server/bin/win/llama/llama-server.exe",
         linux: "server/bin/linux/llama/llama-server",
+        loaderDir: "server/bin/linux/llama/lib",
       }),
       {
         id: "whisper-server",
@@ -354,6 +373,7 @@ export const FAMILY: Caller[] = [
           win32: ["server/bin/win/whisper/whisper-server.exe"],
           linux: ["server/bin/linux/whisper/whisper-server"],
         },
+        loaderDir: "server/bin/linux/whisper/lib",
         cwd: ["", "server/bin/win/whisper", "server/bin/linux/whisper"],
         env: ["LD_LIBRARY_PATH"],
         invocations: [
@@ -379,6 +399,7 @@ export const FAMILY: Caller[] = [
           win32: ["server/bin/win/piper/piper.exe"],
           linux: ["server/bin/linux/piper/piper"],
         },
+        loaderDir: "server/bin/linux/piper/lib",
         cwd: ["", "server/bin/win/piper", "server/bin/linux/piper"],
         env: ["LD_LIBRARY_PATH"],
         invocations: [

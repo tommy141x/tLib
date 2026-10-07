@@ -127,6 +127,41 @@ function probesFor(shape: Shape, overrides: Partial<Probes> = {}): Probes {
   };
 }
 
+/**
+ * The same probes with extra files bolted on, for layouts no release has yet.
+ *
+ * The bundled loader is the case this exists for. It cannot go in
+ * `filesystem()`: putting it there would make loader-exec the default for every
+ * tRadio assertion in this file, and the fact under test is that *both* forms
+ * are reachable — direct-exec is what every glibc host does today and must keep
+ * doing, so it has to stay the behaviour of the unmodified fixture.
+ */
+function probesPlus(
+  shape: Shape,
+  extra: Record<string, string>,
+  directories: string[] = [],
+  overrides: Partial<Probes> = {}
+): Probes {
+  const real = { ...filesystem(shape), ...extra };
+  return {
+    resourcePath: (resource) => (real[shape.at(resource)] ? shape.at(resource) : ""),
+    realpath: (target) => {
+      const resolved = real[target];
+      if (!resolved) throw new Error(`ENOENT: ${target}`);
+      return resolved;
+    },
+    isFile: (target) =>
+      Boolean(real[target]) && !isDirectory(shape, target) && !directories.includes(target),
+    sha256: () => "0".repeat(64),
+    authors: () => ["Tommy Johnston", "TIMMYG Studios"],
+    platform: () => shape.platform,
+    join: shape.join,
+    resolve: shape.resolve,
+    sep: shape.sep,
+    ...overrides,
+  };
+}
+
 /** The fixture directories, so `isFile` can say no to them. */
 function isDirectory(shape: Shape, target: string): boolean {
   return (
@@ -436,6 +471,150 @@ for (const shape of [POSIX, WINDOWS]) {
       );
       expect(plan).toHaveProperty("error");
     });
+  });
+
+  /**
+   * Loader-exec against direct-exec, which is one decision with two right
+   * answers rather than a feature with an off switch.
+   *
+   * Upstream llama.cpp publishes one Linux x64 build and it is glibc-linked, so
+   * on a musl or old-glibc host the kernel cannot find the binary's interpreter
+   * and the exec fails before `main` — naming the *binary*, which reads as a
+   * corrupt or wrong-architecture download. The products answer that by
+   * shipping glibc's loader and its libraries inside the resource and running
+   * the binary through them.
+   *
+   * No tRadio release carries that bundle yet, so **the fixture without a
+   * loader is production** and the assertions that it still execs directly are
+   * not the optional half of this block. A declaration that broke a working
+   * Debian host would be a worse bug than the one it fixes.
+   */
+  describe(`${shape.label}: the bundled loader`, () => {
+    const ENGINE_ARGS = [
+      "--model",
+      "/srv/models/qwen3-4b.gguf",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18291",
+    ];
+    const engineDir = shape.join(shape.llamaTRadio, "..");
+    const libDir = shape.join(engineDir, "lib");
+    const loaderPath = shape.join(libDir, "ld-linux-x86-64.so.2");
+    const bundle = { [libDir]: libDir, [loaderPath]: loaderPath };
+
+    const llama = (p: Probes) =>
+      resolveSpawn("tRadio", { program: "llama-server", args: ENGINE_ARGS }, p);
+
+    it("execs the binary directly when the release carries no loader", () => {
+      const plan = llama(probes());
+      expect((plan as Answer).binary).toBe(shape.llamaTRadio);
+      expect((plan as Answer).argv).toEqual(ENGINE_ARGS);
+    });
+
+    it("execs directly when the loader directory is there but empty", () => {
+      // A bundle step that ran and produced nothing, or a zip that dropped the
+      // only file in the directory. Starting the engine the old way beats
+      // refusing to start it at all.
+      const plan = llama(probesPlus(shape, { [libDir]: libDir }, [libDir]));
+      expect((plan as Answer).binary).toBe(shape.llamaTRadio);
+      expect((plan as Answer).argv).toEqual(ENGINE_ARGS);
+    });
+
+    it("ignores a loader sitting beside a program that declares no loaderDir", () => {
+      // tDB's runtime is fetched on the host that will run it, so PocketBase
+      // has no loaderDir and a `lib/` appearing next to it means nothing. The
+      // catalog decides this, not the filesystem.
+      const tdbLib = shape.join(shape.pocketbase, "..", "lib");
+      const tdbLoader = shape.join(tdbLib, "ld-linux-x86-64.so.2");
+      const plan = resolveSpawn(
+        "tDB",
+        { program: "pocketbase", args: SERVE },
+        probesPlus(shape, { [tdbLib]: tdbLib, [tdbLoader]: tdbLoader }, [tdbLib])
+      );
+      expect((plan as Answer).binary).toBe(shape.pocketbase);
+      expect((plan as Answer).argv).toEqual(SERVE);
+    });
+
+    if (shape.platform === "linux") {
+      it("execs through the bundled loader when one is present", () => {
+        const plan = llama(probesPlus(shape, bundle, [libDir]));
+        expect((plan as Answer).binary).toBe(loaderPath);
+        expect((plan as Answer).argv).toEqual([
+          "--library-path",
+          `${libDir}:${engineDir}`,
+          shape.llamaTRadio,
+          ...ENGINE_ARGS,
+        ]);
+      });
+
+      it("puts the engine's own directory on the library path too", () => {
+        // `--library-path` REPLACES LD_LIBRARY_PATH rather than adding to it, and
+        // llama.cpp's 13 dlopen'd ggml CPU backends live beside the binary, not
+        // in the bundle. Dropping that directory starts a process with no
+        // backend at all, which looks like a broken model rather than a path.
+        const argv = (llama(probesPlus(shape, bundle, [libDir])) as Answer).argv;
+        expect(argv[1]).toBe(`${libDir}:${engineDir}`);
+      });
+
+      it("logs the loader form rather than the plain command", () => {
+        const plan = llama(probesPlus(shape, bundle, [libDir])) as Answer;
+        expect(plan.loggable).toEqual(plan.argv);
+      });
+
+      it("still refuses an argument the invocation does not declare", () => {
+        // The loader is prepended after the argument matching, so it cannot
+        // become a way past it.
+        const plan = resolveSpawn(
+          "tRadio",
+          { program: "llama-server", args: [...ENGINE_ARGS, "--rpc", "0.0.0.0:1"] },
+          probesPlus(shape, bundle, [libDir])
+        );
+        expect(plan).toHaveProperty("error");
+      });
+
+      it("execs directly when the loader resolves outside the resource", () => {
+        // A symlink inside the shipped tree pointing at /bin/sh. The binary is
+        // already proven contained, so falling back is safe — and refusing
+        // would let a planted symlink stop a working engine from starting.
+        const real = { ...filesystem(shape), ...bundle };
+        const plan = llama(
+          probesPlus(shape, bundle, [libDir], {
+            realpath: (target) => {
+              if (target === loaderPath) return OUTSIDE(shape);
+              const resolved = real[target];
+              if (!resolved) throw new Error(`ENOENT: ${target}`);
+              return resolved;
+            },
+          })
+        );
+        expect((plan as Answer).binary).toBe(shape.llamaTRadio);
+        expect((plan as Answer).argv).toEqual(ENGINE_ARGS);
+      });
+
+      it("covers whisper-server and piper, not only llama-server", () => {
+        // All three engines are the same upstream problem, and a loader
+        // declared on one of three is a support ticket for the other two.
+        const piperLib = shape.join(shape.piper, "..", "lib");
+        const piperLoader = shape.join(piperLib, "ld-linux-x86-64.so.2");
+        const plan = resolveSpawn(
+          "tRadio",
+          { program: "piper", args: ["--model", "/srv/voices/en.onnx", "-f", "/tmp/out.wav"] },
+          probesPlus(shape, { [piperLib]: piperLib, [piperLoader]: piperLoader }, [piperLib])
+        );
+        expect((plan as Answer).binary).toBe(piperLoader);
+        expect((plan as Answer).argv[2]).toBe(shape.piper);
+      });
+    } else {
+      it("ignores a bundled loader on Windows", () => {
+        // There is no `lib/` on a Windows release and an `ld-linux-*.so.2`
+        // there would be a mistake, not an instruction. The gate branches on
+        // the platform, so this cannot be reached by shipping the wrong file.
+        const plan = llama(probesPlus(shape, bundle, [libDir]));
+        expect((plan as Answer).binary).toBe(shape.llamaTRadio);
+        expect((plan as Answer).argv).toEqual(ENGINE_ARGS);
+      });
+    }
   });
 
   describe(`${shape.label}: pinning`, () => {
