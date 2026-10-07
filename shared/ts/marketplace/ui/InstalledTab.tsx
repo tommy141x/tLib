@@ -4,6 +4,7 @@ import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconSearch from "~icons/lucide/search";
 import IconTrash2 from "~icons/lucide/trash-2";
 import { NuiButton } from "../../nui-kit/NuiButton";
+import { isInstallBusy } from "../install-machine";
 import { InstallError } from "./InstallError";
 import { inspectableIdentity } from "./inspection";
 import {
@@ -182,7 +183,8 @@ function InstalledItemCard(props: {
   inspection: InspectionState | null;
 }) {
   const s = () => props.installState;
-  const busy = () => s().state === "installing" || s().state === "uninstalling";
+  // Third copy of this boolean before `../install-machine` existed.
+  const busy = () => isInstallBusy(s());
   const managementBlocked = () => {
     const state = props.inspection;
     return state !== null && (state.state !== "ready" || state.summary.managementBlocked);

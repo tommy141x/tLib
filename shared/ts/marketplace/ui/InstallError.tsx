@@ -1,13 +1,11 @@
 import { Show } from "solid-js";
+import { installError } from "../install-machine";
 import type { InstallState } from "./types";
 
 export function InstallError(props: { state: InstallState }) {
-  const message = () => {
-    const state = props.state;
-    return state.state === "done" && !state.ok
-      ? (state.error ?? "Could not install this item. Try again.")
-      : null;
-  };
+  // `installError` owns the fallback now. This file and `ItemCard.tsx` each had
+  // their own, and they did not match.
+  const message = () => installError(props.state);
   return (
     <Show when={message()}>
       <p role="alert" class="mp-inline-error">

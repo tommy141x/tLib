@@ -5,6 +5,13 @@ import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconPlay from "~icons/lucide/play";
 import IconTrash2 from "~icons/lucide/trash-2";
 import { NuiButton } from "../../nui-kit/NuiButton";
+import {
+  INSTALL_ACTION_LABEL,
+  installAction,
+  installError,
+  isInstallBusy,
+  isInstalled,
+} from "../install-machine";
 import { InstallError } from "./InstallError";
 import { formatBytes, type InstallState, type MarketplaceItem } from "./types";
 
@@ -16,20 +23,14 @@ export function ItemCard(props: {
   onPreview: () => void;
 }) {
   const s = () => props.installState;
-  const installError = () => {
-    const st = s();
-    return st.state === "done" && !st.ok ? (st.error ?? "Could not install this item") : undefined;
-  };
-  const busy = () => s().state === "installing" || s().state === "uninstalling";
-  const isInstalled = () => s().state === "installed";
-
-  const installLabel = () => {
-    const st = s();
-    if (st.state === "installing") return "Installing…";
-    if (st.state === "installed") return "Reinstall";
-    if (st.state === "done" && !st.ok) return "Retry";
-    return "Install";
-  };
+  // All four derived from `../install-machine`, which is also where the overlay
+  // and the Installed tab read them from. The `installError` fallback used to
+  // differ between this file and `InstallError.tsx`, so one item could word its
+  // own failure two ways depending on which surface you were looking at.
+  const errorMessage = () => installError(s());
+  const busy = () => isInstallBusy(s());
+  const installed = () => isInstalled(s());
+  const installLabel = () => INSTALL_ACTION_LABEL[installAction(s())];
 
   return (
     <div class="mp-card">
@@ -64,7 +65,7 @@ export function ItemCard(props: {
             </Show>
           </NuiButton>
 
-          <Show when={isInstalled() || s().state === "uninstalling"}>
+          <Show when={installed() || s().state === "uninstalling"}>
             <NuiButton
               class="mp-action mp-delete"
               aria-label="Delete from server"
@@ -86,7 +87,7 @@ export function ItemCard(props: {
             disabled={busy()}
             aria-busy={busy() ? "true" : "false"}
             onClick={props.onInstall}
-            title={installError()}
+            title={errorMessage()}
           >
             <Show when={s().state === "installing"} fallback={<IconDownload class="w-3 h-3" />}>
               <IconLoaderCircle class="w-3 h-3 animate-spin" />

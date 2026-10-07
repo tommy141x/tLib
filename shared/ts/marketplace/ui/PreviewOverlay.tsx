@@ -7,6 +7,12 @@ import IconPlay from "~icons/lucide/play";
 import IconTrash2 from "~icons/lucide/trash-2";
 import { buildHudPreviewScript } from "../../hud-preview-script";
 import { NuiButton } from "../../nui-kit/NuiButton";
+import {
+  INSTALL_ACTION_LABEL,
+  installAction,
+  isInstallBusy,
+  isInstalled,
+} from "../install-machine";
 import { previewMarketplaceHtml } from "./browse";
 import { InstallError } from "./InstallError";
 import { parsePreviewCanvasSize } from "./preview-canvas";
@@ -23,16 +29,12 @@ export function PreviewOverlay(props: {
   previewState?: Record<string, unknown> | null;
 }) {
   const s = () => props.installState;
-  const busy = () => s().state === "installing" || s().state === "uninstalling";
-  const isInstalled = () => s().state === "installed";
-
-  const installLabel = () => {
-    const st = s();
-    if (st.state === "installing") return "Installing…";
-    if (st.state === "installed") return "Reinstall";
-    if (st.state === "done" && !st.ok) return "Retry";
-    return "Install";
-  };
+  // From `../install-machine`. This block was a VERBATIM copy of the one in
+  // `ItemCard.tsx` — the same union answered the same three questions twice,
+  // which is exactly the shape that drifts.
+  const busy = () => isInstallBusy(s());
+  const installed = () => isInstalled(s());
+  const installLabel = () => INSTALL_ACTION_LABEL[installAction(s())];
 
   return (
     <div class="mp-preview absolute inset-0 flex flex-col p-3 gap-2">
@@ -48,7 +50,7 @@ export function PreviewOverlay(props: {
         </Show>
         <div class="flex-1" />
         <div class="flex items-center gap-1 shrink-0">
-          <Show when={isInstalled() || s().state === "uninstalling"}>
+          <Show when={installed() || s().state === "uninstalling"}>
             <NuiButton
               class="mp-action mp-delete"
               aria-label="Delete from server"

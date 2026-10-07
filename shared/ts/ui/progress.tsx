@@ -35,10 +35,16 @@ type ProgressProps = {
 } & VariantProps<typeof progressVariants>;
 
 export const Progress: Component<ProgressProps> = (props) => {
-  const variant = props.variant || "linear";
-  const size = props.size || 120;
-  const thickness = props.thickness || 12;
-  const height = props.thickness || 8;
+  // Accessors, NOT values — the same rule `badge.tsx` documents. A Solid component body runs
+  // exactly once, so `const variant = props.variant || "linear"` reads the prop at setup and a
+  // later change never reaches the DOM: not the `class`, not the three CSS variables, and not
+  // the circular/linear branch. As functions the reads happen inside the JSX bindings, which
+  // Solid tracks. (`height` deliberately reads `thickness` with a different default — one prop
+  // drives the circle's stroke and the bar's height, unchanged here.)
+  const variant = () => props.variant || "linear";
+  const size = () => props.size || 120;
+  const thickness = () => props.thickness || 12;
+  const height = () => props.thickness || 8;
 
   return (
     <ArkProgress.Root
@@ -50,11 +56,11 @@ export const Progress: Component<ProgressProps> = (props) => {
       orientation={props.orientation}
       translations={props.translations}
       id={props.id}
-      class={cn(progressVariants({ variant }), props.class)}
+      class={cn(progressVariants({ variant: variant() }), props.class)}
       style={{
-        "--size": `${size}px`,
-        "--thickness": `${thickness}px`,
-        "--height": `${height}px`,
+        "--size": `${size()}px`,
+        "--thickness": `${thickness()}px`,
+        "--height": `${height()}px`,
       }}
     >
       <Show when={props.label || props.showValue}>
@@ -69,7 +75,11 @@ export const Progress: Component<ProgressProps> = (props) => {
           </Show>
         </div>
       </Show>
-      {variant === "circular" ? (
+      {/* A ternary, not a `Show`: Solid's compiler wraps a JSX expression slot that holds a
+          reactive read, so this branch does re-evaluate — which is exactly what
+          `const variant = …` in the body could not do. `solid/prefer-show` is deliberately
+          off in this tree (tRadio's eslint.config.mjs:482), so a ternary is house style. */}
+      {variant() === "circular" ? (
         <div class="flex items-center justify-center">
           <div class="relative">
             <ArkProgress.Circle

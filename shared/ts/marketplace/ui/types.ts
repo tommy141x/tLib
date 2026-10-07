@@ -43,12 +43,16 @@ export interface OpenData {
   previewState?: Record<string, unknown>;
 }
 
-export type InstallState =
-  | { state: "idle" }
-  | { state: "installing" }
-  | { state: "uninstalling" }
-  | { state: "installed" }
-  | { state: "done"; ok: boolean; error?: string };
+/**
+ * Re-exported, NOT redeclared — same rule as `MarketplaceItem` above.
+ *
+ * The union moved to `../install-machine` along with the three predicates every
+ * surface was deriving from it by hand. It is re-exported here because the
+ * components next door import their types from this file and because
+ * `./index.tsx` is the package's public surface; the declaration lives in one
+ * place.
+ */
+export type { InstallState } from "../install-machine.ts";
 
 export type InspectionState = {
   request: InspectionRequest;

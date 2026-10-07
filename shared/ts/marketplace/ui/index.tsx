@@ -32,6 +32,20 @@
 import "./marketplace.css";
 
 export { NuiButton } from "../../nui-kit/NuiButton";
+// The install state machine is headless and lives one level up, in
+// `../install-machine`. It is surfaced through this barrel because a host that
+// composes these parts needs the same predicates to drive them — and because a
+// host deriving `busy` itself is how three copies of it appeared in this
+// directory in the first place.
+export {
+  INSTALL_ACTION_LABEL,
+  INSTALL_FAILED_FALLBACK,
+  type InstallAction,
+  installAction,
+  installError,
+  isInstallBusy,
+  isInstalled,
+} from "../install-machine";
 export * from "./browse";
 export { ErrorPane, InstallError } from "./InstallError";
 export { InstalledTab } from "./InstalledTab";
