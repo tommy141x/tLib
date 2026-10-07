@@ -255,6 +255,14 @@ function soundstore.open(opts)
     --    is exactly the case that needs healing most.
     for _, key in ipairs(keys) do
         if not self.toneWavMap[key] then
+            -- A default sound's file MUST be named in lowercase. This is an
+            -- invariant, not a convenience: `diskSet` is keyed by the real
+            -- directory entry, so a shipped `KA_BAND.wav` is simply never found
+            -- by this lookup on either platform. The fallback below is worse
+            -- than that -- `LoadResourceFile` opens case-insensitively on
+            -- Windows and case-sensitively on Linux, so a capitalised default
+            -- would re-seed on a dev box and silently not re-seed on a Linux
+            -- server. Lowercase the file, do not "fix" this by folding case.
             local filename = key:lower() .. ".wav"
             local present
             if diskSet then
