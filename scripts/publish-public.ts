@@ -106,7 +106,21 @@ try {
   for (const sha of todo) {
     const subject = git(["log", "-1", "--format=%s", sha]);
 
-    // -n so the private paths can be dropped before anything is recorded.
+    // Decide BEFORE cherry-picking, not after. A commit that touches only
+    // private paths has nothing to publish, and picking it is not merely
+    // wasted work: the internal/ history arrived by subtree from a repo with
+    // its own root, so those commits conflict against a branch that shares no
+    // ancestry with them. Reading the paths first skips them cleanly.
+    const touched = git(["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", sha])
+      .split("\n")
+      .filter(Boolean);
+    if (touched.every((p) => PRIVATE.some((d) => p === d || p.startsWith(`${d}/`)))) {
+      skipped++;
+      continue;
+    }
+
+    // -n so any private path the commit also touched is dropped before
+    // anything is recorded.
     if (tryGit(["cherry-pick", "-n", "--allow-empty", sha], work) === null) {
       console.error(`publish-public: ${sha.slice(0, 9)} ${subject}`);
       console.error(`  conflicted. The worktree is at ${work} for inspection; resolve or reset.`);
