@@ -1,3 +1,5 @@
+![tLib](docs/public/banner.jpg)
+
 # tLib
 
 A shared utility library for FiveM resources. Provides a UI component suite (menus, dialogs, toasts, themes), 40 reusable Lua import modules (access, permission, config, KVP, settings, platform, and more), and TypeScript/NUI utilities (3D gizmo, undo system, coordinate helpers) that other resources can depend on.
