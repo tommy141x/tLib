@@ -8,6 +8,27 @@ end
 
 local platform = { _engine = "fivem" }
 
+--- Whether a BOOL native said yes.
+---
+--- MEASURED 2026-09-26, FiveM Enhanced: every BOOL native reached from Lua here
+--- returns the NUMBER 1, not `true` -- DoesEntityExist, NetworkDoesNetworkIdExist,
+--- IsPedInAnyVehicle, IsEntityAVehicle and HasModelLoaded were all checked with
+--- `type()` and all answered "number". So `native(...) == true` is ALWAYS FALSE, and
+--- the code below used to be exactly that.
+---
+--- It cost a full debugging session: screentarget's `exists` provider rejected every
+--- entity that existed, so no vehicle ever qualified as a screen target and the props
+--- on all three devices stayed dark -- no browser, no backlight, no lamps -- while
+--- every unit test passed, because the suites INJECT their own providers and so never
+--- run a real native.
+---
+--- `not not v` is NOT the fix: 0 is truthy in Lua, so it would turn every "no" into a
+--- "yes". Both shapes have to be spelled out.
+local function nativeTruth(v)
+    if v == true then return true end
+    return type(v) == "number" and v ~= 0
+end
+
 function platform.getMyId()
     return GetPlayerServerId(PlayerId())
 end
@@ -39,7 +60,10 @@ function platform.getMyVehicle()
         modelHash = GetEntityModel(veh),
         isDriver = GetPedInVehicleSeat(veh, -1) == ped,
         isEmergency = cls == 18,
-        isEngineOn = GetIsVehicleEngineRunning(veh),
+        -- Through nativeTruth for the same reason isEntityValid is: this is a
+        -- BOOL native, so it answers with the number 0 for "off", and 0 is
+        -- truthy. A consumer branching on `v.isEngineOn` saw every engine as on.
+        isEngineOn = nativeTruth(GetIsVehicleEngineRunning(veh)),
     }
 end
 
@@ -188,34 +212,17 @@ function platform.getNetworkEntityPosition(networkId)
     return { x = c.x, y = c.y, z = c.z, speed = GetEntitySpeed(entity) }
 end
 
---- Whether a BOOL native said yes.
----
---- MEASURED 2026-09-26, FiveM Enhanced: every BOOL native reached from Lua here
---- returns the NUMBER 1, not `true` -- DoesEntityExist, NetworkDoesNetworkIdExist,
---- IsPedInAnyVehicle, IsEntityAVehicle and HasModelLoaded were all checked with
---- `type()` and all answered "number". So `native(...) == true` is ALWAYS FALSE, and
---- the code below used to be exactly that.
----
---- It cost a full debugging session: screentarget's `exists` provider rejected every
---- entity that existed, so no vehicle ever qualified as a screen target and the props
---- on all three devices stayed dark -- no browser, no backlight, no lamps -- while
---- every unit test passed, because the suites INJECT their own providers and so never
---- run a real native.
----
---- `not not v` is NOT the fix: 0 is truthy in Lua, so it would turn every "no" into a
---- "yes". Both shapes have to be spelled out.
-local function nativeTruth(v)
-    if v == true then return true end
-    return type(v) == "number" and v ~= 0
-end
-
 function platform.isNetworkIdValid(netId)
     if type(NetworkDoesNetworkIdExist) ~= "function" then return false end
     return nativeTruth(NetworkDoesNetworkIdExist(netId))
 end
 
 function platform.isEntityValid(handle)
-    return DoesEntityExist(handle)
+    -- Through nativeTruth, like isNetworkIdValid above and like the server
+    -- twin. This returned the raw native for a while, which is the NUMBER 0 for
+    -- a destroyed entity -- and 0 is truthy in Lua, so every caller spelling the
+    -- check as `not isEntityValid(e)` read a dead entity as alive.
+    return nativeTruth(DoesEntityExist(handle))
 end
 
 function platform.getNetworkId(handle)
@@ -360,7 +367,7 @@ end
 --- under the other, it is idempotent under both, and it costs one native call
 --- on a path that runs when a UI closes. That is cheaper than being wrong.
 ---
---- ⚠️ Do not "simplify" this back to two calls without a measurement in the
+--- Do not "simplify" this back to two calls without a measurement in the
 --- game. `IsNuiFocusKeepingInput()` is the oracle; read it after a release.
 local function releaseNuiFocus()
     SetNuiFocusKeepInput(false)
@@ -544,8 +551,15 @@ do
         -- Best-effort report to tLib so conflicts can be found ACROSS resources.
         -- Intra-resource conflicts are findable here; the live ones are not —
         -- tELS's PA mic and tRadio's push-to-talk both default to B, and neither
-        -- VM can see the other. pcall-guarded because an older tLib has no such
-        -- export and a missing export raises rather than returning nil.
+        -- VM can see the other.
+        --
+        -- The pcall is NOT a version fallback — this module and
+        -- client/cl_keybinds.lua's `ReportKeybind` ship in the same tLib and
+        -- cannot disagree about whether the export exists. It is there because
+        -- consumers call bindKey at FILE SCOPE, so tLib's own client VM may not
+        -- have registered its exports yet, and a missing export RAISES rather
+        -- than returning nil. A diagnostic must never take a player's keybinds
+        -- down with it.
         pcall(function()
             exports[tLibName]:ReportKeybind(entry)
         end)
@@ -603,14 +617,14 @@ do
     ---       when    = SOME_FLAG,         -- false => skip registration entirely
     ---     }
     ---
-    --- ⚠️ `token` exists because **a command name IS the stored binding**. FiveM
+    --- `token` exists because **a command name IS the stored binding**. FiveM
     --- persists a player's rebind against the command token, so renaming a token
     --- silently discards that rebind and the key reverts to default. tRadio's
     --- `talkOnRadio`/`toggleradioui` and tELS's 32 `lbar_*` tokens therefore
     --- cannot be migrated to a namespaced form — pass them as `token` and leave
     --- them alone. New binds should use `id` and get namespacing for free.
     ---
-    --- ⚠️ `when` is not sugar for an `if` around the call. A RegisterKeyMapping is
+    --- `when` is not sugar for an `if` around the call. A RegisterKeyMapping is
     --- permanent in the player's FiveM settings the moment it is first seen, so a
     --- bind registered once and later removed leaves a dead row in their control
     --- list forever. Gate it here rather than registering speculatively.
