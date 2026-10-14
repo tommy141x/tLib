@@ -82,7 +82,11 @@ test("facial clips are recognised by their track ids, not by name", () => {
     [24, 25, 26, 134, 137, 138, 139, 140],
   ]) {
     const c = classifyAnimation(
-      anim(276, 9.167, kinds.map((track, i) => ({ boneId: 1000 + i, track }))),
+      anim(
+        276,
+        9.167,
+        kinds.map((track, i) => ({ boneId: 1000 + i, track }))
+      ),
       PED
     );
     expect(c.kind).toBe("facial");
@@ -129,7 +133,9 @@ test("body tracks on a foreign rig are other-skeleton, not a broken ped clip", (
     anim(
       41,
       1.333,
-      bodyTracks([0, 900001, 900002, 900003, 900004, 900005, 900006, 900007, 900008, 900009, 900010])
+      bodyTracks([
+        0, 900001, 900002, 900003, 900004, 900005, 900006, 900007, 900008, 900009, 900010,
+      ])
     ),
     PED
   );

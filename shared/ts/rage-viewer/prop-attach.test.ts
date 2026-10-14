@@ -6,11 +6,11 @@ import {
   fivemEulerToQuaternion,
   formatPlacementLua,
   normalisePlacementRecord,
-  type Placement6,
-  placementToTransform,
-  PropAttachment,
-  quaternionToFivemEuler,
   PH_R_HAND_TAG,
+  type Placement6,
+  PropAttachment,
+  placementToTransform,
+  quaternionToFivemEuler,
   SKEL_R_HAND_TAG,
   transformToPlacement,
 } from "./prop-attach";
@@ -143,7 +143,11 @@ test("placement <-> transform round-trips exactly", () => {
 });
 
 test("transformToPlacement rounds and never emits -0", () => {
-  const p = transformToPlacement(new THREE.Vector3(-1e-12, 1.23456789, 0), new THREE.Quaternion(), 4);
+  const p = transformToPlacement(
+    new THREE.Vector3(-1e-12, 1.23456789, 0),
+    new THREE.Quaternion(),
+    4
+  );
   expect(Object.is(p[0], -0)).toBe(false);
   expect(p[0]).toBe(0);
   expect(p[1]).toBe(1.2346);
@@ -191,7 +195,11 @@ test("a dragged transform reads back as a game-ready record with no conversion",
 
 test("applyRecord round-trips a record through the node and back", () => {
   const prop = new PropAttachment();
-  const source = { model: "prop_cs_hand_radio", bone: 12345, placement: [0.1, 0.2, 0.3, 45, -30, 90] };
+  const source = {
+    model: "prop_cs_hand_radio",
+    bone: 12345,
+    placement: [0.1, 0.2, 0.3, 45, -30, 90],
+  };
   prop.applyRecord(source);
   expect(prop.model).toBe("prop_cs_hand_radio");
   expect(prop.boneTag).toBe(12345);

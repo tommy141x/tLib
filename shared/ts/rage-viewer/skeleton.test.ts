@@ -3,9 +3,9 @@ import * as THREE from "three";
 import {
   buildSkeleton,
   parseSkeletonJson,
-  SkeletonParseError,
   type SkeletonBoneJson,
   type SkeletonJson,
+  SkeletonParseError,
 } from "./skeleton";
 
 function bone(partial: Partial<SkeletonBoneJson> & { index: number }): SkeletonBoneJson {
@@ -48,7 +48,14 @@ test("parseSkeletonJson rejects malformed input instead of coercing", () => {
   expect(() =>
     parseSkeletonJson({
       bones: [
-        { tag: 1, name: "a", index: 0, parentIndex: -1, translation: [0, 0, 0], rotation: [0, 0, 0] },
+        {
+          tag: 1,
+          name: "a",
+          index: 0,
+          parentIndex: -1,
+          translation: [0, 0, 0],
+          rotation: [0, 0, 0],
+        },
       ],
     })
   ).toThrow(/rotation/);
@@ -57,7 +64,14 @@ test("parseSkeletonJson rejects malformed input instead of coercing", () => {
 test("parseSkeletonJson defaults a missing scale to unit", () => {
   const json = parseSkeletonJson({
     bones: [
-      { tag: 1, name: "a", index: 0, parentIndex: -1, translation: [1, 2, 3], rotation: [0, 0, 0, 1] },
+      {
+        tag: 1,
+        name: "a",
+        index: 0,
+        parentIndex: -1,
+        translation: [1, 2, 3],
+        rotation: [0, 0, 0, 1],
+      },
     ],
   });
   expect(json.bones[0].scale).toEqual([1, 1, 1]);

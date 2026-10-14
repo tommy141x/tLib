@@ -217,8 +217,7 @@ export function buildAnimationClip(
   const keyCount = isPose ? 1 : frames;
   if (isPose) {
     warnings.push(
-      `frames=${frames} duration=${duration}: treated as a single held pose, ` +
-        "not an animation"
+      `frames=${frames} duration=${duration}: treated as a single held pose, ` + "not an animation"
     );
   }
 
@@ -427,9 +426,7 @@ function bump(map: Map<number, number>, key: number): void {
  * Useful for a UI that lists what a clip touches, and for picking an attach bone
  * that the clip moves.
  */
-export function describeAnimationTracks(
-  animation: Animation
-): { tag: number; tracks: number[] }[] {
+export function describeAnimationTracks(animation: Animation): { tag: number; tracks: number[] }[] {
   const byTag = new Map<number, number[]>();
   for (const b of animation.boneIds) {
     const list = byTag.get(b.boneId);

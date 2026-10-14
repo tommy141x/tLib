@@ -128,52 +128,140 @@ export const BC7_WEIGHTS_3: readonly number[] = [0, 9, 18, 27, 37, 46, 55, 64];
 export const BC7_WEIGHTS_4: readonly number[] = [0,4,9,13,17,21,26,30,34,38,43,47,51,55,60,64];
 
 export interface Bc7ModeInfo {
-	/** Number of subsets: 1, 2 or 3. */
-	subsets: number;
-	/** Partition index bit count. */
-	partitionBits: number;
-	/** Rotation bit count (modes 4 and 5 only). */
-	rotationBits: number;
-	/** Index-selection bit count (mode 4 only). */
-	indexSelectionBits: number;
-	/** Colour endpoint precision, in bits per component. */
-	colorBits: number;
-	/** Alpha endpoint precision. 0 means the block is opaque. */
-	alphaBits: number;
-	/** Per-endpoint P-bit count: 1 means every endpoint carries its own low bit. */
-	endpointPBits: number;
-	/** Shared P-bit count: 1 means the two endpoints of a subset share one low bit. */
-	sharedPBits: number;
-	/** Primary index bit count. */
-	indexBits: number;
-	/** Secondary index bit count (modes 4 and 5), 0 when there is only one index set. */
-	indexBits2: number;
+  /** Number of subsets: 1, 2 or 3. */
+  subsets: number;
+  /** Partition index bit count. */
+  partitionBits: number;
+  /** Rotation bit count (modes 4 and 5 only). */
+  rotationBits: number;
+  /** Index-selection bit count (mode 4 only). */
+  indexSelectionBits: number;
+  /** Colour endpoint precision, in bits per component. */
+  colorBits: number;
+  /** Alpha endpoint precision. 0 means the block is opaque. */
+  alphaBits: number;
+  /** Per-endpoint P-bit count: 1 means every endpoint carries its own low bit. */
+  endpointPBits: number;
+  /** Shared P-bit count: 1 means the two endpoints of a subset share one low bit. */
+  sharedPBits: number;
+  /** Primary index bit count. */
+  indexBits: number;
+  /** Secondary index bit count (modes 4 and 5), 0 when there is only one index set. */
+  indexBits2: number;
 }
 
 /** Per-mode layout, in mode order 0-7. Table 1 of the BC7 specification. */
 export const BC7_MODES: readonly Bc7ModeInfo[] = [
-	{ subsets: 3, partitionBits: 4, rotationBits: 0, indexSelectionBits: 0, colorBits: 4, alphaBits: 0, endpointPBits: 1, sharedPBits: 0, indexBits: 3, indexBits2: 0 },
-	{ subsets: 2, partitionBits: 6, rotationBits: 0, indexSelectionBits: 0, colorBits: 6, alphaBits: 0, endpointPBits: 0, sharedPBits: 1, indexBits: 3, indexBits2: 0 },
-	{ subsets: 3, partitionBits: 6, rotationBits: 0, indexSelectionBits: 0, colorBits: 5, alphaBits: 0, endpointPBits: 0, sharedPBits: 0, indexBits: 2, indexBits2: 0 },
-	{ subsets: 2, partitionBits: 6, rotationBits: 0, indexSelectionBits: 0, colorBits: 7, alphaBits: 0, endpointPBits: 1, sharedPBits: 0, indexBits: 2, indexBits2: 0 },
-	{ subsets: 1, partitionBits: 0, rotationBits: 2, indexSelectionBits: 1, colorBits: 5, alphaBits: 6, endpointPBits: 0, sharedPBits: 0, indexBits: 2, indexBits2: 3 },
-	{ subsets: 1, partitionBits: 0, rotationBits: 2, indexSelectionBits: 0, colorBits: 7, alphaBits: 8, endpointPBits: 0, sharedPBits: 0, indexBits: 2, indexBits2: 2 },
-	{ subsets: 1, partitionBits: 0, rotationBits: 0, indexSelectionBits: 0, colorBits: 7, alphaBits: 7, endpointPBits: 1, sharedPBits: 0, indexBits: 4, indexBits2: 0 },
-	{ subsets: 2, partitionBits: 6, rotationBits: 0, indexSelectionBits: 0, colorBits: 5, alphaBits: 5, endpointPBits: 1, sharedPBits: 0, indexBits: 2, indexBits2: 0 },
+  {
+    subsets: 3,
+    partitionBits: 4,
+    rotationBits: 0,
+    indexSelectionBits: 0,
+    colorBits: 4,
+    alphaBits: 0,
+    endpointPBits: 1,
+    sharedPBits: 0,
+    indexBits: 3,
+    indexBits2: 0,
+  },
+  {
+    subsets: 2,
+    partitionBits: 6,
+    rotationBits: 0,
+    indexSelectionBits: 0,
+    colorBits: 6,
+    alphaBits: 0,
+    endpointPBits: 0,
+    sharedPBits: 1,
+    indexBits: 3,
+    indexBits2: 0,
+  },
+  {
+    subsets: 3,
+    partitionBits: 6,
+    rotationBits: 0,
+    indexSelectionBits: 0,
+    colorBits: 5,
+    alphaBits: 0,
+    endpointPBits: 0,
+    sharedPBits: 0,
+    indexBits: 2,
+    indexBits2: 0,
+  },
+  {
+    subsets: 2,
+    partitionBits: 6,
+    rotationBits: 0,
+    indexSelectionBits: 0,
+    colorBits: 7,
+    alphaBits: 0,
+    endpointPBits: 1,
+    sharedPBits: 0,
+    indexBits: 2,
+    indexBits2: 0,
+  },
+  {
+    subsets: 1,
+    partitionBits: 0,
+    rotationBits: 2,
+    indexSelectionBits: 1,
+    colorBits: 5,
+    alphaBits: 6,
+    endpointPBits: 0,
+    sharedPBits: 0,
+    indexBits: 2,
+    indexBits2: 3,
+  },
+  {
+    subsets: 1,
+    partitionBits: 0,
+    rotationBits: 2,
+    indexSelectionBits: 0,
+    colorBits: 7,
+    alphaBits: 8,
+    endpointPBits: 0,
+    sharedPBits: 0,
+    indexBits: 2,
+    indexBits2: 2,
+  },
+  {
+    subsets: 1,
+    partitionBits: 0,
+    rotationBits: 0,
+    indexSelectionBits: 0,
+    colorBits: 7,
+    alphaBits: 7,
+    endpointPBits: 1,
+    sharedPBits: 0,
+    indexBits: 4,
+    indexBits2: 0,
+  },
+  {
+    subsets: 2,
+    partitionBits: 6,
+    rotationBits: 0,
+    indexSelectionBits: 0,
+    colorBits: 5,
+    alphaBits: 5,
+    endpointPBits: 1,
+    sharedPBits: 0,
+    indexBits: 2,
+    indexBits2: 0,
+  },
 ];
 
 /** The anchor pixel index for `subset` of `partition` under `subsetCount` subsets. */
 export function bc7Anchor(subsetCount: number, partition: number, subset: number): number {
-	if (subset === 0) return 0;
-	if (subsetCount === 2) return BC7_ANCHOR_2[partition] ?? 15;
-	return (subset === 1 ? BC7_ANCHOR_3_1[partition] : BC7_ANCHOR_3_2[partition]) ?? 15;
+  if (subset === 0) return 0;
+  if (subsetCount === 2) return BC7_ANCHOR_2[partition] ?? 15;
+  return (subset === 1 ? BC7_ANCHOR_3_1[partition] : BC7_ANCHOR_3_2[partition]) ?? 15;
 }
 
 /** Which subset each of the 16 pixels belongs to. */
 export function bc7Subsets(subsetCount: number, partition: number): readonly number[] {
-	if (subsetCount === 1) return BC7_SINGLE_SUBSET;
-	const table = subsetCount === 2 ? BC7_PARTITION_2 : BC7_PARTITION_3;
-	return table[partition] ?? BC7_SINGLE_SUBSET;
+  if (subsetCount === 1) return BC7_SINGLE_SUBSET;
+  const table = subsetCount === 2 ? BC7_PARTITION_2 : BC7_PARTITION_3;
+  return table[partition] ?? BC7_SINGLE_SUBSET;
 }
 
 const BC7_SINGLE_SUBSET: readonly number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];

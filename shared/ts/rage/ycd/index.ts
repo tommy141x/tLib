@@ -8,6 +8,6 @@ export * from "./clip";
 
 /** Parse a `.ycd` clip dictionary from its raw file bytes. */
 export async function parseYcd(bytes: Uint8Array): Promise<ClipDictionary> {
-	const resource = await parseRsc7(bytes);
-	return parseClipDictionary(resource, new ResourceReader(resource));
+  const resource = await parseRsc7(bytes);
+  return parseClipDictionary(resource, new ResourceReader(resource));
 }

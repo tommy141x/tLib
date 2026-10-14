@@ -30,11 +30,11 @@ import {
   DEFAULT_MOVER_NODE_NAME,
 } from "./anim-clip";
 import {
+  DEFAULT_PROP_BONE_TAG,
   type Placement6,
   PropAttachment,
   type PropPlacementRecord,
   type PropSource,
-  DEFAULT_PROP_BONE_TAG,
 } from "./prop-attach";
 import { buildSkeleton, type SkeletonJson, type ViewerSkeleton } from "./skeleton";
 

@@ -108,7 +108,9 @@ test("rotation and scale tracks map to the right three track types", () => {
   const byName = new Map(r.clip.tracks.map((t) => [t.name, t]));
   expect(byName.get("PH_R_Hand.quaternion")).toBeInstanceOf(THREE.QuaternionKeyframeTrack);
   expect(byName.get("PH_R_Hand.scale")).toBeInstanceOf(THREE.VectorKeyframeTrack);
-  expect(Array.from(req(byName.get("PH_R_Hand.scale"), "scale track").values)).toEqual([2, 2, 2, 2, 2, 2]);
+  expect(Array.from(req(byName.get("PH_R_Hand.scale"), "scale track").values)).toEqual([
+    2, 2, 2, 2, 2, 2,
+  ]);
 });
 
 test("key times are the native rate and the clip keeps the animation's duration", () => {
@@ -165,8 +167,7 @@ test("a hemisphere-flipped rotation track is made continuous during the build", 
   expect(r.quaternionFlips).toBe(1);
   const v = r.clip.tracks[0].values;
   for (let i = 4; i < v.length; i += 4) {
-    const dot =
-      v[i] * v[i - 4] + v[i + 1] * v[i - 3] + v[i + 2] * v[i - 2] + v[i + 3] * v[i - 1];
+    const dot = v[i] * v[i - 4] + v[i + 1] * v[i - 3] + v[i + 2] * v[i - 2] + v[i + 3] * v[i - 1];
     expect(dot).toBeGreaterThanOrEqual(0);
   }
   // The orientation is unchanged: q and -q are the same rotation.

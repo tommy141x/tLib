@@ -23,6 +23,6 @@ export * from "./ytd";
 
 /** Parse a `.ytd` texture dictionary from its raw file bytes. */
 export async function parseYtd(bytes: Uint8Array): Promise<TextureDictionary> {
-	const resource = await parseRsc7(bytes);
-	return parseTextureDictionary(resource, new ResourceReader(resource));
+  const resource = await parseRsc7(bytes);
+  return parseTextureDictionary(resource, new ResourceReader(resource));
 }

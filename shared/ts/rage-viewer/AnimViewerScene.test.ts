@@ -220,7 +220,9 @@ test("setAnimation binds tracks against the real node graph", () => {
 
   // Frame 2 is at 0.1s: the binding resolved if the bone actually moved.
   scene.setTime(0.1);
-  expect(req(req(scene.skeleton, "skeleton").byTag.get(PH_R_HAND_TAG), "PH_R_Hand").position.x).toBeCloseTo(2, 5);
+  expect(
+    req(req(scene.skeleton, "skeleton").byTag.get(PH_R_HAND_TAG), "PH_R_Hand").position.x
+  ).toBeCloseTo(2, 5);
   expect(scene.playbackState.frame).toBe(2);
 });
 
@@ -234,7 +236,9 @@ test("scrubbing applies the pose while paused", () => {
   expect(scene.isPlaying).toBe(false);
   scene.setFrame(7);
   expect(scene.time).toBeCloseTo(0.7, 6);
-  expect(req(req(scene.skeleton, "skeleton").byTag.get(PH_R_HAND_TAG), "PH_R_Hand").position.x).toBeCloseTo(0.7, 5);
+  expect(
+    req(req(scene.skeleton, "skeleton").byTag.get(PH_R_HAND_TAG), "PH_R_Hand").position.x
+  ).toBeCloseTo(0.7, 5);
   // Out-of-range scrubs clamp rather than throwing or wrapping.
   scene.setTime(99);
   expect(scene.time).toBeCloseTo(1, 6);
@@ -325,9 +329,14 @@ test("attachProp parents to the tagged bone and reports drags as game-ready reco
   const records: unknown[] = [];
   scene.onPlacementChange = (r) => records.push(r);
 
-  const prop = scene.attachProp("prop_cs_hand_radio", PH_R_HAND_TAG, [0.13, 0.05, 0.01, -113, 0, -60], {
-    bounds: { min: [-0.03, -0.02, 0], max: [0.03, 0.02, 0.18] },
-  });
+  const prop = scene.attachProp(
+    "prop_cs_hand_radio",
+    PH_R_HAND_TAG,
+    [0.13, 0.05, 0.01, -113, 0, -60],
+    {
+      bounds: { min: [-0.03, -0.02, 0], max: [0.03, 0.02, 0.18] },
+    }
+  );
   expect(prop).not.toBeNull();
   expect(prop?.root.parent?.name).toBe("PH_R_Hand");
   expect(scene.transformControls.enabled).toBe(true);

@@ -6,17 +6,17 @@
 // `three` enters the graph, as a peer dependency (>=0.150.0).
 
 export {
-  AnimViewerScene,
   type AnimViewerPlaybackState,
+  AnimViewerScene,
   type AnimViewerSceneConfig,
   type TransformMode,
 } from "./AnimViewerScene";
 export {
   applyPose,
-  buildAnimationClip,
   type BuildAnimationClipOptions,
   type BuildAnimationClipResult,
   type BuiltClipKind,
+  buildAnimationClip,
   DEFAULT_MOVER_NODE_NAME,
   describeAnimationTracks,
   enforceQuaternionContinuity,
@@ -24,25 +24,6 @@ export {
   normaliseQuaternionValues,
   type SkippedTrack,
 } from "./anim-clip";
-export {
-  buildDrawableMeshes,
-  createRageTexture,
-  DIFFUSE_PARAM_HASHES,
-  type DrawableMeshOptions,
-  type DrawableMeshResult,
-  resolveDiffuse,
-} from "./drawable-mesh";
-export {
-  PedPreviewRig,
-  type PedPreviewFraming,
-  type PedPreviewRigConfig,
-  type PedPreviewStats,
-} from "./ped-preview";
-export {
-  type PreviewHandle,
-  SharedPreviewRenderer,
-  type SharedPreviewRendererOptions,
-} from "./preview-renderer";
 export {
   type AnimationClassification,
   type AnimationKind,
@@ -53,19 +34,38 @@ export {
   type TagSource,
 } from "./classify";
 export {
+  buildDrawableMeshes,
+  createRageTexture,
+  DIFFUSE_PARAM_HASHES,
+  type DrawableMeshOptions,
+  type DrawableMeshResult,
+  resolveDiffuse,
+} from "./drawable-mesh";
+export {
+  type PedPreviewFraming,
+  PedPreviewRig,
+  type PedPreviewRigConfig,
+  type PedPreviewStats,
+} from "./ped-preview";
+export {
+  type PreviewHandle,
+  SharedPreviewRenderer,
+  type SharedPreviewRendererOptions,
+} from "./preview-renderer";
+export {
   createPlacementRecord,
   DEFAULT_PROP_BONE_TAG,
   fivemEulerToQuaternion,
   formatPlacementLua,
   normalisePlacementRecord,
+  PH_R_HAND_TAG,
   type Placement6,
-  placementToTransform,
   PropAttachment,
   type PropAttachmentOptions,
   type PropPlacementRecord,
   type PropSource,
+  placementToTransform,
   quaternionToFivemEuler,
-  PH_R_HAND_TAG,
   SKEL_R_HAND_TAG,
   transformToPlacement,
 } from "./prop-attach";
