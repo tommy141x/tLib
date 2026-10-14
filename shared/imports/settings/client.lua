@@ -19,6 +19,37 @@
 -- `cl_bridge.lua` plus a second copy in TypeScript; the option is the shared
 -- form of both.
 
+--- Coerce an incoming value to a setting's declared type, and clamp it.
+---
+--- ONE ladder, used by both `set` and `applyDefaults`. It was written out
+--- twice and the two had drifted into disagreeing: `set` accepted only boolean
+--- `true` for a bool while `applyDefaults` also accepted the string "true", and
+--- `applyDefaults` had NO `json` branch at all -- so a server default for a json
+--- setting was stored raw and every reader got a string where it expected a
+--- table. The permissive bool is the one kept: a default arriving from JSON or
+--- a convar is a string, and rejecting it silently produced `false`.
+---
+--- The LOAD path above is deliberately not folded in here. It reads through the
+--- store's typed getters rather than coercing a value in hand, which is a
+--- different operation that happens to look similar.
+local function coerce(m, value)
+    local t = m.type
+    if t == 'float' or t == 'number' then
+        value = tonumber(value) or m.default
+    elseif t == 'int' then
+        value = math.floor(tonumber(value) or m.default)
+    elseif t == 'bool' then
+        return value == true or value == "true"
+    elseif t == 'json' then
+        if type(value) == 'string' then return json.decode(value) or m.default end
+        return value
+    else
+        return tostring(value)
+    end
+    if m.clamp then value = math.max(m.clamp[1], math.min(m.clamp[2], value)) end
+    return value
+end
+
 local settingsMod = {}
 
 function settingsMod.create(defs)
@@ -81,22 +112,14 @@ function settingsMod.create(defs)
         if not m then return end
         local store = m.store
 
-        if m.type == 'float' or m.type == 'number' then
-            value = tonumber(value) or m.default
-            if m.clamp then value = math.max(m.clamp[1], math.min(m.clamp[2], value)) end
-            store.setString(key, tostring(value))
-        elseif m.type == 'int' then
-            value = math.floor(tonumber(value) or m.default)
-            if m.clamp then value = math.max(m.clamp[1], math.min(m.clamp[2], value)) end
-            store.setString(key, tostring(value))
-        elseif m.type == 'bool' then
-            value = (value == true)
+        value = coerce(m, value)
+
+        if m.type == 'bool' then
             store.setBool(key, value)
         elseif m.type == 'json' then
             store.setJson(key, value)
         else
-            value = tostring(value)
-            store.setString(key, value)
+            store.setString(key, tostring(value))
         end
 
         values[key] = value
@@ -111,17 +134,7 @@ function settingsMod.create(defs)
     function inst:applyDefaults(defaults)
         for key, value in pairs(defaults) do
             if meta[key] and not userSet[key] then
-                local m = meta[key]
-                if m.type == 'float' or m.type == 'number' then
-                    value = tonumber(value) or m.default
-                    if m.clamp then value = math.max(m.clamp[1], math.min(m.clamp[2], value)) end
-                elseif m.type == 'int' then
-                    value = math.floor(tonumber(value) or m.default)
-                    if m.clamp then value = math.max(m.clamp[1], math.min(m.clamp[2], value)) end
-                elseif m.type == 'bool' then
-                    value = (value == true or value == "true")
-                end
-                values[key] = value
+                values[key] = coerce(meta[key], value)
             end
         end
     end
