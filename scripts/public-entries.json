@@ -1,5 +1,5 @@
 {
-	"//": "Deep paths into shared/ts that consumers import directly. Measured from the sibling resources by `bun run scripts/dead-file-gate.ts --write-baseline`. Checked in because a fresh clone has no siblings. Not a ratchet: see the note in dead-file-gate.ts.",
+	"//": "Deep paths into shared/ts that consumers import directly, measured by `bun run scripts/dead-file-gate.ts --write-baseline`. Checked in because a fresh clone has no siblings. Not a ratchet — see the note in scripts/dead-file-gate.ts.",
 	"entries": [
 		"shared/ts/admin-ui/index.tsx",
 		"shared/ts/assets/index.ts",
@@ -13,6 +13,7 @@
 		"shared/ts/build/dead-classes.ts",
 		"shared/ts/build/detect-plates.ts",
 		"shared/ts/build/dev.ts",
+		"shared/ts/build/hero.ts",
 		"shared/ts/build/hud-gallery.ts",
 		"shared/ts/build/index.ts",
 		"shared/ts/build/manifest-coverage.ts",
