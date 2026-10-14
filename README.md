@@ -1,4 +1,4 @@
-![tLib](https://timmygstudios.com/assets/tLib/banner.jpg)
+![tLib](docs/public/banner.jpg)
 
 # tLib
 
