@@ -18,7 +18,7 @@ local log = Logger.create('tLib/serversettings')
 
 ServerSettings = {}
 
--- ── PER-PLAYER RATE LIMITING ────────────────────────────────────
+-- PER-PLAYER RATE LIMITING
 --
 -- saveEvent goes through Permission.registerAdminEvent and is bounded by that
 -- check. requestEvent is not: anyone may fire it, and it costs an admin lookup,

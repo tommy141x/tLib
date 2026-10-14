@@ -143,12 +143,7 @@ export class SpawnHost {
    * lives in a different resource that may have restarted since; asking twice
    * has to be free rather than a second copy of a model server.
    */
-  serve(
-    plan: Resolved,
-    resource: string,
-    key: string,
-    mode: "lines" | "bytes" = "lines"
-  ): string {
+  serve(plan: Resolved, resource: string, key: string, mode: "lines" | "bytes" = "lines"): string {
     if (!key) return JSON.stringify({ error: "no key given" });
 
     const id = `${resource}:${key}`;

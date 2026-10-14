@@ -6,6 +6,7 @@ import * as path from "node:path";
 import AdmZip from "adm-zip";
 import {
   adoptLegacyInstallationFromData,
+  type PreparedPayload,
   type ProtectedBuiltinInventory,
   protectedInventoryFromRelease,
   snapshotProtectedInventory,
@@ -17,8 +18,24 @@ let limit = 5 * 1024 * 1024;
 let installPath = "assets";
 mock.module("./config", () => ({ resolveConfig: () => ({ maxBundleBytes: limit }) }));
 mock.module("./fivem", () => ({ fGetResourcePath: () => root }));
+/**
+ * A per-test content validator, reached through the REAL code path.
+ *
+ * `install.ts` calls `target.validate` with the prepared payload, which is the
+ * only place a sound's `module.json` is ever visible: it is generated (or read
+ * out of a zipped module) and passed in memory, because a flat audio file has
+ * nowhere on disk to keep it. Observing it here rather than adding a parameter
+ * to `installFromData` means these tests exercise the same hand-off a consumer's
+ * own contract does.
+ */
+let validator: ((payload: PreparedPayload) => void) | undefined;
 mock.module("./registry", () => ({
-  get: (resourceName: string, type: string) => ({ resourceName, type, installPath }),
+  get: (resourceName: string, type: string) => ({
+    resourceName,
+    type,
+    installPath,
+    validate: validator,
+  }),
 }));
 const { installFromData, uninstallItem } = await import("./installer");
 const wav = Buffer.from("RIFF1234WAVEoriginal sound");
@@ -42,6 +59,7 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "tlib-installer-test-"));
   limit = 5 * 1024 * 1024;
   installPath = "assets";
+  validator = undefined;
 });
 afterEach(() => {
   mock.restore();
@@ -57,16 +75,132 @@ describe("marketplace installer isolation and ownership", () => {
     expect(uninstallItem("test", "ui", "demo").ok).toBe(true);
     expect(fs.readdirSync(base())).toEqual([]);
   });
-  test("raw replacement and format transition are receipted and remove only owned old file", () => {
+  test("raw audio installs as a FLAT FILE, and a format change removes the old one", () => {
+    // A sound is a plain `.wav` in `layouts/sounds/`, not a folder. That is the
+    // shape, chosen so an operator can drag an audio file in and have it work
+    // with no manifest to author. The folder-and-`module.json` form of a sound
+    // exists in the studio and the marketplace; `prepareBundle` reduces it here.
     expect(install(wav).ok).toBe(true);
+    expect(fs.readFileSync(file("demo.wav"))).toEqual(wav);
+    // Nothing else lands. No directory, and no manifest — a flat file has nowhere
+    // to keep one, which is exactly why the metadata lives in the catalogue.
+    expect(fs.readdirSync(base()).sort()).toEqual([".marketplace-demo.json", "demo.wav"]);
     expect(install(ogg).ok).toBe(true);
+    // The receipt is what authorises removing the superseded `.wav`: the
+    // destination changed extension, so without ownership the old file would be
+    // left beside the new one and the resolver would pick by extension order.
     expect(fs.existsSync(file("demo.wav"))).toBe(false);
     expect(fs.readFileSync(file("demo.ogg"))).toEqual(ogg);
     expect(uninstallItem("test", "sound", "demo").ok).toBe(true);
+    expect(fs.readdirSync(base())).toEqual([]);
+  });
+  test("a ZIPPED sound module from the studio installs as just its audio", () => {
+    // The two input shapes, one destination. tWeb exports a sound as a folder
+    // with a `module.json`; a FiveM resource gets the audio and nothing else.
+    const manifest = JSON.stringify({
+      schema: 1,
+      kind: "sound",
+      id: "demo",
+      name: "Air Horn",
+      version: "2.1.0",
+      author: "Someone",
+      license: "CC0-1.0",
+      sound: { file: "demo.wav", durationSeconds: 1.5, peaks: [0, 1] },
+    });
+    const data = bundle({ "module.json": manifest, "demo.wav": wav.toString("binary") });
+    expect(install(data).ok).toBe(true);
+    expect(fs.readdirSync(base()).sort()).toEqual([".marketplace-demo.json", "demo.wav"]);
+    // The manifest is DROPPED on purpose, not forgotten: nothing on a resource
+    // reads one, and leaving it would put a second, unread description of the
+    // sound next to the sound.
+    expect(fs.existsSync(file("module.json"))).toBe(false);
+    expect(uninstallItem("test", "sound", "demo").ok).toBe(true);
+  });
+  test("a zipped sound module is refused when it cannot produce playable audio", () => {
+    // Each of these installs cleanly under a looser contract and then plays
+    // nothing, which is the failure class worth a refusal.
+    expect(install(bundle({ "demo.wav": "x" })).ok).toBe(false); // no manifest
+    expect(install(bundle({ "module.json": "{" })).ok).toBe(false); // malformed
+    expect(
+      install(
+        bundle({
+          "module.json": JSON.stringify({
+            schema: 1,
+            kind: "sound",
+            id: "demo",
+            name: "d",
+            version: "1.0.0",
+            sound: { file: "demo.wav" },
+          }),
+        })
+      ).ok
+    ).toBe(false); // declares audio the bundle does not contain
+    expect(fs.existsSync(base())).toBe(false);
+  });
+  test("names and versions the catalogue supplies reach a raw upload's manifest", () => {
+    const seen: unknown[] = [];
+    validator = (payload) => seen.push(payload.manifest);
+    expect(
+      installFromData("test", "sound", "demo", wav, "", 0, {
+        name: "Air Horn",
+        version: "2.1.0",
+      }).ok
+    ).toBe(true);
+    expect(seen).toEqual([
+      {
+        schema: 1,
+        kind: "sound",
+        id: "demo",
+        name: "Air Horn",
+        version: "2.1.0",
+        slug: "demo",
+        sound: { file: "demo.wav" },
+      },
+    ]);
+  });
+  test("a raw upload with no catalogue metadata says so rather than inventing it", () => {
+    const seen: Array<Record<string, unknown> | undefined> = [];
+    validator = (payload) =>
+      seen.push(payload.manifest as unknown as Record<string, unknown> | undefined);
+    expect(install(wav).ok).toBe(true);
+    expect(seen[0]?.name).toBe("demo");
+    // 0.0.0 reads as "nobody told us", which is the truth for raw audio.
+    expect(seen[0]?.version).toBe("0.0.0");
+  });
+  test("a zipped sound module's own manifest reaches the validator, parsed", () => {
+    const seen: Array<Record<string, unknown> | undefined> = [];
+    validator = (payload) =>
+      seen.push(payload.manifest as unknown as Record<string, unknown> | undefined);
+    const manifest = JSON.stringify({
+      schema: 1,
+      kind: "sound",
+      id: "demo",
+      name: "Air Horn",
+      version: "3.0.0",
+      author: "Someone",
+      license: "CC0-1.0",
+      sound: { file: "demo.wav", durationSeconds: 1.5, toneKeys: ["ALERT_A"], peaks: [0, 1] },
+    });
+    expect(
+      install(bundle({ "module.json": manifest, "demo.wav": wav.toString("binary") })).ok
+    ).toBe(true);
+    // Everything the studio put in it, including the peaks that have nowhere to
+    // live on a resource. This is the hand-off the marketplace relies on.
+    expect(seen[0]?.author).toBe("Someone");
+    expect(seen[0]?.license).toBe("CC0-1.0");
+    expect((seen[0]?.sound as Record<string, unknown>)?.peaks).toEqual([0, 1]);
   });
   test.each(["demo", "demo.wav"])(
-    "refuses unreceipted existing %s for install and uninstall",
+    "⛔ refuses an unreceipted existing %s for install and uninstall",
     (name) => {
+      // THE PROTECTION PROPERTY, for BOTH shapes a target can take. Content
+      // that ships with a resource has no receipt, and this refusal is the whole
+      // reason it cannot be overwritten or uninstalled — not
+      // `ProtectedBuiltinInventory`, which is measurably inert.
+      //
+      // Both names are probed regardless of item type, deliberately: a directory
+      // called `demo` must block a sound install just as `demo.wav` must block a
+      // layout install. Refusing more is the safe direction.
       fs.mkdirSync(base());
       if (name === "demo") {
         fs.mkdirSync(file(name));
@@ -77,6 +211,24 @@ describe("marketplace installer isolation and ownership", () => {
       expect(fs.existsSync(file(name))).toBe(true);
     }
   );
+  test("⛔ a SHIPPED mixed-case sound stays un-uninstallable", () => {
+    // tRadio ships `bgDog.wav`, `transEnd1.wav`, `QRX-720/`. A slug is always
+    // lowercased, so the shipped name and the slug differ by case — and a Linux
+    // container will not resolve one to the other.
+    fs.mkdirSync(base());
+    fs.writeFileSync(file("bgDog.wav"), "SHIPPED");
+    const outcome = installFromData("test", "sound", "bgDog", wav, "", 0);
+    expect(outcome.ok).toBe(false);
+    // WHICH guard fires depends on the filesystem, and both are the right answer.
+    // On a case-INSENSITIVE filesystem (this machine) the plain stat for
+    // `bgdog.wav` finds `bgDog.wav` and the unreceipted-target refusal catches it
+    // first. On a case-SENSITIVE one that stat misses and the case-variant scan is
+    // the only thing standing there. Asserting one message would make this pass on
+    // one platform and fail on the other while the property holds on both.
+    if (!outcome.ok) expect(outcome.error).toMatch(/no marketplace ownership receipt|only by case/);
+    expect(uninstallItem("test", "sound", "bgDog").ok).toBe(false);
+    expect(fs.readFileSync(file("bgDog.wav"), "utf8")).toBe("SHIPPED");
+  });
   test("receipt does not authorize removal of changed or newly added content", () => {
     expect(install(bundle(), "ui").ok).toBe(true);
     fs.writeFileSync(file("demo/unrelated"), "keep");
@@ -360,7 +512,12 @@ describe("read-only legacy compatibility verification", () => {
   });
   test("refuses ambiguous destinations and mismatched package format", () => {
     legacy(wav, "sound");
+    // A different container means a different destination name (`demo.ogg`
+    // against a disk holding `demo.wav`), so the format mismatch is refused.
     expect(verify(ogg, "sound").ok).toBe(false);
+    // And a directory sitting beside the flat file is a SECOND candidate for the
+    // same slug. Adopting either would mint a receipt that claims one of two
+    // things an operator can see, so neither is adopted.
     fs.mkdirSync(file("demo"));
     expect(verify(wav, "sound").ok).toBe(false);
   });
@@ -494,20 +651,21 @@ describe("explicit verified legacy adoption", () => {
     expect(fs.readdirSync(base()).sort()).toEqual([".marketplace-demo.json", "demo"]);
     expect(uninstallItem("test", "ui", "demo").ok).toBe(true);
   });
-  test.each(["modified", "extra", "missing", "ambiguous"])(
-    "refuses %s content without a receipt",
-    (kind) => {
-      const data = bundle();
-      legacy(data);
-      if (kind === "modified") fs.writeFileSync(file("demo/ui.html"), "changed");
-      if (kind === "extra") fs.mkdirSync(file("demo/extra"));
-      if (kind === "missing") fs.unlinkSync(file("demo/ui.html"));
-      if (kind === "ambiguous") fs.writeFileSync(file("demo.wav"), wav);
-      expect(adopt(data).ok).toBe(false);
-      expect(fs.existsSync(file(".marketplace-demo.json"))).toBe(false);
-      expect(fs.readdirSync(base()).some((name) => name.startsWith(".marketplace-"))).toBe(false);
-    }
-  );
+  // "ambiguous" is no longer in this list. It wrote a flat `demo.wav` beside the
+  // `demo/` directory, which was a second candidate destination when a sound
+  // could install as a bare file. With one candidate per slug it is not a
+  // candidate at all, so the case cannot reach the hazard it was written for and
+  // keeping it would be a test that passes without exercising anything.
+  test.each(["modified", "extra", "missing"])("refuses %s content without a receipt", (kind) => {
+    const data = bundle();
+    legacy(data);
+    if (kind === "modified") fs.writeFileSync(file("demo/ui.html"), "changed");
+    if (kind === "extra") fs.mkdirSync(file("demo/extra"));
+    if (kind === "missing") fs.unlinkSync(file("demo/ui.html"));
+    expect(adopt(data).ok).toBe(false);
+    expect(fs.existsSync(file(".marketplace-demo.json"))).toBe(false);
+    expect(fs.readdirSync(base()).some((name) => name.startsWith(".marketplace-"))).toBe(false);
+  });
   test("requires policy, exact authorization and package hash", () => {
     const data = bundle();
     legacy(data);
@@ -748,6 +906,7 @@ describe("transaction rollback", () => {
     const transaction = fs
       .readdirSync(base())
       .find((name) => name.startsWith(".marketplace-transaction-"))!;
+    // The backup of a flat sound destination IS the audio file.
     expect(fs.readFileSync(file(`${transaction}/backup`))).toEqual(wav);
   });
   test("failed uninstall receipt move restores old payload", () => {
@@ -765,6 +924,8 @@ describe("transaction rollback", () => {
     expect(install(wav).ok).toBe(true);
     const write = fs.writeFileSync;
     spyOn(fs, "writeFileSync").mockImplementation((p, data, opts) => {
+      // A flat sound stages AS the file named `payload`, which is what makes this
+      // injection reach the audio write rather than the receipt write.
       if (path.basename(String(p)) === "payload") throw new Error("injected disk full");
       return write(p, data, opts);
     });

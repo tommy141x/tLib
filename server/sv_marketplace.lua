@@ -91,7 +91,7 @@ local function fail(p, message)
     reply(p, { ok = false, error = message })
 end
 
--- ── Demo mode's start-time sweep ────────────────────────────────────────────
+-- Demo mode's start-time sweep
 --
 -- A demo server hands every visitor admin, so anyone can install anything. The
 -- promise is that restarting the resource undoes it, and this is where that is
@@ -204,7 +204,7 @@ local function request(action, resource, kind, slug, version, requestId)
         end
     end
 
-    -- ── Cross-product install enforcement ───────────────────────────────────
+    -- Cross-product install enforcement
     --
     -- Everything above proves the CALLER is allowed to install into this
     -- resource. Nothing above proves the ITEM belongs to it. The registry keys
@@ -220,7 +220,7 @@ local function request(action, resource, kind, slug, version, requestId)
     -- to remove, and would put an outbound HTTP call in the way of a local
     -- delete that must keep working when the marketplace is down.
     --
-    -- ⚠️ FAILS CLOSED. An unreachable marketplace refuses the install rather
+    -- FAILS CLOSED. An unreachable marketplace refuses the install rather
     -- than falling through to it, matching what the bundle-digest check already
     -- does with a missing hash header.
     if action ~= 'install' then
@@ -260,7 +260,7 @@ RegisterNetEvent('tlib:marketplace:inspect', function(resource, kind, slug, requ
     request('inspect', resource, kind, slug, nil, requestId)
 end)
 
--- ── Panel reads: browse and preview ─────────────────────────────────────────
+-- Panel reads: browse and preview
 --
 -- The panel used to make both of these itself, straight out of CEF, and
 -- neither could ever have worked: the marketplace host sends no
@@ -334,11 +334,9 @@ local function readBackstop(settle)
     end)
 end
 
--- ── The player's own FiveM identity, for likes ──────────────────────────────
+-- The player's own FiveM identity, for likes
 --
--- ═══════════════════════════════════════════════════════════════════════════
--- ⚠️ THIS FUNCTION IS THE ENTIRE REASON A LIKE COUNT MEANS ANYTHING.
--- ═══════════════════════════════════════════════════════════════════════════
+-- THIS FUNCTION IS THE ENTIRE REASON A LIKE COUNT MEANS ANYTHING.
 --
 -- The marketplace's like endpoint de-duplicates on `(item, license)`. That rule
 -- stops one person boosting a count ONLY IF the license is something they cannot
@@ -351,7 +349,7 @@ end
 -- wanted, where the loop form has to string-match prefixes and would happily
 -- return `license2:` or `ip:` to a careless comparison.
 --
--- ⚠️ WHAT THIS DOES NOT DO, STATED SO NOBODY ASSUMES IT: it does not make the
+-- WHAT THIS DOES NOT DO, STATED SO NOBODY ASSUMES IT: it does not make the
 -- claim verifiable BY THE MARKETPLACE. The outbound request's only credential is
 -- the shared resource secret, which is public by design and identifies a server
 -- rather than a person — so whoever runs this server can bypass this function
@@ -360,7 +358,7 @@ end
 -- the full argument and the design that would close it (the Cfx.re account-link
 -- flow, which produces an identity proven at the website's own origin).
 --
--- ⚠️ AND NOTE WHO CAN REACH THIS AT ALL: every marketplace read in this file
+-- AND NOTE WHO CAN REACH THIS AT ALL: every marketplace read in this file
 -- goes through `beginRead`, which requires the `tlib.admin` ACE. So the in-game
 -- like path is reachable only by server administrators. That is a mitigation
 -- (an ordinary player on somebody's server cannot spam likes through the panel)
@@ -409,7 +407,7 @@ RegisterNetEvent('tlib:marketplace:browse', function(opts)
         sort = opts.sort == 'created_at' and 'created_at' or 'downloads',
         limit = limit,
         cursor = cursor,
-        -- ⚠️ Resolved from `src`, NEVER read off `opts`. `opts` is the NUI's
+        -- Resolved from `src`, NEVER read off `opts`. `opts` is the NUI's
         -- payload and a value the client sent is a value the client chose; see
         -- `playerLicense` above for why that distinction is the whole feature.
         --
@@ -452,7 +450,7 @@ end)
 
 -- Like, or un-like, one catalogue item as the requesting PLAYER.
 --
--- ⚠️ IT GOES THROUGH `beginRead` LIKE THE TWO READS, DESPITE BEING A WRITE, and
+-- IT GOES THROUGH `beginRead` LIKE THE TWO READS, DESPITE BEING A WRITE, and
 -- that is deliberate rather than a copy-paste. `beginRead` is the shared gate
 -- for this panel, and it supplies three things a like needs for exactly the same
 -- reasons a read does: the `tlib.admin` ACE (the panel is admin-only in its
@@ -461,7 +459,7 @@ end)
 -- in-flight cap that stops the panel being used to make this server issue
 -- unbounded outbound requests.
 --
--- ⚠️ `next` IS THE STATE BEING ASKED FOR, NOT A TOGGLE. The NUI sends the state
+-- `next` IS THE STATE BEING ASKED FOR, NOT A TOGGLE. The NUI sends the state
 -- it wants, so a retry after the 20s backstop cannot invert anything — which it
 -- could if this flipped a value it read. The marketplace is idempotent in both
 -- directions for the same reason.
@@ -476,7 +474,7 @@ RegisterNetEvent('tlib:marketplace:like', function(opts)
         return
     end
 
-    -- ⚠️ FROM `src`, not from `opts`. Read `playerLicense`'s header before
+    -- FROM `src`, not from `opts`. Read `playerLicense`'s header before
     -- changing this line: a license taken from the payload would let any player
     -- like as a thousand different people, which is precisely the thing the
     -- backend's unique index exists to prevent.

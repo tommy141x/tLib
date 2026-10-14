@@ -7,6 +7,24 @@
 // The index is public and unauthenticated by design; each mount keeps its own
 // auth. Being listed affects discovery only, never routing or access.
 
+// THERE WAS A DIAGNOSTICS PANEL HERE, AND IT IS GONE ON PURPOSE.
+//
+// It reported the `tlib_telemetry` convar read-only — the state, the convar's
+// value, the queue depth, the breaker, and the per-install-id disclosure. The
+// owner removed it: the hub is app discovery, not a settings surface. Before
+// that, a state-changing switch had already been removed from the same panel,
+// because this listener binds `0.0.0.0` by default and the index is public and
+// unauthenticated with no auth primitive in `server/lib/http/` to gate anything
+// with. So neither half is to be rebuilt here:
+//
+//   • the setting's state → `tlib_telemetry_status` in the server console;
+//   • the per-install-id disclosure → `docs/content/convars.mdx`, under
+//     "What this convar does *not* cover: the per-install id". That disclosure
+//     is load-bearing (browse, community configs and the update check send the
+//     id whether diagnostics are on or off) — it moved, it was not dropped.
+//
+// `hub.test.ts` keeps the read-only guard that stops a control reappearing.
+
 import { ICON_VIEWBOX, iconBody } from "./icons";
 import { type HubDestination, hubDestinations, type Mount } from "./registry";
 

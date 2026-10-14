@@ -108,9 +108,10 @@ end)
 
 -- Additive. HasPermission above is unchanged and still the only thing tELS,
 -- tRadar and the rest call; a consumer that does not know about the batch export
--- is not affected by it, and one that does falls back to looping HasPermission
--- when it is talking to a tLib too old to have this (see
--- shared/imports/permission/server.lua).
+-- is not affected by it. There is NO fallback for a consumer that does: this
+-- export and shared/imports/permission/server.lua's `hasBatch` ship in the same
+-- tLib, so they cannot disagree about whether it exists. `hasBatch` fails CLOSED
+-- if this export does not answer.
 Platform.export('tLib', 'HasPermissionBatch', function(source, keys)
     return Platform.hasPermissionBatch(source, keys)
 end)

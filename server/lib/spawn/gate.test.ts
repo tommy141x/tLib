@@ -98,7 +98,10 @@ function filesystem(shape: Shape): Record<string, string> {
     self(shape.join(shape.llamaTRadio, "..")),
     self(shape.join(shape.piper, "..")),
     // Somewhere outside every resource, for the symlink-escape cases.
-    [shape.platform === "win32" ? "C:\\Windows\\System32\\cmd.exe" : "/bin/sh", shape.platform === "win32" ? "C:\\Windows\\System32\\cmd.exe" : "/bin/sh"],
+    [
+      shape.platform === "win32" ? "C:\\Windows\\System32\\cmd.exe" : "/bin/sh",
+      shape.platform === "win32" ? "C:\\Windows\\System32\\cmd.exe" : "/bin/sh",
+    ],
   ];
   return Object.fromEntries(entries);
 }
@@ -173,9 +176,20 @@ function isDirectory(shape: Shape, target: string): boolean {
   );
 }
 
-const SERVE = ["serve", "--http=127.0.0.1:8090", "--dir", ".runtime/pb_data", "--hooksDir=pb_hooks"];
+const SERVE = [
+  "serve",
+  "--http=127.0.0.1:8090",
+  "--dir",
+  ".runtime/pb_data",
+  "--hooksDir=pb_hooks",
+];
 
-type Answer = { error: string } & { binary: string; argv: string[]; cwd: string; loggable: string[] };
+type Answer = { error: string } & {
+  binary: string;
+  argv: string[];
+  cwd: string;
+  loggable: string[];
+};
 
 for (const shape of [POSIX, WINDOWS]) {
   const probes = (overrides: Partial<Probes> = {}) => probesFor(shape, overrides);
@@ -226,9 +240,9 @@ for (const shape of [POSIX, WINDOWS]) {
       // The names differ per platform — `pocketbase-win.exe` against
       // `pocketbase-linux`, matching what tDB's fetch-runtime.ts writes — and the
       // caller never says which.
-      expect((resolveSpawn("tDB", { program: "pocketbase", args: SERVE }, probes()) as Answer).binary).toBe(
-        shape.pocketbase
-      );
+      expect(
+        (resolveSpawn("tDB", { program: "pocketbase", args: SERVE }, probes()) as Answer).binary
+      ).toBe(shape.pocketbase);
       expect(
         (resolveSpawn("tAI", { program: "llama-server", args: [] }, probes()) as Answer).binary
       ).toBe(shape.llamaTAI);
@@ -289,7 +303,11 @@ for (const shape of [POSIX, WINDOWS]) {
     it("refuses a cwd another program declares", () => {
       const plan = resolveSpawn(
         "tRadio",
-        { program: "piper", args: [], cwd: `server/bin/${shape.platform === "win32" ? "win" : "linux"}/llama` },
+        {
+          program: "piper",
+          args: [],
+          cwd: `server/bin/${shape.platform === "win32" ? "win" : "linux"}/llama`,
+        },
         probes()
       );
       expect((plan as Answer).error).toContain("may only run in");

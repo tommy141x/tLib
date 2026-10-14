@@ -3,6 +3,7 @@
 import {
   type InstallOutcome,
   type InstallTarget,
+  type ItemMetadata,
   installFromData as install,
   type UninstallOutcome,
   uninstallItem as uninstall,
@@ -34,10 +35,12 @@ export function installFromData(
   slug: string,
   bytes: Buffer,
   expectedHash: string,
-  expectedSize: number
+  expectedSize: number,
+  /** Catalogue name and version, for the module.json a raw audio bundle is given. */
+  item?: ItemMetadata
 ): InstallOutcome {
   try {
-    return install(targetFor(resourceName, type), slug, bytes, expectedHash, expectedSize);
+    return install(targetFor(resourceName, type), slug, bytes, expectedHash, expectedSize, item);
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }

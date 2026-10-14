@@ -17,7 +17,22 @@ local E = MenuEngine
 -- does, which the engine cannot know.
 E.config = {
     requestTimeoutMs = 10000,
-    rateLimit = { burst = 6, refillPerSecond = 2 },
+    -- Sized against what the UI legitimately produces, not against a guess.
+    --
+    -- A select or slider row with apply = 'change' sends one request per value
+    -- step, and stepping is a held arrow key. MEASURED on a live server: a
+    -- serialized request round trip is ~26ms, so the real pipeline sustains ~39
+    -- requests/second. At the old burst = 6 / refill = 2 that exhausted the whole
+    -- budget in 174ms of holding one key, and every further step of an ordinary
+    -- colour or ped-model row came back 'Rate limit exceeded'. A limiter a normal
+    -- user trips by scrolling a list is not protecting anything; it is just a bug
+    -- with a reassuring name.
+    --
+    -- The ceiling is now above what a held key can produce, because the client
+    -- coalesces those steps (client/web/src/menu/Menu.tsx) and so a legitimate
+    -- session stays far below this. Flooding still gets cut off, which is the only
+    -- thing this was ever for.
+    rateLimit = { burst = 30, refillPerSecond = 15 },
     maxAuthorities = 8,
     maxPermissionQuery = 64,
 }
@@ -190,6 +205,30 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
         return
     end
 
+    -- The shared "Send feedback" dialog, which tLib's own menu injects into
+    -- every owner's root page. It is here rather than behind a net event of its
+    -- own because this channel already carries the correlation id, the rate
+    -- limiter, the timeout and the drop sweep -- and because the dialog is only
+    -- reachable from the menu.
+    --
+    -- NOT an `action`, deliberately: an action is a row a resource registered
+    -- with an ACE and a handler, and this row belongs to no resource. Routing it
+    -- through `resolveAction` would mean every consumer having to register an
+    -- item they did not write, which is exactly the per-resource wiring the
+    -- injection exists to avoid.
+    --
+    -- And NOT permission-gated. Feedback is about the software, not about the
+    -- server, so an ACE would let an operator switch off the only channel a
+    -- player has for telling US something -- while leaving the impression it
+    -- still worked.
+    if body.kind == 'feedback' then
+        if not MenuFeedback then immediate('Feedback is unavailable'); return end
+        MenuFeedback.submit(src, body, function(result)
+            Platform.TriggerClientEvent(S.events.response, src, requestId, result)
+        end)
+        return
+    end
+
     if body.kind == 'snapshot' then
         -- Before the build, so an owner's per-player overrides travel inside the
         -- snapshot rather than arriving as a second event to reconcile.
@@ -217,9 +256,24 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
     -- action, so honouring it only for server-`run` rows would silently ignore the
     -- field for the rest.
     --
-    -- Stamped on admission, so a handler that fails or no-ops still consumes the
-    -- window. What a cooldown bounds is the attempt; counting only successes would
-    -- let a row that fails cheaply be retried without limit.
+    -- Stamped on ADMISSION rather than on success, because the stamp is also what
+    -- stops a second press racing the first while a handler is still in flight.
+    --
+    -- But an attempt the server itself watched FAIL is refunded (`refundCooldown`
+    -- below). Charging a full window for a handler that refused and produced
+    -- nothing is what makes an ordinary session feel like a punishment -- the
+    -- player waits out the window having received nothing, and cannot tell that
+    -- from a success they somehow missed. Rapid retries of a cheaply-failing row
+    -- are bounded by the request rate limiter above, which is the guard whose job
+    -- that is.
+    --
+    -- The refund is only ever applied to a server-`run` row. A client-dispatched
+    -- action reports its outcome to nobody -- the branch below answers `ok = true`
+    -- and hands off -- so the server never learns whether it worked, and a
+    -- client-reported failure would be forgeable into an unlimited-spawn bypass.
+    -- Those rows keep the admission stamp, and the honest lever for them is the
+    -- length of the window itself.
+    local refundCooldown
     if action.cooldown then
         local key = action.cooldownKey and (entry.owner .. ':group:' .. action.cooldownKey) or item.id
         local now, previous = Platform.now(), cooldowns[src] and cooldowns[src][key]
@@ -228,6 +282,12 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
         end
         cooldowns[src] = cooldowns[src] or {}
         cooldowns[src][key] = now
+        -- Restores the prior stamp rather than clearing the key: that stamp is
+        -- expired by definition (admission proved it) but restoring it keeps this
+        -- a true undo rather than a widening.
+        refundCooldown = function()
+            if cooldowns[src] and cooldowns[src][key] == now then cooldowns[src][key] = previous end
+        end
     end
 
     if action.clientAction then
@@ -259,16 +319,28 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
     Platform.setTimeout(function() finish({ ok = false, error = 'Action timed out' }) end,
         E.config.requestTimeoutMs - 500)
     Platform.createThread(function()
-        if not active() then finish({ ok = false, error = 'Action no longer available' }); return end
+        -- Refunded on the three outcomes the server can be sure cost nothing: the
+        -- handler never started, it raised before completing, or it completed and
+        -- explicitly refused. Deliberately NOT refunded after a successful run
+        -- whose patch was malformed, nor on the `active()` check below, nor on the
+        -- timeout above -- in each of those the handler may have already had its
+        -- side effect, and giving the window back would be giving away a second
+        -- one for work that was really done.
+        if not active() then
+            if refundCooldown then refundCooldown() end
+            finish({ ok = false, error = 'Action no longer available' }); return
+        end
         -- Handlers are trusted installed code, but isActive still has to be
         -- re-checked after any yield and before any side effect.
         local ok, success, changes = pcall(action.run, src, body.value, { isActive = active })
         if not active() then finish({ ok = false, error = 'Unavailable or permission revoked' }); return end
         if not ok then
+            if refundCooldown then refundCooldown() end
             log(('%s action %s failed: %s'):format(entry.owner, item.id, tostring(success)), 4)
             finish({ ok = false, error = 'Action failed' }); return
         end
         if success ~= true then
+            if refundCooldown then refundCooldown() end
             finish({ ok = false, error = S.text(changes, 256) and changes or 'Action rejected' }); return
         end
         local patch

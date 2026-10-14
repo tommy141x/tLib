@@ -77,6 +77,25 @@ function buildUpstream(): http.Server {
 const get = (path: string, headers: Record<string, string> = {}) =>
   fetch(`http://127.0.0.1:${routerPort}${path}`, { redirect: "manual", headers });
 
+/** What `buildUpstream`'s echo handler reports back about the proxied request. */
+interface Echo {
+  path: string;
+  prefix: string;
+  search: string;
+  proto: string;
+  xff: string;
+  /** Null when the router correctly dropped a spoofed `X-Real-IP`. */
+  realIp: string | null;
+}
+
+/**
+ * `Response.json()` is typed `Promise<unknown>`, so every `body.path` in here was
+ * a type error that nothing reported — `server/` had no typecheck until now. One
+ * assertion of the upstream's contract beats nine casts at the call sites.
+ */
+const echo = async (path: string, headers: Record<string, string> = {}): Promise<Echo> =>
+  (await get(path, headers)).json() as Promise<Echo>;
+
 beforeAll(async () => {
   upstream = buildUpstream();
   await new Promise<void>((r) => upstream.listen(0, "127.0.0.1", r));
@@ -312,14 +331,25 @@ describe("hub", () => {
     }
   });
 
-  test("non-navigation methods at the hub are not redirected into an app", async () => {
+  // THE PERMANENT GUARD, router half. A `POST /` consent switch lived here
+  // briefly; this listener binds `0.0.0.0` by default and its index is public
+  // and unauthenticated by design, with no auth primitive in this tree to gate a
+  // writer with, so it was removed. POST is REJECTED — not accepted and ignored,
+  // which would leave a caller believing it had set something. And the original
+  // promise is unchanged: a non-navigation method is never redirected into an
+  // app, single destination or not.
+  test("non-navigation methods at the hub are rejected, not redirected into an app", async () => {
     mountProxy();
-    const res = await fetch(`http://127.0.0.1:${routerPort}/`, {
-      method: "POST",
-      redirect: "manual",
-    });
-    expect(res.status).toBe(405);
-    expect(res.headers.get("allow")).toBe("GET, HEAD");
+    for (const method of ["POST", "PUT", "DELETE", "PATCH"]) {
+      const res = await fetch(`http://127.0.0.1:${routerPort}/`, {
+        method,
+        redirect: "manual",
+        ...(method === "POST" ? { body: "consent=on" } : {}),
+      });
+      expect(res.status).toBe(405);
+      expect(res.headers.get("allow")).toBe("GET, HEAD");
+      expect(res.headers.get("location")).toBeNull();
+    }
   });
 
   test("404s an unmounted path", async () => {
@@ -331,33 +361,33 @@ describe("hub", () => {
 describe("proxying", () => {
   test("forwards the full path when not stripping", async () => {
     mountProxy();
-    const body = await (await get("/app/deep/thing")).json();
+    const body = await echo("/app/deep/thing");
     expect(body.path).toBe("/app/deep/thing");
   });
 
   test("strips the mount when stripping", async () => {
     mountProxy({ stripPrefix: true });
-    const body = await (await get("/app/deep/thing")).json();
+    const body = await echo("/app/deep/thing");
     expect(body.path).toBe("/deep/thing");
     expect(body.prefix).toBe("/app");
   });
 
   test("preserves the query string", async () => {
     mountProxy();
-    const body = await (await get("/app/x?a=1&b=2")).json();
+    const body = await echo("/app/x?a=1&b=2");
     expect(body.search).toBe("?a=1&b=2");
   });
 
   test("sets X-Forwarded-Proto and overwrites a spoofed X-Forwarded-For", async () => {
     mountProxy();
-    const body = await (await get("/app/x", { "x-forwarded-for": "9.9.9.9" })).json();
+    const body = await echo("/app/x", { "x-forwarded-for": "9.9.9.9" });
     expect(body.proto).toBe("http");
     expect(body.xff).not.toBe("9.9.9.9");
   });
 
   test("drops a spoofed X-Real-IP", async () => {
     mountProxy();
-    const body = await (await get("/app/x", { "x-real-ip": "9.9.9.9" })).json();
+    const body = await echo("/app/x", { "x-real-ip": "9.9.9.9" });
     expect(body.realIp).toBeNull();
   });
 
@@ -489,13 +519,13 @@ describe("security", () => {
     mountProxy({ mount: "/other", id: "other" });
     // /app/../other/x normalizes to /other/x and is routed as such — never
     // forwarded to /app's upstream with a traversal still in it.
-    const body = await (await get("/app/../app/x")).json();
+    const body = await echo("/app/../app/x");
     expect(body.path).toBe("/x");
   });
 
   test("encoded traversal is normalized before matching", async () => {
     mountProxy({ stripPrefix: true });
-    const body = await (await get("/app/%2e%2e/app/deep")).json();
+    const body = await echo("/app/%2e%2e/app/deep");
     expect(body.path).toBe("/deep");
   });
 });

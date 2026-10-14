@@ -1,14 +1,16 @@
 -- Server-side proxy for the community configs API, so a consuming resource
 -- neither repeats the HTTP boilerplate nor sees the server hash.
 --
--- ── This file no longer performs HTTP ──────────────────────────────────────
+-- This file no longer performs HTTP
 --
 -- It used to call PerformHttpRequest directly and send no credential. The
--- publish endpoint now requires X-Resource-Secret, a constant baked into the
--- Node bundle (defined once in shared/ts/marketplace/catalogue.ts).
+-- publish endpoint now requires X-Resource-Secret, whose value is the baked-in
+-- TLIB_PUBLIC_KEY (defined once in shared/ts/marketplace/catalogue.ts). The
+-- header name is unchanged and must stay so: every shipped copy sends it, and
+-- only the constant behind it was renamed.
 --
--- ⚠️ NOT a convar. This comment used to name `tmarketplace_resource_secret`,
--- which was never true and is the misreading that got the secret turned into
+-- NOT a convar. This comment used to name `tmarketplace_resource_secret`,
+-- which was never true and is the misreading that got the key turned into
 -- required operator config once already.
 --
 -- Handing it to this VM through an export would let any third-party script on
@@ -23,7 +25,7 @@ local log = Logger.create('tLib/community-configs')
 
 --- Is this value callable?
 ---
---- ⚠️ NOT the same as `type(v) == 'function'`, and the difference is why these
+--- NOT the same as `type(v) == 'function'`, and the difference is why these
 --- exports were silently dead. A Lua function passed ACROSS a resource
 --- boundary does not arrive as a function: the runtime rebuilds it on this
 --- side as a funcref, which is callable but reports a different `type()`.
@@ -113,7 +115,7 @@ local function registerExports()
     --- Fetch a config by id and increment its import counter. callback(ok,
     --- configJson, err) carries the config so no second request is needed.
     ---
-    --- ⚠️ Note the argument ORDER here is (ok, configJson, err), not the
+    --- Note the argument ORDER here is (ok, configJson, err), not the
     --- (ok, err, value) the bridge uses. It is the shipped signature tELS
     --- already calls and is not reordered to match.
     Platform.export('tLib', 'CommunityConfigsImport', function(id, callback)
@@ -140,14 +142,14 @@ local function registerExports()
     --- callback(ok, configJson, err), the same payload CommunityConfigsImport
     --- hands back.
     ---
-    --- ⚠️ The ONLY difference from CommunityConfigsImport is that this does not
+    --- The ONLY difference from CommunityConfigsImport is that this does not
     --- count. Use it whenever the config is being read to render or preview it
     --- rather than because a player chose to install it — tELS's marketplace
     --- tab animates a listing's LEDs on hover, and routing that through import
     --- would turn the counter into a measure of mouse movement. Keep the two
     --- separate; do not "simplify" one into the other.
     ---
-    --- ⚠️ Same argument ORDER note as above: (ok, configJson, err) out here,
+    --- Same argument ORDER note as above: (ok, configJson, err) out here,
     --- (ok, err, value) from the bridge.
     Platform.export('tLib', 'CommunityConfigsPeek', function(id, callback)
         if type(id) ~= 'string' or id == '' then
@@ -212,7 +214,7 @@ local function registerExports()
 
     --- CANDIDATE configs for a vehicle, by model fingerprint.
     ---
-    --- ⚠️ Candidates, NOT matches. Each item carries the publisher's own
+    --- Candidates, NOT matches. Each item carries the publisher's own
     --- fingerprint in `fp`; the caller decides with TELS_FP_Compare. The
     --- similarity algorithm deliberately lives in the consuming resource so it
     --- can be tuned by shipping a resource update rather than a web deploy.

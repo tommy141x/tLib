@@ -25,7 +25,7 @@ Demo = load(
 local CHANGED = 'tlib:demo:changed'
 local REQUEST = 'tlib:demo:request'
 
--- ── Saying so ───────────────────────────────────────────────────────────────
+-- Saying so
 
 local BANNER = {
     '^1╔═══════════════════════════════════════════════════════════════════╗^7',
@@ -56,7 +56,7 @@ CreateThread(function()
     end
 end)
 
--- ── Broadcasting ────────────────────────────────────────────────────────────
+-- Broadcasting
 
 --- Tell every VM that can care. Server-side `TriggerEvent` reaches every other
 --- resource's server VM, which is how a consumer's `tlib.demo` copy learns about
@@ -96,7 +96,7 @@ CreateThread(function()
     publish()
 end)
 
--- ── The runtime toggle ──────────────────────────────────────────────────────
+-- The runtime toggle
 
 -- Restricted: console and `tlib.admin` only. Note that in demo mode everyone
 -- holds `tlib.admin`, so an in-game player on a demo server can turn demo mode
@@ -130,7 +130,7 @@ RegisterCommand('tlib_demo', function(src, args)
     if arg == 'on' then announce() end
 end, true)
 
--- ── The marketplace sweep ───────────────────────────────────────────────────
+-- The marketplace sweep
 
 --- Ask a consumer's bundled marketplace agent to uninstall everything it owns.
 ---
@@ -139,9 +139,12 @@ end, true)
 --- files inside tRadio's folder is refused outright. The sweep runs in the
 --- consumer's own bundle, using the receipts written at install time.
 ---
---- Preinstalled content is safe by construction and needs no special case: items
---- that ship with a resource are covered by its embedded ProtectedBuiltinInventory
---- and are never receipt-owned, and this only ever deletes what a receipt claims.
+--- Preinstalled content is safe by construction and needs no special case: this
+--- only ever deletes what a receipt claims, items that ship with a resource have
+--- no receipt, and installer/core.lua's `owned()` THROWS for any on-disk path no
+--- receipt claims rather than touching it. The receipt model is the whole of it.
+--- NOT the ProtectedBuiltinInventory, which the note here used to credit: that
+--- gates legacy adoption only, and nothing passes one today.
 --- @param resource string
 function Demo.sweepMarketplace(resource)
     if not Demo.active() then return end
