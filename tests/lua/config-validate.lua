@@ -1,7 +1,7 @@
 -- tlib.config: startup validation of an owner-edited config.lua.
 --
 -- Every assertion here maps to a rule in
--- internal/reference/tscripts-config-standard.md §10, which in turn exists
+-- the shared config standard these resources follow, which in turn exists
 -- because each rule maps to a support ticket the seven resources actually
 -- generated: a typo'd key that silently did nothing, a quoted number, a
 -- fallback that differed from the shipped default, an error that named the

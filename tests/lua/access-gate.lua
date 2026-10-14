@@ -2,7 +2,7 @@
 --
 -- The real adapters.lua is loaded off disk rather than stubbed, so the framework
 -- and inventory call shapes are covered here too. Those were transcribed from
--- the vendored framework sources in internal/reference/frameworks, and the ones
+-- the vendored framework sources kept outside this repository, and the ones
 -- that are easy to get subtly wrong -- nested vs flat grade, GetGroups vs
 -- PlayerData, geteverything vs getdept -- are pinned below by name.
 

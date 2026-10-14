@@ -17,7 +17,7 @@
 -- that differed from the shipped default, so the product disagreed with both
 -- the file and the docs.
 --
--- The rules it enforces are internal/reference/tscripts-config-standard.md §10:
+-- The rules it enforces come from the shared config standard these resources follow:
 --   * report EVERY problem at once, never just the first
 --   * every message names the file, the key, what was expected, what was found,
 --     and how to fix it

@@ -61,7 +61,7 @@ describe("the private internal/ tree stays out of this public repo", () => {
   test.skipIf(!HAS_PRIVATE_TREE)(
     "it is its own repository, which is what makes add -f and clean -xdf safe",
     () => {
-      // The repo root is internal/ itself; tProvenance is a directory inside it.
+      // internal/ IS the repository root -- there is no package directory inside it.
       // A nested repo is a directory containing .git; on a worktree .git is a file.
       expect(existsSync(join(REPO, "internal", ".git"))).toBe(true);
     }

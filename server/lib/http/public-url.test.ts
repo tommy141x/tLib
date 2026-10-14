@@ -40,7 +40,7 @@ describe("bare host, no port", () => {
   });
 
   test("a single-label LAN name gets the router's port over http", () => {
-    expect(base("ms-a2")).toBe("http://ms-a2:7777");
+    expect(base("myserver")).toBe("http://myserver:7777");
   });
 
   // The headline inference: DNS pointed here means a proxy or tunnel on 443.
