@@ -5,15 +5,19 @@
 --
 --   local shared = tlib.inference:lookup('text', 'qwen3-1.7b-q4_k_m')
 --   if shared then
---       -- someone else already has these weights loaded; talk to shared.baseUrl
+--       -- someone else already has these weights loaded; talk to shared.url
 --   else
 --       local handle = tlib.inference:advertise({
 --           capability = 'text',
 --           workload   = 'qwen3-1.7b-q4_k_m',
---           baseUrl    = 'http://127.0.0.1:18291/v1',
+--           url        = 'http://127.0.0.1:18291/v1',
 --           model      = 'local',
 --       })
 --   end
+--
+-- The field is `url`, not `baseUrl`: server/lib/inference/registry.ts reads
+-- `request.url` and rejects an advertisement with no URL by returning '', so a
+-- descriptor spelled `baseUrl` advertises nothing and reports it as nil.
 --
 -- No inference goes through tLib. An advertisement is a note about where an
 -- engine is; the bytes go straight between the two resources over loopback.
