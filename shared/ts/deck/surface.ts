@@ -1,7 +1,7 @@
 /**
  * The drawing surface a deck primitive renders onto.
  *
- * ── Why this exists ──
+ * Why this exists
  *
  * The three product render modules this package replaces each hardcoded two
  * things they had no business hardcoding:
@@ -23,7 +23,7 @@
  * meaning, they differ per product, and every primitive takes them as an explicit
  * argument so a reader can see at the call site what a colour is saying.
  *
- * ── The 72px budget, which is the real constraint ──
+ * The 72px budget, which is the real constraint
  *
  * A key canvas is 144x144 (the @2x size) but a Stream Deck key is **72x72
  * physical**. Everything is downscaled 2:1 before a human sees it, and that is
@@ -42,30 +42,30 @@
 
 /** The structural greys every primitive needs, independent of what a key means. */
 export interface SurfaceInk {
-	/** Text knocked out of a LIT field. Near-black, so it survives any backlight. */
-	ink: string;
-	/** Unlit segment fill — present but not energised. */
-	card: string;
-	/** Primary ink. */
-	text: string;
-	/** Unlit / disabled / off-segment ink. */
-	faint: string;
-	/** Hairline rules, chip outlines and the glass edge. */
-	edge: string;
+  /** Text knocked out of a LIT field. Near-black, so it survives any backlight. */
+  ink: string;
+  /** Unlit segment fill — present but not energised. */
+  card: string;
+  /** Primary ink. */
+  text: string;
+  /** Unlit / disabled / off-segment ink. */
+  faint: string;
+  /** Hairline rules, chip outlines and the glass edge. */
+  edge: string;
 }
 
 /** A cell to draw into: its geometry plus its structural ink. */
 export interface Surface extends SurfaceInk {
-	width: number;
-	height: number;
-	/**
-	 * Horizontal inset for content, in px.
-	 *
-	 * Primitives measure against `width - inset * 2` rather than against a
-	 * hardcoded `- 24`, so the same primitive keeps a sane margin on a 144px key
-	 * and on a 200px encoder cell.
-	 */
-	inset: number;
+  width: number;
+  height: number;
+  /**
+   * Horizontal inset for content, in px.
+   *
+   * Primitives measure against `width - inset * 2` rather than against a
+   * hardcoded `- 24`, so the same primitive keeps a sane margin on a 144px key
+   * and on a 200px encoder cell.
+   */
+  inset: number;
 }
 
 /** A standard Stream Deck key face: 144x144 at @2x, 72x72 physical. */
@@ -83,20 +83,20 @@ export const STRIP_CELL = { width: 200, height: 100 } as const;
 
 /** Build a {@link Surface} for a key face from a product's structural ink. */
 export function keySurface(ink: SurfaceInk, inset = 12): Surface {
-	return { ...ink, width: KEY_SIZE, height: KEY_SIZE, inset };
+  return { ...ink, width: KEY_SIZE, height: KEY_SIZE, inset };
 }
 
 /** Build a {@link Surface} for one encoder cell from a product's structural ink. */
 export function stripSurface(ink: SurfaceInk, inset = 10): Surface {
-	return { ...ink, width: STRIP_CELL.width, height: STRIP_CELL.height, inset };
+  return { ...ink, width: STRIP_CELL.width, height: STRIP_CELL.height, inset };
 }
 
 /** The horizontal centre of a surface. */
 export function centreX(s: Surface): number {
-	return s.width / 2;
+  return s.width / 2;
 }
 
 /** The widest a piece of content may be before it collides with the inset. */
 export function contentWidth(s: Surface): number {
-	return s.width - s.inset * 2;
+  return s.width - s.inset * 2;
 }

@@ -31,35 +31,35 @@ import { centreX, contentWidth, type Surface } from "./surface.ts";
  * was drawn at, and changing any of them reflows labels on a shipped deck.
  */
 export function fitText(
-	s: Surface,
-	text: string,
-	opts: {
-		y: number;
-		max: number;
-		min?: number;
-		weight?: number;
-		fill?: string;
-		maxWidth?: number;
-		mono?: boolean;
-		step?: number;
-	},
+  s: Surface,
+  text: string,
+  opts: {
+    y: number;
+    max: number;
+    min?: number;
+    weight?: number;
+    fill?: string;
+    maxWidth?: number;
+    mono?: boolean;
+    step?: number;
+  }
 ): string {
-	const weight = opts.weight ?? 600;
-	const maxWidth = opts.maxWidth ?? contentWidth(s);
-	const raw = String(text ?? "");
-	const fitted = fitToWidth(raw, {
-		max: opts.max,
-		min: opts.min ?? 12,
-		maxWidth,
-		weight,
-		tracking: 0,
-		step: opts.step ?? 1,
-	});
-	return (
-		`<text x="${centreX(s)}" y="${opts.y}" text-anchor="middle" ` +
-		`font-family="${opts.mono ? MONO : SANS}" font-size="${fitted.size}" ` +
-		`font-weight="${weight}" fill="${opts.fill ?? s.text}">${esc(fitted.text)}</text>`
-	);
+  const weight = opts.weight ?? 600;
+  const maxWidth = opts.maxWidth ?? contentWidth(s);
+  const raw = String(text ?? "");
+  const fitted = fitToWidth(raw, {
+    max: opts.max,
+    min: opts.min ?? 12,
+    maxWidth,
+    weight,
+    tracking: 0,
+    step: opts.step ?? 1,
+  });
+  return (
+    `<text x="${centreX(s)}" y="${opts.y}" text-anchor="middle" ` +
+    `font-family="${opts.mono ? MONO : SANS}" font-size="${fitted.size}" ` +
+    `font-weight="${weight}" fill="${opts.fill ?? s.text}">${esc(fitted.text)}</text>`
+  );
 }
 
 /**
@@ -69,27 +69,27 @@ export function fitText(
  * bank, a band — rather than anything a player typed.
  */
 export function label(
-	s: Surface,
-	text: string,
-	y: number,
-	fill?: string,
-	opts: { maxWidth?: number } = {},
+  s: Surface,
+  text: string,
+  y: number,
+  fill?: string,
+  opts: { maxWidth?: number } = {}
 ): string {
-	const weight = 700;
-	const tracking = 1.6;
-	const maxWidth = opts.maxWidth ?? contentWidth(s) - 4;
-	const fitted = fitToWidth(String(text ?? "").toUpperCase(), {
-		max: 14,
-		min: 10,
-		maxWidth,
-		weight,
-		tracking,
-	});
-	return (
-		`<text x="${trackedCentre(centreX(s), tracking)}" y="${y}" text-anchor="middle" ` +
-		`font-family="${SANS}" font-size="${fitted.size}" font-weight="${weight}" ` +
-		`letter-spacing="${tracking}" fill="${fill ?? s.faint}">${esc(fitted.text)}</text>`
-	);
+  const weight = 700;
+  const tracking = 1.6;
+  const maxWidth = opts.maxWidth ?? contentWidth(s) - 4;
+  const fitted = fitToWidth(String(text ?? "").toUpperCase(), {
+    max: 14,
+    min: 10,
+    maxWidth,
+    weight,
+    tracking,
+  });
+  return (
+    `<text x="${trackedCentre(centreX(s), tracking)}" y="${y}" text-anchor="middle" ` +
+    `font-family="${SANS}" font-size="${fitted.size}" font-weight="${weight}" ` +
+    `letter-spacing="${tracking}" fill="${fill ?? s.faint}">${esc(fitted.text)}</text>`
+  );
 }
 
 /**
@@ -104,27 +104,27 @@ export function label(
  * case its author typed; use {@link fitText}.
  */
 export function legend(
-	s: Surface,
-	text: string,
-	y: number,
-	fill?: string,
-	opts: { max?: number; min?: number; maxWidth?: number } = {},
+  s: Surface,
+  text: string,
+  y: number,
+  fill?: string,
+  opts: { max?: number; min?: number; maxWidth?: number } = {}
 ): string {
-	const weight = 700;
-	const tracking = 1.2;
-	const maxWidth = opts.maxWidth ?? contentWidth(s) - 2;
-	const fitted = fitToWidth(String(text ?? "").toUpperCase(), {
-		max: opts.max ?? 15,
-		min: opts.min ?? 10,
-		maxWidth,
-		weight,
-		tracking,
-	});
-	return (
-		`<text x="${trackedCentre(centreX(s), tracking)}" y="${y}" text-anchor="middle" ` +
-		`font-family="${SANS}" font-size="${fitted.size}" font-weight="${weight}" ` +
-		`letter-spacing="${tracking}" fill="${fill ?? s.faint}">${esc(fitted.text)}</text>`
-	);
+  const weight = 700;
+  const tracking = 1.2;
+  const maxWidth = opts.maxWidth ?? contentWidth(s) - 2;
+  const fitted = fitToWidth(String(text ?? "").toUpperCase(), {
+    max: opts.max ?? 15,
+    min: opts.min ?? 10,
+    maxWidth,
+    weight,
+    tracking,
+  });
+  return (
+    `<text x="${trackedCentre(centreX(s), tracking)}" y="${y}" text-anchor="middle" ` +
+    `font-family="${SANS}" font-size="${fitted.size}" font-weight="${weight}" ` +
+    `letter-spacing="${tracking}" fill="${fill ?? s.faint}">${esc(fitted.text)}</text>`
+  );
 }
 
 /**
@@ -136,59 +136,59 @@ export function legend(
  * {@link fitText} rather than a string concatenation at the call site.
  */
 export function valueWithUnit(
-	s: Surface,
-	value: string,
-	unit: string | undefined,
-	opts: {
-		y: number;
-		max: number;
-		min?: number;
-		fill?: string;
-		unitFill?: string;
-		mono?: boolean;
-		/** Unit size in px. FIXED, not a fraction of the value — see below. */
-		unitSize?: number;
-		maxWidth?: number;
-	},
+  s: Surface,
+  value: string,
+  unit: string | undefined,
+  opts: {
+    y: number;
+    max: number;
+    min?: number;
+    fill?: string;
+    unitFill?: string;
+    mono?: boolean;
+    /** Unit size in px. FIXED, not a fraction of the value — see below. */
+    unitSize?: number;
+    maxWidth?: number;
+  }
 ): string {
-	const weight = 700;
-	const family = opts.mono ? MONO : SANS;
-	const maxWidth = opts.maxWidth ?? contentWidth(s);
-	const min = opts.min ?? 14;
-	const raw = String(value ?? "");
-	if (!unit) {
-		return fitText(s, raw, {
-			y: opts.y,
-			max: opts.max,
-			min,
-			weight,
-			fill: opts.fill,
-			mono: opts.mono,
-			maxWidth,
-		});
-	}
+  const weight = 700;
+  const family = opts.mono ? MONO : SANS;
+  const maxWidth = opts.maxWidth ?? contentWidth(s);
+  const min = opts.min ?? 14;
+  const raw = String(value ?? "");
+  if (!unit) {
+    return fitText(s, raw, {
+      y: opts.y,
+      max: opts.max,
+      min,
+      weight,
+      fill: opts.fill,
+      mono: opts.mono,
+      maxWidth,
+    });
+  }
 
-	const unitTrack = 0.8;
-	const gap = 6;
-	// The unit is a FIXED size, deliberately. Scaling it with the value means a
-	// long reading shrinks its own unit out of legibility at exactly the moment
-	// the key is busiest — and the unit is three letters that have to stay
-	// readable at 72px whatever the number beside them is doing.
-	const unitSize = opts.unitSize ?? 14;
-	// The unit's share is reserved off the top, so the number is sized against
-	// what is genuinely left rather than competing with it for width.
-	const unitW = estimateWidth(unit, unitSize, weight, unitTrack) + gap;
-	const valueMax = maxWidth - unitW;
-	let size = opts.max;
-	while (size > min && estimateWidth(raw, size, weight, 0) > valueMax) size -= 1;
+  const unitTrack = 0.8;
+  const gap = 6;
+  // The unit is a FIXED size, deliberately. Scaling it with the value means a
+  // long reading shrinks its own unit out of legibility at exactly the moment
+  // the key is busiest — and the unit is three letters that have to stay
+  // readable at 72px whatever the number beside them is doing.
+  const unitSize = opts.unitSize ?? 14;
+  // The unit's share is reserved off the top, so the number is sized against
+  // what is genuinely left rather than competing with it for width.
+  const unitW = estimateWidth(unit, unitSize, weight, unitTrack) + gap;
+  const valueMax = maxWidth - unitW;
+  let size = opts.max;
+  while (size > min && estimateWidth(raw, size, weight, 0) > valueMax) size -= 1;
 
-	const valueW = estimateWidth(raw, size, weight, 0);
-	const startX = centreX(s) - (valueW + unitW) / 2;
-	return (
-		`<text x="${startX}" y="${opts.y}" text-anchor="start" font-family="${family}" ` +
-		`font-size="${size}" font-weight="${weight}" fill="${opts.fill ?? s.text}">${esc(raw)}</text>` +
-		`<text x="${startX + valueW + gap}" y="${opts.y}" text-anchor="start" font-family="${SANS}" ` +
-		`font-size="${unitSize}" font-weight="${weight}" letter-spacing="${unitTrack}" ` +
-		`fill="${opts.unitFill ?? s.faint}">${esc(unit)}</text>`
-	);
+  const valueW = estimateWidth(raw, size, weight, 0);
+  const startX = centreX(s) - (valueW + unitW) / 2;
+  return (
+    `<text x="${startX}" y="${opts.y}" text-anchor="start" font-family="${family}" ` +
+    `font-size="${size}" font-weight="${weight}" fill="${opts.fill ?? s.text}">${esc(raw)}</text>` +
+    `<text x="${startX + valueW + gap}" y="${opts.y}" text-anchor="start" font-family="${SANS}" ` +
+    `font-size="${unitSize}" font-weight="${weight}" letter-spacing="${unitTrack}" ` +
+    `fill="${opts.unitFill ?? s.faint}">${esc(unit)}</text>`
+  );
 }

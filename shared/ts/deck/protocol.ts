@@ -1,7 +1,7 @@
 /**
  * The transport contract shared by every TIMMYG Studios Stream Deck link.
  *
- * ── What is in here, and what deliberately is not ────────────────────────────
+ * What is in here, and what deliberately is not
  *
  * The LINK is shared; the PAYLOAD is not. Every product's state frame has its
  * own shape — tELS nests its snapshot under `payload`, tRadar sends its fields
@@ -15,7 +15,7 @@
  * four CONTROL frames (`ping`, `pong`, `bye`, and the `command` envelope), which
  * are byte-compatible across all three products today.
  *
- * ── Why the ports live in a typed record ─────────────────────────────────────
+ * Why the ports live in a typed record
  *
  * The allocation used to exist as a sentence in a comment, repeated in six
  * files, with nothing anywhere able to notice a collision. Two plugins binding
@@ -114,7 +114,7 @@ export const REBIND_MS = 3_000;
  */
 export const DEFAULT_MAX_BIND_ATTEMPTS = 6;
 
-/* ── Control frames ─────────────────────────────────────────────────────────── */
+/* Control frames */
 
 /** Page → plugin. Application-level keepalive. */
 export interface PingFrame {

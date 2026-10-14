@@ -20,25 +20,25 @@ import type { Surface } from "./surface.ts";
  * bar rather than segments drawn off the side of the key.
  */
 export function levelBar(
-	s: Surface,
-	level: number,
-	opts: { y: number; x?: number; width?: number; count?: number; fill: string; height?: number },
+  s: Surface,
+  level: number,
+  opts: { y: number; x?: number; width?: number; count?: number; fill: string; height?: number }
 ): string {
-	const count = opts.count ?? 14;
-	const x = opts.x ?? s.inset + 2;
-	const width = opts.width ?? s.width - (s.inset + 2) * 2;
-	const h = opts.height ?? 10;
-	const gap = 2;
-	const w = (width - gap * (count - 1)) / count;
-	const clamped = Math.max(0, Math.min(1, Number.isFinite(level) ? level : 0));
-	const lit = Math.round(clamped * count);
-	let out = "";
-	for (let i = 0; i < count; i++) {
-		out +=
-			`<rect x="${x + i * (w + gap)}" y="${opts.y - h}" width="${w}" height="${h}" ` +
-			`fill="${i < lit ? opts.fill : s.card}"/>`;
-	}
-	return out;
+  const count = opts.count ?? 14;
+  const x = opts.x ?? s.inset + 2;
+  const width = opts.width ?? s.width - (s.inset + 2) * 2;
+  const h = opts.height ?? 10;
+  const gap = 2;
+  const w = (width - gap * (count - 1)) / count;
+  const clamped = Math.max(0, Math.min(1, Number.isFinite(level) ? level : 0));
+  const lit = Math.round(clamped * count);
+  let out = "";
+  for (let i = 0; i < count; i++) {
+    out +=
+      `<rect x="${x + i * (w + gap)}" y="${opts.y - h}" width="${w}" height="${h}" ` +
+      `fill="${i < lit ? opts.fill : s.card}"/>`;
+  }
+  return out;
 }
 
 /**
@@ -57,41 +57,41 @@ export function levelBar(
  * exists to say.
  */
 export function sweepBar(
-	s: Surface,
-	active: number | null,
-	opts: { y: number; x?: number; width?: number; count?: number; fill: string; height?: number },
+  s: Surface,
+  active: number | null,
+  opts: { y: number; x?: number; width?: number; count?: number; fill: string; height?: number }
 ): string {
-	const count = opts.count ?? 9;
-	const x = opts.x ?? s.inset + 4;
-	const width = opts.width ?? s.width - (s.inset + 4) * 2;
-	const h = opts.height ?? 26;
-	const gap = 3;
-	const w = (width - gap * (count - 1)) / count;
-	let out = "";
-	for (let i = 0; i < count; i++) {
-		const lit = active !== null && i === active;
-		// Segments either side of the lit one carry a trailing glow, which is what
-		// makes a static image read as a sweep in motion rather than as one lit bar.
-		const near = active !== null && Math.abs(i - active) === 1;
-		out +=
-			`<rect x="${x + i * (w + gap)}" y="${opts.y - h}" width="${w}" height="${h}" ` +
-			`fill="${lit ? opts.fill : s.card}" opacity="${lit ? 1 : near ? 0.85 : 0.55}"/>`;
-	}
-	return out;
+  const count = opts.count ?? 9;
+  const x = opts.x ?? s.inset + 4;
+  const width = opts.width ?? s.width - (s.inset + 4) * 2;
+  const h = opts.height ?? 26;
+  const gap = 3;
+  const w = (width - gap * (count - 1)) / count;
+  let out = "";
+  for (let i = 0; i < count; i++) {
+    const lit = active !== null && i === active;
+    // Segments either side of the lit one carry a trailing glow, which is what
+    // makes a static image read as a sweep in motion rather than as one lit bar.
+    const near = active !== null && Math.abs(i - active) === 1;
+    out +=
+      `<rect x="${x + i * (w + gap)}" y="${opts.y - h}" width="${w}" height="${h}" ` +
+      `fill="${lit ? opts.fill : s.card}" opacity="${lit ? 1 : near ? 0.85 : 0.55}"/>`;
+  }
+  return out;
 }
 
 /** Geometry for one signal-strength meter. */
 export interface SignalGeom {
-	/** Bar width. */
-	w?: number;
-	/** Gap between bars. */
-	gap?: number;
-	/** Height of the shortest bar. */
-	base?: number;
-	/** How much taller each successive bar is. */
-	step?: number;
-	/** How many bars. */
-	count?: number;
+  /** Bar width. */
+  w?: number;
+  /** Gap between bars. */
+  gap?: number;
+  /** Height of the shortest bar. */
+  base?: number;
+  /** How much taller each successive bar is. */
+  step?: number;
+  /** How many bars. */
+  count?: number;
 }
 
 /**
@@ -105,10 +105,10 @@ export const SIGNAL_GEOM_ROW: SignalGeom = { w: 4, gap: 2.5, base: 4, step: 2.6 
 
 /** Total width of {@link signalBars}, so callers can right-align without guessing. */
 export function signalBarsWidth(g: SignalGeom = {}): number {
-	const w = g.w ?? 5;
-	const gap = g.gap ?? 2;
-	const count = g.count ?? 5;
-	return count * w + (count - 1) * gap;
+  const w = g.w ?? 5;
+  const gap = g.gap ?? 2;
+  const count = g.count ?? 5;
+  return count * w + (count - 1) * gap;
 }
 
 /**
@@ -121,24 +121,24 @@ export function signalBarsWidth(g: SignalGeom = {}): number {
  * three different states rendered identically.
  */
 export function signalBars(
-	s: Surface,
-	level: number,
-	x: number,
-	y: number,
-	on: string,
-	g: SignalGeom = {},
+  s: Surface,
+  level: number,
+  x: number,
+  y: number,
+  on: string,
+  g: SignalGeom = {}
 ): string {
-	let out = "";
-	const w = g.w ?? 5;
-	const gap = g.gap ?? 2;
-	const base = g.base ?? 6;
-	const step = g.step ?? 4.5;
-	const count = g.count ?? 5;
-	for (let i = 0; i < count; i++) {
-		const h = base + i * step;
-		out +=
-			`<rect x="${x + i * (w + gap)}" y="${y - h}" width="${w}" height="${h}" ` +
-			`fill="${i < level ? on : s.card}"/>`;
-	}
-	return out;
+  let out = "";
+  const w = g.w ?? 5;
+  const gap = g.gap ?? 2;
+  const base = g.base ?? 6;
+  const step = g.step ?? 4.5;
+  const count = g.count ?? 5;
+  for (let i = 0; i < count; i++) {
+    const h = base + i * step;
+    out +=
+      `<rect x="${x + i * (w + gap)}" y="${y - h}" width="${w}" height="${h}" ` +
+      `fill="${i < level ? on : s.card}"/>`;
+  }
+  return out;
 }

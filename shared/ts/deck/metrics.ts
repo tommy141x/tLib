@@ -1,7 +1,7 @@
 /**
  * Type metrics for Stream Deck key art, and the text measurement built on them.
  *
- * ── Why this is shared ──
+ * Why this is shared
  *
  * tRadio, tELS and tRadar each drew their own deck keys from their own copy of a
  * render module. The copies agreed on the design language by convention and prose
@@ -10,7 +10,7 @@
  * that cannot happen again: the numbers below are measured, and they are measured
  * once.
  *
- * ── The measurement ──
+ * The measurement
  *
  * Taken with a canvas `measureText` probe in the same Chromium 103 build that
  * rasterises the keys, against the real {@link SANS} stack and the actual strings
@@ -40,8 +40,8 @@
  * label on someone else's machine.
  */
 export const SANS =
-	"Bahnschrift, 'DIN Alternate', 'DIN Condensed', 'Helvetica Neue Condensed', " +
-	"'HelveticaNeue-CondensedBold', 'Arial Narrow', 'Segoe UI', Helvetica, Arial, sans-serif";
+  "Bahnschrift, 'DIN Alternate', 'DIN Condensed', 'Helvetica Neue Condensed', " +
+  "'HelveticaNeue-CondensedBold', 'Arial Narrow', 'Segoe UI', Helvetica, Arial, sans-serif";
 
 /** For digits that must not reflow as they count — clocks, frequencies, speeds. */
 export const MONO = "Consolas, 'SF Mono', 'Cascadia Code', monospace";
@@ -83,7 +83,7 @@ export const CAP = 0.72;
  * each was correct at exactly one font size.
  */
 export function capBaseline(cy: number, size: number): number {
-	return cy + (size * CAP) / 2;
+  return cy + (size * CAP) / 2;
 }
 
 /**
@@ -95,33 +95,33 @@ export function capBaseline(cy: number, size: number): number {
  * face is ever swapped for one whose bold *is* wider.
  */
 export function estimateWidth(
-	text: string,
-	size: number,
-	_weight: number,
-	tracking: number,
+  text: string,
+  size: number,
+  _weight: number,
+  tracking: number
 ): number {
-	return text.length * size * PER_CHAR + Math.max(0, text.length - 1) * tracking;
+  return text.length * size * PER_CHAR + Math.max(0, text.length - 1) * tracking;
 }
 
 /** Binary-search the longest prefix (plus an ellipsis) that fits `maxWidth`. */
 export function truncateToWidth(
-	text: string,
-	size: number,
-	maxWidth: number,
-	weight: number,
-	tracking: number,
+  text: string,
+  size: number,
+  maxWidth: number,
+  weight: number,
+  tracking: number
 ): string {
-	const ELLIPSIS = "…";
-	if (!text.length) return text;
-	let lo = 0;
-	let hi = text.length;
-	while (lo < hi) {
-		const mid = (lo + hi + 1) >> 1;
-		const candidate = `${text.slice(0, mid).trimEnd()}${ELLIPSIS}`;
-		if (estimateWidth(candidate, size, weight, tracking) <= maxWidth) lo = mid;
-		else hi = mid - 1;
-	}
-	return lo > 0 ? `${text.slice(0, lo).trimEnd()}${ELLIPSIS}` : ELLIPSIS;
+  const ELLIPSIS = "…";
+  if (!text.length) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    const candidate = `${text.slice(0, mid).trimEnd()}${ELLIPSIS}`;
+    if (estimateWidth(candidate, size, weight, tracking) <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo > 0 ? `${text.slice(0, lo).trimEnd()}${ELLIPSIS}` : ELLIPSIS;
 }
 
 /**
@@ -138,35 +138,35 @@ export function truncateToWidth(
  * was designed and reviewed at.
  */
 export function fitToWidth(
-	text: string,
-	opts: {
-		max: number;
-		min: number;
-		maxWidth: number;
-		weight: number;
-		tracking: number;
-		step?: number;
-	},
+  text: string,
+  opts: {
+    max: number;
+    min: number;
+    maxWidth: number;
+    weight: number;
+    tracking: number;
+    step?: number;
+  }
 ): { text: string; size: number; width: number } {
-	const step = opts.step ?? 0.5;
-	let size = opts.max;
-	while (size > opts.min && estimateWidth(text, size, opts.weight, opts.tracking) > opts.maxWidth) {
-		size -= step;
-	}
-	const out =
-		estimateWidth(text, size, opts.weight, opts.tracking) > opts.maxWidth
-			? truncateToWidth(text, size, opts.maxWidth, opts.weight, opts.tracking)
-			: text;
-	return { text: out, size, width: estimateWidth(out, size, opts.weight, opts.tracking) };
+  const step = opts.step ?? 0.5;
+  let size = opts.max;
+  while (size > opts.min && estimateWidth(text, size, opts.weight, opts.tracking) > opts.maxWidth) {
+    size -= step;
+  }
+  const out =
+    estimateWidth(text, size, opts.weight, opts.tracking) > opts.maxWidth
+      ? truncateToWidth(text, size, opts.maxWidth, opts.weight, opts.tracking)
+      : text;
+  return { text: out, size, width: estimateWidth(out, size, opts.weight, opts.tracking) };
 }
 
 /** Escape text for inclusion in SVG markup. */
 export function esc(s: string): string {
-	return s
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 /**
@@ -178,10 +178,10 @@ export function esc(s: string): string {
  * moment a tracked line sits above an untracked one.
  */
 export function trackedCentre(centre: number, tracking: number): number {
-	return centre + tracking / 2;
+  return centre + tracking / 2;
 }
 
 /** The drawn width of a tracked string — its advance less the trailing gap. */
 export function trackedWidth(advance: number, tracking: number): number {
-	return advance - tracking;
+  return advance - tracking;
 }

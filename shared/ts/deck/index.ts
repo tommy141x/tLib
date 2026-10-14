@@ -1,7 +1,7 @@
 /**
  * Shared Stream Deck key art — the drawing language behind tRadio, tELS and tRadar.
  *
- * ── What this package owns, and what it does not ──
+ * What this package owns, and what it does not
  *
  * It owns **how things are drawn**: the measured type metrics, the vertical
  * rhythm, what an inverted field is, how a chip row lays out, how a meter
@@ -22,7 +22,7 @@
  * all take as argument one. What a product still writes for itself is its state
  * colours, its exceptional washes, and how its own cards are composed.
  *
- * ── Consuming it ──
+ * Consuming it
  *
  * The three `.sdPlugin` builds are deliberately hermetic — no workspace, file: or
  * link: dependencies, so each one can be zipped and handed to Elgato's packager on
@@ -31,7 +31,7 @@
  * proving byte-for-byte that the copy still matches this source. Everything else
  * in-tree can import `@tlib/shared/deck` directly.
  *
- * ── Where to start ──
+ * Where to start
  *
  * `card(theme, spec)` composes a key; `stripCard(theme, spec)` composes a Stream
  * Deck+ encoder cell. Reach for the primitives below only when a key needs
@@ -41,77 +41,77 @@
  */
 
 export {
-	BAND,
-	bandCentre,
-	capBaseline,
-	card,
-	type CardSpec,
-	type CardTheme,
-	centreX,
-	hairline,
-	HERO,
-	hero,
-	type Hero,
-	heroCentre,
-	keyDoc,
-	offlineCard,
-	type Shell,
+  BAND,
+  bandCentre,
+  type CardSpec,
+  type CardTheme,
+  capBaseline,
+  card,
+  centreX,
+  HERO,
+  type Hero,
+  hairline,
+  hero,
+  heroCentre,
+  keyDoc,
+  offlineCard,
+  type Shell,
 } from "./card.ts";
 export {
-	bindKey,
-	type BindOptions,
-	type BoundKey,
-	type KeyMaterial,
-	LCD_MATERIAL,
-	materialInk,
-	materialShell,
-} from "./material.ts";
-export {
-	chevron,
-	glyphRow,
-	type GlyphSpec,
-	invertField,
-	ledRow,
-	type LedSpec,
-	stateRule,
-	stepRow,
-	unlitField,
+  chevron,
+  type GlyphSpec,
+  glyphRow,
+  invertField,
+  type LedSpec,
+  ledRow,
+  stateRule,
+  stepRow,
+  unlitField,
 } from "./marks.ts";
 export {
-	CAP,
-	esc,
-	estimateWidth,
-	fitToWidth,
-	MONO,
-	PER_CHAR,
-	SANS,
-	trackedCentre,
-	trackedWidth,
-	truncateToWidth,
-} from "./metrics.ts";
+  type BindOptions,
+  type BoundKey,
+  bindKey,
+  type KeyMaterial,
+  LCD_MATERIAL,
+  materialInk,
+  materialShell,
+} from "./material.ts";
 export {
-	levelBar,
-	SIGNAL_GEOM_ROW,
-	signalBars,
-	signalBarsWidth,
-	type SignalGeom,
-	sweepBar,
+  levelBar,
+  SIGNAL_GEOM_ROW,
+  type SignalGeom,
+  signalBars,
+  signalBarsWidth,
+  sweepBar,
 } from "./meters.ts";
 export {
-	offlineStrip,
-	STRIP_BAND,
-	stripCard,
-	stripDoc,
-	type StripSpec,
-	type StripTheme,
+  CAP,
+  esc,
+  estimateWidth,
+  fitToWidth,
+  MONO,
+  PER_CHAR,
+  SANS,
+  trackedCentre,
+  trackedWidth,
+  truncateToWidth,
+} from "./metrics.ts";
+export {
+  offlineStrip,
+  STRIP_BAND,
+  type StripSpec,
+  type StripTheme,
+  stripCard,
+  stripDoc,
 } from "./strip.ts";
 export {
-	contentWidth,
-	KEY_SIZE,
-	keySurface,
-	STRIP_CELL,
-	type Surface,
-	type SurfaceInk,
-	stripSurface,
+  contentWidth,
+  KEY_SIZE,
+  keySurface,
+  STRIP_CELL,
+  type Surface,
+  type SurfaceInk,
+  stripSurface,
 } from "./surface.ts";
 export { fitText, label, legend, valueWithUnit } from "./text.ts";

@@ -1,67 +1,39 @@
 /**
  * The page's end of a Stream Deck link: it dials OUT to the plugin.
  *
- * ── Why this directory is not the vendored one ───────────────────────────────
- *
- * `shared/ts/deck/*.ts` is copied into all three Stream Deck plugins by each
- * product's `deck-render:sync`, which globs that directory non-recursively. This
- * file sits one level down precisely so it is NOT copied: it is DOM code, the
- * plugins compile against `@tsconfig/node20` with no `DOM` lib, and a vendored
- * copy of it would fail their typecheck while nothing imported it. Page bundles
- * are Vite, so they import it from `@tlib/shared` directly and need no copy.
- *
- * ── Direction ────────────────────────────────────────────────────────────────
+ * Direction
  *
  * The plugin is the server and the page is the client, which is the opposite of
  * what it sounds like it should be. A page in FiveM's CEF — or in a dispatcher's
  * browser — cannot accept an inbound connection; the plugin is a long-lived Node
  * process and can listen. Entirely local: the game server is never involved.
  *
- * ── Keepalive, and the bug the whole design is for ───────────────────────────
+ * This file sits one level down from the vendored `deck/` directory so that
+ * `deck-render:sync` does NOT copy it: it is DOM code, and the plugins compile
+ * with no `DOM` lib.
  *
- * CEF throttles `setInterval` in a page that is not on screen, and once a page
- * has been hidden a few minutes it drops to about one wake-up per MINUTE. An
- * open WebSocket does not exempt it. This page is exactly that page whenever the
- * game window loses focus, and the dispatch panel can sit hidden in a tray for
- * hours. The plugin's watchdog then saw a silent peer and terminated the socket
- * under someone who was still using it, and a naive `onclose` released a key
- * they were still physically holding — a PA cut off mid-sentence.
+ * KEEPALIVE IS WHAT THE DESIGN IS FOR. CEF throttles `setInterval` in a hidden
+ * page to about one wake-up a minute, and an open WebSocket does not exempt it,
+ * so the plugin's watchdog saw a silent peer and terminated the socket under
+ * someone still using it -- releasing a key they were physically holding, and
+ * cutting a PA off mid-sentence. Three independent answers: the plugin sends
+ * protocol-level PINGs (answered by CEF's network stack whatever the event loop
+ * is doing), the application keepalive is PIGGYBACKED on `publish()` so a frozen
+ * interval is not the only thing keeping the socket alive, and a hold is not
+ * thrown away on a transport close -- it survives `holdGraceMs` while the socket
+ * reconnects, so the deck's key-up arrives on the new socket.
  *
- * Three answers, and they fail independently:
- *
- *   1. The plugin sends WebSocket PING frames, which CEF answers in its network
- *      stack whatever the JS event loop is doing. That is the layer that
- *      survives throttling, and it lives on the plugin side.
- *   2. The application keepalive here is PIGGYBACKED on the event-driven
- *      `publish()` path, so a frozen interval is not the only thing keeping the
- *      socket alive. The interval is a floor for a genuinely idle page.
- *   3. A hold is not thrown away on a transport close. We reconnect at once and
- *      keep it for `holdGraceMs`; the deck key is still down, so its key-up
- *      arrives on the new socket and ends the action normally. If the plugin
- *      really is gone, the reconnect fails and the hold is released when the
- *      window expires. The mic is never left keyed.
- *
- * Layer 3 is OPT-IN, via `hasHold`/`releaseHolds`. A product with no hold-style
- * key passes neither and gets no grace machinery at all — tRadar's documented
- * choice, now expressed as configuration rather than as an absence that reads
- * like an oversight. Its reasoning holds: `xmit` latches and a struck fork
- * decays on its own timer, so there is no state a reconnect could strand, and
- * carrying the guard anyway would mean maintaining a defence against another
- * product's bug.
+ * The hold layer is OPT-IN via `hasHold`/`releaseHolds`. A product with no
+ * hold-style key gets no grace machinery, which is tRadar's documented choice.
  */
 
 import { KEEPALIVE_MS } from "../protocol.ts";
 
 /**
- * The reconnect schedule: capped exponential backoff.
- *
- * Exported so the arithmetic can be checked exhaustively instead of by
- * stopwatch. Timing a real reconnect proves it came back; it does not prove the
- * delay doubled, and a backoff that silently degraded to a constant would pass
- * every behavioural test in the suite.
- *
- * The exponent is clamped before the cap so the doubling cannot overflow on a
- * link that has been retrying for days.
+ * The reconnect schedule: capped exponential backoff. Exported so the arithmetic
+ * can be checked exhaustively rather than by stopwatch -- timing a real reconnect
+ * proves it came back, not that the delay doubled. The exponent is clamped before
+ * the cap so the doubling cannot overflow on a link retrying for days.
  */
 export function reconnectDelayFor(attempt: number, baseMs: number, capMs: number): number {
   return Math.min(capMs, baseMs * 2 ** Math.min(Math.max(attempt, 0), 5));
@@ -82,26 +54,16 @@ export interface DeckLinkClientOptions<TSnap extends object> {
 
   /**
    * Build the current snapshot, or null when there is nothing to send yet.
-   *
-   * Called only when a socket is actually open, so a player with the feature
-   * off pays for a subscription and nothing else.
    */
   snapshot: () => TSnap | null;
 
   /**
    * Handle an inbound frame the link does not handle itself.
-   *
-   * Everything except `ping` and `pong` arrives here, because the plugin-to-page
-   * vocabulary is product-owned: tELS and tRadio send `command`, tRadar also
-   * sends `set`, and a link layer that filtered on `type === "command"` would
-   * silently swallow the others. Discriminate on `type` inside.
    */
   onMessage: (message: Record<string, unknown>) => void;
 
   /**
    * Is something held that a dropped socket would strand?
-   *
-   * Supplying this (with `releaseHolds`) is what turns the hold-grace layer on.
    */
   hasHold?: () => boolean;
 
@@ -119,22 +81,11 @@ export interface DeckLinkClientOptions<TSnap extends object> {
 
   /**
    * Reconnect ceiling. Default 30_000.
-   *
-   * Capped exponential backoff, which is tRadar's, and it is the baseline
-   * because it is strictly better than the flat 5 s tELS and tRadio used: a
-   * game left running overnight next to a plugin that is not installed must not
-   * hammer a closed port all night, and a plugin that has just started must not
-   * wait a flat 5 s to be noticed.
    */
   reconnectCapMs?: number;
 
   /**
    * Skip a state push identical to the one before it. Default true.
-   *
-   * tRadio's, and worth having everywhere: these feeds re-publish on every
-   * engine output, most of which do not change a single field the deck reads,
-   * and each no-op push costs a socket write here plus a parse and a repaint
-   * decision in the plugin. A skipped push still covers the keepalive.
    */
   dedupe?: boolean;
 
@@ -148,9 +99,6 @@ export interface DeckLinkClientOptions<TSnap extends object> {
 export interface DeckLinkClient {
   /**
    * Turn the link on or off.
-   *
-   * Off sends a `bye` so the plugin's keys go offline at once rather than
-   * waiting out its 12 s watchdog on a socket that is never coming back.
    */
   setEnabled(on: boolean): void;
   /** True while the player has the link switched on. */
@@ -159,12 +107,12 @@ export interface DeckLinkClient {
   isOpen(): boolean;
   /**
    * Push the current snapshot.
-   *
-   * Event-driven, which is also what makes it the application liveness signal:
-   * a page that is drawing is a page proving it is alive. Pass `true` to send
-   * even when nothing changed.
    */
   publish(force?: boolean): void;
+  /**
+   * Send one frame outside the snapshot path.
+   */
+  sendRaw(data: string | ArrayBuffer | ArrayBufferView): void;
   /** Tear everything down: timers, socket, holds. */
   dispose(): void;
 }
@@ -192,11 +140,6 @@ export function createDeckLinkClient<TSnap extends object>(
 
   /**
    * Grace only exists when the product tracks holds.
-   *
-   * Both halves are required together: knowing something is held is no use
-   * without a way to let go of it, and a `releaseHolds` that is never consulted
-   * would be a release that never happens. Captured as a single pair so the two
-   * cannot drift apart.
    */
   const holdTracking =
     typeof hasHold === "function" && typeof releaseHolds === "function"
@@ -222,11 +165,15 @@ export function createDeckLinkClient<TSnap extends object>(
 
   const isOpen = (): boolean => ws != null && ws.readyState === WebSocket.OPEN;
 
-  const raw = (text: string): void => {
+  const raw = (data: string | ArrayBuffer | ArrayBufferView): void => {
     const sock = ws;
     if (!sock || sock.readyState !== WebSocket.OPEN) return;
     try {
-      sock.send(text);
+      // The overloads differ by argument type, so narrow rather than widening
+      // the call — `send` accepts both but TypeScript resolves one signature.
+      if (typeof data === "string") sock.send(data);
+      else if (data instanceof ArrayBuffer) sock.send(data);
+      else sock.send(new Uint8Array(data.buffer as ArrayBuffer, data.byteOffset, data.byteLength));
       noteOutbound();
     } catch {
       /* a failed write is a dead socket; onclose handles it */
@@ -252,8 +199,6 @@ export function createDeckLinkClient<TSnap extends object>(
     const json = JSON.stringify({ type: "state", source, ...snap });
     if (dedupe && !force && json === lastSent) {
       // Nothing changed — but this call is event-driven rather than
-      // timer-driven, so use it to cover a keepalive the throttled interval
-      // may have missed. This is the piggyback.
       if (Date.now() - lastOutboundAt >= keepaliveMs) ping();
       return;
     }
@@ -290,7 +235,6 @@ export function createDeckLinkClient<TSnap extends object>(
       lastSent = "";
       noteOutbound();
       // A reconnect that lands inside the grace window means the hold
-      // survived: the deck key is still down and its key-up will arrive here.
       clearHoldGrace();
       publish(true);
       keepaliveTimer = setInterval(() => {
@@ -314,8 +258,6 @@ export function createDeckLinkClient<TSnap extends object>(
 
       if (msg.type === "ping") {
         // The plugin heartbeats with protocol-level ping frames today, but
-        // answer an application-level one too: a reply is inbound traffic for
-        // it and costs nothing.
         raw(JSON.stringify({ type: "pong", source }));
         return;
       }
@@ -422,6 +364,7 @@ export function createDeckLinkClient<TSnap extends object>(
     isEnabled: () => enabled,
     isOpen,
     publish,
+    sendRaw: raw,
     dispose() {
       if (disposed) return;
       disposed = true;

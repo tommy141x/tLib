@@ -19,13 +19,13 @@
  *     tELS assigned the payload wholesale, so a snapshot missing a field the
  *     plugin knew about reached a draw function as `undefined`.
  *
- * ── Direction, and why it is this way round ──────────────────────────────────
+ * Direction, and why it is this way round
  *
  * The plugin listens and the page dials out. That is not a preference: a page
  * running in FiveM's CEF (or a dispatcher's browser) cannot accept inbound
  * connections at all, while the plugin is a long-lived Node process that can.
  *
- * ── Liveness: three layers, because two of them fail on their own ────────────
+ * Liveness: three layers, because two of them fail on their own
  *
  *   1. A server-initiated WebSocket PING frame, from here. Browsers and CEF
  *      answer ping frames in the NETWORK stack whatever the JS event loop is
@@ -37,7 +37,7 @@
  *   3. Hold grace, which can only live on the PAGE side — only the page knows
  *      whether a key is still physically down. See `deck/page/link.ts`.
  *
- * ── No `@elgato/streamdeck` import, deliberately ─────────────────────────────
+ * No `@elgato/streamdeck` import, deliberately
  *
  * This module is vendored into three plugins and lives in a library that does
  * not depend on Elgato's SDK. Logging is INJECTED (`log`), which also happens to
@@ -217,7 +217,7 @@ export function createDeckLinkServer<TSnap, TSource extends string>(
   let rebindTimer: NodeJS.Timeout | null = null;
   let listeningPort: number | null = null;
 
-  /* ── A minimal typed emitter ──────────────────────────────────────────────
+  /* A minimal typed emitter
    * Rather than `node:events`, whose generic signatures differ between the
    * three products' TypeScript versions, and whose `error` event semantics are
    * a trap this layer has no use for.
