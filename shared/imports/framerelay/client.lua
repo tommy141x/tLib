@@ -12,16 +12,11 @@
             differs   = tdetScreenFrameDiffers,
         })
 
-    ── What this is for ────────────────────────────────────────────────────────
+     What this is for
 
     How a screen belonging to a car you are NOT operating gets something to show.
-
-    The picture is built in the browser from the local device's own view, so a client
-    that is not running that car's device has no way to derive it — and must not try.
-    A second derivation is a second answer, and two props showing two different
-    readings of the same device is worse than one prop showing none. Each client's
-    copy of a moving car is its own approximation, so two engines would disagree
-    about the very number the device exists to produce.
+    Only the client running the device computes its picture, and that client is
+    not the one looking at the prop.
 
     So the client that HAS the picture publishes it, on the VEHICLE's statebag, and
     everyone who can see the vehicle reads it — the rear passengers, the officer at
@@ -29,16 +24,10 @@
     readable by anyone in scope, where a point-to-point seat relay only ever reaches
     one partner.
 
-    ── What is OWNED HERE and what is the consumer's ───────────────────────────
+     What is OWNED HERE and what is the consumer's
 
-    Here: the controller ELECTION, the sequence numbering, the heartbeat, the stale
-    expiry, and the withdrawal on a vehicle change or a resource stop. tDetector and
-    tRadar had all of that twice, identically, for payloads that have nothing in
-    common — 27 flat scalars on one side and a nested cells/lamps tree on the other.
-
-    The consumer's: the PAYLOAD SCHEMA. `sanitise` and `differs` are the whole of it
-    and they are genuinely different per device, which is why they are parameters
-    rather than anything this file knows about.
+    The relay owns publication, expiry and withdrawal. The consumer owns the frame
+    itself — producing it, sanitising it, and deciding whether two differ.
 
     THE RELAY TOUCHES EXACTLY THREE FIELDS of a payload, and they are part of the
     contract:
@@ -51,20 +40,15 @@
                     work anywhere. Every consumer wanted this and stating it once is
                     the point.
 
-    ── WHY THE ELECTION ────────────────────────────────────────────────────────
+     WHY THE ELECTION
 
-    The publisher is the vehicle's CONTROLLER — its driver, or its front passenger
-    while the driver seat is empty — and exactly one client can be that at a time.
-    Electing one matters: BOTH FRONT-SEAT OCCUPANTS RUN THEIR OWN NUI AND BOTH HAVE A
-    FRAME, and two writers on one statebag key would alternate two devices' pictures
-    into everyone else's prop.
+     Two occupants of one vehicle would otherwise write the same statebag key with
+     two different pictures, each overwriting the other every tick. So exactly one
+     publishes: `occupancy.isController()`. The suite that proves this is
+     tests/lua/framerelay-election.lua, and it needs two clients over one statebag
+     world because no single-VM resource suite can reach the state at all.
 
-    The controller is also the client that normally OWNS the entity, which is what a
-    statebag write requires; when ownership migrates the writes stop landing, the
-    heartbeat freezes and every reader expires the value. The failure mode is a blank
-    prop, never a wrong one.
-
-    ── TWO HARD-WON FACTS ABOUT THIS PATTERN ───────────────────────────────────
+     TWO HARD-WON FACTS ABOUT THIS PATTERN
 
      * POLL IT; DO NOT USE AddStateBagChangeHandler. The condition is not "the value
        changed", it is "the value changed AND the consumer still names this vehicle
@@ -76,41 +60,20 @@
        hence the stale window. Without them a driver whose game crashed leaves their
        last alert painted on the prop for as long as the car exists.
 
-    ── Not owned here ─────────────────────────────────────────────────────────
-
-    The threads. `publishTick` and `read` are both callable and both pure of timing,
-    because the consumer already runs a loop at its own cadence and because an
-    infinite loop is the one thing a Lua suite cannot drive. See
-    tests/lua/framerelay-election.lua, which steps them.
 ]]
 
 local FrameRelay = {}
 
 --- How often a publisher looks at whether it owes the vehicle a write, in ms.
 ---
---- Not how often it writes: it writes when the picture CHANGED or when the heartbeat
---- is due. A consumer's NUI already suppresses unchanged frames, and this is the
---- second gate, because a NUI clock runs at 10-20 Hz and a live frame genuinely
---- changes several times a second. Four writes a second of one payload, replicated to
---- everyone the vehicle is streamed to, is the ceiling that buys; twenty would not be.
----
---- Exposed rather than private: it is the cadence a consumer's publish thread should
---- wait on, and two numbers that have to agree should not be written twice.
 FrameRelay.PUBLISH_MS = 250
 
 --- How long a publisher will go without writing anything at all, in ms.
 ---
---- The heartbeat. It exists for the reader's staleness test and for nothing else, so
---- it is as slow as that test can tolerate.
 FrameRelay.HEARTBEAT_MS = 1000
 
 --- How long a value may go without its `seq` moving before it is leftovers, in ms.
 ---
---- Three heartbeats. It has to clear HEARTBEAT_MS with room to spare: a window of one
---- would expire a live device every time the publisher's frame hitched, and the
---- symptom is a screen that blanks and comes back. Reacting to a genuine crash two
---- seconds late is much the better failure — and the explicit withdrawal below is
---- what makes every ordinary case immediate anyway.
 FrameRelay.STALE_MS = FrameRelay.HEARTBEAT_MS * 3
 
 --- @param descriptor table
@@ -139,7 +102,7 @@ function FrameRelay.create(descriptor)
 
     local instance = {}
 
-    -- ── Publish side ────────────────────────────────────────────────────────
+    -- Publish side
 
     local publishedVehicle = nil
     local publishedFrame   = nil
@@ -148,9 +111,6 @@ function FrameRelay.create(descriptor)
 
     --- Withdraw whatever we published, if anything. Idempotent.
     ---
-    --- Call it on resource stop BEFORE anything else: the vehicle is a SHARED object,
-    --- so every other client's reader would otherwise hold our last frame until it
-    --- expired — on a restart, a stale alert on a prop for the next three seconds.
     function instance.withdraw()
         local vehicle = publishedVehicle
         publishedVehicle, publishedFrame = nil, nil
@@ -164,9 +124,6 @@ function FrameRelay.create(descriptor)
         local vehicle, netId = occupancy.myVehicle()
         local mine = vehicle ~= nil and occupancy.isController() == true
 
-        -- Nothing worth publishing: not aboard, not the elected writer, no screen on
-        -- the car, or a device that is switched off. See the `powered` note in the
-        -- header for why an off device publishes nothing rather than an off frame.
         local present = mine and (hasScreen == nil or hasScreen(vehicle) == true)
         local raw = present and d.frame() or nil
         local frame = (type(raw) == 'table' and raw.powered == true) and d.sanitise(raw) or nil
@@ -176,8 +133,6 @@ function FrameRelay.create(descriptor)
             return
         end
 
-        -- Changed car between two passes. Withdraw from the old one first or it keeps
-        -- a value nothing will ever update or clear again.
         if publishedVehicle and publishedVehicle ~= vehicle then instance.withdraw() end
 
         local now = GetGameTimer()
@@ -194,21 +149,16 @@ function FrameRelay.create(descriptor)
         publishedAt      = now
 
         frame.seq   = publishSeq
-        -- Carried so a reader can cross-check the vehicle it thinks it is reading. Not
-        -- load-bearing; it costs one field and it is the first thing anyone debugging
-        -- a relay asks for.
         frame.netId = netId
         Entity(vehicle).state:set(KEY, frame, true)
     end
 
-    --- The vehicle we are currently publishing on, or nil. For suites and for a
-    --- consumer's own diagnostics; nothing in the relay reads it.
     function instance.publishedVehicle() return publishedVehicle end
 
     --- The sequence number of the last write. Same purpose.
     function instance.publishedSeq() return publishSeq end
 
-    -- ── Read side ───────────────────────────────────────────────────────────
+    -- Read side
 
     local remoteSeq     = nil
     local remoteSeqAt   = 0

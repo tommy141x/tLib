@@ -30,6 +30,17 @@ local function fixture(authors, name)
         jobs[#jobs + 1] = { at = clock, thread = coroutine.create(fn) }
     end
     function Wait(ms) return coroutine.yield(ms) end
+    -- Both spellings are live across the resources this fixture loads: tRadio's
+    -- sv_version.lua calls `Citizen.CreateThread`/`Citizen.Wait`, the others use
+    -- the bare globals. In FiveM they are the same functions -- `Citizen` is the
+    -- namespace and the globals are its aliases -- so point both at one stub
+    -- rather than letting the spelling decide whether the suite runs.
+    --
+    -- Without this the suite dies at `../tRadio/server/sv_version.lua:649:
+    -- attempt to index a nil value (global 'Citizen')`, which looks exactly like
+    -- an ancient unrelated failure. It was reported as "pre-existing, not mine"
+    -- four times in one day before anyone read the line it died on.
+    Citizen = { CreateThread = CreateThread, Wait = Wait }
     function PerformHttpRequest(url, cb, method, body, headers)
         requests[#requests + 1] = { url = url, cb = cb, headers = headers }
     end
@@ -44,7 +55,7 @@ local function fixture(authors, name)
     StudioBranding = nil
     assert(loadfile('shared/sh_branding.lua'))()
     -- Same story for the studio API host: the module takes it from tLib's real
-    -- shared/sh_api.lua so `tmarketplace_base_url` is ONE switch -- pointing it
+    -- shared/sh_api.lua so `tlib_api_base_url` is ONE switch -- pointing it
     -- at a dev worker has to move the version check and its changelog too, not
     -- just marketplace installs. Pre-loaded here for the same reason branding is;
     -- the module's guard accepts either. GetConvar is left undefined by default
@@ -155,16 +166,16 @@ test('Studios provider queries each product and resolves once', function()
     end
 end)
 
--- The whole point of tmarketplace_base_url is pointing every studio call at one
+-- The whole point of tlib_api_base_url is pointing every studio call at one
 -- local dev server. Before this, the provider below hard-coded the host, so an
 -- operator testing marketplace installs against localhost still had their
 -- version check and changelog hitting production -- exactly the split the convar
 -- exists to remove. github() is asserted UNCHANGED in the same test: that one
 -- really does point at GitHub and must never follow this convar.
-test('Studios provider follows tmarketplace_base_url; GitHub does not', function()
+test('Studios provider follows tlib_api_base_url; GitHub does not', function()
     local f = fixture({ 'TIMMYG Studios' })
     GetConvar = function(name, default)
-        if name == 'tmarketplace_base_url' then return 'http://localhost:8787/' end
+        if name == 'tlib_api_base_url' then return 'http://localhost:8787/' end
         return default
     end
     f.vc({ name = 'tELS', current = '1.0.0', fetch = f.vc.studios('tELS', '1.0.0') })
@@ -173,7 +184,7 @@ test('Studios provider follows tmarketplace_base_url; GitHub does not', function
 
     local g = fixture({ 'TIMMYG Studios' })
     GetConvar = function(name, default)
-        if name == 'tmarketplace_base_url' then return 'http://localhost:8787' end
+        if name == 'tlib_api_base_url' then return 'http://localhost:8787' end
         return default
     end
     g.vc({ name = 'tLib', current = '1.0.0', fetch = g.vc.github('tommy141x/tLib') })
@@ -188,7 +199,7 @@ end)
 test('Studios provider trims a trailing /api path off the convar', function()
     local f = fixture({ 'TIMMYG Studios' })
     GetConvar = function(name, default)
-        if name == 'tmarketplace_base_url' then return '  http://localhost:8787/api/v1/  ' end
+        if name == 'tlib_api_base_url' then return '  http://localhost:8787/api/v1/  ' end
         return default
     end
     f.vc({ name = 'tELS', current = '1.0.0', fetch = f.vc.studios('tELS', '1.0.0') })
@@ -421,5 +432,6 @@ test('radio Lua bridge renders structured update failure without claiming curren
     excludes(f.text(), 'up to date')
     excludes(f.text(), 'Update available')
 end)
+
 
 report(('Passed %d versioncheck tests'):format(passed))

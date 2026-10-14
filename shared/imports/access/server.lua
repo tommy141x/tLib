@@ -10,36 +10,10 @@
             ...
         end)
 
-    Why this exists
-    ---------------
-    Every one of these resources eventually gets the same request: "I don't want
-    everyone to have this." And every server answers it differently -- one owner
-    gates on an ACE, one on a QBox job, one on an item in an ox_inventory, one on
-    a bespoke function in their own framework. Hand-rolling that per resource
-    produced two bugs already, both the same bug: the CHECK ran on the client, so
-    the gate was a greyed-out button and the underlying net event was open to
-    anyone who typed it.
+    The decision is made HERE, on the server, every time; the client mirror
+    only greys out a button. Framework and inventory are independent axes.
+    Design notes: docs/internal/access-gate.md
 
-    So the rule this module exists to enforce is not "support frameworks". It is:
-    **the decision is made here, on the server, every time.** The client mirror in
-    client.lua exists only to grey out a button, and says so.
-
-    Two axes, independently detected
-    --------------------------------
-    A framework answers "what job is this player, at what grade". An inventory
-    answers "how many of this item do they have". They are SEPARATE resources and
-    separate questions, and conflating them is a real bug, not a tidiness point:
-
-      * qb-core's own `HasItem` is a pass-through to qb-inventory and answers nil
-        on a server running qb-core with ox_inventory -- which is a very common
-        pairing, and reads as "the player has nothing".
-      * ox_core and ND_Core ship no inventory at all; in practice both are run
-        with ox_inventory.
-      * nat2k15 is a duty/department framework with no inventory concept. It is
-        a perfectly good answer to `job`, alongside any inventory at all.
-
-    So `mode = 'item'` needs an INVENTORY, not a framework, and a server with no
-    framework whatsoever can still gate on an item.
 ]]
 
 local access = {}
@@ -54,7 +28,7 @@ local ANSWER_TTL_MS = 250
 
 local VALID_MODES = { everyone = true, ace = true, job = true, item = true, custom = true }
 
--- ── Adapter registry ────────────────────────────────────────────────────────
+-- Adapter registry
 
 -- Ordered, not a map. Detection order is load-bearing: qbx_core declares
 -- `provide 'qb-core'` AND registers the qb-core export names, so on a QBox server
@@ -93,12 +67,9 @@ local function loadAdapters()
     for _, a in ipairs(built.inventories or {}) do inventories[#inventories + 1] = a end
 end
 
--- Rebuilding the adapter LIST is not enough on its own: the detection result is
--- cached separately, so an adapter registered after the first check would sit in
--- the list and never win. That is the normal case, not an edge case -- a
--- consumer's server script registering a fork's adapter runs after something has
--- already asked a gate a question. A pinned choice is left alone; it was set
--- deliberately and outranks a later registration.
+-- Rebuilding the adapter list is not enough: the detection RESULT is cached
+-- separately, so an adapter registered after the first check would sit in the
+-- list and never win. A pinned choice outranks a later registration.
 local function invalidateDetection()
     frameworks, inventories = nil, nil
     if not detected.frameworkPinned then detected.frameworkDone = false end
@@ -121,7 +92,7 @@ function access.registerInventory(adapter)
     invalidateDetection()
 end
 
--- ── Detection ───────────────────────────────────────────────────────────────
+-- Detection
 
 local function resourceRunning(name)
     if type(name) ~= 'string' or name == '' then return false end
@@ -143,14 +114,10 @@ local function detectOne(list)
     return nil
 end
 
--- Resource start order is not ours to control. A consumer declares
--- `dependencies { 'tLib' }`, which says nothing about qbx_core or ox_inventory,
--- so a gate built at startup can easily run before the framework exists. Caching
--- "nothing detected" at that moment would deny every player for the life of the
--- server, and look exactly like a broken resource.
 --
--- So detection is redone whenever ANY resource starts. It is two GetResourceState
--- calls behind a flag, and it turns a permanent wrong answer into a transient one.
+-- Detection is redone whenever ANY resource starts: a consumer's dependency on
+-- tLib says nothing about qbx_core or ox_inventory, and caching "nothing
+-- detected" would deny every player for the life of the server.
 if AddEventHandler then
     AddEventHandler('onResourceStart', function()
         detected.frameworkDone = detected.frameworkPinned or false
@@ -256,24 +223,16 @@ function access.count(src, item, required)
     return result
 end
 
--- ── Validating an owner's access block ──────────────────────────────────────
+-- Validating an owner's access block
 
 --- Checks one `access = { ... }` block. Returns a list of problem strings.
+--- Deliberately not silent-and-deny: a gate whose framework is missing denies
+--- everyone forever, which an owner experiences as a broken resource.
 ---
---- Deliberately NOT silent-and-deny. A gate whose framework is missing denies
---- every player forever, which an owner experiences as "the resource is broken",
---- and the console is the only place that can tell them otherwise.
----
---- `environment` splits the two kinds of problem, and the split matters:
----
----   * STRUCTURAL (environment = false) is a mistake in the file -- a misspelled
----     mode, a job list of the wrong shape. It is true the moment the file is
----     read, it can only be fixed by editing the file, and it disables the gate.
----   * ENVIRONMENTAL (environment = true) is "mode is job and I see no framework".
----     That may simply mean the framework has not started yet, so asserting it at
----     startup would print a scary, wrong error on a perfectly good server. It is
----     checked once things have settled, and it never disables the gate -- the
----     gate will start passing on its own the moment the framework appears.
+--- `environment` splits the two kinds. STRUCTURAL is a mistake in the file and
+--- disables the gate; ENVIRONMENTAL is "mode is job and I see no framework",
+--- which may just mean the framework has not started yet, so it warns and never
+--- disables. See docs/internal/access-gate.md.
 local function problems(block, label, environment)
     local out = {}
     local function bad(message)
@@ -350,123 +309,19 @@ end
 
 access.problems = problems
 
--- ── Migrating from the pre-access config shape ──────────────────────────────
-
---- Builds an `access` block from the older loose keys, so an owner's config
---- keeps working across the upgrade.
----
---- This lives in tLib rather than in each resource on purpose. Every one of
---- these resources grew the same three-ish keys independently -- `accessMode`,
---- `acePermission`, and some form of job or item name -- so every one of them
---- would otherwise write its own shim, and get the same two details subtly
---- wrong: that a flat job LIST has no grades and must become `{ name = 0 }`
---- rather than being passed through as-is, and that an owner who has already
---- written the new block must not have it silently overwritten by stale old keys
---- still sitting further up the file.
----
----     Config.access = tlib.access.migrate(Config.access, {
----         mode = Config.accessMode,
----         ace  = Config.acePermission,
----         job  = Config.jobs,            -- flat list or { name = grade }
----         item = Config.qbItemName,
----     }, { file = 'shared/config.lua', removeIn = '2.0.0' })
----
---- @param block table|nil   the owner's `access` block, if they have written one
---- @param legacy table      values read from the old keys; nils are ignored
---- @param opts table|nil    { file, removeIn, names = { mode = 'accessMode', ... } }
---- @return table|nil        the block to hand to `gate()`
-function access.migrate(block, legacy, opts)
-    opts = opts or {}
-    legacy = legacy or {}
-
-    local file = opts.file or 'config.lua'
-    local removeIn = opts.removeIn or 'a future major version'
-    local names = opts.names or {}
-    local function oldName(field) return names[field] or field end
-
-    local used = {}
-    for _, field in ipairs({ 'mode', 'ace', 'job', 'item', 'count' }) do
-        if legacy[field] ~= nil then used[#used + 1] = oldName(field) end
-    end
-
-    local function warn(message)
-        print(('^3[%s] %s: %s^7'):format(RESOURCE, file, message))
-    end
-
-    if type(block) == 'table' then
-        -- The new block wins. Saying so matters: an owner who migrated and left
-        -- the old keys behind would otherwise be debugging a setting that is
-        -- being ignored, with no indication that it is.
-        if #used > 0 then
-            warn(('Config.access is set, so %s %s ignored.\n  Fix: delete %s from %s.')
-                :format(table.concat(used, ', '), #used == 1 and 'is' or 'are',
-                    table.concat(used, ', '), file))
-        end
-        return block
-    end
-
-    if #used == 0 then return nil end
-
-    warn(('%s %s been replaced by a single Config.access block.\n  Your settings are still being used. Fix: move them into Config.access in %s -- see the documentation. The old names stop working in v%s.')
-        :format(table.concat(used, ', '), #used == 1 and 'has' or 'have', file, removeIn))
-
-    local job = legacy.job
-    if type(job) == 'table' then
-        local converted, isFlatList = {}, false
-        for key, value in pairs(job) do
-            if type(key) == 'number' and type(value) == 'string' then
-                -- A flat list of job names, with no grades anywhere. Grade 0 is
-                -- the only faithful translation: the old shape could not express
-                -- a minimum, so every grade qualified.
-                converted[value], isFlatList = 0, true
-            elseif type(key) == 'string' then
-                converted[key] = tonumber(value) or 0
-            end
-        end
-        job = (next(converted) ~= nil) and converted or nil
-        if isFlatList then
-            warn(('%s was a list of job names with no grades, so every grade qualifies.\n  Fix: in Config.access, write job = { police = 0 } and raise the 0 to set a minimum grade.')
-                :format(oldName('job')))
-        end
-    else
-        job = nil
-    end
-
-    return {
-        mode   = legacy.mode,
-        ace    = legacy.ace,
-        job    = job,
-        item   = legacy.item,
-        count  = legacy.count,
-    }
-end
-
--- ── The gate ────────────────────────────────────────────────────────────────
+-- The gate
 
 local Gate = {}
 Gate.__index = Gate
 
+--
+--
+--
 -- Every gate this resource has built, so a disconnect can drop that player's
--- memoised answer from all of them.
---
--- ⚠️ WITHOUT THIS A GATE IS A MEMORY LEAK, and a silent one. `Gate:allowed`
--- memoises one entry per player it has EVER been asked about, keyed by src, and
--- nothing in the gate itself ever removes one: the TTL makes an entry STALE, it
--- does not make it go away. On a busy server that is one table entry per unique
--- player per gate, held for the life of the process.
---
--- It was found because two resources happened to notice it and swept their own
--- gates by hand from their own `playerDropped` handlers (tDetector's
--- sv_admin.lua did `accessGate:invalidate(src)` and `toggleGate:invalidate(src)`
--- there). Every other gate in the tree leaked. A consumer cannot reasonably be
--- expected to know that a gate needs sweeping, so the gate sweeps itself, and
--- the hand-written calls become redundant rather than wrong.
---
--- Weak KEYS, not an array: a gate the consumer has dropped must be collectable,
--- and a weak ARRAY would leave holes that `#` cannot be asked about safely. The
--- handler is installed once, lazily, on the first gate — `playerDropped` is an
--- ordinary event and one handler per gate would mean N dispatches per
--- disconnect.
+-- memoised answer from all of them. WITHOUT THIS A GATE IS A SILENT MEMORY LEAK:
+-- the TTL makes an entry stale, it does not remove it, so a gate holds one entry
+-- per unique player for the life of the process. Weak KEYS so a dropped gate is
+-- collectable; one lazily-installed handler rather than one per gate.
 local liveGates = setmetatable({}, { __mode = 'k' })
 local gateSweepInstalled = false
 
@@ -532,7 +387,15 @@ function Gate:allowed(src)
     local memo = self.memo[key]
     if memo and (now - memo.at) < ANSWER_TTL_MS then return memo.value end
 
+    --
+    --
+    -- Instrumented on the MISS path only. `evaluate` calls out to whichever
+    -- framework and inventory the customer runs, and that is one of the few
+    -- costs in this estate that depends on their server rather than ours -- a
+    -- profiler once attributed ~5.2 ms to one permission resolution. 50 ms,
+    -- because a privileged action waits on this.
     local value = self:evaluate(src)
+    tlib.telemetry.record('access:evaluate', 50, ((GetGameTimer and GetGameTimer()) or 0) - now)
     self.memo[key] = { at = now, value = value }
     return value
 end
@@ -578,8 +441,8 @@ function Gate:report()
         label     = self.label,
         modes     = modes,
         broken    = self.broken,
-        -- Reported separately from `modes` so a diagnostic can tell "this gate
-        -- is open because demo mode is on" from "this gate is configured open".
+        -- Reported separately from `modes` so a diagnostic can tell "open
+        -- because demo mode is on" from "configured open".
         demo      = tlib.demo.active(),
         framework = access.framework(),
         inventory = access.inventory(),

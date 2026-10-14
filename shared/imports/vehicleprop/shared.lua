@@ -1,88 +1,25 @@
 --[[
-    tLib — the in-vehicle prop: model registry, placement store and lifecycle
+    tLib — the in-vehicle prop: model registry, placement store and lifecycle.
 
-    Loaded into the CONSUMER's VM, like every other module under
-    shared/imports/: `tlib.vehicleprop`. It has to run there rather than inside
-    tLib's own VM because it creates objects the consumer's own files look at
-    (a DUI screen renderer asks "is there a prop on this vehicle?"), and because
-    it instantiates `tlib.propeditor`, which registers NUI callbacks against the
-    consumer's `ui_page`.
+    Loaded into the CONSUMER's VM: it creates objects the consumer's own files
+    look at, and it instantiates `tlib.propeditor`, which registers NUI
+    callbacks against the consumer's `ui_page`. `shared.lua` because the pure
+    rules are asked on both sides -- what to spawn, and what a save may store.
 
-        local props = tlib.vehicleprop.create({ ... descriptor ... })
+    Ownership is the DECORATOR and nothing else, and the placement tables are
+    cleared in place and never replaced, because consumers alias them.
+    Design notes: docs/internal/vehicle-prop.md
 
-    `shared.lua` rather than `client.lua` because the PURE RULES below are asked
-    on both sides. The client builds the registry to decide what to SPAWN; the
-    server builds the same registry to decide what a save is allowed to STORE.
-    Those are two different questions over the same table, which is why both
-    halves exist — but there is no reason for two implementations of the table
-    itself, and the three that existed had already drifted (the server's
-    validity check did not trim whitespace before measuring the name).
-    `create` is client-only in practice; defining it on the server costs
-    nothing, because every native it touches is reached at call time.
-
-    ── Why this exists ─────────────────────────────────────────────────────────
-
-    tDetector's and tRadar's `client/cl_props.lua` were both exactly 591 lines.
-    Normalising only the identifier prefix, the built-in model name and the
-    device noun left 80 differing lines, and EVERY ONE of them was comment prose
-    or whitespace: the two files had no behavioural difference at all. tRadio's
-    is the same skeleton with heavier edits; it is the file that solved this
-    first and the ownership rule below is lifted from it.
-
-    Everything that is actually a particular resource arrives in the descriptor:
-    the identifier prefix, the built-in model, the decorator, the two net event
-    names, the notify label and the one error string. Those were the only real
-    inputs; they were already fields in the table the duplicated files built.
-
-    ── The reasoning, which is the part that is expensive to rediscover ────────
-
-    Four rules are implemented here rather than restated in each consumer. Each
-    one fails SILENTLY in game when it is got wrong, which is why they are
-    written down at the point they are enforced:
-
-      * CASE INSENSITIVITY. `GetHashKey` routes through the lowercasing
-        `HashString`, so a record saved as "RDX4000" and a config entry spelled
-        "rdx4000" name the SAME archetype and must resolve to each other.
-        Comparing the strings raw treats them as two models, one of which is not
-        registered — and the prop silently comes out as the default.
-
-      * THE BUILT-IN IS ALWAYS PRESENT, AND ALWAYS FIRST, and the default always
-        names a model that is in the registry. A fallback is only worth anything
-        if the thing it falls back to can actually be spawned.
-
-      * OWNERSHIP IS THE DECORATOR AND NOTHING ELSE — not the model hash, not a
-        distance, not "it is attached to a vehicle". See the mark's own comment
-        in `tlib.propeditor`, whose instance this module reuses rather than
-        keeping a second one that could disagree.
-
-      * THE PLACEMENT TABLES ARE CLEARED IN PLACE, NEVER REPLACED. Consumers
-        alias them (`tdetAttachedProps = props.attached`) and other files in the
-        resource index the alias. Reassigning `attached = {}` on cleanup would
-        leave every alias pointing at the previous table, which then looks
-        permanently empty to half the resource and permanently full to the
-        other half. `clearInPlace` below is the whole of that guarantee.
-
-    ── Not owned here ──────────────────────────────────────────────────────────
-
-    The DUI screen that renders on the prop, the HUD, and anything that reads a
-    placement to draw something are the consumer's. This module answers "which
-    prop is on this vehicle, and where" and nothing further.
 ]]
 
 local VehicleProp = {}
 
--- ══════════════════════════════════════════════════════════════════════════
 --  PURE RULES — no natives, no state. tests/lua/vehicleprop.lua drives these
 --  directly, which is possible only because they take no globals.
--- ══════════════════════════════════════════════════════════════════════════
 
---- Is `model` a plausible archetype name?
----
---- An archetype name is one of the few strings out of a config file that
---- reaches a native: it goes to `GetHashKey` and then to `CreateObject`. A path
---- separator in one is never legitimate, and neither is an empty or absurdly
---- long string. The server applies the same shape check to a vehicle model name.
----
+--- Is `model` a plausible archetype name? It is one of the few config strings
+--- that reaches a native -- `GetHashKey` then `CreateObject` -- so a path
+--- separator, an empty string or an absurd length is never legitimate.
 --- @param model any
 --- @return string|nil  the trimmed name, or nil when it is not usable
 function VehicleProp.normaliseModelName(model)
@@ -95,12 +32,8 @@ end
 --- Builds the prop-model registry from a `Config.vehicleProp`-shaped table:
 ---   { default = 'rdx4000', models = { { model = 'rdx4000', label = 'RDX-4000' }, ... } }
 ---
---- Built wholesale rather than merged into whatever was there before: a model
---- the owner deleted from config has to stop being offered, and a merge would
---- keep it forever.
----
---- An ABSENT block is the common case, not an error. It means "the built-in,
---- alone".
+--- Built wholesale rather than merged: a model the owner deleted from config has
+--- to stop being offered. An ABSENT block is the common case, not an error.
 ---
 --- @param builtin string          the model the resource streams itself
 --- @param cfg table|nil           the owner's block
@@ -117,12 +50,6 @@ function VehicleProp.buildRegistry(builtin, cfg)
         local key  = model:lower()
         local text = (type(label) == 'string' and label ~= '') and label or model
 
-        -- The built-in is seeded FIRST so it is always offered and always
-        -- first, which means an owner who also lists it — and the config.lua
-        -- these resources ship does exactly that, as 'RDX-4000 (built in)' —
-        -- would otherwise have their label thrown away by the de-duplication.
-        -- A real label replaces a placeholder one (a label that is only the
-        -- model name); a second real label does not win.
         local existing = index[key]
         if existing then
             if existing.label == existing.model and text ~= model then
@@ -159,14 +86,9 @@ function VehicleProp.clearInPlace(t)
 end
 
 --- Copies `source` into `target` in place, keeping only records that look like
---- placements.
----
---- Filtered on `x ~= nil` rather than trusted wholesale. `data.json` is a shared
---- file with other sections in it (`soundWavMap`, `installedSounds`), and a bug
---- on the server side that handed the whole document over instead of the
---- `props` section would otherwise have the lifecycle thread trying to attach a
---- prop to a vehicle model called "installedSounds".
----
+--- placements. Filtered on `x ~= nil` rather than trusted: data.json is shared,
+--- and a server bug that sent the whole document would have the lifecycle
+--- thread attaching a prop to a vehicle model called "installedSounds".
 --- @param target table
 --- @param source any
 --- @return table target
@@ -179,9 +101,7 @@ function VehicleProp.replacePlacements(target, source)
     return target
 end
 
--- ══════════════════════════════════════════════════════════════════════════
 --  THE INSTANCE
--- ══════════════════════════════════════════════════════════════════════════
 
 local LIFECYCLE_INTERVAL_MS = 2500
 local STARTUP_REQUEST_DELAY_MS = 2000
@@ -218,7 +138,6 @@ function VehicleProp.create(descriptor)
 
     local instance = {}
 
-    -- ── Registry ─────────────────────────────────────────────────────────
     --
     -- `models` is a stable table for the same reason the placement tables are:
     -- a consumer hands it to a settings UI once. `setRegistry` refills it.
@@ -243,17 +162,10 @@ function VehicleProp.create(descriptor)
     end
 
     --- The model name to actually spawn for a saved record's `model` field, in
-    --- the registry's own spelling.
-    ---
-    --- Everything unresolvable lands on the default, deliberately. There are
-    --- three ways to get here with something that is not a registered model and
-    --- all three are ordinary rather than exceptional:
-    ---   * nil — every record written before a record could name a model
-    ---   * a model the owner has since removed from the config block
-    ---   * a typo, or a model whose streaming resource is not running
-    --- Spawning NOTHING for those would not read as "misconfigured", it would
-    --- read as the device disappearing: CreateObject returns 0 for a model that
-    --- is not resident, and it does it silently.
+    --- the registry's own spelling. Everything unresolvable lands on the default,
+    --- because all three ways of getting here are ordinary: a record from before
+    --- records named a model, a model the owner removed, and a typo. Spawning
+    --- nothing reads as the device disappearing, not as a misconfiguration.
     function instance.resolveModel(name)
         local entry = type(name) == 'string' and index[name:lower()] or nil
         if entry then return entry.model end
@@ -267,18 +179,10 @@ function VehicleProp.create(descriptor)
 
     instance.setRegistry(d.registry)
 
-    -- ── Placement store ──────────────────────────────────────────────────
     --
     --   placements[<vehicle model hash as a string>] = { x, y, z, rx, ry, rz, model? }
     --
-    -- Keyed by the hash rather than by the spawn name because that is what
-    -- GetEntityModel answers with, and it is the one identifier a client can
-    -- get off a vehicle without a lookup table of every archetype on the server.
     --
-    -- Two sources, merged by the server before it sends this: the owner's seeds
-    -- in config, and the `props` section of data.json that the editor writes.
-    -- The server resolves the precedence, so there is exactly one place that
-    -- decision is made.
     local placements = {}
     -- { [vehicleHandle] = propHandle }. This incarnation of the resource only.
     local attached = {}
@@ -294,15 +198,10 @@ function VehicleProp.create(descriptor)
         return nil
     end
 
-    --- The saved placement for a vehicle, or nil.
-    ---
-    --- `model` is always filled in with the model that will actually be
-    --- spawned, so a caller never has to know the resolution rules. It is a
-    --- SHALLOW COPY, not the live record: writing the resolved name back would
-    --- give every record that never had a `model` key one, and the editor saves
-    --- whatever it finds there — so merely READING the data would quietly
-    --- rewrite data.json. `tlib.propeditor.placementView` is the one
-    --- implementation of that copy.
+    --- The saved placement for a vehicle, or nil. `model` is filled in with what
+    --- will actually be spawned, as a SHALLOW COPY: writing the resolved name
+    --- back would give every legacy record a `model` key, and the editor saves
+    --- whatever it finds -- so merely reading would rewrite data.json.
     function instance.getPlacement(vehicle)
         if not DoesEntityExist(vehicle) then return nil end
         local data = placements[tostring(GetEntityModel(vehicle))]
@@ -315,13 +214,6 @@ function VehicleProp.create(descriptor)
         VehicleProp.replacePlacements(placements, source)
     end
 
-    -- ── Gizmo state, shared with the prop editor ─────────────────────────
-    --
-    -- Written by `tlib.propeditor` (through `onStateChange` below) while it has
-    -- hold of a prop; nothing else writes them. Both guards below are written
-    -- `if not gizmoActive` and `obj ~= gizmoProp`, which are correct against nil
-    -- as well as false — the editor never having been opened is the normal
-    -- case, not an error case.
     local gizmoActive = false
     local gizmoProp = nil
     local onGizmoChange = d.onGizmoChange
@@ -329,13 +221,11 @@ function VehicleProp.create(descriptor)
     function instance.isGizmoActive() return gizmoActive end
     function instance.gizmoProp() return gizmoProp end
 
-    -- ── Model streaming ──────────────────────────────────────────────────
+    -- Model streaming
 
-    --- Blocks until the model is loaded, or gives up after ~1s.
-    ---
-    --- Declared above the editor because the descriptor takes it BY VALUE:
-    --- `tlib.propeditor.create` asserts it is a function at call time, and a
-    --- forward local would still be nil there.
+    --- Blocks until the model is loaded, or gives up after ~1s. Declared above
+    --- the editor because the descriptor takes it BY VALUE, and
+    --- `tlib.propeditor.create` asserts it is a function at call time.
     local function loadPropModel(modelName)
         local hash = GetHashKey(instance.resolveModel(modelName))
         if not IsModelValid(hash) then return false end
@@ -354,12 +244,10 @@ function VehicleProp.create(descriptor)
 
     instance.loadPropModel = loadPropModel
 
-    -- ── The editor, and the ownership mark that comes with it ────────────
+    -- The editor, and the ownership mark that comes with it. Created here rather
+    -- than by the consumer because the editor and the lifecycle share one prop,
+    -- so there is exactly one implementation of the mark.
     --
-    -- Created here rather than by the consumer because the editor and the
-    -- lifecycle share one prop: takeProp/giveProp are the handover, and the
-    -- ownership mark is the editor instance's — so there is exactly one
-    -- implementation of it rather than two that can disagree.
     local editor = tlib.propeditor.create({
         prefix      = d.prefix,
         decor       = d.decor,
@@ -367,20 +255,10 @@ function VehicleProp.create(descriptor)
         removeEvent = d.removeEvent,
         fov         = d.fov,
 
-        -- Placements are keyed by model HASH as a string, the same key
-        -- `getPlacement` and the lifecycle thread index by. Both are strings
-        -- and both index `placements`, so keying by the other one would
-        -- silently write every record into a namespace nothing reads.
         vehicleKey  = function(vehicle) return tostring(GetEntityModel(vehicle)) end,
         displayName = d.displayName,
         placements  = function() return placements end,
 
-        -- THE MODEL-PRESERVATION RULE lives in these two. The editor asks
-        -- rather than deciding: it keeps a record's own `model` field exactly
-        -- as it found it (nil on the legacy records, which is all of them) and
-        -- resolves separately for what to spawn. A second copy of the
-        -- resolution rules in the editor could disagree with what the lifecycle
-        -- thread actually attaches.
         resolvePropModel      = instance.resolveModel,
         isRegisteredPropModel = instance.isRegisteredModel,
         loadPropModel         = loadPropModel,
@@ -389,9 +267,6 @@ function VehicleProp.create(descriptor)
         notify    = d.notify,
         translate = d.translate,
 
-        -- The handover. The editor borrows the vehicle's prop for the duration
-        -- of an edit and gives it back on save/cancel; a stale handle is left
-        -- alone so the editor falls through to its own pool sweep.
         takeProp = function(vehicle)
             local prop = attached[vehicle]
             if not (prop and DoesEntityExist(prop)) then return nil end
@@ -415,7 +290,7 @@ function VehicleProp.create(descriptor)
     instance.markOwnedProp = editor.markOwnedProp
     instance.isOwnedProp   = editor.isOwnedProp
 
-    -- ── Attach / detach ──────────────────────────────────────────────────
+    -- Attach / detach
 
     --- Attaches the device to a vehicle using its saved placement.
     --- Yields while the model streams, so it is only ever called from the
@@ -426,18 +301,9 @@ function VehicleProp.create(descriptor)
         local modelName = instance.resolveModel(placement and placement.model)
         local propHash  = GetHashKey(modelName)
 
-        -- Re-adopt a prop of OURS this vehicle is already wearing: the tracking
-        -- table went out of sync, which across an unclean restart it always
-        -- has. Requires our own mark, because adopting on model + attachment
-        -- alone would make us the owner of another resource's object and we
-        -- delete what we own.
-        --
-        -- A prop of ours on this vehicle whose model is NOT the one we are
-        -- about to spawn is a leftover from before the owner changed the model
-        -- for this vehicle. It has to go, or the vehicle silently ends up
-        -- wearing two devices: adoption rejects it on the model test, and
-        -- nothing else would ever look at it again because it is not in
-        -- `attached`.
+        -- Adopt before creating. A prop survives a resource restart while
+        -- `attached` does not, so without this sweep a reload spawns a second
+        -- prop on top of the first and only tracks the new one.
         for _, obj in ipairs(GetGamePool('CObject')) do
             if IsEntityAttachedToEntity(obj, vehicle)
                 and editor.isOwnedProp(obj)
@@ -472,16 +338,9 @@ function VehicleProp.create(descriptor)
         end
         editor.markOwnedProp(prop)
 
-        -- ⚠️ TWO MECHANISMS, CHOSEN BY THE SCALE. See the long note on
-        -- `reattach` in tlib.propeditor: `AttachEntityToEntity` cannot carry a
-        -- scale, because the attach recomputation rewrites the basis from the
-        -- parent's matrix every frame and has no notion of one. A same-tick read
-        -- says 3.0 and the next frame says 1.0.
-        --
-        -- A prop at UNIT SCALE stays attached, which is free and is what every
-        -- placement on every server does today — none of them has a `scale` key.
-        -- The per-frame cost of the driven path (~0.8 µs per prop, measured) is
-        -- paid only by the placements that actually ask for a scale.
+        -- Unit scale attaches; anything else is DRIVEN. `AttachEntityToEntity`
+        -- cannot carry a scale -- measured, with the full write-up and the
+        -- handedness invariant at propeditor/client.lua's `TWO MECHANISMS` block.
         if tlib.drivenprop.isUnitScale(placement.scale) then
             AttachEntityToEntity(
                 prop, vehicle, 0,
@@ -490,10 +349,6 @@ function VehicleProp.create(descriptor)
                 false, false, false, false, 0, true
             )
         else
-            -- The EDITOR'S driver, deliberately, not one of our own. The editor
-            -- and this lifecycle hand one prop back and forth through
-            -- takeProp/giveProp, and two drivers would both think they owned its
-            -- matrix.
             editor.driver.add(prop, vehicle, {
                 x  = placement.x  or 0.0, y  = placement.y  or 0.0, z  = placement.z  or 0.0,
                 rx = placement.rx or 0.0, ry = placement.ry or 0.0, rz = placement.rz or 0.0,
@@ -505,17 +360,11 @@ function VehicleProp.create(descriptor)
         SetModelAsNoLongerNeeded(propHash)
     end
 
-    --- Deletes the prop attached to a vehicle and clears the tracking entry.
-    ---
-    --- Deletes the TRACKED HANDLE and nothing else. In particular it does not
-    --- sweep nearby objects of the same model, which is the obvious-looking
-    --- resync fallback and is wrong twice over: proximity is not ownership, so
-    --- two equipped cars parked near each other would have one player leaving
-    --- delete the prop off BOTH; and when this is called for a vehicle that no
-    --- longer exists — which the lifecycle thread does on every pass —
-    --- GetEntityCoords on the dead handle returns the world origin, so the
-    --- sweep would run there instead. Out-of-sync entries are recovered by
-    --- adoption, keyed off our own mark.
+    --- Deletes the prop attached to a vehicle and clears the tracking entry --
+    --- the TRACKED HANDLE and nothing else. It deliberately does not sweep nearby
+    --- objects of the same model: proximity is not ownership, and on a dead
+    --- handle GetEntityCoords returns the world origin. See
+    --- docs/internal/vehicle-prop.md.
     local function detachProp(vehicle)
         local prop = attached[vehicle]
         if prop and DoesEntityExist(prop) then
@@ -531,39 +380,14 @@ function VehicleProp.create(descriptor)
 
     instance.detach = detachProp
 
-    --- Deletes props WE created that no longer have a tracking entry.
-    ---
-    --- The narrow recovery policy. Ownership is the decorator and nothing else:
-    --- not the model hash, not a distance, and not the fact that the object is
-    --- attached to a vehicle. An object without our mark is somebody else's
-    --- problem even if it is one of our models bolted to a windshield.
-    ---
-    --- Callers must hold `gizmoActive == false`. Mid-edit the editor's prop
-    --- carries our mark but is deliberately absent from `attached` — it is not
-    --- attached to anything yet — so it reads as an orphan and would be deleted
-    --- out from under the editor. `gizmoProp` is the second half of that guard,
-    --- for the window where a sweep runs before the flag has been raised.
+    --- Deletes props WE created that no longer have a tracking entry. Ownership
+    --- is the decorator and nothing else. Callers must hold
+    --- `gizmoActive == false`: mid-edit the editor's prop carries our mark and is
+    --- deliberately absent from `attached`, so it would read as an orphan.
     local function reclaimOrphanProps()
-        -- ⚠️ "IS IT IN THE TRACKING TABLE AT ALL", NOT "DOES ITS ATTACHMENT MAP
-        -- BACK TO IT". This used to read the object's parent with
-        -- `GetEntityAttachedTo(obj)` and test `attached[parent] ~= obj`.
-        --
-        -- That test is wrong for a SCALED prop, and wrong in the worst
-        -- direction: a scaled prop is deliberately NOT attached to anything (see
-        -- attachPropToVehicle), so `GetEntityAttachedTo` answers 0, `attached[0]`
-        -- is nil, and every scaled prop on the server reads as an orphan and is
-        -- deleted on the next sweep. The prop would appear, then vanish, with
-        -- nothing logged — and only for the placements that had been given a
-        -- scale, which is the hardest possible version to diagnose.
-        --
-        -- The tracking table is the ownership record either way, so asking it
-        -- directly is both correct for both mechanisms and simpler. The one
-        -- behaviour this gives up is deleting a prop that IS in `attached` but
-        -- attached to a different vehicle than the one it is filed under — a
-        -- desync the old test would have cleaned up. Nothing produces that state
-        -- (only this file writes the table, and it writes the handle it just
-        -- attached), and the next pass's own bookkeeping catches a vehicle that
-        -- has gone.
+        -- "Is it in the tracking table at all", NOT "does its attachment map
+        -- back to it": a scaled prop is deliberately not attached, so the
+        -- attachment test reads every one of them as an orphan and deletes it.
         local tracked = {}
         for _, prop in pairs(attached) do tracked[prop] = true end
 
@@ -594,21 +418,12 @@ function VehicleProp.create(descriptor)
         gizmoActive = false
         if onGizmoChange then onGizmoChange(false, nil) end
 
-        -- The table is empty now, so every remaining object carrying our mark
-        -- is an orphan — including any a previous incarnation left behind.
         reclaimOrphanProps()
-        -- Nothing is driven once every prop is gone. Belt and braces: the
-        -- driver's own pass drops entries for deleted entities, but its thread
-        -- does not run again after a resource stop.
         editor.driver.clear()
     end
 
     --- Drops tracking for props whose vehicle or prop handle has gone away.
     ---
-    --- What respawning needs, and deliberately NOT cleanupAll: dying must not
-    --- delete the props on every other car in the world, and it must not delete
-    --- the prop being edited either. Live vehicles keep their props and the
-    --- lifecycle thread reconciles the rest on its next pass.
     function instance.reconcile()
         for vehicle, prop in pairs(attached) do
             if not DoesEntityExist(vehicle) or not prop or not DoesEntityExist(prop) then
@@ -624,7 +439,7 @@ function VehicleProp.create(descriptor)
         instance.cleanupAll()
     end)
 
-    -- ── Events ───────────────────────────────────────────────────────────
+    -- Events
 
     if type(d.receiveEvent) == 'string' and d.receiveEvent ~= '' then
         RegisterNetEvent(d.receiveEvent, function(props)
@@ -638,16 +453,12 @@ function VehicleProp.create(descriptor)
     end
 
     if type(d.requestEvent) == 'string' and d.requestEvent ~= '' then
-        -- Ask once, shortly after start. The server also greets joining
-        -- players, so this is the resource-restart path rather than the join
-        -- path.
         Citizen.CreateThread(function()
             Citizen.Wait(STARTUP_REQUEST_DELAY_MS)
             TriggerServerEvent(d.requestEvent)
         end)
     end
 
-    -- ── Lifecycle thread ─────────────────────────────────────────────────
     --
     -- One pass over the vehicle pool every 2.5s, attaching props to configured
     -- models and clearing stale entries. A poll rather than an event because
@@ -697,22 +508,9 @@ function VehicleProp.create(descriptor)
             end
         end
 
-        -- ── One reclaim, after the FIRST pass only ───────────────────────
+        -- One reclaim, after the FIRST pass only
         --
-        -- For the props an unclean stop left behind that adoption cannot
-        -- rescue. Adoption keys off `IsEntityAttachedToEntity`, and a SCALED
-        -- prop is deliberately not attached to anything — so a previous
-        -- incarnation's scaled props are invisible to it, and the pass above
-        -- would spawn a second prop over the top of each one while the
-        -- original sat there forever.
         --
-        -- ⚠️ AFTER the pass, not before, and that ordering is the whole of why
-        -- this is not simply called at startup. Before the first pass
-        -- `attached` is empty, so every prop of ours in the world reads as an
-        -- orphan — including the attached ones adoption was about to reclaim,
-        -- which it would delete and then respawn. Running it after means
-        -- adoption has already had its chance and anything still unaccounted
-        -- for genuinely is a leftover.
         if not firstPassDone then
             firstPassDone = true
             reclaimOrphanProps()

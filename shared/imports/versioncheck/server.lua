@@ -14,7 +14,7 @@ if type(StudioBranding) ~= 'table' then
 end
 
 -- Same mechanism, same reason: the `studios` provider below talks to the same
--- host the marketplace does, so it must honour `tmarketplace_base_url` too.
+-- host the marketplace does, so it must honour `tlib_api_base_url` too.
 -- Without this the convar was only half a switch -- installs went to a local dev
 -- worker while the version check and its changelog still hit production.
 if type(StudioApi) ~= 'table' then
@@ -213,8 +213,20 @@ local GREY = '\x1b[37m'
 local TEAL = '\x1b[38;2;0;180;210m'
 local RESET = '\x1b[0m'
 
+-- Width of a banner line, with colour codes removed.
+--
+-- COUNTS CODEPOINTS, NOT COLUMNS. This looks like a bug and is not: a terminal
+-- draws columns, and the Unicode width tables call U+2705 two of them.
+-- The console these banners are actually read in renders that glyph in ONE
+-- cell, so column counting puts every line carrying one a place out. Changing
+-- this to measure columns makes the box worse, and a test built from the width
+-- tables will agree with the tables rather than with the console.
+--
+-- So: do not 'fix' this again from first principles. If a banner ever does look
+-- crooked, screenshot the console first -- the terminal is the oracle here, not
+-- the standard.
 local function visLen(s)
-    local stripped = s:gsub('%^%d', ''):gsub('\x1b%[[%d;]*m', '')
+    local stripped = s:gsub('%^%d', ''):gsub('%[[%d;]*m', '')
     local count = 0
     local i = 1
     local len = #stripped
@@ -383,24 +395,45 @@ local function afterStartup(fn)
 end
 
 local function buildOutput(opts, release, infoValues)
-    local name    = opts.name or GetCurrentResourceName()
+    local resource = GetCurrentResourceName()
+    -- `name` is the WORDMARK -- what the figlet spells, a short identifier-shaped
+    -- token. `title` is the human-visible product title from the manifest's
+    -- `name` directive. They are deliberately separate; see titleLine below.
+    local name    = opts.name or resource
+    -- displayName falls back to the resource name, so a title EQUAL to it means
+    -- the manifest declared nothing worth showing. Treated as absent here rather
+    -- than printed: without this, `opts.name` stops reaching the banner on the
+    -- unbranded path, which tests/lua/versioncheck.lua guards.
+    local title   = StudioBranding.displayName(resource)
+    if title == '' or title == resource then title = nil end
     local current = opts.current or '?'
     local author  = opts.author
     local color   = opts.color or TEAL
 
+    -- The display title is NOT put through the figlet. That font has glyphs for
+    -- letters and digits only -- no space, no apostrophe -- so art silently
+    -- renders "Tommy's Radar Detector" as TommysRadarDetector, and MEASURED it
+    -- is 173 columns wide against tDetector's 74, which wraps and destroys the
+    -- box on any normal console. So the wordmark stays short and the title is a
+    -- text line under it. Omitted when it would just repeat the wordmark.
+    local titleLine = nil
+
     local bannerLines = {}
     if not hasStudioAuthor() then
-        bannerLines[1] = color .. name .. '^7'
+        -- Already plain text here, so there is no width or glyph cost.
+        bannerLines[1] = color .. (title or name) .. '^7'
     elseif opts.banner then
         for row in opts.banner:gmatch('[^\r\n]+') do
             bannerLines[#bannerLines + 1] = row
         end
+        if title and title ~= name then titleLine = color .. title .. '^7' end
     else
         local split = 1
         local _, upper = name:find('^%l+')
         if upper then split = upper end
         local rows = renderLean(name, color, '^7', split)
         for _, row in ipairs(rows) do bannerLines[#bannerLines + 1] = row end
+        if title and title ~= name then titleLine = color .. title .. '^7' end
     end
 
     local authorLine = nil
@@ -494,6 +527,10 @@ local function buildOutput(opts, release, infoValues)
         local w = visLen(line)
         if w > maxW then maxW = w end
     end
+    if titleLine then
+        local w = visLen(titleLine)
+        if w > maxW then maxW = w end
+    end
     if authorLine then
         local w = visLen(authorLine)
         if w > maxW then maxW = w end
@@ -520,6 +557,12 @@ local function buildOutput(opts, release, infoValues)
     end
 
     allLines[#allLines + 1] = ''
+
+    if titleLine then
+        local w = visLen(titleLine)
+        local pad = math.floor((maxW - w) / 2)
+        allLines[#allLines + 1] = string.rep(' ', pad) .. titleLine
+    end
 
     if authorLine then
         local w = visLen(authorLine)
@@ -692,7 +735,14 @@ local function studios(product, current)
                 end
             end
             finish({ version = data.product.currentVersion, changelog = table.concat(parts, '\n'), url = '' })
-        end, 'GET', '', { ['Accept'] = 'application/json' })
+        -- Through `StudioApi.headers` and never as a literal table, because
+        -- the per-install id has to be on this request as it is on every other
+        -- studio call. IT RUNS REGARDLESS OF `tlib_telemetry` — the update
+        -- check is not diagnostics and is not gated on consent — which is
+        -- exactly why docs/content/convars.mdx has to say out loud that the id
+        -- is sent whether or not diagnostics are on. (It said so on the hub's
+        -- diagnostics panel too; that panel is gone, the docs section is not.)
+        end, 'GET', '', StudioApi.headers({ ['Accept'] = 'application/json' }))
         CreateThread(function()
             Wait(8000)
             finish(nil)
