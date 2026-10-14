@@ -24,7 +24,7 @@ local function check(value, message)
     assert(value, message)
 end
 
--- ── host ────────────────────────────────────────────────────────────
+-- host
 local env = setmetatable({}, { __index = _G })
 env._G = env
 env._TLIB_IS_FIVEM = true
@@ -57,7 +57,7 @@ env.TriggerClientEvent = function(name, target, a, b)
 end
 env.TriggerServerEvent = function() end
 
--- ── a fake filesystem with FiveM's real refusal rules ────────────────
+-- a fake filesystem with FiveM's real refusal rules
 --
 -- `files[resource][path] = contents`. `writable[resource]` mirrors the measured
 -- native: only a resource tLib is allowed to write into accepts a write, an
@@ -91,18 +91,32 @@ env.GetHashKey = function(s) return #tostring(s) end
 env.GetInvokingResource = function() return 'consumer' end
 env.GetCurrentResourceName = function() return 'tLib' end
 
--- tLib's own Node exports. WriteResourceFile is the staging write and is only
--- ever asked to write into tLib itself; AppendToManifest is Node `fs` and is
--- refused wherever SaveResourceFile is.
+-- Which resources ship a server bundle and so register their OWN
+-- `WriteResourceFile`. This is the whole cross-resource write mechanism: an
+-- export is callable across resources, so the write ORIGINATES inside the
+-- target and the sandbox has nothing to object to. `vehicle` is deliberately
+-- absent -- a plain asset pack has no bundle, which is the one case that
+-- genuinely has to be staged.
+local hasBridge = { tLib = true, other = true }
+
+-- Each resource's own Node exports, modelling the real refusal rules:
+-- `exports[X]:WriteResourceFile(X, ...)` writes, and `exports[X]` asked to
+-- write into a DIFFERENT resource answers EPERM, exactly as
+-- shared/ts/fs/server.ts does. AppendToManifest is Node `fs` and is refused
+-- wherever SaveResourceFile is.
 env.manifestWrites = {}
 env.exports = setmetatable({}, {
     __index = function(_, resourceName)
         return setmetatable({}, {
             __index = function(_, method)
-                if resourceName == 'tLib' and method == 'WriteResourceFile' then
+                if method == 'WriteResourceFile' then
+                    if not hasBridge[resourceName] then
+                        error("No such export WriteResourceFile in resource " .. tostring(resourceName))
+                    end
                     return function(_self, target, relPath, contents)
-                        if not writable[target] then
-                            return "EPERM: '" .. tostring(target) .. "' is not writable"
+                        if target ~= resourceName then
+                            return "EPERM: '" .. tostring(resourceName)
+                                .. "' cannot write into resource '" .. tostring(target) .. "'"
                         end
                         files[target] = files[target] or {}
                         files[target][relPath] = contents
@@ -189,7 +203,7 @@ local function findLog(needle)
     return nil
 end
 
--- ══ 1. a refused export is a failure, and stages the file ═══════════
+-- 1. a refused export is a failure, and stages the file
 seedLocal()
 writable = { tLib = true }
 local disc = create()
@@ -209,15 +223,41 @@ check(staged.car.siren.maxHz == 745, 'and it contains the exported config')
 check(staged.car._local == nil, 'with the internal _local marker stripped')
 check(info.stagedPath == 'export-staging/vehicle/demo.json', 'the staged path is reported back')
 
--- The three steps, and the one-time line that would remove the need for them.
+-- 1b. A TARGET WITH ITS OWN BRIDGE IS WRITTEN INTO DIRECTLY -- no staging.
+--
+-- This is the half that makes "cross-resource writes are impossible" false.
+-- `vehicle` above has no server bundle, so it stages; `other` registers its
+-- own WriteResourceFile, so the write originates inside it and lands. Both
+-- halves are asserted, because the staging case passes just as well when the
+-- bridge attempt was never made at all.
+seedLocal()
+writable = { tLib = true }   -- SaveResourceFile still refuses everything else
+local bridgeDisc = create()
+env.logs = {}
+local bOk, bPath, bInfo = bridgeDisc:exportConfig('car', 'other')
+check(bOk == true, 'a target that ships its own fs bridge accepts the write (got '
+    .. tostring(bInfo and bInfo.message) .. ')')
+check(bInfo.status ~= 'staged', 'and is NOT staged -- staging is only for a target with no bundle')
+local delivered = fileTable('other', bPath)
+check(delivered ~= nil and delivered.car ~= nil, 'the config reached the target resource itself')
+check(delivered.car.siren.maxHz == 745, 'with its contents intact')
+check(fileTable('tLib', 'export-staging/other/' .. tostring(bPath)) == nil,
+    'and nothing was staged into tLib for it')
+
+-- The three steps. There is deliberately NO "one-time grant" line any more:
+-- `add_filesystem_permission tLib write *` was measured and does not lift the
+-- refusal, because the sandbox objects to which resource is writing. These
+-- assertions used to require that advice; they now require its ABSENCE, so a
+-- future edit cannot quietly put false instructions back in front of operators.
+-- See the banner at the top of server/sv_discovery.lua.
 check(#(info.steps or {}) == 3, 'three concrete steps are handed back')
 check(info.steps[1]:find('export-staging/vehicle/demo.json', 1, true), 'step 1 names the source file')
 check(info.steps[1]:find('vehicle/demo.json', 1, true), 'step 1 names the destination')
 check(info.manifestLine == "demo_config 'demo.json'", 'the literal fxmanifest line is handed back')
 check(info.steps[2]:find("demo_config 'demo.json'", 1, true), 'step 2 carries that line verbatim')
-check(info.grantLine == 'add_filesystem_permission tLib write *',
-    'the one-time blanket grant is named, and names tLib — the VM that issues the write')
-check(findLog('add_filesystem_permission tLib write *'), 'the grant line reaches the server console too')
+check(info.grantLine == nil, 'no blanket-grant line is handed back -- it does not work')
+check(not findLog('add_filesystem_permission'),
+    'and no grant advice reaches the server console either')
 
 -- NOTHING was committed. This is the ordering guarantee.
 check(files.vehicle['demo.json'] == nil, 'nothing was written into the vehicle resource')
@@ -227,7 +267,7 @@ local localAfter = fileTable('consumer', 'data.json')
 check(localAfter.vehicles.car ~= nil, 'and the local copy on disk still holds it — the source was not dropped')
 print('PASS discovery-export: a refused write fails honestly, stages the file and names the fix (' .. checks .. ')')
 
--- ══ 2. with the write permitted, the export completes ═══════════════
+-- 2. with the write permitted, the export completes
 seedLocal()
 files.vehicle = {}
 writable = { tLib = true, consumer = true, vehicle = true }   -- the blanket grant is on
@@ -252,7 +292,7 @@ check(localNow.vehicles.car == nil, 'the local copy is dropped now that the vehi
 check(#(info.warnings or {}) == 0, 'a clean export reports no warnings')
 print('PASS discovery-export: a permitted write completes, commits in the right order (' .. checks .. ')')
 
--- ══ 3. merging, not clobbering ══════════════════════════════════════
+-- 3. merging, not clobbering
 files.vehicle['demo.json'] = env.json.encode({ van = { siren = { maxHz = 600 } } })
 seedLocal()
 disc = create()
@@ -263,7 +303,7 @@ check(landed.van ~= nil, "the vehicle's existing model survives the export")
 check(landed.car ~= nil, 'and the new one is beside it')
 print('PASS discovery-export: an export merges into the target file (' .. checks .. ')')
 
--- ══ 4. a target that does not exist raises — and is caught ══════════
+-- 4. a target that does not exist raises — and is caught
 seedLocal()
 disc = create()
 env.logs = {}
@@ -274,7 +314,7 @@ check(tostring(info.error):find('not found', 1, true), 'the real native error is
 check(disc:getConfigs().car ~= nil, 'the config survives the raise')
 print('PASS discovery-export: a raising target is caught, not left to unwind (' .. checks .. ')')
 
--- ══ 5. move back to local really removes the external copy ══════════
+-- 5. move back to local really removes the external copy
 seedLocal()
 files.vehicle = {}
 writable = { tLib = true, consumer = true, vehicle = true }
@@ -292,7 +332,7 @@ check(fileTable('consumer', 'data.json').vehicles.car ~= nil, 'and it is back in
 check(#(info.warnings or {}) == 0, 'a clean move reports no warnings')
 print('PASS discovery-export: move back to local deletes the external copy (' .. checks .. ')')
 
--- ══ 6. …and says so when it cannot ═════════════════════════════════
+-- 6. …and says so when it cannot
 seedLocal()
 files.vehicle = {}
 writable = { tLib = true, consumer = true, vehicle = true }
@@ -310,7 +350,7 @@ check(disc:getConfigs().car._local == true, 'the local entry is marked local so 
 check(findLog('could NOT be deleted'), 'the console hears about it too')
 print('PASS discovery-export: an undeletable external copy is reported, not assumed gone (' .. checks .. ')')
 
--- ══ 7. hasMetadata comes from the manifest ═════════════════════════
+-- 7. hasMetadata comes from the manifest
 seedLocal()
 disc = create()
 local targets = disc:getExportTargets()
@@ -324,7 +364,7 @@ check(byName.other and byName.other.hasMetadata == false, 'a resource that decla
 check(targets[2].name == 'vehicle', 'targets that declare the key sort first')
 print('PASS discovery-export: hasMetadata reflects GetResourceMetadata (' .. checks .. ')')
 
--- ══ 8. the net handler never reports a success that did not happen ══
+-- 8. the net handler never reports a success that did not happen
 seedLocal()
 files.vehicle = {}
 writable = { tLib = true }
@@ -344,6 +384,6 @@ local joined = table.concat(said, ' | ')
 check(not joined:find('Exported ', 1, true), 'the player is NOT told the export succeeded')
 check(joined:find('Could not write into', 1, true), 'the player is told it did not')
 check(joined:find("demo_config 'demo.json'", 1, true), 'and is given the exact fxmanifest line')
-check(joined:find('add_filesystem_permission tLib write *', 1, true),
-    'and the one-time line that would make it one click')
+check(not joined:find('add_filesystem_permission', 1, true),
+    'and is NOT told to add a server.cfg grant, which cannot lift the refusal')
 print('PASS discovery-export: the player is told the truth over the wire (' .. checks .. ' checks)')

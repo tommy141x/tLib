@@ -11,15 +11,37 @@ Discovery = {}
 -- name that appears in a filesystem-permission grant, not the consumer's.
 local TLIB_RESOURCE = _TLIB_IS_FIVEM and GetCurrentResourceName() or 'tLib'
 
--- The one-time server.cfg line that lifts the cross-resource write refusal for
--- every resource at once.
+-- THERE IS NO server.cfg LINE THAT LIFTS THE CROSS-RESOURCE WRITE REFUSAL.
+-- DO NOT ADD ONE BACK, AND DO NOT TELL OPERATORS TO TRY ONE.
 --
--- A per-target grant is deliberately NOT offered. One cfg line and a full server
--- restart per vehicle is more work than pasting the JSON in by hand, which makes
--- it a worse feature than no feature. Either a single line enables the whole
--- thing, or the export stages the file locally and tells the operator what to
--- copy — see STAGING below. Nothing in between is worth an operator's time.
-local BLANKET_GRANT_LINE = 'add_filesystem_permission ' .. TLIB_RESOURCE .. ' write *'
+-- This file used to carry
+--     BLANKET_GRANT_LINE = 'add_filesystem_permission tLib write *'
+-- and six places recommended it whenever a write was refused. It was a
+-- hypothesis awaiting measurement. The measurement is in, and it is negative:
+-- that exact line sat in 305RP2's server.cfg from 2026-09-25, across many
+-- server restarts, and on 2026-10-13 writes into a vehicle resource were still
+-- refused every time.
+--
+-- The reason is that the sandbox objects to WHICH RESOURCE IS WRITING, not to
+-- a missing permission. FiveM's Node runtime confines each resource to its own
+-- directory, so a write originating in tLib's VM cannot land in someone else's
+-- folder whatever the cfg says. shared/ts/fs/server.ts records the same finding
+-- from the other side: a tLib-registered `WriteResourceFile(resource, ...)` was
+-- built, measured, and abandoned for this, and replaced by "every resource
+-- writes to itself from its own bundle".
+--
+-- THAT IS NOT THE SAME AS "CROSS-RESOURCE WRITES ARE IMPOSSIBLE", and this
+-- comment used to say so. They are possible, and _saveFile does them: the
+-- write just has to ORIGINATE in the target, which is what calling the
+-- TARGET's own `WriteResourceFile` export achieves. Every t* resource bundles
+-- tLib's shared/ts and registers one, and exports cross resources freely. The
+-- only unreachable destination is one with no server bundle at all -- a plain
+-- ASSET PACK, a vehicle resource shipping a tels.json. That case is structural.
+--
+-- For that case, and only that case, there is STAGING: write the finished file
+-- inside tLib and tell the operator the two or three steps to put it where it
+-- belongs. See stagingPath and _stageFile below, and the identical fallback in
+-- saveModelConfig.
 
 -- Where a refused export leaves the file it could not deliver. Inside tLib,
 -- because tLib's own directory is the one place a write from tLib's VM is always
@@ -32,7 +54,7 @@ local function manifestLineFor(metadataKey, targetPath)
     return tostring(metadataKey) .. " '" .. tostring(targetPath) .. "'"
 end
 
--- ── PER-PLAYER RATE LIMITING ────────────────────────────────────
+-- PER-PLAYER RATE LIMITING
 --
 -- The admin-gated handlers below are already bounded by checkPerm; the config
 -- request is not, and it is the expensive one — it serialises the whole config
@@ -79,7 +101,7 @@ local function _loadFile(resource, path)
     end
 end
 
--- ── WRITING TO A RESOURCE THAT IS NOT OURS ──────────────────────────
+-- WRITING TO A RESOURCE THAT IS NOT OURS
 --
 -- Measured on this server, from one resource's VM:
 --
@@ -111,12 +133,42 @@ local function _saveFile(resource, path, content)
     if not called then
         return false, tostring(res), 'missing'
     end
-    if res == false or res == nil or res == 0 then
-        return false,
-            "FiveM's filesystem sandbox refused the write to '" .. tostring(resource) .. "/" .. tostring(path) .. "'",
-            'denied'
+    if res ~= false and res ~= nil and res ~= 0 then
+        return true
     end
-    return true
+
+    -- CROSS-RESOURCE WRITES ARE POSSIBLE, and this is how.
+    --
+    -- The sandbox objects to which resource is DOING the writing, not to the
+    -- destination — so the write has to originate inside the target. That is
+    -- exactly what the target's own `WriteResourceFile` export is: every
+    -- resource bundling tLib's shared/ts calls `registerWriteResourceFile()`
+    -- in its own server/main.ts, and an export is callable across resources.
+    --
+    -- `exports[resource]`, NOT `exports[tLib]`. Asking our own bridge to
+    -- write somewhere else is the thing that is refused, and shared/ts/fs/
+    -- server.ts refuses it there deliberately rather than letting Node answer
+    -- with "use --allow-fs-write" — a server startup argument no customer can
+    -- be asked to add. Routing to the target's bridge is not a workaround for
+    -- that refusal; it is the design the refusal points at.
+    --
+    -- Only a target with no server bundle at all — a plain vehicle asset pack —
+    -- is genuinely unwritable, and the callers below stage a file for that.
+    local bridged, bridgeRes = pcall(function()
+        return exports[resource]:WriteResourceFile(resource, path, content)
+    end)
+    if bridged and bridgeRes == true then return true end
+
+    -- A string is the bridge's own error (an errno, or its EPERM refusal); any
+    -- other shape, or a raise, means the target has no bridge to ask.
+    if bridged and type(bridgeRes) == 'string' and bridgeRes ~= '' then
+        return false, bridgeRes, 'denied'
+    end
+
+    return false,
+        "'" .. tostring(resource) .. "' refused the write to '" .. tostring(path)
+        .. "' and has no Node fs bridge of its own to fall back on",
+        'denied'
 end
 
 --- Write into tLib's OWN directory, which is never sandbox-refused.
@@ -194,7 +246,6 @@ local function _onResourceStop(cb)
     end
 end
 
--- ══════════════════════════════════════════════════════════════════
 --  INSTANCE LIFETIME
 --
 --  Every handler this module registers lives in tLib's resource state, not in
@@ -217,7 +268,6 @@ end
 --  it down there and then. Disposal both removes the handlers and trips a flag
 --  the handler bodies check, because RemoveEventHandler is not guaranteed on
 --  every build and a handler that cannot be removed must at least go quiet.
--- ══════════════════════════════════════════════════════════════════
 
 local LIVE = {}
 
@@ -452,7 +502,6 @@ function Discovery.create(opts)
             -- is for.
             advice = " '" .. tostring(ownerResource) .. "' should pass skipAutoSave = true to CreateDiscovery and"
                 .. " write its own data file (tlib.fs.writeResourceFile runs inside its VM and is always allowed)."
-                .. " Alternatively, add this one line to server.cfg and restart: " .. BLANKET_GRANT_LINE
         end
         log("[" .. tag .. "] saveLocal FAILED for " .. tostring(ownerResource) .. "/" .. tostring(filePath)
             .. " — " .. tostring(err) .. " Nothing was written; these settings will be gone after a restart."
@@ -482,11 +531,28 @@ function Discovery.create(opts)
                     .. "' is a " .. type(cfg) .. ", expected an object — skipped", 3)
             else
                 registerAlias(model)
-                if not externalSources[model] then
+                local prevSource = externalSources[model]
+                if not prevSource then
                     externalSources[model] = { resource = resName, filePath = configPath }
                 end
                 local existing = configs[model]
-                if not existing then
+                -- Re-registration by the SAME external resource is not a shadow.
+                -- scanExternal() walks every resource at owner start, including
+                -- ones that have not started yet -- their folder is on disk, so
+                -- the metadata and tels.json read fine and the config is adopted.
+                -- Their onResourceStart then re-registers the identical file, and
+                -- this used to see the owner's own earlier adoption as a local
+                -- override and report a shadow against a file that does not
+                -- contain the model at all. Measured 2026-10-13: tELS/data.json
+                -- held `vehicles: {}` and the warning still fired every boot for
+                -- 18charger21tr and fpiu21tr. Refresh in place instead.
+                if existing and prevSource
+                    and prevSource.resource == resName
+                    and prevSource.filePath == configPath
+                    and not (type(existing) == "table" and existing._local)
+                then
+                    configs[model] = cfg
+                elseif not existing then
                     configs[model] = cfg
                     count = count + 1
                 elseif type(existing) == "table" then
@@ -510,13 +576,14 @@ function Discovery.create(opts)
                             .. " and restart the server.", 3)
                     else
                         -- Transient: saveLocal drops the entry on the next
-                        -- write. Logged below WARN because it self-heals.
-                        log("[" .. tag .. "] '" .. tostring(model) .. "' shipped by '" .. resName .. "/" .. configPath
-                            .. "' is not being used yet: " .. shadowPath .. " still holds an older copy of it, and "
-                            .. "local takes priority. That leftover copy is dropped the next time this config is "
-                            .. "saved, and the version from '" .. resName .. "' takes over from then on. To switch "
-                            .. "immediately, delete the '" .. tostring(model) .. "' entry from " .. shadowPath
-                            .. " and restart the server.", 2)
+                        -- write, so this is below WARN and is kept to ONE
+                        -- line. It used to carry the same four-sentence
+                        -- explanation as the permanent case above, per model,
+                        -- on every boot -- and unlike that case the operator's
+                        -- correct response here is to do nothing.
+                        log("[" .. tag .. "] '" .. tostring(model) .. "' from '" .. resName
+                            .. "' is shadowed by an older copy in " .. shadowPath
+                            .. "; it takes over when that config is next saved.", 2)
                     end
                 end
             end
@@ -580,14 +647,58 @@ function Discovery.create(opts)
             local extData = (raw and raw ~= "") and json.decode(raw) or {}
             if type(extData) ~= "table" then extData = {} end
             extData[model] = config
-            local ok, err, kind = _saveFile(ext.resource, ext.filePath, json.encode(extData))
+            local encodedExt = json.encode(extData)
+            local ok, err, kind = _saveFile(ext.resource, ext.filePath, encodedExt)
             if not ok then
-                log("[" .. tag .. "] Could NOT save '" .. model .. "' to " .. ext.resource .. "/" .. ext.filePath
-                    .. " — " .. tostring(err) .. " The change is live in memory but is not on disk and will be lost"
-                    .. " on restart." .. (kind == 'denied'
-                        and (" To let " .. TLIB_RESOURCE .. " write into other resources, add this one line to"
-                             .. " server.cfg and restart the server: " .. BLANKET_GRANT_LINE)
-                        or ""), 4)
+                -- DO NOT RECOMMEND THE BLANKET GRANT HERE. It cannot work.
+                --
+                -- This used to end with "add this one line to server.cfg and
+                -- restart: add_filesystem_permission tLib write *". That advice
+                -- is false, and it was being printed on EVERY lightbar save.
+                -- The grant has been in 305RP2's server.cfg since 2026-09-25 and
+                -- the write is still refused, because the sandbox objects to
+                -- WHICH RESOURCE IS WRITING, not to a missing permission:
+                -- FiveM's Node runtime confines each resource to its own
+                -- directory. shared/ts/fs/server.ts documents the same thing
+                -- from the other side -- a tLib-registered WriteResourceFile
+                -- taking a target resource was built, measured and abandoned
+                -- for exactly this reason, and replaced by "every resource
+                -- writes to itself from its own bundle".
+                --
+                -- Reaching HERE is not "cross-resource writes do not work" --
+                -- _saveFile has already tried the target's own fs bridge, which
+                -- is the route that does work. It means this particular target
+                -- has no server bundle to host one: a plain asset pack, a
+                -- vehicle resource shipping a tels.json. That case is
+                -- structural, not a configuration gap, and no cfg line fixes it.
+                --
+                -- So do what the export path at the bottom of this file already
+                -- does: stage the finished file inside tLib and tell the
+                -- operator the three steps. `stagingPath` and `_stageFile`
+                -- exist for precisely this.
+                local staged = stagingPath(ext.resource, ext.filePath)
+                local stagedOk, stageErr = _stageFile(staged, encodedExt)
+
+                if stagedOk then
+                    log("[" .. tag .. "] Could not write '" .. model .. "' into '" .. ext.resource
+                        .. "' (" .. tostring(err) .. "), so the finished file was written to "
+                        .. TLIB_RESOURCE .. "/" .. staged .. " instead.", 3)
+                    log("[" .. tag .. "]   1. Copy " .. TLIB_RESOURCE .. "/" .. staged
+                        .. "  ->  " .. ext.resource .. "/" .. ext.filePath, 3)
+                    log("[" .. tag .. "]   2. Restart " .. ext.resource .. " (or the server).", 3)
+                    log("[" .. tag .. "]   Until then the calling resource's own copy is what is used,"
+                        .. " which is why the change is still in effect in game.", 3)
+                else
+                    log("[" .. tag .. "] Could NOT save '" .. model .. "' to " .. ext.resource .. "/"
+                        .. ext.filePath .. " — " .. tostring(err)
+                        .. " The staging copy could not be written either (" .. tostring(stageErr)
+                        .. "), so this change exists only in memory here.", 4)
+                end
+
+                -- Still false: tLib did not write the owning resource's file.
+                -- The caller (tELS) persists its own copy, which is why the
+                -- setting survives a restart -- but that is the CALLER's doing,
+                -- not something this function may claim.
                 return false, err, kind
             end
             log("[" .. tag .. "] Saved '" .. model .. "' → " .. ext.resource .. "/" .. ext.filePath, 2)
@@ -615,11 +726,15 @@ function Discovery.create(opts)
             if not ok then
                 -- The entry is gone from memory but still on disk, so it comes
                 -- back on the next scan. Saying so is the whole point.
+                -- No blanket-grant suggestion here either, and for the same
+                -- reason as saveModelConfig above: the grant cannot work, and
+                -- offering it sends the operator to restart a server for
+                -- nothing. Deleting the entry by hand is the ONLY way to remove
+                -- a config from a resource that cannot write to itself.
                 warning = "'" .. tostring(model) .. "' was removed here but could NOT be removed from "
                     .. ext.resource .. "/" .. ext.filePath .. " — " .. tostring(err)
                     .. " It will reappear when that resource is next scanned. Delete the '" .. tostring(model)
-                    .. "' entry from that file by hand, or add this one line to server.cfg and restart: "
-                    .. BLANKET_GRANT_LINE
+                    .. "' entry from " .. ext.resource .. "/" .. ext.filePath .. " by hand to make it stick."
                 log("[" .. tag .. "] " .. warning, 4)
             end
             externalSources[model] = nil
@@ -696,9 +811,7 @@ function Discovery.create(opts)
                 local warning = "'" .. tostring(model) .. "' is now local, but the copy in "
                     .. oldExt.resource .. "/" .. oldExt.filePath .. " could NOT be deleted — " .. tostring(err)
                     .. " The local copy takes priority so the right settings are in use, but delete the '"
-                    .. tostring(model) .. "' entry from that file by hand to finish the move"
-                    .. (BLANKET_GRANT_LINE and (", or add this one line to server.cfg and restart: "
-                        .. BLANKET_GRANT_LINE) or "") .. "."
+                    .. tostring(model) .. "' entry from that file by hand to finish the move."
                 info.warnings[#info.warnings + 1] = warning
                 log("[" .. tag .. "] " .. warning, 4)
             end
@@ -763,7 +876,6 @@ function Discovery.create(opts)
             resource = targetResource,
             filePath = targetPath,
             manifestLine = manifestLineFor(metadataKey, targetPath),
-            grantLine = BLANKET_GRANT_LINE,
         }
 
         -- The file the target should end up with: whatever it already ships,
@@ -816,18 +928,14 @@ function Discovery.create(opts)
             for _, step in ipairs(info.steps or {}) do
                 log("[" .. tag .. "]   " .. step, 4)
             end
-            if kind == 'denied' and BLANKET_GRANT_LINE then
-                log("[" .. tag .. "]   To make this one-click instead, add ONE line to server.cfg and restart the"
-                    .. " server:  " .. BLANKET_GRANT_LINE
-                    .. "   (it is a config-file directive; it cannot be run from the console)", 4)
-            elseif kind == 'missing' then
+            if kind == 'missing' then
                 log("[" .. tag .. "]   '" .. tostring(targetResource) .. "' is not a resource this server knows"
                     .. " about — check the name.", 4)
             end
             return false, targetPath, info
         end
 
-        -- ── committed from here: the destination has the config ─────────
+        -- committed from here: the destination has the config
         info.status = 'exported'
         log("[" .. tag .. "] Wrote '" .. tostring(model) .. "' → " .. targetResource .. "/" .. targetPath, 2)
 
@@ -903,8 +1011,10 @@ function Discovery.create(opts)
 
     track(_onResourceStop(function(resName)
         if resName ~= ownerResource then return end
-        log("[" .. tag .. "] '" .. tostring(ownerResource) .. "' stopped — disposing its Discovery "
-            .. "so it cannot keep answering with configs it loaded before", 2)
+        -- DEBUG, not INFO. Disposal is bookkeeping that always happens and can
+        -- only fail loudly; narrating it put one line per Discovery owner in
+        -- every operator's console on every restart.
+        log("[" .. tag .. "] '" .. tostring(ownerResource) .. "' stopped — disposing its Discovery", 1)
         inst:dispose()
     end))
 
@@ -1097,10 +1207,6 @@ function Discovery.create(opts)
                     for _, step in ipairs(info.steps or {}) do
                         _chatMessage(src, "^3" .. chatTag, "~w~" .. step)
                     end
-                    if info.errorKind == 'denied' and BLANKET_GRANT_LINE then
-                        _chatMessage(src, "^3" .. chatTag, "To make this one click in future, add this ONE line to "
-                            .. "~y~server.cfg~w~ and restart: ~g~" .. BLANKET_GRANT_LINE)
-                    end
                 else
                     _chatMessage(src, "^1" .. chatTag, "Export failed: ~w~" .. tostring(info.message or "unknown error"))
                 end
@@ -1125,9 +1231,14 @@ function Discovery.registerExports()
         if not opts.resourceName then
             opts.resourceName = GetInvokingResource()
             if not opts.resourceName or opts.resourceName == '' then
-                log('[Discovery] WARNING: resourceName not set and GetInvokingResource() returned nil. '
+                -- Level 4 (ERROR). This said "WARNING: … file I/O will target
+                -- the wrong resource!" at level 1, which the logger filters out
+                -- by default -- so the loudest sentence in the file was the one
+                -- nobody could see. The comment above says "warn loudly"; now it
+                -- does.
+                log('[Discovery] resourceName not set and GetInvokingResource() returned nil. '
                     .. 'Pass resourceName = GetCurrentResourceName() in your CreateDiscovery opts. '
-                    .. 'Defaulting to tLib — file I/O will target the wrong resource!', 1)
+                    .. 'Defaulting to tLib — file I/O will target the wrong resource!', 4)
             end
         end
         return Discovery.create(opts)
