@@ -1,8 +1,8 @@
 diff --git a/dist/bindable.js b/dist/bindable.js
-index cf4db05d76a77c4c6dc2d3303a537a27440ddabe..afd6414b938586d89eea26c1cc08547c02a850c5 100644
+index cf4db05d76a77c4c6dc2d3303a537a27440ddabe..c5d50e36ae11cea2e498599eba4a775fb5b8e59e 100644
 --- a/dist/bindable.js
 +++ b/dist/bindable.js
-@@ -38,19 +38,28 @@ function createBindable(props) {
+@@ -38,19 +38,32 @@ function createBindable(props) {
      valueRef.current = v;
    });
    const set = (v) => {
@@ -13,9 +13,11 @@ index cf4db05d76a77c4c6dc2d3303a537a27440ddabe..afd6414b938586d89eea26c1cc08547c
        console.log(`[bindable > ${props().debug}] setValue`, { next, prev });
      }
      if (!controlled()) setValue(next);
-+    // See bindable.mjs for the full reasoning: Solid 2 does not make this write
-+    // synchronously readable, so the machine's next queued microtask would
-+    // otherwise evaluate its transition against a one-event-stale state.
++    // Solid 2 does not make this write synchronously readable, and the
++    // `createEffect` above that refreshes `valueRef` / `prevValue` is flushed
++    // later still. `useMachine`'s `send` reads the state back inside the very
++    // next microtask, so without these two synchronous writes a transition is
++    // evaluated against a one-event-stale state.
 +    prevValue.current = prev;
 +    valueRef.current = next;
      if (!eq(next, prev)) {
@@ -29,13 +31,15 @@ index cf4db05d76a77c4c6dc2d3303a537a27440ddabe..afd6414b938586d89eea26c1cc08547c
 +      const v = props().value;
 +      return (0, import_utils.isFunction)(v) ? v() : v;
 +    }
++    // Read the signal so this stays a reactive dependency for rendering, but
++    // return the ref, which is the synchronously-current value.
 +    value();
 +    return valueRef.current;
    }
    return {
      initial,
 diff --git a/dist/bindable.mjs b/dist/bindable.mjs
-index ee099dbe9d4ac9f5e914fdcd0416032f5cf59e70..0f77fc4a7844bfef5629f769c131c9824b1966af 100644
+index ee099dbe9d4ac9f5e914fdcd0416032f5cf59e70..7fc14ab140b82d86e9273f988723b30ffb58dd0e 100644
 --- a/dist/bindable.mjs
 +++ b/dist/bindable.mjs
 @@ -14,19 +14,32 @@ function createBindable(props) {
@@ -49,11 +53,11 @@ index ee099dbe9d4ac9f5e914fdcd0416032f5cf59e70..0f77fc4a7844bfef5629f769c131c982
        console.log(`[bindable > ${props().debug}] setValue`, { next, prev });
      }
      if (!controlled()) setValue(next);
-+    // Solid 2 does not reliably make this write readable before the next queued
-+    // microtask, and the `createEffect` above that refreshes `valueRef` /
-+    // `prevValue` is flushed later still. `useMachine`'s `send` reads the state
-+    // back inside the very next microtask, so without these two synchronous
-+    // writes a transition is evaluated against a one-event-stale state.
++    // Solid 2 does not make this write synchronously readable, and the
++    // `createEffect` above that refreshes `valueRef` / `prevValue` is flushed
++    // later still. `useMachine`'s `send` reads the state back inside the very
++    // next microtask, so without these two synchronous writes a transition is
++    // evaluated against a one-event-stale state.
 +    prevValue.current = prev;
 +    valueRef.current = next;
      if (!eq(next, prev)) {

@@ -1,6 +1,5 @@
 /// <reference path="./solid-1-compat-virtual.d.ts" />
 /*
- * ═══════════════════════════════════════════════════════════════════════════
  * SOLID 1 -> 2 COMPATIBILITY LAYER  ·  THE `solid-js/store` SHIM
  *
  * One shared copy, kept in tLib and consumed by five projects. `README.md` in
@@ -8,7 +7,7 @@
  * the five modules does, how a project adopts it, what `vendorPackages` is for
  * and how to derive one, and the debug environment variables. Read that first.
  *
- * ── TWO CONVENTIONS HOLD THROUGHOUT THESE FILES ──────────────────────────
+ * TWO CONVENTIONS HOLD THROUGHOUT THESE FILES
  *
  *  · EVERY CLAIM WITH A NUMBER BEHIND IT IS A MEASUREMENT, and the number is
  *    the reason the code below is the shape it is. Several of them record
@@ -22,7 +21,7 @@
  *    subject. Re-measure at the union of all consumers before inheriting a
  *    conclusion into this shared copy.
  *
- * ── FORMATTING ─────────────────────────────────────────────────────
+ * FORMATTING
  *
  * `tLib/biome.json` excludes this directory, deliberately. biome and the
  * consumers' formatter (oxfmt, via `vp fmt`) disagree on import order and line
@@ -30,13 +29,12 @@
  * churn would bury the annotations that are the only record of why each shim
  * is the shape it is.
  *
- * ⚠️ NOTHING FORMATS OR LINTS THIS DIRECTORY TODAY, AND THAT IS A GAP RATHER
+ * NOTHING FORMATS OR LINTS THIS DIRECTORY TODAY, AND THAT IS A GAP RATHER
  * THAN A DESIGN. Measured: every consumer's `fmt`/`lint` script names only its
  * own `src` and configs, and `vp fmt` refuses a path containing `..`, so a
  * consumer cannot point it here even by hand. Match the surrounding style when
  * you edit, and do not assume a green `vp fmt --check` in a consumer says
  * anything about these files. See README.md § Formatting.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 /**
  * VENDOR COMPATIBILITY ONLY. Not reachable from `src/`.
@@ -47,7 +45,7 @@
  * redirects here and gets the same legacy-call-shape-compatible `createStore`
  * as everything importing from bare `solid-js` (see solid-1-compat.ts).
  *
- * ── ⚠️ NO `produce` RE-EXPORT, AND IT IS NOT AN OVERSIGHT ────────────────────
+ * NO `produce` RE-EXPORT, AND IT IS NOT AN OVERSIGHT
  *
  * There was one. It is gone because the `produce`
  * shim it re-exported is gone: see the block comment where `produce`/`isProducer`
@@ -73,7 +71,7 @@
  * a consumer appears rather than in anticipation of one.
  */
 /**
- * ⚠️ BOTH NAMES COME FROM THE SHIM, AND `reconcile` DOING SO IS A REVERSAL.
+ * BOTH NAMES COME FROM THE SHIM, AND `reconcile` DOING SO IS A REVERSAL.
  *
  * It used to read `export { reconcile } from "virtual:solid-1-compat-real/
  * solid-js"`, on the argument that Solid 2 kept `reconcile` unchanged and
@@ -91,7 +89,7 @@
  * wrapper that is never reached. See that file's `reconcile` block for the
  * measurement and for what the wrapper does and does not translate.
  *
- * ⚠️ THE OLD SPELLING ALSO GUARDED AGAINST A REAL TS2305, and that hazard is
+ * THE OLD SPELLING ALSO GUARDED AGAINST A REAL TS2305, and that hazard is
  * gone rather than ignored: `solid-1-compat.ts` now DEFINES `reconcile` as a
  * named export, so `tsc` resolves it without falling back to the wildcard
  * re-export that only the bundler accepted. Run a consumer's `tsc --noEmit`

@@ -1,5 +1,4 @@
 /*
- * ═══════════════════════════════════════════════════════════════════════════
  * SOLID 1 -> 2 COMPATIBILITY LAYER  ·  TYPES FOR THE `virtual:` SPECIFIERS
  *
  * One shared copy, kept in tLib and consumed by five projects. `README.md` in
@@ -10,7 +9,6 @@
  * This file is ambient declarations only — it emits nothing and is the one file
  * here that is not bundled into a consumer's output. The two conventions and
  * the formatting note in the sibling modules' banners apply to it too.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 /**
  * Types for the `virtual:solid-1-compat-real/*` specifiers.
@@ -28,7 +26,7 @@
  * baseline — shipping this file alongside the shims fixes it for every
  * consumer, and is why it lives here rather than in each project.
  *
- * ── ⚠️ EACH OF THE FOUR SHIM FILES CARRIES A `/// <reference path>` TO THIS ───
+ * EACH OF THE FOUR SHIM FILES CARRIES A `/// <reference path>` TO THIS
  *
  * An ambient declaration only applies if its file is part of the program, and a
  * consumer's tsconfig `include` is its own `src` — it has no reason to name a
@@ -36,7 +34,7 @@
  * program wherever one of the shims is reached, rather than asking four separate
  * projects to each add a path to their `include`.
  *
- * ── ⚠️ THE SHORTHAND (BODY-LESS) FORM, AND THAT IS A CONSEQUENCE OF SHARING ──
+ * THE SHORTHAND (BODY-LESS) FORM, AND THAT IS A CONSEQUENCE OF SHARING
  *
  * The richer form declares each virtual id AS the real package it stands for:
  *
@@ -47,7 +45,7 @@
  * types is accurate rather than convenient, and it keeps the shims themselves
  * typechecked against the real surface they wrap.
  *
- * ⛔ IT CANNOT WORK FROM A SHARED LOCATION, MEASURED. TypeScript resolves
+ * IT CANNOT WORK FROM A SHARED LOCATION, MEASURED. TypeScript resolves
  * `"solid-js"` relative to the file containing the declaration, and this file
  * lives in tLib, where `shared/ts/node_modules/solid-js` is **1.9.12** — tLib's
  * own UI and every t* resource are deliberately still on Solid 1.9.x. So the
@@ -56,7 +54,7 @@
  * shorthand ambient module is typed `any` wholesale, which depends on nothing
  * outside this file.
  *
- * ⚠️ WHAT THAT COSTS, SAID PLAINLY: `tsc` no longer checks the shim bodies
+ * WHAT THAT COSTS, SAID PLAINLY: `tsc` no longer checks the shim bodies
  * against the real Solid 2 surface. A typo in a re-exported name here is caught
  * by the BUILD (rolldown reports `"X" is not exported by …`) and not by the
  * typechecker. A consumer that wants the stronger check back can add the precise
@@ -65,12 +63,12 @@
  * A consumer doing this keeps its own `vite/solid-1-compat-virtual.d.ts`
  * alongside its `vite/solid-compat-vendors.ts`; one of the five does today.
  *
- * ⚠️ AND IT MUST BE THE BODY-LESS FORM SPECIFICALLY. A wildcard module WITH a
+ * AND IT MUST BE THE BODY-LESS FORM SPECIFICALLY. A wildcard module WITH a
  * body has to enumerate its exports, so `export * from` and every named import
  * fail (TS2498 "uses 'export =' and cannot be used with 'export *'", then TS2305
  * per member).
  *
- * ── ONE PIECE OF KNOWLEDGE THE PRECISE VERSION CARRIED, PRESERVED AS PROSE ───
+ * ONE PIECE OF KNOWLEDGE THE PRECISE VERSION CARRIED, PRESERVED AS PROSE
  *
  * `virtual:solid-1-compat-real/solid-js` legitimately exports `sharedConfig`,
  * though `solid-js`'s own `.d.ts` does not declare it (`grep -c sharedConfig
@@ -80,7 +78,7 @@
  * `@solidjs/web` because @solidjs/web's CLIENT PRODUCTION build (`dist/web.js`)
  * does not export it, which fails `bun run build` with MISSING_EXPORT.
  *
- * ⛔ Do NOT "fix" a TS2307 here by dropping the shims from a tsconfig's
+ * Do NOT "fix" a TS2307 here by dropping the shims from a tsconfig's
  * `include`. These files are ~2,000 lines of load-bearing compatibility logic;
  * leaving them untypechecked is how a typo in one ships.
  */

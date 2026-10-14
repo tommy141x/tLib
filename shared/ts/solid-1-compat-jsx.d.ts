@@ -23,7 +23,7 @@
  * `any` and nothing is invented, so vendor props stay genuinely checked — which is
  * the whole difference between this and a `@ts-expect-error` sweep.
  *
- * ── ⚠️ DO NOT IMPORT `JSX` FROM `solid-js` IN THIS PACKAGE'S OWN SOURCE ────────
+ * DO NOT IMPORT `JSX` FROM `solid-js` IN THIS PACKAGE'S OWN SOURCE
  *
  * This shim is scoped to vendor code by convention, not by the compiler: it is
  * ambient, so it would just as happily serve a `solid-js` JSX import of ours. All

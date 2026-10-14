@@ -1,6 +1,5 @@
 /// <reference path="./solid-1-compat-virtual.d.ts" />
 /*
- * ═══════════════════════════════════════════════════════════════════════════
  * SOLID 1 -> 2 COMPATIBILITY LAYER  ·  THE SERVER-FUNCTIONS SHIM
  *
  * One shared copy, kept in tLib and consumed by five projects. `README.md` in
@@ -8,7 +7,7 @@
  * the five modules does, how a project adopts it, what `vendorPackages` is for
  * and how to derive one, and the debug environment variables. Read that first.
  *
- * ── TWO CONVENTIONS HOLD THROUGHOUT THESE FILES ──────────────────────────
+ * TWO CONVENTIONS HOLD THROUGHOUT THESE FILES
  *
  *  · EVERY CLAIM WITH A NUMBER BEHIND IT IS A MEASUREMENT, and the number is
  *    the reason the code below is the shape it is. Several of them record
@@ -22,7 +21,7 @@
  *    subject. Re-measure at the union of all consumers before inheriting a
  *    conclusion into this shared copy.
  *
- * ── FORMATTING ─────────────────────────────────────────────────────
+ * FORMATTING
  *
  * `tLib/biome.json` excludes this directory, deliberately. biome and the
  * consumers' formatter (oxfmt, via `vp fmt`) disagree on import order and line
@@ -30,13 +29,12 @@
  * churn would bury the annotations that are the only record of why each shim
  * is the shape it is.
  *
- * ⚠️ NOTHING FORMATS OR LINTS THIS DIRECTORY TODAY, AND THAT IS A GAP RATHER
+ * NOTHING FORMATS OR LINTS THIS DIRECTORY TODAY, AND THAT IS A GAP RATHER
  * THAN A DESIGN. Measured: every consumer's `fmt`/`lint` script names only its
  * own `src` and configs, and `vp fmt` refuses a path containing `..`, so a
  * consumer cannot point it here even by hand. Match the surrounding style when
  * you edit, and do not assume a green `vp fmt --check` in a consumer says
  * anything about these files. See README.md § Formatting.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 /**
  * VENDOR COMPATIBILITY ONLY. Not reachable from `src/`.

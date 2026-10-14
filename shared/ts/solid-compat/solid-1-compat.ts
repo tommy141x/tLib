@@ -1,6 +1,5 @@
 /// <reference path="./solid-1-compat-virtual.d.ts" />
 /*
- * ═══════════════════════════════════════════════════════════════════════════
  * SOLID 1 -> 2 COMPATIBILITY LAYER  ·  THE `solid-js` SHIM
  *
  * One shared copy, kept in tLib and consumed by five projects. `README.md` in
@@ -8,7 +7,7 @@
  * the five modules does, how a project adopts it, what `vendorPackages` is for
  * and how to derive one, and the debug environment variables. Read that first.
  *
- * ── TWO CONVENTIONS HOLD THROUGHOUT THESE FILES ──────────────────────────
+ * TWO CONVENTIONS HOLD THROUGHOUT THESE FILES
  *
  *  · EVERY CLAIM WITH A NUMBER BEHIND IT IS A MEASUREMENT, and the number is
  *    the reason the code below is the shape it is. Several of them record
@@ -22,7 +21,7 @@
  *    subject. Re-measure at the union of all consumers before inheriting a
  *    conclusion into this shared copy.
  *
- * ── FORMATTING ─────────────────────────────────────────────────────
+ * FORMATTING
  *
  * `tLib/biome.json` excludes this directory, deliberately. biome and the
  * consumers' formatter (oxfmt, via `vp fmt`) disagree on import order and line
@@ -30,13 +29,12 @@
  * churn would bury the annotations that are the only record of why each shim
  * is the shape it is.
  *
- * ⚠️ NOTHING FORMATS OR LINTS THIS DIRECTORY TODAY, AND THAT IS A GAP RATHER
+ * NOTHING FORMATS OR LINTS THIS DIRECTORY TODAY, AND THAT IS A GAP RATHER
  * THAN A DESIGN. Measured: every consumer's `fmt`/`lint` script names only its
  * own `src` and configs, and `vp fmt` refuses a path containing `..`, so a
  * consumer cannot point it here even by hand. Match the surrounding style when
  * you edit, and do not assume a green `vp fmt --check` in a consumer says
  * anything about these files. See README.md § Formatting.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 /**
  * VENDOR COMPATIBILITY ONLY. Not reachable from `src/`.
@@ -47,7 +45,7 @@
  * and a legacy single-arg `createEffect` fallback (2.0 requires
  * `(compute, apply)` and throws `[MISSING_EFFECT_FN]` without it).
  *
- * ── WHO REACHES THIS FILE, MEASURED ─────────────────────────────────────────
+ * WHO REACHES THIS FILE, MEASURED
  *
  * A Vite resolveId plugin (see ./solid-1-compat-plugin.ts) redirects a bare
  * `from "solid-js"` import to this file ONLY when the importer lives under one
@@ -67,10 +65,11 @@
  * Every export below therefore exists for a named vendor consumer, and the ones
  * that turned out to have none have been deleted (see the block comments where
  * `Suspense`/`SuspenseList`/`ErrorBoundary`, `produce`/`isProducer`,
- * `createResource`/`Resource`/`ResourceState`, `createRenderEffect` and
- * `mergeSources` used to be).
+ * `createResource`/`Resource`/`ResourceState` and `mergeSources` used to be).
+ * `createRenderEffect` was on that list and is back — see its own block for the
+ * ripgrep-honours-gitignore miscount that put it there.
  *
- * ⚠️ THE VENDOR SIDE IS ALSO MEASURED, not inherited from whichever build error
+ * THE VENDOR SIDE IS ALSO MEASURED, not inherited from whichever build error
  * first demanded a name. Every `import … from "solid-js" | "solid-js/web" |
  * "solid-js/store"` under the whole `VENDOR_PACKAGES` tree was enumerated by
  * name — 37 distinct names from bare `solid-js`, 18 from `solid-js/web`, 2 from
@@ -109,37 +108,22 @@ import {
   createSignal as realCreateSignal,
   createUniqueId as realCreateUniqueId,
   // Needed only by the shims at the end of this file (`createComputed`,
-  // `observable`). `flush` was imported here for the first version of the `batch`
-  // shim and is gone with it: migration.txt says to remove `batch` rather than
-  // map it to `flush`, and mapping it threw "Cannot call flush() from inside
-  // onSettled or createTrackedEffect". `Loading`/`Errored`/`Reveal` went the same
-  // way as of 2026-10-03: they existed only to be aliased as `Suspense`/
-  // `ErrorBoundary`/`SuspenseList`, which nothing imported.
+  // `createRenderEffect`, `observable`). `flush` was imported here for the
+  // first version of the `batch` shim and is gone with it: migration.txt says
+  // to remove `batch` rather than map it to `flush`, and mapping it threw
+  // "Cannot call flush() from inside onSettled or createTrackedEffect".
+  // `Loading`/`Errored`/`Reveal` went the same way as of 2026-10-03: they
+  // existed only to be aliased as `Suspense`/`ErrorBoundary`/`SuspenseList`,
+  // which nothing imported.
   createRenderEffect as realCreateRenderEffect,
   createTrackedEffect,
   reconcile as realReconcile,
 } from "virtual:solid-1-compat-real/solid-js";
 export * from "virtual:solid-1-compat-real/solid-js";
 
-/*
- * ── NO `mergeSources` RE-EXPORT, AND NO `solid-js/internal` IMPORT ───────────
- *
- * There was one, justified as RC-to-RC skew: "@solidjs/web@rc.8 still imports
- * `mergeSources` from bare solid-js, but solid-js core rc.13 only exposes it via
- * the `solid-js/internal` subpath now." Deleted 2026-10-03 because the skew it
- * bridged is not present in what is actually installed.
- *
- * Re-measured rather than re-assumed: the installed `@solidjs/web` is
- * **rc.13**, not rc.8, and the string `mergeSources` does not appear anywhere in
- * its `dist/`. Across the WHOLE of node_modules it appears in exactly nine
- * files, all of which DEFINE or re-export it — `@solidjs/signals`' store
- * internals and `solid-js`'s own `internal.js`/`internal.d.ts`. Nothing imports
- * it. So this was a shim for a version of a dependency the lockfile had already
- * moved past, kept alive by a comment that was correct when written.
- *
- * Its removal also drops this file's only dependency on `solid-js/internal`,
- * a subpath whose types the docs say carry "no semver guarantee".
- */
+// No `mergeSources` re-export and no `solid-js/internal` import: the
+// installed `@solidjs/web` does not reference `mergeSources` at all, so the
+// shim bridged a dependency skew the lockfile had already moved past.
 
 // Real Solid 2's `createUniqueId` (confirmed by reading
 // `node_modules/solid-js/dist/server.dev.js` directly) now throws
@@ -203,7 +187,7 @@ export function onMount(fn: () => void | (() => void)) {
     dispose = d;
     return (getOwner as any)();
   });
-  // ⚠️ THE `onSettled` CALL ITSELF MUST RUN UNDER `owner`, NOT JUST `fn`.
+  // THE `onSettled` CALL ITSELF MUST RUN UNDER `owner`, NOT JUST `fn`.
   //
   // `onSettled` decides its OWN safe-vs-unowned path synchronously, by
   // reading `getOwner()` at the moment it is CALLED — not from anything
@@ -256,8 +240,8 @@ export function onMount(fn: () => void | (() => void)) {
 // calling the context directly with `{value, children}` props IS the new
 // provider behavior, so self-reference is a correct, not approximate, shim.
 //
-// ── AND ITS CHILDREN ARE CONSTRUCTED UNTRACKED, FOR THE SAME REASON `Show`
-//    AND `Switch` BELOW ARE ──────────────────────────────────────────────────
+// AND ITS CHILDREN ARE CONSTRUCTED UNTRACKED, FOR THE SAME REASON `Show`
+// AND `Switch` BELOW ARE
 //
 // Read the `Show`/`Switch` header first: this is the identical bug in a second
 // host. Solid 2's JSX compiler HOISTS a `ref={expr}` expression out of the ref
@@ -277,7 +261,7 @@ export function onMount(fn: () => void | (() => void)) {
 // subtree from scratch instead of letting the element's own fine-grained
 // effects update it in place.
 //
-// ⚠️ MEASURED, ON `@ark-ui/solid`'s `<Field>`. `FieldRoot` is
+// MEASURED, ON `@ark-ui/solid`'s `<Field>`. `FieldRoot` is
 //   <FieldProvider value={field}>
 //     <ark.div {...mergedProps} ref={composeRefs(field().refs.rootRef, props.ref)} />
 //   </FieldProvider>
@@ -298,7 +282,7 @@ export function onMount(fn: () => void | (() => void)) {
 // "the error clears as you type" both act on a dead node — focus, caret and
 // any in-progress IME composition go with it.
 //
-// ⚠️ THE WRAPPER IS A PROXY WITH AN `apply` TRAP, NOT A NEW FUNCTION. In Solid
+// THE WRAPPER IS A PROXY WITH AN `apply` TRAP, NOT A NEW FUNCTION. In Solid
 // 2 the context IS the provider, and `getContext` keys off `context.id`
 // (confirmed by reading `@solidjs/signals`' `getContext`: `owner._context[
 // context.id]`), while the real provider's own body calls
@@ -343,8 +327,8 @@ export function createContext<T>(defaultValue?: T, options?: unknown) {
 // THESE specific errors — any other throw from inside `fn` still propagates,
 // same as Solid 1.
 //
-// ── ⛔ `.constructor.name` IS NOT A STABLE IDENTIFIER IN A BUNDLE, AND IT
-//    BROKE THE WHOLE SITE ON EVERY CLIENT-SIDE NAVIGATION WHILE SIGNED IN ───
+// `.constructor.name` IS NOT A STABLE IDENTIFIER IN A BUNDLE, AND IT
+// BROKE THE WHOLE SITE ON EVERY CLIENT-SIDE NAVIGATION WHILE SIGNED IN
 //
 // `constructor.name` is the MINIFIED class binding. Our production build's
 // minifier renames `class NoOwnerError` to `class i` and
@@ -379,7 +363,7 @@ export function createContext<T>(defaultValue?: T, options?: unknown) {
 // signed in (the signed-out header renders a plain button, not the Menu),
 // which is why nothing before this had caught it.
 //
-// ⚠️ SO THE CLASSES ARE LEARNED AT RUNTIME, FROM REAL SOLID ITSELF, and
+// SO THE CLASSES ARE LEARNED AT RUNTIME, FROM REAL SOLID ITSELF, and
 // compared by constructor IDENTITY. `probeContextErrors` below provokes each
 // of the two throws once at module init against a throwaway context and keeps
 // the constructor it got. No identifier is involved, so no minifier can
@@ -388,7 +372,7 @@ export function createContext<T>(defaultValue?: T, options?: unknown) {
 // exactly what it was), and because an unminified/dev build answers them
 // correctly anyway.
 //
-// ⛔ DO NOT "SIMPLIFY" THIS BACK TO A NAME, OR TO A MESSAGE TEST. The name is
+// DO NOT "SIMPLIFY" THIS BACK TO A NAME, OR TO A MESSAGE TEST. The name is
 // minified. The MESSAGE is the EMPTY STRING in a production build —
 // `class NoOwnerError { constructor(){ super("") } }` in
 // `@solidjs/signals/dist/prod/core/error.js`, confirmed by reading it — so
@@ -413,24 +397,24 @@ const NO_CONTEXT_ERROR_NAMES = new Set(["ContextNotFoundError", "NoOwnerError"])
  * both throws once rather than by naming them — see the long note above for
  * what naming them cost.
  *
- * ⚠️ BOTH PROBES USE ONE THROWAWAY CONTEXT WITH NO DEFAULT VALUE, which is
+ * BOTH PROBES USE ONE THROWAWAY CONTEXT WITH NO DEFAULT VALUE, which is
  * the only shape that reaches the second throw at all: real `getContext` falls
  * back to `ctx.defaultValue` first and throws `ContextNotFoundError` only when
  * that is `undefined` too.
  *
- * ⚠️ THE TWO PROBES DIFFER ONLY IN WHETHER THERE IS AN OWNER, because that is
+ * THE TWO PROBES DIFFER ONLY IN WHETHER THERE IS AN OWNER, because that is
  * the only thing that distinguishes the two errors. Module init has no owner,
  * so the bare call takes the `NoOwnerError` path; the `createRoot` call gives
  * it an owner with no provider, which takes the `ContextNotFoundError` path.
  * The root is disposed immediately — it exists for one synchronous read and
  * holds nothing.
  *
- * ⚠️ READING A CONTEXT CREATES NO REACTIVE PRIMITIVE (real `getContext` is a
+ * READING A CONTEXT CREATES NO REACTIVE PRIMITIVE (real `getContext` is a
  * plain property read off the owner, and `createContext` only allocates a
  * Symbol and an object), so this is safe at module scope and cannot trip
  * Solid 2's `PRIMITIVE_IN_FORBIDDEN_SCOPE` the way `onMount` above can.
  *
- * ⚠️ EVERY FAILURE HERE IS SILENT AND LEAVES THE SETS EMPTY, deliberately. A
+ * EVERY FAILURE HERE IS SILENT AND LEAVES THE SETS EMPTY, deliberately. A
  * probe that does not throw means this build's Solid does not have the failure
  * mode being compensated for, and `useContext` below then behaves exactly as
  * the name-only version did. A probe must never be able to break module
@@ -507,25 +491,10 @@ export function useContext<T>(ctx: unknown): T | undefined {
 }
 export const mergeProps = realMerge;
 
-/*
- * ── `Suspense`, `SuspenseList` AND `ErrorBoundary` ARE GONE FROM THIS FILE ───
- *
- * They were `Loading`, `Reveal` and `Errored` aliases (the renames
- * `migration.txt:317-320` prescribes). Deleted 2026-10-03 because NOTHING
- * imports them. Measured, not assumed: a scan of all 11,611 files under the
- * `VENDOR_PACKAGES` trees found zero imports and zero mentions of any of the
- * three outside of prose. The only hits at all were two comments in
- * `@tanstack/solid-router` — `renderRouterToStream.jsx` saying "if a
- * Suspense/resource never resolves", and `router.d.ts` saying "errors caught by
- * the Router ErrorBoundary" — neither of which is code. `src/` imports none of
- * them either (it uses `Loading` natively, 9 times, and has no error boundary
- * at all by the deliberate decision recorded in `src/routes/__root.tsx`).
- *
- * A shim export consumed by nobody is worse than dead weight: it is evidence
- * for a compatibility requirement that does not exist, and it makes the shim
- * look larger — i.e. the migration look less complete — than it is. If a vendor
- * package ever does need one, it is a one-line alias to re-add.
- */
+// No `Suspense`, `SuspenseList` or `ErrorBoundary` aliases. Nothing imports
+// them -- not the vendor trees, not `src/` -- and a shim nobody consumes reads
+// as evidence for a compatibility requirement that does not exist. One-line
+// alias to re-add if a vendor package ever needs one.
 
 // --- splitProps: old 2-tuple [picked, rest] shape --------------------------
 // Both halves are thin Proxies over the real, instrumented `props` object —
@@ -549,14 +518,14 @@ export const mergeProps = realMerge;
 // plain, safely-spreadable object.
 export function splitProps(props: any, ...keyGroups: Array<readonly string[]>) {
   /*
-   * ── ⛔ VARIADIC, BECAUSE SOLID 1's `splitProps` IS — AND THE ONE-ARRAY VERSION
-   *      SILENTLY DELETED EVERY CHILD OF EVERY `<Motion>` ELEMENT ──────────────────
+   * VARIADIC, BECAUSE SOLID 1's `splitProps` IS — AND THE ONE-ARRAY VERSION
+   * SILENTLY DELETED EVERY CHILD OF EVERY `<Motion>` ELEMENT
    *
    * This took `(props, keys)` — ONE key array — and returned `[picked, rest]`. Solid 1's
    * real signature is `splitProps(props, ...keyGroups)`, returning one bag per group plus
    * a final rest bag.
    *
-   * ⛔ MEASURED. `solid-motionone/dist/index.jsx` opens with
+   * MEASURED. `solid-motionone/dist/index.jsx` opens with
    *
    *     const [options, , attrs] = splitProps(props, OPTION_KEYS, ATTR_KEYS);
    *
@@ -565,17 +534,17 @@ export function splitProps(props: any, ...keyGroups: Array<readonly string[]>) {
    * no `class`, no `ref`. Every `<Motion.div>` on the site rendered as a bare
    * `<div style="opacity:0;filter:blur(6px)">` with an empty body.
    *
-   * ⛔ AND IT WAS A 200 WITH A PERFECT `<head>`. `/blog` served the full document — title,
+   * AND IT WAS A 200 WITH A PERFECT `<head>`. `/blog` served the full document — title,
    * canonical, OG tags, the complete JSON-LD `@graph` describing three posts — above a
    * `<main>` containing three empty divs. Nothing errored, nothing logged. The only reason
    * it was caught at all is that the port was being verified by READING the rendered
    * output rather than by the build exiting 0.
    *
-   * ⚠️ THE PRE-EXISTING ONE-ARRAY CALLERS ARE UNAFFECTED: with a single group this returns
+   * THE PRE-EXISTING ONE-ARRAY CALLERS ARE UNAFFECTED: with a single group this returns
    * `[picked, rest]` exactly as before, which is the shape every other vendor call site
    * (Ark UI's, chiefly) destructures.
    *
-   * ⚠️ EACH GROUP EXCLUDES ONLY ITS OWN KEYS; `rest` excludes the UNION of all of them.
+   * EACH GROUP EXCLUDES ONLY ITS OWN KEYS; `rest` excludes the UNION of all of them.
    * That is Solid 1's semantics — a key named in group 2 must not also appear in group 1's
    * bag, and must not appear in `rest`.
    */
@@ -644,7 +613,7 @@ function makePickedProxy(props: any, keySet: Set<string>) {
 /**
  * The `rest` half of `splitProps`.
  *
- * ⚠️ `keySet` here is the UNION of every key group, not one group's keys — a prop claimed
+ * `keySet` here is the UNION of every key group, not one group's keys — a prop claimed
  * by any group must not also appear in the rest bag.
  */
 function makeRestProxy(props: any, keySet: Set<string>) {
@@ -862,7 +831,7 @@ export function on(
 // it into an equivalent draft mutation; a true single-function call (the 2.0
 // native form) passes straight through.
 //
-// ⚠️ EVERY CALL HERE GOES THROUGH `withStoreWritePermit`. A Solid 1 vendor
+// EVERY CALL HERE GOES THROUGH `withStoreWritePermit`. A Solid 1 vendor
 // writes its store from inside a tracked callback as a matter of course, and
 // this file's own tracked-effect wrapper takes away the runtime's permit for
 // that — see the long note beside `storeWriteScopes` for the measurement and
@@ -890,7 +859,7 @@ export function createStore<T extends object>(init: T, options?: any) {
 }
 
 /*
- * ── ONE TRACKED CALLBACK, WITH NESTED PRIMITIVES ALLOWED ─────────────────────
+ * ONE TRACKED CALLBACK, WITH NESTED PRIMITIVES ALLOWED
  *
  * Solid 1's single-argument `createEffect` and its `createComputed` are both
  * "one callback that tracks what it reads AND performs the side effect", and in
@@ -900,8 +869,8 @@ export function createStore<T extends object>(init: T, options?: any) {
  * the writes Solid 1 code routinely makes, and `ownedWrite: true` cannot rescue
  * a STORE write because `StoreOptions` has no such field).
  *
- * ── ⛔ BUT A BARE `createTrackedEffect(compute)` THROWS THE MOMENT A VENDOR
- *      NESTS A PRIMITIVE, AND SOLID 1 CODE DOES THAT ROUTINELY ───────────────
+ * BUT A BARE `createTrackedEffect(compute)` THROWS THE MOMENT A VENDOR
+ * NESTS A PRIMITIVE, AND SOLID 1 CODE DOES THAT ROUTINELY
  *
  * Its scope is marked CHILDREN_FORBIDDEN. The guard, read in
  * `node_modules/@solidjs/signals/dist/dev-shared.js`:
@@ -909,7 +878,7 @@ export function createStore<T extends object>(init: T, options?: any) {
  *     if (parent && parent._config & CONFIG_CHILDREN_FORBIDDEN) {
  *       throw new Error(PRIMITIVE_IN_FORBIDDEN_SCOPE_MESSAGE);
  *
- * ⛔ MEASURED — THIS PUT EVERY PAGE OF A CONSUMING SITE ON THE ERROR
+ * MEASURED — THIS PUT EVERY PAGE OF A CONSUMING SITE ON THE ERROR
  * BOUNDARY, and it was invisible to curl: each page SSR'd perfectly (a correct,
  * full-length 200 with no error markers in the HTML) and then threw during
  * HYDRATION. Captured over CDP by patching `Error` and reloading:
@@ -932,7 +901,7 @@ export function createStore<T extends object>(init: T, options?: any) {
  * reads, and the primitives it creates are owned by the effect, so Solid disposes
  * them when the effect re-runs or is destroyed.
  *
- * ⚠️ IT IS INERT WHERE NOTHING NESTS. Measured on a consumer whose vendors do
+ * IT IS INERT WHERE NOTHING NESTS. Measured on a consumer whose vendors do
  * not nest a primitive: zero `[PRIMITIVE_IN_FORBIDDEN_SCOPE]` across its 5,419
  * tests with or without this, so
  * for a project whose vendors never nest a primitive the save/restore is a
@@ -940,7 +909,7 @@ export function createStore<T extends object>(init: T, options?: any) {
  * costs nothing where it is not needed and the absence of it is a hydration-time
  * crash where it is.
  *
- * ⛔ `runWithOwner(ownerCreatedOutside, …)` IS THE OBVIOUS ALTERNATIVE AND IT IS
+ * `runWithOwner(ownerCreatedOutside, …)` IS THE OBVIOUS ALTERNATIVE AND IT IS
  * A TRAP. It is how `onMount` above legalises the same guard, so it looks like
  * the house pattern — but `onMount` defers a ONE-SHOT callback that tracks
  * nothing, and this does not. Read it in `dev-shared.js:6936`:
@@ -959,8 +928,8 @@ export function createStore<T extends object>(init: T, options?: any) {
  * with a perfect console. DO NOT REINTRODUCE `runWithOwner` HERE.
  */
 /*
- * ── ⚠️ THE SAME BIT IS ALSO SOLID 2's WRITE PERMIT, AND CLEARING IT REVOKED
- *      ONE ─────────────────────────────────────────────────────────────────
+ * THE SAME BIT IS ALSO SOLID 2's WRITE PERMIT, AND CLEARING IT REVOKED
+ * ONE
  *
  * `CONFIG_CHILDREN_FORBIDDEN` is not only "no primitives here". It is how the
  * runtime recognises a tracked-effect scope AT ALL, and eight separate places
@@ -987,7 +956,7 @@ export function createStore<T extends object>(init: T, options?: any) {
  * "only the one bit that forbids children turned off"; that was read off the
  * primitive guard alone and is wrong about the other seven call sites.
  *
- * ⛔ MEASURED on `@tanstack/solid-virtual`, which is the vendor in this set
+ * MEASURED on `@tanstack/solid-virtual`, which is the vendor in this set
  * that writes a store from a `createComputed` body (see `createComputed`):
  *
  *     [REACTIVE_WRITE_IN_OWNED_SCOPE] … (in trackedEffect)
@@ -1008,7 +977,7 @@ export function createStore<T extends object>(init: T, options?: any) {
  * one of ours; re-arming any other node would legalise a write Solid 2 means
  * to reject.
  *
- * ⚠️ WHY ONLY THE STORE SETTER, AND NOT ALL SEVEN. Signals are already covered
+ * WHY ONLY THE STORE SETTER, AND NOT ALL SEVEN. Signals are already covered
  * by `CONFIG_OWNED_WRITE`, which `setSignal` tests FIRST and which the shimmed
  * `createSignal` below forces on every vendor signal; `markRefresh` and the
  * pending-async guard have no vendor call site in this set. The three READ
@@ -1017,7 +986,7 @@ export function createStore<T extends object>(init: T, options?: any) {
  * recorded in the README as unproven rather than patched, because no consumer
  * has produced a case and a speculative wrapper around every read is not free.
  *
- * ⛔ NOT: "stop clearing the bit, and clear it only inside the shim's own
+ * NOT: "stop clearing the bit, and clear it only inside the shim's own
  * primitive constructors instead". That looks strictly better and it has a
  * hole — `createMemo` is NOT shimmed in this file, it arrives through the
  * `export *` passthrough, so a vendor nesting a memo would start throwing
@@ -1089,7 +1058,7 @@ function trackedEffectAllowingNestedPrimitives(compute: any, options?: any) {
 // code that was never written against this new guard.
 export function createEffect(compute: any, effectFn?: any, options?: any) {
   if (effectFn === undefined) {
-    // ⚠️ `createTrackedEffect`, FOR THE SAME REASON `createComputed` BELOW USES
+    // `createTrackedEffect`, FOR THE SAME REASON `createComputed` BELOW USES
     // IT. The obvious mapping — `(compute, () => {})`, the body as the compute
     // phase with an empty apply — is what this was, and it only worked because
     // the shimmed `createSignal` below forces `ownedWrite: true`: a Solid 1
@@ -1100,7 +1069,7 @@ export function createEffect(compute: any, effectFn?: any, options?: any) {
     // `createEffect` IS "one tracked callback", which is what
     // `createTrackedEffect` is for.
     //
-    // ⚠️ MEASURED BEFORE KEEPING IT: changed NOTHING observable — the full suite
+    // MEASURED BEFORE KEEPING IT: changed NOTHING observable — the full suite
     // reports the identical 5,405 passing / 14 failing either way, and zero
     // `[PRIMITIVE_IN_FORBIDDEN_SCOPE]` errors across all 5,419 tests, which is
     // the constraint `createTrackedEffect` adds (it cannot create nested
@@ -1124,12 +1093,11 @@ export function createSignal(first: any, second?: any) {
   return (realCreateSignal as any)(first, { ownedWrite: true, ...second });
 }
 
-// ───────────────────────────────────────────────────────────────────────────
 // THE `@tanstack/solid-*` ADAPTER FAMILY. Everything below this line exists for
 // that vendor group specifically; it is not reached by a consumer that does not
 // install it.
 //
-// ⚠️ EVERY EXPORT BELOW IS JUSTIFIED BY A VENDOR CALL SITE, AND THAT RULE HAS
+// EVERY EXPORT BELOW IS JUSTIFIED BY A VENDOR CALL SITE, AND THAT RULE HAS
 // TEETH. These were originally justified by APPLICATION call sites instead,
 // back when the redirect was unconditional and application code was still
 // unmigrated. Two of them (`produce`, then `createResource`) turned out to have
@@ -1138,13 +1106,12 @@ export function createSignal(first: any, second?: any) {
 // `@tanstack/solid-table`, `createComputed` for `-form`/`-table`/`-virtual`.
 // "a project of ours uses it" is not a reason for anything in this file to
 // exist — count it in `node_modules` or delete it.
-// ───────────────────────────────────────────────────────────────────────────
 
 // `batch` is GONE from 2.0 because its job is now the default: writes are
 // collected onto the microtask queue and collapse into one update pass whether
 // you ask for it or not. So a plain `fn()` would already be "batched".
 //
-// ── ⚠️ IT IS THE IDENTITY FUNCTION, AND `flush(fn)` WAS A MISTAKE ───────────
+// IT IS THE IDENTITY FUNCTION, AND `flush(fn)` WAS A MISTAKE
 //
 // This shim first mapped `batch(fn)` onto `flush(fn)`, reasoning that Solid 1's
 // `batch` ran its dependent updates synchronously once the callback returned, and
@@ -1172,7 +1139,7 @@ export function batch<T>(fn: () => T): T {
 }
 
 /*
- * ── `reconcile`: THE OPTIONS-OBJECT SECOND ARGUMENT, BACK AGAIN ─────────────
+ * `reconcile`: THE OPTIONS-OBJECT SECOND ARGUMENT, BACK AGAIN
  *
  * Solid 1 took `reconcile(items, { key?: string | null, merge?: boolean })`.
  * Solid 2 kept `reconcile` with the same semantics and merely moved it out of
@@ -1188,7 +1155,7 @@ export function batch<T>(fn: () => T): T {
  * tracked callback, so it takes the reactive system down with it rather than
  * failing locally.
  *
- * ── ⚠️ THIS WRAPPER WAS DELETED ONCE AND ITS REASON WENT STALE ──────────────
+ * THIS WRAPPER WAS DELETED ONCE AND ITS REASON WENT STALE
  *
  * The deletion note said, correctly when written: every `reconcile` call site
  * in every consumer's vendor tree was `@ark-ui/solid`'s one-argument
@@ -1200,7 +1167,7 @@ export function batch<T>(fn: () => T): T {
  *     @tanstack/solid-virtual/dist/esm/index.js:33   reconcile(…, { key: "index" })
  *     @tanstack/solid-virtual/dist/esm/index.js:42   reconcile(…, { key: "index" })
  *
- * ⚠️ IT WAS INVISIBLE UNDERNEATH AN EARLIER FAULT, which is the part worth
+ * IT WAS INVISIBLE UNDERNEATH AN EARLIER FAULT, which is the part worth
  * keeping. `devGuardStoreSetterWrite` rejected those same two writes at the
  * setter's front door — see the long note beside `storeWriteScopes` — so the
  * diff walk was never reached and the only error anyone saw was
@@ -1218,7 +1185,7 @@ export function batch<T>(fn: () => T): T {
  * undefined)` takes Solid 2's own `"id"` default, which was Solid 1's default
  * as well.
  *
- * ⚠️ `solid-1-compat-store.ts` MUST NOW TAKE IT FROM HERE, not from the real
+ * `solid-1-compat-store.ts` MUST NOW TAKE IT FROM HERE, not from the real
  * package. `@tanstack/solid-virtual` imports `reconcile` from the
  * `solid-js/store` subpath, so that file is the only path its calls travel;
  * re-exporting the real one there leaves this wrapper unreached and the error
@@ -1234,7 +1201,7 @@ export function reconcile(value: any, key?: any) {
 }
 
 /*
- * ── NO `produce`/`isProducer` SHIM ANY MORE ──────────────────────────────────
+ * NO `produce`/`isProducer` SHIM ANY MORE
  *
  * `produce` is gone from 2.0 because the mutation form IS the native setter now:
  * a Solid 2 store setter takes `(draft) => { ... }` and applies the mutations,
@@ -1262,7 +1229,7 @@ export function reconcile(value: any, key?: any) {
  */
 
 /**
- * ── ⚠️ NO `createResource`, AND NO `Resource`/`ResourceState` TYPES ─────────
+ * NO `createResource`, AND NO `Resource`/`ResourceState` TYPES
  *
  * There was a ~170-line reimplementation here. It is gone because NOTHING asks
  * for it. Measured, not assumed — the same two-sided count this file applies to
@@ -1280,7 +1247,7 @@ export function reconcile(value: any, key?: any) {
  *    solid-2-idioms.test.ts lists the name in SOLID_1_ONLY_NAMES and asserts
  *    no `src/` file imports it.
  *
- * ⚠️ IT WAS DEAD CODE WITH A LIVE-LOOKING JUSTIFICATION, which is the exact
+ * IT WAS DEAD CODE WITH A LIVE-LOOKING JUSTIFICATION, which is the exact
  * trap the `produce` note above describes. Its docblock argued its own
  * behavioural costs against call-site counts — 18 files naming `Suspense`,
  * 41 using `createResource` — and every one of those counts
@@ -1300,7 +1267,7 @@ export function reconcile(value: any, key?: any) {
  * approximation, for the reason above.
  */
 
-// ── TWO MORE, FOR A VENDOR GROUP ONLY SOME CONSUMERS INSTALL ─────────────
+// TWO MORE, FOR A VENDOR GROUP ONLY SOME CONSUMERS INSTALL
 //
 // `@tanstack/solid-form` and `@tanstack/solid-table` are on only one of the
 // five `vendorPackages` lists today. Both still
@@ -1308,7 +1275,7 @@ export function reconcile(value: any, key?: any) {
 // measured peer ranges: solid-form@2.0.0-alpha.2 is `solid-js: >=1.9.5`,
 // solid-table@9.2.4 is `>=1.3`.
 //
-// ⚠️ THEY SURFACED ONE LAYER AT A TIME, which is how this whole vendor surface
+// THEY SURFACED ONE LAYER AT A TIME, which is how this whole vendor surface
 // behaves: rolldown reports the first batch of missing exports and stops, so
 // each round of fixes reveals the next. Never read a shorter error list as
 // progress — enumerate the vendor tree instead (see this file's header).
@@ -1318,7 +1285,7 @@ export function reconcile(value: any, key?: any) {
 // render pass — which is why libraries used it to derive state they then WROTE to
 // a signal. That last part is the whole difficulty.
 //
-// ── ⚠️ `createTrackedEffect`, AND THE FIRST TWO ATTEMPTS WERE BOTH WRONG ──────
+// `createTrackedEffect`, AND THE FIRST TWO ATTEMPTS WERE BOTH WRONG
 //
 // ATTEMPT 1 — `createRenderEffect(fn, () => {})`, i.e. the body as the COMPUTE
 // phase with an empty apply, matching how the `createEffect` shim above restores
@@ -1347,7 +1314,7 @@ export function reconcile(value: any, key?: any) {
 // legal — its reference page states that "writes made inside it are queued into
 // the same flush's continuation". That is exactly Solid 1's `createComputed`.
 //
-// ⚠️ YES, IT IS DEPRECATED, AND THAT IS THE RIGHT TOOL HERE RATHER THAN A
+// YES, IT IS DEPRECATED, AND THAT IS THE RIGHT TOOL HERE RATHER THAN A
 // CONTRADICTION. Its own page says "Deprecated: Do not use in new code …
 // retained solely to ease 1.x migration". This file IS the 1.x migration, for
 // packages we do not control and cannot rewrite. The same primitive was
@@ -1356,7 +1323,7 @@ export function reconcile(value: any, key?: any) {
 // wearing a native name. The distinction is who owns the code, not which
 // primitive is nicer.
 //
-// ⚠️ WHAT IT COSTS, from its own documentation rather than guessed: it "may run
+// WHAT IT COSTS, from its own documentation rather than guessed: it "may run
 // multiple times for a single change or show tearing", it "never holds a
 // transition", and it "cannot observe a write staged earlier in the same flush by
 // a signal it has not read yet". For a virtualizer republishing a window those
@@ -1370,24 +1337,53 @@ export function createComputed(compute: any, effectFn?: any, options?: any) {
   return (realCreateRenderEffect as any)(compute, effectFn, options);
 }
 /*
- * ── NO `createRenderEffect` SHIM, BECAUSE NOTHING ASKS FOR ONE ───────────────
+ * `createRenderEffect`: THE SINGLE-ARGUMENT RESCUE IS BACK, AND THE
+ * MEASUREMENT THAT RETIRED IT WAS WRONG
  *
- * There was one here (the same single-argument rescue `createComputed` above
- * does, for the same reason). Deleted 2026-10-03: `createRenderEffect` is not
- * imported — and is not so much as MENTIONED — anywhere in the 11,611 files
- * under the `VENDOR_PACKAGES` trees, and `src/` does not use it either.
+ * The docblock this replaces deleted the shim on 2026-10-03, saying
+ * `createRenderEffect` "is not imported — and is not so much as MENTIONED —
+ * anywhere in the 11,611 files under the `VENDOR_PACKAGES` trees". Re-measured
+ * 2026-10-14 at the installed tree: FOUR single-argument call sites, all in
+ * `@tanstack/solid-form@2.0.0-alpha.2`, which is on `VENDOR_PACKAGES` —
  *
- * It is also the one name on this file's old roster that real Solid 2 still
- * exports under its own name, so an unneeded shim for it was shadowing a live
- * API rather than restoring a dead one. The real export is two-phase now
- * (`compute, effectFn`, no `EffectBundle` overload) and is documented as
- * renderer plumbing — "app code should use `createEffect`" — so if a vendor
- * ever does import it, letting the real one through is the better default and
- * the shim can come back deliberately.
+ *     dist/createField.lib.js:7,32,35   (createFieldSelector, createInternalField ×2)
+ *     dist/SolidFormApi.lib.js:30,76    (FormGroup, createInternalForm)
  *
- * `realCreateRenderEffect` is still imported above: `createComputed`'s
- * two-argument passthrough uses it.
+ * Counting a vendor tree from a shell needs `rg --no-ignore`: `node_modules` is
+ * gitignored and ripgrep honours that, so a plain `rg` over it reports zero.
+ * The surface suite walks with `readdirSync` and is not subject to that, but it
+ * could not catch this either — Solid 2 exports the name and only the ARITY
+ * changed, which is invisible to a "does this name resolve" check.
+ *
+ * Symptom: `TypeError: e.st is not a function` from Solid 2's effect runner.
+ * `e.st` is the mangled apply-phase callback, undefined because only a compute
+ * was passed; the page renders the root error boundary and the server is 200.
+ *
+ * THE MAPPING IS `(fn, () => {})` — THE BODY AS THE COMPUTE PHASE — WHICH IS
+ * DELIBERATELY NOT WHAT `createComputed` ABOVE DOES. That shape is "ATTEMPT 1"
+ * in `createComputed`'s note, rejected there because `@tanstack/solid-virtual`
+ * writes a STORE from its body and a store write from a computation has no
+ * opt-out. solid-form has no store: it imports `createSignal` (shimmed, so
+ * `ownedWrite: true`) and otherwise writes TanStack atoms, which are not Solid
+ * state. So the objection does not apply, and the cost of `createTrackedEffect`
+ * does: its first run is queued (`enqueueSub` + `schedule`, not a synchronous
+ * recompute), whereas Solid 1's `createRenderEffect` ran its body IMMEDIATELY at
+ * creation — which is what `createInternalField`'s `_update()`/`_register()`
+ * depend on, since the field's own children read that state in the same render.
+ * A compute phase keeps that timing exactly.
+ *
+ * A two-argument call is passed through, matching `createComputed`. That is a
+ * genuine ambiguity — Solid 1's second parameter was the effect's INITIAL VALUE,
+ * not an apply function — and it is accepted rather than guessed at because no
+ * vendor in this set passes one. If one ever does, it will arrive as a value
+ * being called as a function, so it will not be silent.
  */
+export function createRenderEffect(compute: any, effectFn?: any, options?: any) {
+  if (effectFn === undefined) {
+    return (realCreateRenderEffect as any)(compute, () => {}, options);
+  }
+  return (realCreateRenderEffect as any)(compute, effectFn, options);
+}
 
 // `observable(accessor)` turned a signal into a TC39/RxJS-interop observable.
 // 2.0 dropped it; `@tanstack/solid-table`'s `dist/reactivity.js` still imports

@@ -1,7 +1,7 @@
 /**
  * The shim's surface, measured against a CONSUMER's installed vendor tree.
  *
- * ── ⛔ WHY THIS IS SHARED LOGIC AND PER-PROJECT DATA ────────────────────────────
+ * WHY THIS IS SHARED LOGIC AND PER-PROJECT DATA
  *
  * Nothing in `solid-compat/` had a test of its own. The rule in README's
  * *Changing anything here* — "every export must have a vendor call site, count
@@ -11,7 +11,7 @@
  * were taken BEFORE the migration and never marked historical. Reading the
  * docblock actively argued FOR keeping it.
  *
- * ⚠️ THE ASSERTIONS ARE GENERIC; THE TREE THEY RUN AGAINST IS NOT. "What does the
+ * THE ASSERTIONS ARE GENERIC; THE TREE THEY RUN AGAINST IS NOT. "What does the
  * installed vendor tree import" can only be answered by an installed tree, and
  * the trees genuinely differ — `VENDOR_PACKAGES` runs from 2 entries to 12 across
  * the supported set, and only `@ark-ui/solid` and `@zag-js/solid` appear in every
@@ -21,7 +21,7 @@
  * project can do that alone, and a copy per project is the fork this layer
  * exists to have ended.
  *
- * ── ⛔ TWO THINGS ARE INJECTED RATHER THAN IMPORTED, AND BOTH ARE FORCED ────────
+ * TWO THINGS ARE INJECTED RATHER THAN IMPORTED, AND BOTH ARE FORCED
  *
  * This file is physically inside tLib, so a bare import here resolves against
  * tLib — not against the consumer. Measured in `tLib/shared/ts/node_modules`:
@@ -39,7 +39,7 @@
  *     runner the consumer is watching — a suite that silently contributes zero
  *     tests, which is indistinguishable from one that passes.
  *
- * ⚠️ SO THE CONSUMER PASSES ITS OWN `{ describe, test, expect }` AND ITS OWN
+ * SO THE CONSUMER PASSES ITS OWN `{ describe, test, expect }` AND ITS OWN
  * DYNAMIC IMPORTS. Both then resolve from the consumer's root, where the real
  * Solid 2 and the real runner live. It also makes this runner-agnostic, which is
  * a free side effect rather than the goal.
@@ -81,11 +81,11 @@ export interface SurfaceSuiteOptions {
   vendorPackages: readonly string[];
 
   /**
-   * ⛔ THE CONSUMER'S OWN DYNAMIC IMPORTS — see this file's header. Written as
+   * THE CONSUMER'S OWN DYNAMIC IMPORTS — see this file's header. Written as
    * `() => import("solid-js")` at the CALL SITE so they resolve from the
    * consumer's root rather than from tLib's Solid 1.9.12.
    *
-   * ⚠️ `solid-js/store` IS ABSENT ON PURPOSE. Solid 2 has no counterpart at all;
+   * `solid-js/store` IS ABSENT ON PURPOSE. Solid 2 has no counterpart at all;
    * the store APIs moved into bare `solid-js`, so the shim file supplies that
    * whole surface and there is no real package to compare against.
    */
@@ -124,20 +124,20 @@ export interface SurfaceSuiteOptions {
    * not declare anywhere. Asserted as an EXACT set, so a vendor upgrade that
    * changes it has to be looked at rather than absorbed.
    *
-   * ⚠️ INERT, NOT BROKEN: type imports are erased before a bundler looks for a
+   * INERT, NOT BROKEN: type imports are erased before a bundler looks for a
    * binding, so a missing one cannot resolve to `undefined` — and `skipLibCheck`
    * hides them from tsc. The list shrinking is how this layer ends.
    */
   undeclaredTypeImports: readonly string[];
 
   /**
-   * ── ⛔ "UNUSED" IS A UNION QUESTION, AND THIS OPTION IS WHY ───────────────────
+   * "UNUSED" IS A UNION QUESTION, AND THIS OPTION IS WHY
    *
    * Shim exports no vendor in THIS consumer's tree imports. They are not dead
    * code: another consumer's vendors want them, and only the union of all five
    * trees can say otherwise.
    *
-   * ⚠️ THIS WAS FOUND BY RUNNING THE SUITE, NOT BY DESIGNING IT. Its first run
+   * THIS WAS FOUND BY RUNNING THE SUITE, NOT BY DESIGNING IT. Its first run
    * against a second consumer failed on `batch`, `createComputed` and
    * `observable` as "unused" — and all three are live elsewhere, measured in that
    * other consumer's `node_modules`:
@@ -148,18 +148,18 @@ export interface SurfaceSuiteOptions {
    *                       @tanstack/solid-form
    *     observable     <- @tanstack/solid-table
    *
-   * ⛔ SO A PER-PROJECT "UNUSED" VERDICT IS A FALSE FAILURE FOR A SHARED LAYER,
+   * SO A PER-PROJECT "UNUSED" VERDICT IS A FALSE FAILURE FOR A SHARED LAYER,
    * and asserting it strictly would have pushed the narrower consumer to delete
    * exports the wider one needs. That is the exact opposite of what README rule 2
    * ("re-measure at the UNION, not at the one project in front of you") asks for.
    *
-   * ⚠️ IT IS ASSERTED AS AN EXACT SET RATHER THAN AN ALLOWLIST. A name that
+   * IT IS ASSERTED AS AN EXACT SET RATHER THAN AN ALLOWLIST. A name that
    * becomes locally wanted must be REMOVED from here, and a newly orphaned export
    * must be ADDED — either way the diff is visible and someone has to decide.
    * An allowlist would only ever grow, and would silence the `createResource`
    * case this suite exists to catch.
    *
-   * ⛔ AN EXPORT IS ONLY DEAD WHEN IT APPEARS IN EVERY CONSUMER'S LIST. That is
+   * AN EXPORT IS ONLY DEAD WHEN IT APPEARS IN EVERY CONSUMER'S LIST. That is
    * the signal to delete it from the shim, and it cannot be seen from one repo.
    */
   exportsWantedOnlyByOtherConsumers: readonly string[];
@@ -197,7 +197,7 @@ function walk(dir: string, out: string[] = []): string[] {
  * namespace or default import contributes no name, because neither pins an
  * export.
  *
- * ⚠️ THE TYPE/VALUE SPLIT IS READ OFF THE IMPORT POSITION, NOT OFF THE PACKAGE.
+ * THE TYPE/VALUE SPLIT IS READ OFF THE IMPORT POSITION, NOT OFF THE PACKAGE.
  * Deciding "is it a type?" by scanning installed `.d.ts` for a declaration
  * reported seven false positives as missing VALUES — `Accessor`, `JSX`,
  * `JSXElement`, `Component`, `ComponentProps`, `Context`, `ParentProps` — every
@@ -317,7 +317,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
           if (!SHIMMED_SPECIFIERS.includes(spec)) continue;
           const byName = bySpec.get(spec);
           if (!byName) continue;
-          // ⚠️ AN IMPORT IN A DECLARATION FILE IS TYPE-POSITION WHETHER OR NOT IT
+          // AN IMPORT IN A DECLARATION FILE IS TYPE-POSITION WHETHER OR NOT IT
           // SAYS `type`. A `.d.ts` has no runtime; nothing in it can resolve to
           // `undefined`. See `namedBindings` for the seven false positives this
           // prevents.
@@ -393,7 +393,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
      * read from their own `.d.ts` so the list is not hand-maintained. */
     function declaredTypeNames(): Set<string> {
       const names = new Set<string>();
-      // ⚠️ `@solidjs/signals` IS IN THIS LIST DELIBERATELY. `solid-js`'s own
+      // `@solidjs/signals` IS IN THIS LIST DELIBERATELY. `solid-js`'s own
       // types re-export the reactive ones from there rather than declaring them,
       // so scanning only the two packages vendors NAME reports `Accessor` as
       // undeclared when it is declared one hop away. The scan is textual and
@@ -432,7 +432,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
    * CONTAINS; this measures who it is HANDED TO, which is the actual rule ("the
    * shim serves vendor code only").
    *
-   * ⚠️ WHY IT IS DRIVEN DIRECTLY RATHER THAN THROUGH A BUILD. A build tells you
+   * WHY IT IS DRIVEN DIRECTLY RATHER THAN THROUGH A BUILD. A build tells you
    * the answer for the importers it happens to contain, and the interesting cases
    * are the ones no build contains. The predecessor guard in the plugin was
    * introduced as "THE MIGRATION'S ENFORCEMENT, NOT A DEBUG AID" and could not
@@ -464,7 +464,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
     });
 
     test("application code asking for bare solid-js is left completely alone", async () => {
-      // ⚠️ THE REGRESSION THIS LOCKS. Gating the throw on the shim keys rather
+      // THE REGRESSION THIS LOCKS. Gating the throw on the shim keys rather
       // than on the DROPPED specifiers threw for bare `solid-js` too — a real
       // Solid 2 package every application file imports — while claiming "Solid 2
       // has no such specifier" about it.
@@ -473,7 +473,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
 
     test("a vendor importer gets the shim", async () => {
       /**
-       * ⚠️ THE VENDOR FILE IS DISCOVERED, NOT HARDCODED. A pinned path like
+       * THE VENDOR FILE IS DISCOVERED, NOT HARDCODED. A pinned path like
        * `@ark-ui/solid/dist/chunk/EIZK5ZYY.js` is a content hash: it is correct
        * for one installed version of one consumer and silently becomes a test of
        * nothing — `walk` returns `[]` for an absent path, so the assertion would
@@ -505,7 +505,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
   });
 
   /**
-   * ── THE VENDOR SHAPE THAT HALTED A CONSUMER, HELD IN PLACE BY TEXT ──────────
+   * THE VENDOR SHAPE THAT HALTED A CONSUMER, HELD IN PLACE BY TEXT
    *
    * `@tanstack/solid-virtual` writes a STORE from inside a Solid 1 single-argument
    * `createComputed`, which this layer maps onto `createTrackedEffect`. That one
@@ -514,7 +514,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
    * `[REACTIVITY_HALTED]` — a click handler that runs and renders nothing. Both
    * repairs are easy to undo by tidying, so both are pinned here.
    *
-   * ⛔ THESE ARE TEXT ASSERTIONS AND THAT IS NOT LAZINESS — A BEHAVIOURAL VERSION
+   * THESE ARE TEXT ASSERTIONS AND THAT IS NOT LAZINESS — A BEHAVIOURAL VERSION
    * WAS WRITTEN FIRST AND MEASURED VACUOUS. The obvious better test is to drive
    * the consumer's real Solid: create a tracked effect, write a store from it,
    * watch what the runtime does. Run against web-next it reported
@@ -525,7 +525,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
    * store write with a deliberately invalid key succeeded. That consumer's runner
    * resolves `solid-js` under node conditions, which is the SSR build, where
    * effects do not run and writes are inert. The test passed nothing and failed
-   * nothing. ⚠️ EVERY CONSUMER PICKS ITS OWN CONDITIONS, so a shared suite cannot
+   * nothing. EVERY CONSUMER PICKS ITS OWN CONDITIONS, so a shared suite cannot
    * assume a reactive runtime is present — the runtime half of this lives in a
    * consumer that runs its tests with `--conditions=browser`, where it can
    * actually observe the guard.
@@ -535,7 +535,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
       const core = readFileSync(join(SHIM_DIR, "solid-1-compat.ts"), "utf8");
 
       /*
-       * ⛔ WHY THE PERMIT EXISTS AT ALL. `CONFIG_CHILDREN_FORBIDDEN` is not only
+       * WHY THE PERMIT EXISTS AT ALL. `CONFIG_CHILDREN_FORBIDDEN` is not only
        * "no primitives here" — `devGuardStoreSetterWrite` reads it NEGATED:
        *
        *     if (context && !(context._config & CONFIG_CHILDREN_FORBIDDEN)) throw
@@ -545,7 +545,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
        * repair has to CLEAR. One bit, two opposite needs; the setter puts it back
        * for the duration of the write and for nothing else.
        *
-       * ⚠️ COUNTED, NOT MERELY PRESENT. The setter has two arms — the native
+       * COUNTED, NOT MERELY PRESENT. The setter has two arms — the native
        * single-function call and the legacy path form — and an unwrapped arm is
        * invisible until a vendor happens to use that spelling.
        */
@@ -558,7 +558,7 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
       const store = readFileSync(join(SHIM_DIR, "solid-1-compat-store.ts"), "utf8");
 
       /*
-       * ⛔ THE SUBPATH IS THE ONLY ROUTE `@tanstack/solid-virtual`'s reconcile
+       * THE SUBPATH IS THE ONLY ROUTE `@tanstack/solid-virtual`'s reconcile
        * calls travel — it imports `{ createStore, reconcile }` from
        * `solid-js/store` and nothing else — so a wrapper in `solid-1-compat.ts`
        * that this file does not re-export is a wrapper that is never reached.

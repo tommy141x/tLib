@@ -164,6 +164,294 @@ the attribute *value* a correct-looking element ends up with. One of the five
 consumers enables it today. Turn it on in another together with a check that
 reads rendered output.
 
+## How the plugin resolves, and why each road exists
+
+### One reactive instance is the whole point
+
+Two copies of the Solid runtime in one graph is the hazard every rule below is
+arranged to prevent. A vendor component's signals live in one graph while the
+JSX bindings rendering it are effects in the other, so reads never subscribe and
+writes never notify — and **nothing throws**. It surfaced once as ~313
+reactivity diagnostics on a single page load (246 `STRICT_READ_UNTRACKED`, 39
+`NO_OWNER_EFFECT`, 26 `NO_OWNER_CLEANUP`), which are all one fact reported from
+many scopes: the ambient owner a primitive looks for is a module-level variable,
+and it was in the other copy. The user-visible symptom was an accordion that
+stayed at `aria-expanded="false"` with its content at height 0.
+
+Three separate things can split it in two, and each has its own guard:
+
+| Cause | Guard |
+| --- | --- |
+| Vite's dep optimizer appends a browser hash, so `…/solid.dev.js?v=0412508d` and `…/solid.dev.js` are two module URLs for one file. `vp build`/`vp preview` are fine because there is no optimizer, which is what made it read as a Solid 2 bug. | Outside Vitest the virtual bypass **delegates to `this.resolve`** so the id matches what Vite gives every other importer, hash and all. |
+| `require.resolve`/`path.join` return OS-native paths, and Rollup normalizes module ids to forward slashes. A backslash path for the same physical file is a second, distinct module. | Normalize to forward slashes before returning. |
+| `createRequire(import.meta.url)` resolves from **tLib**, whose `shared/ts/node_modules` holds solid-js 1.9.12. | `createRequire` is rebound to `config.root` in `configResolved`, and `this.resolve` is passed the consumer's root as the importer rather than the shim file. |
+
+That last one fails in the place hardest to read: the bypass only falls back to
+`require.resolve` under Vitest, so a production build stays green while
+`bun run test` loses 40 of 290 test *files* at collection, reported as `Cannot
+find module '/@fs/…/solid-2-aria-attributes.ts'` — a message about the shim
+file, which exists and loads fine, rather than about the dependency it then
+failed to find. Handing `this.resolve` the shim's own path instead of the root
+fails differently and more helpfully: eight `[MISSING_EXPORT]` errors naming
+`../../../tLib/shared/ts/node_modules/solid-js/dist/solid.js`. **That message
+names which `solid-js` it found, which is the one thing that makes it readable —
+do not catch and rethrow it.**
+
+### Why the shims import `virtual:solid-1-compat-real/*`
+
+The shims need the real packages to build their compat surface on. Letting them
+`import … from "solid-js"` and having `resolveId` return `null` for its own shim
+files resolved to a **completely empty module** under Vitest's module runner
+(`Object.keys(real)` was `[]`). `this.resolve(source, importer, { skipSelf:
+true })`, the standard "defer past just this plugin" idiom, produced the empty
+module too, so the fallthrough chain itself is the problem rather than which
+plugin picks the request up next. Dual instances, a dep-optimizer cache and
+`sharedViteServer` were all suspected and ruled out by measurement first — do not
+re-open them.
+
+The bypass is a synthetic specifier this plugin recognises and resolves in one
+step, before any other plugin sees the request. `enforce: "pre"` is required
+independently: without it the main redirect loses to `@solidjs/vite-plugin`'s own
+`enforce: "pre"` resolveId hooks and stops working entirely.
+
+### `POSTURE_SPLIT`: client/server *and* dev/production
+
+`solid-js` and `@solidjs/web` both ship separate client and server builds through
+their `exports` conditions. A plain `require.resolve` applies Node's default
+conditions and returns the **server** build every time, which was invisible for
+`solid-js` core and turned `Dynamic`, `render` and `Portal` into their
+"Client-only API called on the server side" stubs for happy-dom-postured tests.
+`resolveId`'s third argument carries Vite's own resolved `ssr` flag, so the table
+picks the sibling dist file explicitly.
+
+The table must respect build mode too. Hardcoding the `.dev.js` file shipped
+dev-only diagnostics installers into production builds, and because
+`@solidjs/signals` is *not* in the table it correctly got its production build —
+a real dev/prod split across one import, which production tree-shaking resolved
+by dropping the binding to `void 0` rather than reconciling it. It crashed as
+`(void 0).server = serverSlots();`.
+
+Only the two packages with a client/server split are in the table;
+`solid-js/internal` and `@solidjs/web/server-functions/server` are single-build
+subpaths and pass straight through.
+
+### `SOLID_1_ONLY_SPECIFIERS`, and why an absent importer needs a rule
+
+`@tanstack/solid-start`'s import-protection plugin re-resolves specifiers by
+calling `this.resolve(source)` with **no importer**. The vendor gate is a path
+test on that importer, so `undefined` answered "not vendor", the request fell
+through to the real `solid-js`, and the build died with dozens of `"./web" is not
+exported under the conditions […] from package node_modules/solid-js` — all of
+them about `solid-js` and none about the package that actually asked.
+
+Treating an absent importer as vendor wholesale would reopen the hole the vendor
+gate closes, since a bare `solid-js` re-resolution would land on the shim.
+Keying on the *specifier* is exact instead: `solid-js/web` and `solid-js/store`
+are gone from Solid 2's `exports` map, so nothing migrated can be asking for
+them. Bare `solid-js` is deliberately **not** in the set — it is a real Solid 2
+package.
+
+### The `src/` throw
+
+Importing a dropped specifier from our own `src/` throws at resolve time, which
+makes the build the migration's progress meter. Two things about it are
+load-bearing:
+
+- **It runs before the vendor gate.** Positioned after, reaching it required an
+  importer that was both inside a vendor package and contained `/src/`, so it
+  was dead in the direction it was written to catch. (Inert in the other
+  direction too: five vendor packages here ship a `src/` tree, but every one
+  resolves through its `exports` map to `dist/`, never to `src/`.)
+- **It is gated on `SOLID_1_ONLY_SPECIFIERS`, not on `shims`.** `shims` is keyed
+  by four specifiers and one of them is bare `solid-js`, which every file under
+  `src/` imports legitimately. Throwing for the whole set took down a consumer's
+  own `import { For, flush } from "solid-js"` with a message saying Solid 2 has
+  no such specifier.
+
+It cannot catch a Solid 1 *name* imported from bare `solid-js`, because
+`resolveId` sees specifiers and not named bindings. That half is a consumer-side
+`SOLID_1_ONLY_NAMES` guard. The two are halves of one rule and neither is
+sufficient alone.
+
+### No `import type { Plugin } from "vite"`
+
+From a shared location that import resolves against whatever `vite` is reachable
+from *this* directory — tLib's — which is a different package instance from the
+`vite-plus` consumers build with. A consumer's `tsc --noEmit` then reports, at
+its own `defineConfig({…})` call and not at this file:
+
+```
+error TS2321: Excessive stack depth comparing types
+'{ resolve: …; plugins: (PluginOption[] …' and 'ViteUserConfigExport'
+```
+
+TypeScript gave up structurally comparing two independently-installed copies of
+one enormous type, and the error names neither this file nor the two packages. So
+`CompatShimPlugin` declares the exact subset of the plugin interface this file
+implements. Vite's `Plugin` is structural, so a consumer's `plugins: [...]`
+accepts it with no cast, and the shape is checked against something rather than
+against nothing. **Do not widen it to the real type.**
+
+### Re-checking a vendor entry
+
+Every entry on a consumer's `vendorPackages` is there because its latest
+published version — prerelease tags included — has no Solid 2-compatible release.
+Check the published source rather than the changelog: a `2.0.0-next` tag can
+track a package's *own* API bump while its adapter still imports `mergeProps` and
+`onMount` from bare `solid-js`, and an "adds Solid 2 support" PR can be an
+unmerged draft its own author describes as untested on Solid 1. When an entry
+graduates it leaves the list entirely — one did, through a `package.json`
+`overrides` pin, because its only consumer pinned it to a range a prerelease
+cannot satisfy.
+
+`@solidjs/web/server-functions/server` is not a "no Solid 2 release" case. It is
+an RC-to-RC skew: `@tanstack/solid-start` imports `parseServerFunctionUrl` and
+the installed `@solidjs/web` only exports `parseServerFunctionActionUrl`. The two
+projects' RC lines have not caught up to each other.
+
+## What the shims correct, and the measurement behind each
+
+Every entry here is a change `export *` cannot catch, because the name survives
+and only its meaning moves. All of them fail silently.
+
+### `solid-js/web`: `spread`, arguments three and four
+
+| | Signature |
+| --- | --- |
+| Solid 1 | `spread(node, accessor, isSVG?, skipChildren?)` |
+| Solid 2 | `spread(node, accessor, skipChildren?, skip?, name?)` |
+
+Solid 1's `isSVG` boolean lands in Solid 2's `skipChildren`, and Solid 1's
+`skipChildren` lands in `skip` — a *predicate* Solid 2 calls unconditionally.
+`lucide-solid`'s precompiled `Icon.mjs` calls `spread(el, merged, true, true)`,
+so `skip(prop)` throws `skip is not a function` inside a render effect, and
+Solid 2 answers a throw there with `[REACTIVITY_HALTED]` **for the whole
+process**. Measured in tLib's DOM harness: an empty container and nine failures
+in a cascade that named neither `spread` nor `lucide-solid`.
+
+The shim drops argument three — Solid 2 infers SVG-ness from the node, and there
+is nowhere to put it — and moves argument four into position three. A
+three-argument call is genuinely ambiguous, since `isSVG` and `skipChildren` are
+both booleans and no `typeof` separates them. It is resolved by **reachability,
+not a guess**: `solid-js/web` is absent from Solid 2's `exports` map, so only
+Solid 1 output can reach this module at all. Sniffing `node.namespaceURI` was
+rejected — for a Solid 1 caller `isSVG === true` and an SVG node are the same
+fact, so it adds nothing for the case it would be used on while introducing a
+wrong answer for an SVG element a Solid 2 caller asked to skip the children of.
+
+Whether a given bundle reaches the Solid 1 shape is a resolution fact, not a
+reprieve. `lucide-solid`'s `exports` map offers a `solid` condition pointing at
+uncompiled JSX *ahead* of `import`/`browser`, which point at the
+Solid-1-precompiled `.mjs`. Vite with `@solidjs/vite-plugin` resolves `solid`, so
+the project's own compiler emits the call at Solid 2's arity; `bun test
+--conditions=browser`, a non-Vite bundler, or any consumer without the plugin's
+conditions gets the `.mjs` and the throw. The mapping makes both roads work, so
+which one a consumer takes stops being load-bearing.
+
+### `solid-js/web`: `effect`'s second argument
+
+| | Signature |
+| --- | --- |
+| Solid 1 | `effect(fn, initialPrev?)` — `initialPrev` is the value handed to `fn` on its first run, and `fn`'s return feeds the next. It was `createRenderEffect` re-exported. |
+| Solid 2 | `effect(compute, effectFn, options?)` — argument two is the *write half*, and nothing carries an initial `prev` at all. |
+
+Every Solid 1 JSX compiler emits exactly the colliding shape for an element with
+two or more dynamic bindings: an accumulator object of one slot per binding,
+passed as argument two so the first run has something to diff against. Solid 2
+consumes that object as `effectFn` and calls `compute` with `prev === undefined`,
+so the first line of the generated callback reads `.e` off `undefined`.
+
+Measured: a page served a perfect SSR document and then died during hydration
+behind the router's error boundary — nothing in the console, because the boundary
+caught it — with `Cannot read properties of undefined (reading 'e')`. The `'e'`
+is **not** a minified property name, which is what made the production trace so
+misleading; it is the literal first slot name the Solid 1 compiler assigns, and
+the vendor's published pre-compiled source spells it that way. Not one package's
+bug either: `@responsive-image/solid` carries the identical shape on its
+`<source>` element, latent only because that branch needs a non-default config.
+
+The shim keeps the vendor callback as `compute` — same render phase, same
+tracked-reads-and-writes-together scope Solid 1 gave it — supplies a no-op write
+half, and substitutes the accumulator for `prev` on run one. Dispatch is on
+`typeof` and cannot collide: a Solid 2 caller's second argument is always a
+function, and a Solid 1 caller's is always a plain object or absent. A bare
+one-argument `effect(fn)` lands on the compat path too, which is right, since
+under real Solid 2 it crashes with `effectFn` undefined.
+
+### `solid-js/web`: `Dynamic`
+
+Solid 2 rebuilt `Dynamic` around a server-component binding-delivery system.
+Handed a plain DOM tag-name string — `lucide-solid`'s
+`<Dynamic component={elementName} {...attrs} />` per-child pattern — that
+machinery yields an internal marker object instead of an element, which
+happy-dom's `insertBefore` then crashes on, deep inside the reactive system. This
+is an architectural incompatibility rather than a rename, and `lucide-solid` has
+no Solid 2 release.
+
+The shim reimplements Solid 1's much simpler `Dynamic` — component function or
+plain tag name, no binding delivery — on Solid 2's own exported
+`spread`/`SVGElements`/`Namespaces`, leaving the real `createComponent`/`dynamic`
+alone for code that needs them. Three details in it are load-bearing:
+
+- **The props wrapper's Proxy target is an empty object, not `props`.** A
+  non-configurable own property cannot legally be hidden by
+  `ownKeys`/`getOwnPropertyDescriptor`, so wrapping the real props object is a
+  Proxy-invariant crash waiting to happen.
+- **Every symbol key is excluded, not just `component`.** Real Solid reactive
+  views are tagged with a `$PROXY` symbol, and `@solidjs/web`'s `spread` checks
+  for it so it can read the underlying `$RECORD` directly, bypassing a plain
+  Proxy's traps entirely. With `$PROXY` forwarded, `Object.keys(rest)` and
+  `rest.for` both showed the aliased name while the element still came out
+  carrying the literal unaliased `htmlfor`. Hiding symbols makes the wrapper
+  present as a genuinely plain object, which routes `spread` through the
+  plain-source path that actually calls the traps.
+- **The full-props view is a Proxy, not `{ component, ...rest }`.** An object
+  spread snapshots every value and silently de-reactifies the whole element.
+
+On the server `document` does not exist at all, and the client-only marker bug
+does not apply, so the server posture delegates to the real `Dynamic` rather than
+rebuilding SSR string-building by hand.
+
+**Hydration delegates too, and that one is measured.** `document.createElement`
+cannot *claim* an existing SSR node — real Solid's element creation does, through
+the hydration-key machinery behind `sharedConfig.hydrating`, and there is no
+public API for it. During the hydration pass the hand-rolled path therefore built
+a brand-new orphan, spread the real props onto the orphan and returned it, while
+Solid's `insert` kept the SSR node and dropped the orphan. On a landing page's
+accordion all nine created elements were `isConnected === false`, none was
+identical to any live node, every orphan carried a working delegated click
+handler and every live node had none — so the component was completely inert on a
+fresh SSR load and came back to life after a client-side navigation, which
+re-renders with `hydrating` false. **"Dead on first load, fine after a nav" is
+the fingerprint of this bug.** The hand-rolled path stays for every
+non-hydrating client render, which is the case it was written and tested against.
+
+### `solid-js/web`: `htmlFor`
+
+Solid 1's JSX-safe spelling of the `for` attribute is gone; real Solid 2 sets a
+literal, inert `htmlfor`. The fix for our own code is to write `for` directly.
+The alias exists because `@ark-ui/solid`'s `Field.Label` writes `htmlFor`
+internally and has no other way to spell it. Patching real `@solidjs/web` instead
+was tried and reverted: it would make everyone depend on a non-standard runtime,
+which defeats a vendor-scoped shim.
+
+### `sharedConfig` is read from `solid-js`, not `@solidjs/web`
+
+`@solidjs/web` does not export it from its **client production** build, only from
+its dev and server builds, so importing it from there fails a production build
+with `MISSING_EXPORT`. `solid-js` core exports it from every build.
+
+### `Index`, `Show` and `Switch` are re-exported into `solid-js/web`
+
+Vendor code imports the flow components from both spellings —
+`@ark-ui/solid`'s json-tree-view chunk does `import { Index, Show } from
+"solid-js/web"`. `Show` and `Switch` are re-exported because the *shimmed*
+versions are better than the real ones; `Index` is re-exported because Solid 2
+removed it outright and there is no real one for `export *` to fall through to,
+so those importers would have resolved it to `undefined` — a JSX call on a
+non-function, far from the import at fault. Nothing has broken yet only because
+`src/` uses no Ark UI JsonTreeView, so the chunk never enters a bundle.
+
 ## Debugging
 
 | Variable | Effect |
