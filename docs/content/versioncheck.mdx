@@ -1,12 +1,13 @@
 ---
 title: "Version Check"
-description: "Startup version checks, changelogs, banners and resource status lines."
+description: "Check your resource's version at startup, print a status box, and show the operator a changelog and an update link."
 order: 5
 group: "tLib"
+published: true
 ---
 
 Consumers import `@tLib/imports.lua` and call `tlib.versioncheck` on the server.
-Declare `versioncheck` in `tlib_modules` to load it before startup status events.
+The call is itself the load; nothing needs declaring.
 
 ```lua
 local current = GetResourceMetadata(GetCurrentResourceName(), 'version', 0)
@@ -20,17 +21,17 @@ tlib.versioncheck({
 })
 ```
 
-Providers return `{ version, changelog, url }`, `nil` on failure, or
-`{ status = 'Update check not run' }` for a deliberately unavailable check.
-Unavailable checks must not return the installed version and claim it is current.
-`github(nil)` makes no request and reports that the repository is not configured.
+## Providers
 
-`tlib.versioncheck.studios(product, current)` uses the TIMMYG Studios product
-changelog API, with an eight-second timeout. tAFK and tELS use this provider.
-tRadio retains its cached JS provider because it also feeds its panel API, and
-passes the result to the same Lua display through `radio:vcInfo:version`.
-tLib checks `tommy141x/tLib` on GitHub. tDB's GitHub repository is intentionally
-unset in `utils/version.lua` until publication; PocketBase binary updates are separate.
+`fetch` is any function returning `{ version, changelog, url }`, `nil` on failure, or
+`{ status = 'Update check not run' }` for a check that is deliberately unavailable. An
+unavailable check must not return the installed version and claim it is current.
+
+| Provider | Use it for |
+| --- | --- |
+| `tlib.versioncheck.github(repo)` | A release published on GitHub. `github(nil)` makes no request and reports that the repository is not configured. |
+| `tlib.versioncheck.studios(product, current)` | A TIMMYG Studios catalogue product, through the product changelog API. Eight-second timeout. |
+| your own function | Anything else — a private endpoint, a cached result you already hold. |
 
 ## Branding
 
@@ -44,48 +45,87 @@ author 'Another contributor'
 author 'TIMMYG Studios'
 ```
 
-All five studio resources declare the studio explicitly. The caller's folder name,
-`opts.name`, and `opts.author` do not grant banner eligibility. Other consumers still
-get a plain-name status box with version, diagnostics and update links. This is a
-branding convention, not proof of authenticity; manifests are editable.
+The caller's folder name, `opts.name`, and `opts.author` do not grant banner eligibility.
+Other consumers get a plain-name status box with version, diagnostics and update links.
 
-### One rule, two callers
+<Callout type="warning" title="This is a branding convention, not proof of authenticity">
+  A manifest is editable, so nothing downstream may use this rule to decide who is
+  *allowed* to do something — that is what ACEs are for. The menu registry's matching
+  exemption grants a studio resource room against the per-owner registration counts; it
+  never grants authority, and every schema check, duplicate refusal and ACE check behaves
+  identically for a trusted owner.
+</Callout>
 
-The rule lives in `shared/sh_branding.lua` as `StudioBranding.isStudioResource(resource)`
-and is deliberately dependency-free, so both callers run that same file rather than a
-copy of it:
+The rule lives in `shared/sh_branding.lua`, which is read from disk by the banner and by
+the menu registry. It must be listed in **both** `shared_scripts` and `files` in
+`fxmanifest.lua`; with only one of the two, one of the callers silently loses the rule.
 
-- **The banner**, from `shared/imports/versioncheck/server.lua`, which runs in the *consumer's*
-  VM and pulls the file in with `LoadResourceFile` — the same mechanism
-  `shared/imports/menu/shared.lua` uses for `shared/lib/menu/schema.lua`. It reads from disk, so it
-  does not depend on tLib having started.
-- **The menu registry's limit exemption**, through `Platform.isStudioResource` (a thin
-  wrapper in `shared/lib/adapter/lifecycle.lua`), which exempts a studio resource from the
-  per-owner registration *counts* in `server/lib/menu/registry.lua`. Those counts are courtesy
-  guardrails against wire cost; the real ceiling is `snapshotTransport` in
-  `shared/lib/menu/schema.lua`.
+## Display titles
 
-Because it is branding policy and not an authenticity boundary, nothing downstream may
-use it to decide who is *allowed* to do something — that is what ACEs are for. The
-exemption grants room, never authority; `tests/lua/registry-limits.lua` pins that
-distinction by asserting schema validation, duplicate/cross-owner refusal and every ACE
-check still behave identically for a trusted owner.
+A product's human-visible title is the manifest's own `name` directive, and nothing
+else. `tELS` declares `name 'Tommy\'s ELS'`; the resource, the folder, the slug, the
+event prefixes and every ACE object stay `tELS`.
 
-If the file is listed in neither `shared_scripts` nor `files` in `fxmanifest.lua`, one
-of the two callers silently loses the rule. Both entries are required.
+```lua
+name 'Tommy\'s ELS'      -- shown to people
+-- the resource is still tELS everywhere else
+```
 
-## Regression tests
+`StudioBranding.displayName(resource)` reads it, falling back to the resource name when
+the manifest declares nothing, declares it empty, or the metadata natives cannot answer —
+so a caller only ever gets a label back, never a failure it could mistake for identity.
 
-From tLib, with the five sibling resources checked out:
+It is text and only text. A display title is never a slug, ACE object, event name,
+command, statebag or KVP key, filename, cache key, wire field or lookup index. The
+update check's request URL is keyed on the product slug, which is the technical name.
+
+The banner prints the title as a **text line** under the wordmark rather than as art.
+The figlet font has glyphs for letters and digits only — no space, no apostrophe — so
+`Tommy's Radar Detector` renders as `TommysRadarDetector`, and measured it is 173
+columns wide against `tDetector`'s 74, which wraps and destroys the box. So the art
+keeps spelling the short technical name:
+
+```
+     _/     _/_/_/_/ _/         _/_/_/
+  _/_/_/_/ _/       _/       _/
+   _/     _/_/_/   _/         _/_/
+  _/     _/       _/             _/
+   _/_/ _/_/_/_/ _/_/_/_/ _/_/_/
+
+              Tommy's ELS
+           By TIMMYG Studios
+```
+
+Leave `name` as the technical name and the title line is omitted, which is what a
+developer library wants: the name a developer types is the name they get back.
+
+## Running the suites
+
+From the tLib resource root:
+
+```sh
+bun run test:lua                                          # every Lua suite, discovered off disk
+bun test tests/integration/versioncheck-provider.test.ts
+bun run check:regression                                  # the complete gate
+```
+
+<Callout type="warning" title="Do not hand a suite to fengari yourself">
+  Fengari's CLI can print an unhandled Lua error and still exit **0**, so a suite that
+  blew up on its first line reads as a pass. `scripts/run-lua-suite.lua` turns that into
+  a non-zero exit, so go through it even for a single suite:
 
 ```sh
 bunx --bun --package fengari-node-cli fengari scripts/run-lua-suite.lua tests/lua/versioncheck.lua
-# The other caller of the same branding rule:
-bunx --bun --package fengari-node-cli fengari scripts/run-lua-suite.lua tests/lua/registry-limits.lua
-bun test server/versioncheck-provider.test.ts
-# Or include them in the complete regression gate:
-bun run check:regression
 ```
+</Callout>
 
-This executes the actual Lua checker in a Lua VM with mocked FiveM metadata,
-events, HTTP callbacks and scheduling; no live FiveM server or credentials are used.
+The suites run the real Lua checker in a Lua VM with mocked FiveM metadata, events, HTTP
+callbacks and scheduling. No live server and no credentials are needed.
+
+---
+
+## Next steps
+
+- The status box's own diagnostics blocks: [`diag`](/docs/tLib/import-modules#diag)
+- Everything else reachable through `tlib`: [Import Modules](/docs/tLib/import-modules)
+- Where the update check sends its request: [`tlib_api_base_url`](/docs/tLib/convars#marketplace)

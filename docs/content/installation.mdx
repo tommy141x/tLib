@@ -1,9 +1,13 @@
 ---
 title: "Installation"
-description: "How to install tLib on your FiveM server and depend on it from your own resource."
+description: "Install tLib on your FiveM server, then depend on it from your own resource through exports or the import modules."
 order: 1
 group: "tLib"
+published: true
 ---
+
+By the end of this page tLib is running, your resource declares it as a dependency, and a
+toast proves the install.
 
 ## Prerequisites
 
@@ -59,19 +63,14 @@ handlers on the client. See [Exports](/docs/tLib/exports) and
 
 ### Using import modules
 
-For lightweight Lua modules (coords, kvp, settings, layouts), declare them in your
-`fxmanifest.lua` and add the imports script:
+For lightweight Lua modules (coords, kvp, settings, access, permission, and 35
+more), add the imports script. You do not declare the modules:
 
 ```lua title="fxmanifest.lua"
 dependencies { 'tLib' }
 
 shared_scripts {
     '@tLib/imports.lua',
-}
-
-tlib_modules {
-    'kvp',
-    'settings',
 }
 ```
 
@@ -83,3 +82,12 @@ local value = kvp.getString('my_key', 'default')
 ```
 
 Modules are lazy-loaded — they only load when first accessed.
+
+---
+
+## Next steps
+
+- Every module you can reach through `tlib`: [Import Modules](/docs/tLib/import-modules)
+- The export surface — menus, dialogs, toasts, HUD: [Exports](/docs/tLib/exports)
+- What an owner can change in `server.cfg`: [Convars](/docs/tLib/convars)
+- Build a resource on the shared menu: [Menu Consumers](/docs/tLib/menu-consumers)

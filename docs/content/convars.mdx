@@ -3,11 +3,14 @@ title: "Convars"
 description: "Every convar tLib reads — what it does, its unit, its default, and whether it needs set or setr."
 order: 6
 group: "tLib"
+published: true
 ---
 
 tLib has **no config file**. Everything an owner can change is a FiveM convar in
-`server.cfg`, placed **before** `ensure tLib`. This page is the one place that
-surface is documented; if a convar is not listed here, tLib does not read it.
+`server.cfg`, placed **before** `ensure tLib`. Every one of them is `tlib_*`, and this page
+is the whole surface: if a convar is not listed here, tLib does not read it.
+
+Every duration convar carries its unit in the name (`_ms`). There are no unit-less aliases.
 
 ## `set` vs `setr` — read this first
 
@@ -20,37 +23,10 @@ A convar read only by the server bundle uses `set`.
 Getting it wrong fails *quietly*, which is why the column below is not decorative:
 
 - A `setr` convar written with `set` makes the client read return the built-in
-  default. Point `tmarketplace_base_url` at your own host with `set` and the
+  default. Point `tlib_api_base_url` at your own host with `set` and the
   server talks to your host while the in-game panel keeps talking to ours.
 - A `set` convar written with `setr` still works, but it ships your server's
   networking details to everyone who joins. Never do it for a secret.
-
-## Naming: two prefixes, on purpose
-
-| Prefix | Owner | Scope |
-| --- | --- | --- |
-| `tlib_*` | tLib | Settings that exist because tLib exists. |
-| `tmarketplace_*` | the marketplace API contract | Read by **several** resources, not just tLib. |
-
-`tmarketplace_*` is deliberately **not** folded into `tlib_*`. It names the
-marketplace contract shared with the website's `API.md`, and the same convars are
-read outside this repository — `tmarketplace_base_url` is read by tRadio
-(`client/cl_bridge.lua`) as well as by tLib's own client and server. Renaming it
-would break a sibling resource's `server.cfg` for no gain, so it stays. New
-marketplace-contract convars go under `tmarketplace_*`; everything else under
-`tlib_*`.
-
-## Units
-
-Every duration convar carries its unit in the name (`_ms`). Three did not, and
-were renamed. The old names still work and print a one-line deprecation warning
-naming the replacement; they will be removed in the next major version.
-
-| Old name | Use instead |
-| --- | --- |
-| `tlib_menu_request_timeout` | `tlib_menu_request_timeout_ms` |
-| `tlib_menu_permission_refresh` | `tlib_menu_permission_refresh_ms` |
-| `tlib_menu_highlight_settle` | `tlib_menu_highlight_settle_ms` |
 
 ## Demo mode
 
@@ -58,25 +34,20 @@ naming the replacement; they will be removed in the next major version.
 | --- | --- | --- | --- | --- |
 | `tlib_demo` | `set` | boolean — `1`, `true`, `yes` or `on` | *(off)* | Turns the server into a self-resetting showroom. **Every player becomes a superadmin and every access gate opens**, no resource writes its data file, and marketplace installs are swept off disk at the next start. |
 
-`set`, not `setr`: the server is the authority and pushes the state to clients,
-so a client never needs to read the convar itself. `setr` also works and does no
-harm.
+`setr` also works and does no harm: the server pushes the state to clients, so a client
+never reads the convar itself.
 
 ### What it is for
 
 A public demo box that cleans itself on `ensure <resource>`, and — because it is
-the same artifact you ship — a test server with nothing patched out of it.
-
-The reason this is a convar rather than a config key is that a convar is the one
-setting that **cannot travel inside the release**. `server.cfg` is not in the zip
-and not escrow-packed, so the demo box keeps demo mode across every update
-without a per-release edit, and a customer installing that identical artifact
-gets the real thing. There is no build flag and no step to forget.
+the same artifact you ship — a test server with nothing patched out of it. A convar
+cannot travel inside a release, so the demo box keeps demo mode across every update
+with no per-release edit and no build flag.
 
 ### Read this before you set it
 
 Demo mode is **fail-open**, and it is the only thing in tLib that is. Everything
-else here fails closed deliberately; demo mode overrides all of it. Anyone who
+else here fails closed; demo mode overrides all of it. Anyone who
 connects can do anything, including install marketplace content and change every
 server setting. Never set it on a server whose data you care about or whose
 players you do not.
@@ -92,7 +63,7 @@ tLib prints a red banner at boot and every 30 minutes for as long as it is on.
 | **Preinstalled** marketplace content shipped in the zip | **Untouched.** It is covered by the release's protected inventory and is never receipt-owned, so the sweep cannot see it. |
 | Per-player client storage (HUD placement, menu preferences) | **Untouched.** It lives on the player's own machine and is not server state. |
 
-Because nothing is deleted — writes are dropped, not rolled back — removing the
+Nothing is deleted — writes are dropped, not rolled back — so removing the
 convar and restarting brings the server back exactly as it was.
 
 ### Flipping it on a running server
@@ -103,22 +74,104 @@ reports the new state. `convar` stops overriding and follows `server.cfg` again.
 Access and permission changes take effect immediately. The **data reset and the
 marketplace sweep cannot** — both happen when a resource starts — so the command
 says so every time it is used. To test that a marketplace install survives a
-restart, turn demo mode off and restart the resource; that is the supported way
-to run the two modes apart.
+restart, turn demo mode off and restart the resource.
+
+## Diagnostics
+
+| Convar | Command | Type / unit | Default | What it does |
+| --- | --- | --- | --- | --- |
+| `tlib_telemetry` | `set` | boolean — `1`, `true`, `yes`, `on`, `enabled` / `0`, `false`, `no`, `off`, `disabled` | *(unset — off)* | Opt in to **diagnostics events**: errors, warnings, renderer crashes and slow-operation outliers from our own code, with machine context. **This convar is the only control** — see below. ⚠️ It does not govern the per-install id, which accompanies **all** requests tLib makes to timmygstudios.com whether diagnostics are on or off — see below. |
+| `tlib_telemetry_key` | `set` | string | *(empty)* | Dev only: points the transport at a local ingest credential. There is nothing for an operator to supply; the shipped build authenticates with the same public key every other studio API call uses. |
+
+**This convar is the only way to turn diagnostics on or off.** There is one
+fact and one control:
+
+- `tlib_telemetry` **set** — that is the answer. Setting it to something
+  unreadable (`maybe`) still counts as a decision: diagnostics stay **off**, with
+  the value you wrote reported back to you.
+- `tlib_telemetry` **unset** — **off**. No diagnostics are collected and none
+  are sent. (A consumer resource can call `SetTelemetryConsent` to store an
+  answer of its own — see [Exports](/docs/tLib/exports) — and this convar, once set,
+  overrides it.)
+
+`set`, not `setr`: the server decides, re-checks before every outbound request, and
+pushes the answer to clients so they stop collecting. A client never reads this convar.
+
+### ⚠️ What this convar does *not* cover: the per-install id
+
+Marketplace browse, installs and previews, community configs and the startup
+update check all run **regardless of this setting** — they are things your
+server asked for, not diagnostics. Every one of them, and the diagnostics ingest
+too, carries a random per-install id (`x-install-id`) so that one server can be
+rate-limited or blocked at our end without affecting anybody else's.
+
+So an install that never turns diagnostics on is still identifiable *as an
+install* on the requests it chooses to make. The id is random, generated on your
+own server from no input at all, and is never an IP, a licence key, a server name
+or a player identifier. It lives in tLib's `data.json`; deleting it only mints a
+new one, which makes your server look like a different install — it is not an
+opt-out. The opt-out for diagnostics is this convar.
+
+### Where to see the current state
+
+`tlib_telemetry_status` in the server console. It is the only place, and it is
+the authoritative answer: what is enabled, what decided it, how much is queued
+and whether the transport has given up for this session.
+
+⛔ **tLib's hub does not show this, and does not change it.** The page at
+`http://<server>:7777/` (`tlib_http_port`) is app discovery and nothing else: it
+has no form, no button and no JavaScript, and `POST /` is rejected outright. The
+hub binds `0.0.0.0` by default and its index carries no auth, so a control there
+would be one anybody who could reach the port could use.
+
+### What is collected
+
+Faults in **our** code and performance on real machines — five event kinds, and
+nothing else:
+
+| Event | Carries |
+| --- | --- |
+| `tlib.error_reported` | the resource and version, which VM the fault was in, an error kind, the error name, a file-and-line location, a hash of the normalised stack — and the scrubbed stack itself, stored once per hash per day |
+| `tlib.warning_reported` | the same context, a warning kind and a warning code. **No message:** a warning's text has nowhere to go |
+| `tlib.crash_reported` | a crash kind and how long the session survived. Sent on the NEXT start, because the renderer that died could not send anything |
+| `tlib.slow_operation` | which operation, how long it took and the budget it crossed. **Outliers only** — never one row per call |
+| `tlib.environment_reported` | once per boot: OS, a RAM bucket, GPU vendor and model, CPU threads |
+
+### What is deliberately not
+
+No IP, no `sv_licenseKey`, no server name, no server endpoint, no player name,
+licence, Steam or Discord id, and no player count. The only identifier is the
+random per-install id described above — generated on your own server from no
+input at all, and sent on every studio request rather than only these.
+
+Before anything is sent: home-directory paths lose the account name,
+credential-shaped values are blanked, and anything shaped like a FiveM player
+identifier (`steam:`, `license:`, `discord:`, a bare Steam id or snowflake, an
+IP address) is removed. ⚠️ The store's own character set *allows* those values;
+they are stripped on the way out regardless.
+
+And four things that **could** be collected are not, because the store has no
+column for them: the CEF build, the screen size, the device pixel ratio and the
+JS heap limit. They still appear in the F8 console if you need them for a report.
+
+⚠️ The RAM bucket is honest rather than precise: the browser API it comes from
+caps its answer at 8 GB, so it can say "under 8 GB" or "cannot tell" and nothing
+in between. A machine with 64 GB reports `unknown` rather than a wrong bucket.
+
+⛔ **`<resource>_diag` output is not routed into this.** Those diagnostics are
+operator-error reports — a bad config key, a missing file — and they stay in your
+own console.
 
 ## Marketplace
 
 | Convar | Command | Type / unit | Default | What it does |
 | --- | --- | --- | --- | --- |
-| `tmarketplace_base_url` | `setr` | URL, no trailing slash, no `/api` suffix | `https://timmygstudios.com` | **Where the TIMMYG Studios API lives** — not just the marketplace. One switch: browse, preview, install downloads, community configs **and** the startup version check with its changelog all follow it. Point it at a local `wrangler dev` worker for integration testing. Read by the server bundle **and** by client Lua, so `set` alone leaves the in-game panel on the default host. |
+| `tlib_api_base_url` | `setr` | URL, no trailing slash, no `/api` suffix | `https://timmygstudios.com` | **Where the TIMMYG Studios API lives** — not just the marketplace. One switch: browse, preview, install downloads, community configs **and** the startup version check with its changelog all follow it. Point it at a local `wrangler dev` worker for integration testing. Read by the server bundle **and** by client Lua, so `set` alone leaves the in-game panel on the default host. |
 
 <Callout type="info">
-  **It covers version checks and changelogs too.** Until tLib 0.11 the startup
-  version check hard-coded `https://timmygstudios.com/api/products/...`, so an
-  operator pointing this convar at localhost got marketplace traffic on their
-  dev worker while update checks quietly went on hitting production. It is the
-  same host and the same API surface (`/api/v1`, `/api/v2`, `/api/products`),
-  so it is now one convar for all of it.
+  **It covers version checks and changelogs too.** Marketplace traffic and the startup
+  update check are the same host and the same API surface (`/api/v1`, `/api/v2`,
+  `/api/products`), and one convar points all of it somewhere else.
 
   The GitHub release check that some resources use instead is **not** affected —
   that one really does point at GitHub.
@@ -133,11 +186,8 @@ to run the two modes apart.
   broken dev server. A one-line warning is printed when that trimming happens.
   An empty value falls back to the default rather than producing a relative URL.
 
-  Nothing caches the resolved value. `resolveConfig()` in the server bundle used
-  to memoise it at first use, which meant changing the convar mid-session did
-  nothing on the server while tRadio's client bridge followed it immediately.
-  Both re-read per call now, so a `setr` from the console applies without a
-  resource restart.
+  Nothing caches the resolved value, on either side, so a `setr` from the console
+  applies without a resource restart.
 </Callout>
 
 <Callout>
@@ -145,10 +195,12 @@ to run the two modes apart.
   install and community-config publish all work on a fresh install with nothing
   in your `server.cfg`.
 
-  Earlier versions of this page listed a required `tmarketplace_resource_secret`
-  convar. That was never right — the value the server presents as
-  `X-Resource-Secret` is compiled into the resource, not configured. If you set
-  that convar, nothing reads it; you can delete the line.
+  The value the server presents as `X-Resource-Secret` is compiled into the
+  resource rather than configured. It is a **public key**, shared by every install,
+  and it is not specific to the marketplace: it authenticates every
+  timmygstudios.com API tLib calls, the same way `tlib_api_base_url` points all of
+  them at one host. What tells one server from another is the per-install id in the
+  [Diagnostics](#diagnostics) section, not the key.
 </Callout>
 
 ## HTTP router
@@ -200,3 +252,13 @@ These look similar and are not convars — do not put them in `server.cfg`:
 | `tlib_min_version`, `tlib_module`, `tlib_modules` | `fxmanifest.lua` metadata keys on the **consuming** resource. |
 | `tlib_menu_selftest`, `tlib_menu_refresh`, `tlib_menu_permissions` | Console commands. |
 | `tlib_demo` *(as a command)* | Also a console command, `tlib_demo [on\|off\|convar]`, which toggles the convar above at runtime. The convar is the real setting. |
+| `tmarketplace_resource_secret` | Nothing reads it. An earlier version of this page listed it as required; if the line is in your `server.cfg`, delete it. |
+| `tlib_menu_request_timeout`, `tlib_menu_permission_refresh`, `tlib_menu_highlight_settle` | Unit-less near-misses for the three `_ms` convars above. Nothing reads them. |
+
+---
+
+## Next steps
+
+- The exports behind the diagnostics switch: [Exports](/docs/tLib/exports#diagnostics-consent)
+- Honouring demo mode from your own resource: [`demo`](/docs/tLib/import-modules#demo)
+- Installing tLib and depending on it: [Installation](/docs/tLib/installation)

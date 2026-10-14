@@ -31,7 +31,7 @@ local function contains(needle)
     return joined():find(needle, 1, true) ~= nil
 end
 
--- ── wrap ────────────────────────────────────────────────────────────────────
+-- wrap
 
 local lines = diag.wrap('one two three four five six seven eight nine ten', 20)
 for _, l in ipairs(lines) do
@@ -42,7 +42,7 @@ assert(table.concat(lines, ' ') == 'one two three four five six seven eight nine
 
 -- A path or a URL is the thing an operator copies out of the console. Splitting
 -- one to respect the column would be a worse answer than an over-long line.
-local url = 'https://docs.timmygstudios.com/docs/tRadio/configuration'
+local url = 'https://timmygstudios.com/docs/tRadio/configuration'
 local whole = false
 for _, l in ipairs(diag.wrap('see ' .. url .. ' now', 20)) do
     if l:find(url, 1, true) then whole = true end
@@ -53,7 +53,7 @@ local hung = diag.wrap('  - alpha beta gamma delta epsilon zeta', 16, '    ')
 assert(hung[1]:sub(1, 4) == '  - ', 'a bulleted first line keeps its dash')
 assert(hung[2]:sub(1, 4) == '    ', 'and the continuation hangs under the text, not the dash')
 
--- ── render ──────────────────────────────────────────────────────────────────
+-- render
 
 local block = diag.render('fatal', 'Config does not exist.', {
     cause  = 'config/config.lua failed to load.',
@@ -82,7 +82,7 @@ for _, l in ipairs(block) do
 end
 assert(blanks >= 3, 'cause, fix and detail are each separated by a prefixed blank line')
 
--- ── say and once ────────────────────────────────────────────────────────────
+-- say and once
 
 diag.reset()
 capture(function()
@@ -117,7 +117,7 @@ local seen = 0
 for _, l in ipairs(printed) do if l:find('repeated', 1, true) then seen = seen + 1 end end
 assert(seen == 2, 'without a once key, nothing is suppressed')
 
--- ── scope ───────────────────────────────────────────────────────────────────
+-- scope
 
 local scoped = diag.render('warn', 'x', { scope = 'tDetector' })
 assert(scoped[1]:find('[tDetector]', 1, true),

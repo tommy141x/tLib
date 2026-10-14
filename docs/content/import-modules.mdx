@@ -1,11 +1,12 @@
 ---
 title: "Import Modules"
-description: "Lightweight Lua modules that load on demand — access, config, coords, kvp, settings, and layouts."
+description: "Reference for the 40 lightweight Lua modules you reach through the tlib global, each loaded on demand — access, config, permission, platform, kvp, settings and the rest."
 order: 3
 group: "tLib"
+published: true
 ---
 
-Import modules are lightweight Lua modules that your resource declares in `fxmanifest.lua` and accesses via the `tlib` global. They load on demand — only when first accessed.
+Import modules are lightweight Lua modules you reach through the `tlib` global. They load on demand — only when first accessed — so **a consumer declares nothing**.
 
 ## Setup
 
@@ -15,14 +16,47 @@ dependencies { 'tLib' }
 shared_scripts {
     '@tLib/imports.lua',
 }
+```
 
+That is the whole of it. `tlib.kvp` loads `kvp` the first time you touch it.
+
+### Declaring modules
+
+`tlib_modules` still works and is still accepted. It makes a load eager, which buys
+you an at-boot failure for a module that does not **compile**, and it keeps the
+manifest an auditable list of what the resource uses:
+
+```lua title="fxmanifest.lua"
 tlib_modules {
     'coords',
     'kvp',
-    'settings',
-    'layouts',
 }
 ```
+
+Two things to know about it:
+
+- A name tLib does **not provide** raises nothing. It is not a failed load, it is no
+  load at all, and the first `tlib.<name>` is then an export proxy that throws
+  `attempt to index a function value` wherever it happens to be used. Pin
+  `tlib_min_version` instead; that is what reports a tLib too old to have a module.
+- **Three names still matter**, and for three different reasons:
+  - `tlib_module { 'realtime' }` is **required**. `server/lib/realtime/index.ts` walks
+    every resource's manifest for this name and only then registers the `rt*` exports, so
+    without it nothing in `tlib.realtime` has an export to call.
+  - `tlib_module { 'marketplace' }` is required to register content types.
+    `tlib.marketplace.registerType` otherwise gets `false` back from the bridge and warns,
+    naming the line to add. The resource still starts; its types just never register.
+  - `tlib_module { 'menu' }` matters when **loading the module is the wiring** — it
+    defines the bare globals `MenuSchema` and `MenuCatalog`, and a consumer whose own
+    shared files read those globals has no `tlib.menu` access to trigger the lazy load.
+
+  Both spellings are accepted in every case (`tlib_module` and `tlib_modules`).
+
+Two modules load themselves, in every consumer, with nothing declared: `occupancy`
+and `telemetry`. Their wiring happens when the file loads — a net-event handler, a
+NUI callback, a flush thread — so there may be no call to trigger a lazy load, and
+until something loaded them they were simply off. See `AUTOLOAD` in `imports.lua`.
+`telemetry` defaults to studio-authored resources only; declare it to opt in.
 
 Then in your scripts:
 
@@ -126,29 +160,6 @@ gate:refresh()   -- after going on duty, picking the item up, etc.
   you have written a suggestion, not a gate.
 </Callout>
 
-### Migrating an older config
-
-Resources that shipped loose `accessMode` / `acePermission` / job-list keys before
-`Config.access` existed keep working. `access.migrate` does the translation once, here,
-rather than in each resource:
-
-```lua
-Config.access = tlib.access.migrate(Config.access, {
-    mode = Config.accessMode,
-    ace  = Config.acePermission,
-    job  = Config.jobs,          -- a flat list OR { name = grade }
-    item = Config.qbItemName,
-}, {
-    file = 'shared/config.lua',
-    removeIn = '2.0.0',
-    names = { mode = 'Config.accessMode', ace = 'Config.acePermission' },
-})
-```
-
-A written `Config.access` always wins, and any stale old keys are named and reported as
-ignored. A **flat job list** becomes `{ name = 0 }` — the old shape could not express a
-minimum grade, so every grade qualifies, and that widening is stated rather than silent.
-
 ### Fails closed, always
 
 A framework that is absent, not yet started, or throwing answers **no jobs**, which denies.
@@ -159,9 +170,8 @@ resource.
 
 ### Replacing the logic entirely
 
-`custom` is the escape hatch, and it is a plain Lua function in the owner's own config file —
-so a server owner can still replace the decision wholesale, as they could when each resource
-kept a separate editable access file. `registerFramework` / `registerInventory` cover the
+`custom` is the escape hatch: a plain Lua function in the owner's own config file, so a server
+owner can replace the decision wholesale. `registerFramework` / `registerInventory` cover the
 other case: the same gate semantics, against a core this module does not ship an adapter for.
 
 ```lua title="server/sv_access.lua"
@@ -172,11 +182,10 @@ tlib.access.registerFramework({
 })
 ```
 
-If you are moving from a hand-written "edit this function to return the player's job" hook,
-note that the adapter shape is strictly wider, not a rename: it returns a **map** of every job
-to its grade, so a server with police *and* sheriff can express both — and grades at all —
-which a single-job return could not. `detect` is yours too, so the framework no longer has to
-be one that merely happens to be running.
+Moving from a hand-written "return the player's job" hook: `jobs` returns a **map** of every
+job to its grade, not a single job, so a player who is both police and sheriff is expressible
+and so are grades. `detect` is yours too, so the framework does not have to be one that merely
+happens to be running.
 
 <Callout type="note">
   Adapters register into the **consuming resource's own server VM**, so `registerFramework`
@@ -235,9 +244,6 @@ local ok = tlib.config.check(Config, {
         enableSiren          = { type = 'boolean', default = true },
         radarResources       = { type = 'list',   default = {} },
     },
-    deprecated = {
-        detectionRange = { replacement = 'detectionRangeMeters', removeIn = '2.0.0' },
-    },
 })
 if not ok then return end
 ```
@@ -248,7 +254,6 @@ if not ok then return end
 | ------------ | ------------------------------------------------------------------------------------ |
 | `file`       | Path shown in messages. Use the path the owner actually edits.                        |
 | `keys`       | Map of key name → definition.                                                         |
-| `deprecated` | Map of old key → `{ replacement, removeIn }`.                                         |
 | `prefix`     | Table name in messages. Defaults to `Config`.                                         |
 | `allowUnknown` | Skip the unknown-key warnings. Only for a table that legitimately holds extra keys. |
 
@@ -261,16 +266,12 @@ remedy.
 - **Every** problem is reported at once, not just the first.
 - Each message names the file, the key, what was expected, what was found, and a fix.
 - A default fills a key the owner **omitted**. A value the owner actually set is
-  **never** silently replaced — a rejected value is reported and left alone, because a
-  fallback that quietly differs from the config file is how "I changed the setting and
-  nothing happened" happens.
+  **never** silently replaced: a rejected value is reported and left alone, so what runs
+  never quietly differs from what the file says.
 - An unknown key warns and suggests the key that was probably meant, including the
   unit-less near-misses (`detectionRnge` → `detectionRangeMeters`) that naming units in
   keys tends to produce.
-- A deprecated key keeps working: its value is carried to the replacement, and one
-  warning names the replacement and the version the old name stops working in.
-- A missing `required` key is fatal, so the resource stops at its own config rather than
-  failing later in a way that blames an innocent file.
+- A missing `required` key is fatal, and the resource stops at its own config.
 
 ---
 
@@ -305,7 +306,7 @@ Reports whether the server is running in demo mode, and gives a file writer the
 one line it needs to honour it.
 
 Demo mode is a server-owner switch — the `tlib_demo` convar — that turns a server
-into a self-resetting showroom. See [Convars](/docs/convars#demo-mode) for what it
+into a self-resetting showroom. See [Convars](/docs/tLib/convars#demo-mode) for what it
 is for and the warning that comes with it. This module is how your resource takes
 part.
 
@@ -316,9 +317,8 @@ part.
 
 ### You probably need nothing
 
-Three of the four things demo mode does are already handled inside tLib, and a
-resource that uses the normal primitives inherits all of them without a line of
-code:
+A resource that uses the normal primitives inherits all four of demo mode's
+effects without a line of code:
 
 - `tlib.access` gates all answer yes;
 - `tlib.permission` reports every player as a superadmin;
@@ -328,8 +328,7 @@ code:
 ### Unless you write files yourself
 
 The exception is a resource with its **own** file writer that does not go through
-`tlib.fs` — which, for historical reasons, is most of them. One line at the top of
-that function is the whole integration:
+`tlib.fs`. One line at the top of that function is the whole integration:
 
 ```lua title="server/sv_admin.lua"
 local function saveData(json)
@@ -346,9 +345,9 @@ error behind every settings change and teaches visitors that the demo is broken.
 The console already says, once per file, what happened.
 </Callout>
 
-This works because these resources already keep a complete in-memory mirror of
-their state and treat the file as write-behind. Dropping the write leaves the
-mirror serving the session, and the next start reads the shipped file back.
+This only works if your resource keeps a complete in-memory mirror of its state
+and treats the file as write-behind. Dropping the write then leaves the mirror
+serving the session, and the next start reads the shipped file back.
 
 ### Reacting to it in your own code
 
@@ -362,6 +361,64 @@ wrong about on the client. It is a display and convenience signal. Demo mode's
 real effects are all applied server-side, which is the only place they are
 enforceable.
 </Callout>
+
+---
+
+## devgate
+
+A gate for a feature that exists on your own servers and is **absent** from the
+shipped build.
+
+| Function              | Side | Description                                                  |
+| --------------------- | ---- | ------------------------------------------------------------ |
+| `tlib.devgate(name)`  | both | Predicate for the convar `name`. Reads it on every call.      |
+
+```lua title="client/cl_feature.lua"
+local isInternal = tlib.devgate('my_resource_convar')
+
+if isInternal() then
+    RegisterCommand('my_internal_tool', runTool, false)
+end
+```
+
+tLib supplies the mechanism and never the name. Your resource names its own
+convar, which is what lets the name be encrypted: put the call in a script that
+is **not** in your `escrow_ignore` and there is no string a customer can read out
+of the build, so there is nothing for them to find and nothing to switch on.
+Naming it in an exempt file defeats the module.
+
+### Gate registration, not behaviour
+
+Nothing should surface at all — no command, no keybind, no menu row, no NUI
+panel, no export. A command that exists and refuses, or a row that renders
+disabled, tells the customer the feature is there and earns a support question
+about something they do not have.
+
+```lua
+-- WRONG: the command exists, so `cmdlist` advertises it.
+RegisterCommand('my_internal_tool', function()
+    if not isInternal() then return print('not available') end
+    runTool()
+end, false)
+```
+
+### When the switch takes effect
+
+The convar is read on every call, never captured when the gate is made, so a
+replicated convar flipped mid-session changes the answer immediately. Where the
+*registration* happens once at load, off → on still needs a resource restart
+while on → off takes effect at the next call. Where a surface is rebuilt per use
+— a command's sub-command table, the payload sent when a panel opens — call the
+predicate there and both directions are immediate.
+
+<Callout type="warning">
+A client VM only sees a convar written with `setr`. `set` is server-only, so a
+client-side gate on a `set` convar is permanently off.
+</Callout>
+
+Any of `1`, `true`, `yes` and `on` turn it on, in any case. Anything else,
+including an unset convar, is off: the gate hides features, so failing open would
+ship them.
 
 ---
 
@@ -399,8 +456,8 @@ tlib.diag.fatal('Config does not exist. tRadio cannot start.', {
 })
 ```
 
-It prints; it never logs. Every caller is explaining why something is broken, and a
-log level is exactly the thing an operator in that situation has not configured.
+It prints; it never logs. There is no level to configure and nothing to route, so a
+block always reaches the console the operator is looking at.
 
 <Callout type="info">
   Put these blocks in files your customers receive on every update, not in
@@ -486,29 +543,76 @@ store:reset('volume')              -- Back to 0.8
 
 ---
 
-## layouts
+## modules
 
-Server-side layout discovery and file loading with template variable substitution.
+Server-side content discovery. A **module** is a self-contained folder plus a
+`module.json` that declares what it is.
 
-| Function                                                                    | Description                              |
-| --------------------------------------------------------------------------- | ---------------------------------------- |
-| `layouts.scan(basePath, matchFile, resourceName?)`                          | Scan a directory for layout folders.     |
-| `layouts.load(basePath, layoutName, fileName, resourceName?)`               | Load a layout file's contents.           |
-| `layouts.loadTemplate(basePath, layoutName, fileName, vars, resourceName?)` | Load and replace `{{KEY}}` placeholders. |
-| `layouts.clearCache()`                                                      | Clear the scan cache.                    |
+```
+layouts/QRX-720/module.json        { "kind": "layout", "id": "QRX-720", … }
+layouts/themes/dark/module.json    { "kind": "theme",  "id": "dark",    … }
+```
+
+<Callout type="warning" title="This module discovers layout and theme, never sound">
+  On a FiveM resource a sound is a flat audio file — `layouts/sounds/ptt.wav` — so an
+  operator can drop a `.wav` in with no manifest to author. Asking this module to scan for
+  sounds **throws**, and a `sound` manifest that reaches a resource's `layouts/` is refused
+  by name. Sounds carry a `module.json` only on the marketplace, where the installer reads
+  it and writes out just the audio.
+</Callout>
+
+| Function                                                     | Description                                                          |
+| ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `modules.scan(basePath, kind, resourceName?)`                | The ids of every usable module of `kind`, sorted.                    |
+| `modules.list(basePath, kind, resourceName?)`                | The same, as `{ id, manifest }` so you need not re-read the manifest. |
+| `modules.read(basePath, id, kind?, resourceName?)`           | One module's validated manifest, or `nil, err`.                      |
+| `modules.load(basePath, id, fileName, resourceName?)`        | Read a file out of a module folder.                                  |
+| `modules.hasFile(basePath, id, fileName, resourceName?)`     | Whether a module ships an optional asset.                            |
+| `modules.validate(raw, id, kind?)`                           | Validate a decoded manifest directly.                                |
+| `modules.clearCache()`                                       | Clear the scan cache, for modules added at runtime.                  |
+| `modules.onRefusal(basePath, id, err)`                       | Replace with your logger; called for every folder refused.           |
 
 ```lua
-local layouts = tlib.layouts
+local modules = tlib.modules
 
--- Scan for available layouts
-local available = layouts.scan('layouts', 'layout.html')
+-- Point refusals at your own log before the first scan.
+modules.onRefusal = function(base, id, err)
+    log(('skipped %s/%s — %s'):format(base, id, err), tlib.logger.WARN)
+end
 
--- Load a specific layout with template variables
-local html = layouts.loadTemplate('layouts', 'default', 'layout.html', {
-    TITLE = 'My HUD',
-    VERSION = '1.0',
-})
+for _, entry in ipairs(modules.list('layouts', 'layout')) do
+    print(entry.id, entry.manifest.name, entry.manifest.version)
+end
+
+local html = modules.load('layouts', 'QRX-720', 'ui.html')
+local hasDark = modules.hasFile('layouts', 'QRX-720', 'radio-dark.png')
 ```
+
+### The manifest
+
+`schema`, `kind`, `id`, `name` and `version` are required; `author`, `license`,
+`description` and `slug` are optional. A `sound` module — a marketplace artefact,
+never read off a resource — also carries `sound.file`, and may carry
+`sound.durationSeconds`, `sound.toneKeys` and `sound.peaks`.
+
+Three rules are worth knowing before you author one by hand:
+
+- **`id` must equal the folder name, byte for byte.** This is what catches a
+  folder renamed on copy, including a case-only rename on a case-sensitive
+  filesystem.
+- **`kind` is declared, never inferred from location.** Keep the category
+  directories for humans; tooling branches on `kind`. A folder whose `kind`
+  does not match the directory it sits in is **refused** at start, naming the
+  folder, rather than loaded and then 404ing on `ui.html` on a player's machine.
+- **`sounds` and `themes` are reserved** and cannot be module ids. They are the
+  category directories inside `layouts/` — `sounds` included, because it still
+  holds the flat audio files and a layout called `sounds` would shadow every one
+  of them.
+
+A module declares its **identity**; its **content** is found by a live directory
+scan, so a folder dropped in while the resource is running is discovered without
+a restart. A manifest lists no files, and `clearCache()` is what makes a new
+folder visible to a scan that has already run.
 
 ---
 
@@ -541,13 +645,18 @@ log('state dump', tlib.logger.DEBUG)     -- hidden unless setLevel(DEBUG)
 
 ## permission
 
-Server-only. Admin and permission checks that match tLib's own rules.
+Admin and permission checks that match tLib's own rules. Both sides, with different
+interfaces: the server answers *about a player*, the client answers *about this player*.
+
+### Server
 
 | Function                     | Description                                                                          |
 | ---------------------------- | ------------------------------------------------------------------------------------ |
 | `permission.isAdmin(src)`    | `true` for `tlib.admin` or `tlib.superadmin`. Same answer as `exports.tLib:IsPlayerAdmin`. |
 | `permission.level(src)`      | `0` none, `1` admin, `2` superadmin.                                                 |
 | `permission.has(src, key)`   | Any permission key, resolved by tLib — ACE, or a framework resolver registered with tLib. |
+| `permission.hasBatch(src, keys)` | A whole key list in one round trip. Returns `{ [key] = boolean }`.               |
+| `permission.hasAll(src, keys)` | `true` only if every key is held. One round trip. An empty list is `true`.         |
 
 ```lua
 RegisterNetEvent('myres:saveDefaults', function(data)
@@ -561,7 +670,1186 @@ if tlib.permission.has(src, Config.acePermission) then
 end
 ```
 
+<Callout type="warning">
+  **In demo mode `level(src)` returns `2` for everybody**, so `isAdmin(src)` is true for
+  everybody — see [`tlib_demo`](/docs/tLib/convars#demo-mode). `has(src, key)` is not
+  affected. Never set that convar on a server whose data you care about.
+</Callout>
+
 `isAdmin` is answered inside your resource, so it works even while tLib is still starting. `has`
 has to ask tLib, because a registered resolver lives there. If tLib can't answer, it returns
 `false` rather than falling back to a plain ACE check, since a resolver is allowed to deny what
 ACE would grant.
+
+### Client
+
+| Function                      | Description                                                        |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `permission.isAdmin()`        | `true` for this player, as last answered by the server.            |
+| `permission.level()`          | `0` none, `1` admin, `2` superadmin.                               |
+| `permission.onChange(fn)`     | `fn(isAdmin, level)` on every change, and once immediately.        |
+| `permission.refresh()`        | Ask the server for a fresh answer.                                 |
+
+```lua
+local hudIsAdmin = false
+
+tlib.permission.onChange(function(isAdmin)
+    hudIsAdmin = isAdmin
+end)
+```
+
+Use `onChange` rather than reading `exports['tLib']:IsAdmin()` once at resource start. That
+export is a value tLib's client caches when **tLib** starts; revoke an ace on a running server
+and a panel built from it keeps drawing the admin section until the player reconnects.
+
+<Callout type="warning">
+  This is a cached copy of a decision the server made, in a process the player controls. It
+  answers "should I draw the admin tab?" and never "may this player do the thing". Every
+  privileged net event still has to re-resolve the ace server-side.
+</Callout>
+
+---
+
+## net
+
+A net event with its guard built into the registration rather than written at the top of the
+handler.
+
+### Client — `net.fromServer`
+
+A server-triggered net event reaches the client with `source == 65535`; a local `TriggerEvent`
+from another resource or a cheat menu does not. `fromServer` runs your handler only for the
+former.
+
+```lua
+tlib.net.fromServer('myres:serverDefaults', function(defaults)
+    applyServerDefaults(defaults)
+end)
+```
+
+A rejected event is dropped and reported in the console **once per event name** — the first
+rejection says everything the hundredth would, and a per-call line would hand an attacker a
+console flood. Registering two handlers for one name is fine: both run, as FiveM intends.
+
+### Server — `net.fromClient`
+
+The source guard, a rate limit and an optional permission gate, applied once.
+
+```lua
+tlib.net.fromClient('myres:requestSettings', function(src)
+    TriggerClientEvent('myres:settings', src, buildSettings(src))
+end)
+
+local gate = tlib.access.gate(Config.access, { key = 'myres' })
+
+tlib.net.fromClient('myres:saveLayout', {
+    allow    = function(src) return gate:allowed(src) end,
+    onDenied = function(src) TriggerClientEvent('myres:denied', src) end,
+}, function(src, layout)
+    saveLayout(src, layout)
+end)
+```
+
+| Option      | Default | Description                                                               |
+| ----------- | ------- | ------------------------------------------------------------------------- |
+| `rateLimit` | `1000`  | Minimum ms between one player's calls. `0` disables it.                   |
+| `allow`     | *none*  | `fn(src) -> boolean`. Only `true` is a grant. Throwing denies.            |
+| `onDenied`  | *none*  | `fn(src)`, so you can tell the player.                                    |
+
+The handler is called as `fn(src, ...)`. A rate-limited call is dropped **silently**, so a
+feature that has to reopen a panel it just closed must not go back through the request path —
+use `panel:reopen()` from [opengate](#opengate). A denial by `allow` calls `onDenied` and
+prints once per event name.
+
+<Callout type="warning">
+  Without `allow`, `fromClient` is a source guard and a rate limit — **not** a permission gate.
+  That is correct for a request-shaped event any player may fire. Pass `allow` to make it a gate,
+  and put a `tlib.access` gate in it rather than inventing a second mechanism.
+</Callout>
+
+## opengate
+
+The "may I open my panel?" handshake: the client asks, the server decides fresh on every open,
+and the answer is one of three things.
+
+### Server
+
+```lua
+local gate = tlib.access.gate(Config.access, { key = 'myres' })
+
+tlib.opengate.serve({
+    key      = 'settings',
+    allow    = function(src) return gate:allowed(src) end,
+    configOk = function() return myresConfigOk() end,
+    payload  = function(src) return { isAdmin = tlib.permission.isAdmin(src) } end,
+})
+```
+
+| Option      | Default | Description                                                                 |
+| ----------- | ------- | --------------------------------------------------------------------------- |
+| `key`       | `settings` | Namespaces the wire events. Must match the client's.                     |
+| `allow`     | **required** | `fn(src) -> boolean`. A missing one denies everyone and says so at boot. |
+| `configOk`  | *none*  | `fn() -> boolean`. Omit it if the resource has no config spec to check.      |
+| `payload`   | *none*  | `fn(src) -> table`. Travels with the reply. Draw hints only.                |
+| `rateLimit` | `1000`  | Passed through to `net.fromClient`.                                         |
+
+The checks run in this order, and the order matters: rate limit, then `configOk`, then `allow`.
+A broken config is not a permissions problem, and answering "you are not allowed" to a player on
+a misconfigured server sends them to the wrong person.
+
+A panel that really is open to everyone writes `allow = function() return true end`. There is
+no default: an omitted `allow` denies everyone rather than opening the panel.
+
+### Client
+
+```lua
+local panel = tlib.opengate.panel({
+    key      = 'settings',
+    onOpen   = function(data) openSettingsDialog(data) end,
+    onDenied = function() toast("You don't have permission to use this.") end,
+    onBroken = function() toast("This server's config has errors — ask an admin to check the console.") end,
+})
+
+RegisterCommand('myres', function() panel:open() end, false)
+```
+
+| Member          | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| `panel:open()`  | Ask the server. The answer arrives as one of the three callbacks.           |
+| `panel:reopen()` | Re-run `onOpen` with the last answer. No round trip. Returns `false` if there was never one. |
+| `onOpen`        | **required.** `fn(payload)`.                                                |
+| `onDenied`      | **required.** A denial the player is never told about reads as a bug.       |
+| `onBroken`      | Optional, but omitting it means a broken-config reply tells the player nothing. |
+
+All three replies are registered through `net.fromServer`, so a local `TriggerEvent` can neither
+open the panel nor fake a denial.
+
+<Callout type="warning">
+  `reopen()` exists for one case: a feature that had to close the panel to use the game view — a
+  3D prop editor, a world placement — and has to put the player back. The request path is
+  rate-limited on the server and drops the extra call silently, so an admin who opened the editor
+  and cancelled straight away would get nothing back. `reopen()` replays the grant the server
+  already gave; it cannot create one, and with no previous open it does nothing.
+</Callout>
+
+---
+
+## platform
+
+The FiveM native adapter, inside **your** VM. A consumer's natives have to be invoked from
+the consumer's own runtime, so this is a parallel copy of tLib's internal adapter rather
+than an export onto it.
+
+### Server
+
+| Function | Description |
+| --- | --- |
+| `platform.getPlayers()` / `getPlayerName(src)` | The roster. `getPlayerName` is `nil` for `src <= 0` or an empty name. |
+| `platform.getPlayerPed(src)` / `getPlayerCoords(src)` | `nil` rather than a throw for a disconnected source. |
+| `platform.getPlayerFrontSeat(src)` | `seat, netId` — **seats `-1` and `0` only**. A rear seat reads as `nil`, exactly like on foot. |
+| `platform.getPlayerSeat(src)` | `seat, netId` across every index. |
+| `platform.getPlayerVehicleNetId(src)` | Requires OneSync. |
+| `platform.getNearbyPlayers(coords, radius)` | Server IDs, by squared distance. `{}` if either argument is falsy. |
+| `platform.resolveNetworkId(netId)` / `isNetworkIdValid(netId)` / `doesEntityExist(e)` / `getEntityCoords(e)` | Entity lookups. |
+| `platform.triggerClientEvent(event, target, ...)` / `triggerEvent(event, ...)` | Event dispatch. |
+| `platform.now()` / `isServer()` | `GetGameTimer()`, and the duplicity check. |
+
+### Client
+
+Grouped by what they answer, because the surface is large:
+
+| Group | Functions |
+| --- | --- |
+| This player | `getMyId`, `getMyName`, `getMyPosition`, `getMySpeed`, `getMyEntityHandle`, `getClothingItem`, `isPlayerShooting`, `getActiveWeaponId`, `cancelAnimations`, `getIgnoredWeaponIds` |
+| This vehicle | `getMyVehicle`, `getMyFrontSeat`, `getMySeat`, `getFrontSeatServerIds` |
+| Other entities | `getRemotePlayerPosition`, `getNetworkEntityPosition`, `isNetworkIdValid`, `isEntityValid`, `getNetworkId`, `resolveNetworkId`, `getEntityPosition`, `getCameraState` |
+| Blips | `createMapMarker`, `removeMapMarker`, `isMapMarkerValid`, `moveMapMarker`, `setMarkerRotation/Icon/Color/Scale/ShortRange/Display/Opacity/Label/HeadingIndicator`, `getPlayerMapMarker` |
+| NUI focus | `showCursor`, `releaseCursor`, `setInputMode`, `setKeepInputActive`, `releaseCursorSuppressPause`, `releaseCursorDeferred` |
+| Keybinds | `bindKey`, `keybinds`, `keybindConflicts` |
+| Voice | `voice.isAvailable`, `voice.backend`, `voice.onAvailabilityChanged`, `voice.overrideProximityRange`, `voice.clearProximityOverride`, `voice.setSubmixForServerId`, `voice.setAudioInputIntent` |
+| Misc | `now`, `getGameTime`, `loadData`/`saveData`/`removeData`, `sendToEngine`, `sendToServer`, `showChatMessage`, `emitEvent`, `getResourceId`, `wrapExport` |
+
+`getMyVehicle()` answers `nil` or
+`{ handle, type, displayType, modelHash, isDriver, isEmergency, isEngineOn }`, where `type`
+is `heli | plane | boat | car` and `displayType` is `Air | Boat | Vehicle`.
+
+<Callout type="warning">
+  **A BOOL native returns the number `1`, not `true`.** Measured 2026-09-26 on FiveM
+  Enhanced across `DoesEntityExist`, `NetworkDoesNetworkIdExist`, `IsPedInAnyVehicle`,
+  `IsEntityAVehicle` and `HasModelLoaded` — every one answered `"number"` to `type()`. So
+  `native(...) == true` is **always false**, and `not not v` is not the fix either, because
+  `0` is truthy in Lua. Use the predicates above; they test both shapes.
+</Callout>
+
+#### Keybinds
+
+```lua
+tlib.platform.bindKey({
+    id      = 'toggle',
+    product = 'tRadar',
+    action  = 'Toggle the radar',
+    default = 'F5',
+    press   = function() toggle() end,
+})
+```
+
+Defaults: `group` is `keyboard`, `pair` is `true`, `default` is `''` (which appends
+*"(unbound — assign a key in GTA keybinds menu)"* to the label). The positional form
+`bindKey(key, cb, eventType, bindingId, label)` is also accepted.
+
+<Callout type="warning">
+  **The command token IS the stored binding.** FiveM persists a player's rebind against
+  the token, so renaming one silently discards every player's rebind with no error and no
+  migration. Pass a `token` to keep a legacy name; use `id` for a new bind. For the same
+  reason a `when = false` gate must run *before* registration — a `RegisterKeyMapping`
+  seen once is in that player's settings forever.
+</Callout>
+
+Each bind is reported to tLib's cross-resource [keybind registry](/docs/tLib/exports#keybind-registry),
+which is the only place two different resources' bindings are visible at once.
+
+<Callout type="note">
+  `releaseNuiFocus` is three calls (clear keepInput, release focus, clear again) and not
+  two. Neither native is in the native reference and the orderings people assert for them
+  contradict each other, so the third call is empirical. Do not shorten it without an
+  in-game measurement against `IsNuiFocusKeepingInput()`.
+</Callout>
+
+`MAX_SEAT_INDEX` is `16`, measured rather than assumed: 394 vehicle layouts in the Enhanced
+install, largest 16 slots, confirmed against an independent 921-vehicle dump. Counting seat
+*bones* gives 17 on the bus and would be wrong. The server scan needs that bound because
+`GetVehicleMaxNumberOfPassengers` is client-only and `GetPedInVehicleSeat` answers `0` for
+both an empty seat and a nonexistent index; the client scan is exact.
+
+---
+
+## occupancy
+
+One shared answer to who is aboard a vehicle, in which tier, and which of them may act on
+it. **The controller is the driver if a driver is seated, otherwise the front passenger.**
+
+This module is in `AUTOLOAD` — it loads itself into every consumer, because on the server
+its file scope registers the handlers that keep the cache honest and a consumer may have no
+Lua call that would ever trigger a lazy load.
+
+### Client
+
+| Function | Description |
+| --- | --- |
+| `occupancy.poll()` / `.state()` | A copy of `{ seat, vehicle, netId, driver, passenger, partner, isController, tier, cabinSeat, cabinVehicle, cabinNetId }`. |
+| `occupancy.isController()` | May this client act on the vehicle? |
+| `occupancy.isFrontSeat()` / `.isDriver()` / `.isPassenger()` / `.isRearPassenger()` / `.isAboard()` | Predicates about **this** player — no arguments. |
+| `occupancy.tier()` | `driver` \| `passenger` \| `rear` \| `nil`. |
+| `occupancy.myVehicle()` | `handle, netId` — `nil` unless in a **front** seat. |
+| `occupancy.cabin()` | `handle, netId, seat, tier` — any seat, so `nil` only on foot. |
+| `occupancy.partner()` | The other front seat's server id. |
+| `occupancy.onChange(fn)` | `fn(state)`. Returns an unsubscribe function. |
+| `occupancy.startReporting()` / `.startSweep(ms)` / `.stopSweep()` | Opt in to the move ping and the poll loop. Sweep default `250`. |
+
+### Server
+
+| Function | Description |
+| --- | --- |
+| `occupancy.isControllerOf(src, netId)` / `.isFrontSeat(src, netId)` / `.isAboard(src, netId)` | **Gates.** Each re-reads the host; none can be stale. |
+| `occupancy.refresh(src)` / `.refreshOccupant(src)` | Re-read and repair the cache. `seat, netId[, tier]`. |
+| `occupancy.seatOf(src)` / `.occupantSeatOf(src)` / `.tierOf(src)` | The cache. |
+| `occupancy.frontSeats(netId)` / `.occupantsOf(netId)` / `.controllerOf(netId)` | By vehicle. Copies. |
+| `occupancy.partnerOf(src)` / `.peersOf(src)` | The other front seat / everyone aboard. |
+| `occupancy.onChange(fn)` / `.onCabinChange(fn)` | Front-seat edges / every-seat edges. Both return an unsubscribe. |
+| `occupancy.seatTier(seat)` / `.clear(src)` / `.startSweep(ms)` / `.stopSweep()` | Helpers. Sweep default `1000`. |
+
+<Callout type="warning">
+  **Gate on the predicates, read the cache for display.** `isControllerOf`, `isFrontSeat`
+  and `isAboard` re-read the host on every call — and `isControllerOf` re-reads the driver
+  again before granting to a passenger. `occupantsOf` / `tierOf` / `occupantSeatOf` are a
+  cache repaired by a rate-limited client ping and can briefly name a seat the player has
+  left. That can never grant control, because control is never read from the cache.
+</Callout>
+
+**The front-seat and the cabin fields answer different questions.** `seat`, `vehicle`,
+`netId`, `partner` and `isController` are front-seat-only and are `nil` for a rear
+passenger — so `state.seat ~= nil` reads as "may I operate this". A rear passenger shows up
+only in `tier`, `cabinSeat`, `cabinVehicle` and `cabinNetId`, and only `onCabinChange` fires
+for them; `onChange` does not.
+
+`tlib:occupancy:moved` is one event name for every resource — each consumer VM keeps its own
+cache over the same natives, and one client ping repairs all of them at once. Treat its
+payload as a hint: the seat is re-read from the host, so a lying client gets the truth
+written down instead.
+
+Neither sweep runs until you start it.
+
+---
+
+## jsonstore
+
+The single memoised writer for one resource's JSON data file, with per-owner schema seeding,
+versioning and forward migration.
+
+| Function | Description |
+| --- | --- |
+| `jsonstore.open(opts)` | The store. `opts.log` is **required**. |
+| `store:read()` / `store:section(name)` | The whole document, or one section. `{}` when absent. |
+| `store:write(sections)` | Merge and persist. `false` when nothing reached the disk. |
+| `store:ensure(schema)` | Seed or migrate this owner's slice. Returns what it did. |
+| `store:schemaState(owner)` | That result again, or `nil`. |
+| `store:locked()` | Why writes are refused, or `nil`. |
+
+`opts` defaults: `file` to `data.json`, `resource` to `GetCurrentResourceName()`.
+
+```lua
+local store = tlib.jsonstore.open({ log = tlib.logger.create('tDetector') })
+
+store:section('props')            -- the section, or an empty table
+store:write({ props = placements })
+```
+
+**`open` is memoised per resource and file** — the same pair hands back the *same* object,
+so you cannot accidentally create a second writer by calling it twice.
+
+<Callout type="warning">
+  **A lock is permanent for the session, and it fails closed.** An unparseable file, a
+  malformed `__schema`, a version downgrade, a migration that throws or deletes an
+  unnamed key, a failed backup or a failed write all lock the store, and every later
+  `write` returns `false`. The reason is logged once; `store:locked()` is how you ask.
+</Callout>
+
+A migration that drops a top-level key it did not list in `allowRemove` is refused and
+nothing is written. Write a rename as a copy plus an `allowRemove`. A malformed *schema*
+raises rather than locking, so you find it on your own machine.
+
+<Callout type="warning">
+  **Migrations must be idempotent.** A `write` can report success without the bytes
+  landing — demo mode drops it, and a bridge can report success too — so the store
+  re-probes, and if its stamp did not land it switches to an in-memory mirror and warns.
+  The next start then migrates again.
+</Callout>
+
+`__schema` is keyed by **owner**, since one document can be co-owned by several resources.
+Never stamp a version when applying defaults — a document that already carries your version
+is one your migrations will skip.
+
+---
+
+## fs
+
+One function: write a file into a resource, and say so honestly when it could not.
+
+| Function | Description |
+| --- | --- |
+| `fs.writeResourceFile(relPath, contents, resource, log)` | `true`, or `false, err`. `err` is never empty. |
+
+```lua
+local ok, err = tlib.fs.writeResourceFile('data.json', encoded)
+if not ok then log('could not write data.json — ' .. err, tlib.logger.ERROR) end
+```
+
+`resource` defaults to `GetCurrentResourceName()`; `log` is optional and only controls
+whether the one-time warning below is emitted — the caller still gets `err` either way.
+
+The native `SaveResourceFile` is tried first. When Enhanced refuses it, the write falls back
+to the **calling resource's own** Node bridge — which exists only if that resource calls
+`registerWriteResourceFile()` from `tLib/shared/ts/fs/server.ts` in its `server/main.ts` and
+rebuilds its bundle. If you have not, the returned `err` says so by name. No `server.cfg`
+line changes this; `--allow-fs-write` is a server launch argument.
+
+<Callout type="warning">
+  **In demo mode the write is dropped and this still returns `true`** (see [demo](#demo)),
+  so a `true` is not proof the bytes landed. Re-read the file if you need to be sure.
+</Callout>
+
+---
+
+## assets
+
+Reconciles a stored list of operator-dropped files against what is actually in the folder.
+
+| Function | Description |
+| --- | --- |
+| `assets.scan(subdir, opts)` | Sorted filenames, or `nil, reason`. |
+| `assets.reconcile(tracked, diskFiles, opts)` | `list, changed`. Pure. |
+| `assets.sync(tracked, subdir, opts)` | Both at once: `list, changed, reason`. |
+| `assets.slug(filename)` | The name with its final extension stripped. |
+| `assets.AUDIO` | `{ "wav", "ogg", "mp3" }`. |
+
+```lua
+local files, reason = tlib.assets.scan('layouts/sounds', { extensions = tlib.assets.AUDIO })
+local list, changed = tlib.assets.reconcile(installedSounds, files)
+
+-- or both at once, which refuses to prune when the folder cannot be read:
+local list, changed, reason = tlib.assets.sync(installedSounds, 'layouts/sounds',
+                                               { extensions = tlib.assets.AUDIO })
+```
+
+<Callout type="warning">
+  **`nil` and `{}` from `scan` mean different things, and conflating them deletes data.**
+  `nil` is "I could not look"; `{}` is "the folder is empty". `reconcile` prunes anything
+  the list does not confirm, so handing it a failed scan wipes the registry. Use `sync`,
+  which refuses to prune on a scan failure and hands back the `reason`.
+</Callout>
+
+`changed` reports **membership**, not length, so a one-in-one-out swap reports `true`.
+Retained records come back byte-identical and in order — any field you added to a record,
+such as a label, survives; only genuinely new files get a fresh one.
+
+`scan` needs tLib's Node bundle (`ScanResourceFiles`); a missing export reads back as
+`"unavailable"` rather than throwing.
+
+---
+
+## audio3d
+
+Positional device audio: the server decides who is near enough to hear a vehicle-mounted
+device, the client resolves each emitter's live position locally and pushes one batched
+frame per tick into the consumer's own NUI.
+
+### Server — the bus
+
+```lua
+local bus = tlib.audio3d.createBus({
+    event  = 'tradar:worldSound',
+    range  = Config.audioRange,
+    fields = { kind = { type = 'string', max = 16 } },
+})
+RegisterNetEvent('tradar:emitWorldSound', function(payload)
+    bus:emit(source, payload)
+end)
+```
+
+| Member | Description |
+| --- | --- |
+| `bus:emit(src, payload)` | Receivers reached. **`0` for every rejection** — on foot, throttled, malformed, nobody near. |
+| `bus:sanitize(payload)` | The whitelisted fields, or `nil` if any present field is malformed. |
+| `bus:receivers(netId, sender)` | `serverIds, coords`. |
+| `bus:setRange(r)` / `bus:getRange()` | Metres, clamped to `MAX_RANGE` (250). |
+| `bus:stats()` | `{ sent, delivered, throttled, rejected, notAboard, capped }`. |
+| `bus:forget(netId)` | Drop a vehicle's throttle state. |
+
+`createBus` asserts `event` and `range`. Defaults: `maxReceivers` 24 (1–128),
+`minIntervalMs` 100 (0–10000), `maxPerSecond` 20 (1–120).
+
+The emitter is the **vehicle**, resolved through `occupancy.refreshOccupant(src)`, so a
+sender on foot emits nothing at all.
+
+### Client — the receiver
+
+| Member | Description |
+| --- | --- |
+| `audio3d.createReceiver(opts)` | Asserts `event`, `send` and `range`. `prefix` defaults to `audio3d`, `keepAliveMs` to `6000`. |
+| `rx:setLocal(netId)` | Mark the unit this player's own UI already sounds. `nil` on leaving. |
+| `rx:accept(payload)` | `true` only when the frame was forwarded to the NUI. |
+| `rx:pushFrame()` | How long to wait next: `250` idle, else `16`/`33`/`50` by listener speed. |
+| `rx:activeEmitters()` / `rx:getLocal()` / `rx:stats()` | State. |
+| `rx:setRange(r)` / `rx:stopAll()` | Range, and a full teardown. |
+
+<Callout type="warning">
+  **`send` receives ONE table that already carries `action`** — not `(action, data)`.
+  Passing a `sendHud(action, data)` straight in builds `{ action = <table> }`, which
+  tLib's NUI dispatcher drops silently, so the feature looks unwired rather than broken.
+  Bridge it:
+
+```lua
+local function sendWorldAudio(msg) sendHud(msg.action, msg) end
+```
+</Callout>
+
+A frame is dropped twice over: the bus excludes the sender, and the receiver rejects the id
+you marked with `setLocal`. Mark it, or the player hears two copies of the same tone and
+they comb-filter.
+
+---
+
+## framerelay
+
+Publishes the device picture computed by the one occupant who owns it onto the vehicle's
+statebag, so every other client in scope can read it.
+
+| Member | Description |
+| --- | --- |
+| `framerelay.create(descriptor)` | Asserts `key`, `frame`, `sanitise`, `differs`. |
+| `relay.publishTick()` | Safe to call every frame; writes rarely. |
+| `relay.read(vehicle)` | The sanitised frame, or `nil` — covering none published, malformed, and stale. |
+| `relay.withdraw()` | Clear the key. Idempotent. |
+| `relay.publishedVehicle()` / `relay.publishedSeq()` | State. |
+
+```lua
+local relay = tlib.framerelay.create({
+    key       = 'tdetScreenFrame',
+    frame     = function() return localFrame end,
+    hasScreen = function(vehicle) return tdetGetAttachedProp(vehicle) ~= nil end,
+    sanitise  = tdetScreenSanitiseFrame,
+    differs   = tdetScreenFrameDiffers,
+})
+```
+
+Defaults: `hasScreen` absent means yes, `heartbeatMs` 1000, `staleMs` 3000.
+
+<Callout type="warning">
+  **Poll it; do not use `AddStateBagChangeHandler`.** Two of the three conditions for a
+  frame being current — that the consumer still names this vehicle, and that it has not
+  gone stale — produce no statebag event at all, so a change handler latches onto whatever
+  it last heard and never lets go.
+</Callout>
+
+Three field names are reserved in your payload: the relay writes `seq` and `netId`, and
+reads `powered`. Do not use those names for anything else. A device reporting
+`powered = false` publishes nothing at all.
+
+A statebag is not withdrawn when its writer disconnects, and a write only lands while the
+writer owns the entity, so `staleMs` is what clears a crashed driver's last frame.
+
+`publishTick` reads `occupancy.isController()` live, so the occupancy sweep has to be
+running or nothing is ever published.
+
+---
+
+## drivenprop
+
+Drives an unattached, frozen prop's world matrix from its parent vehicle's each frame.
+
+Reach for it when a prop needs a non-unit scale: scale lives in the basis-vector lengths of
+`SetEntityMatrix`, and `AttachEntityToEntity` does not carry it, so a scaled prop cannot be
+attached at all.
+
+| Function | Description |
+| --- | --- |
+| `drivenprop.create(opts)` | A driver. `opts.onError` defaults to a print. |
+| `driver.add(prop, parent, placement)` / `.update(prop, placement)` / `.remove(prop)` | Membership. |
+| `driver.tick()` | `written, skipped`. |
+| `driver.write(prop)` / `.isDriven(prop)` / `.count()` / `.clear()` | The rest. |
+| `drivenprop.normaliseScale(v)` / `.isUnitScale(v)` | Clamped to `[0.1, 10.0]`; anything unusable lands on `1.0`. |
+| `drivenprop.transform(basis, placement)` / `.localRotation(rx, ry, rz)` / `.toWorld(basis, L)` | The pure maths. |
+| `drivenprop.handedness(f, r, u)` / `.assertHandedness(...)` / `.dot` / `.cross` | Basis checks. |
+| `drivenprop.hasMoved(last, basis)` | Whether a rewrite is needed. |
+
+`add` **detaches, freezes and disables collision** on the prop, and writes the matrix
+before it returns. Undo any of the three and you get a specific failure: attached loses the
+scale, unfrozen falls through the world, collision-enabled bounces off the vehicle.
+
+`remove` and `clear` neither delete the prop nor re-attach it. Re-attaching it yourself
+discards the scale.
+
+<Callout type="warning">
+  `transform` asserts handedness and will raise on a left-handed basis — a mesh rendered
+  inside-out looks identical in every number you can print, so this is the only warning you
+  get. It also returns the native's `(forward, right, up, at)` ordering, not the
+  `(right, forward, up)` the rest of the module takes.
+</Callout>
+
+`create` starts a per-frame thread and an `onResourceStop` handler; merely importing the
+module does not. Share one driver per resource — `vehicleprop` exposes its own as
+`instance.editor.driver`.
+
+---
+
+## lifecycle
+
+Keeps a registration against a **dependency** alive across that dependency's restarts. The
+complete worked example is in [Menu Consumers](/docs/tLib/menu-consumers#shared-lifecycle-adapter-api-v1);
+this is the reference.
+
+| Member | Description |
+| --- | --- |
+| `lifecycle.version` | `1`. Assert it. |
+| `lifecycle.watch({ resource, install, cleanup?, readyEvent? })` | The handle below. |
+| `handle.ready()` / `.retry()` / `.invalidate()` / `.dispose()` | Lifecycle. `dispose` is idempotent. |
+| `ctx.once(name, fn)` / `ctx.isActive()` | Inside `install`. |
+
+**Watch a dependency, never yourself** — passing your own resource name asserts. The
+subscription lives in your VM, so it survives the dependency restarting.
+
+`ctx.once(name, fn)` requires `fn` to return exactly `true`; a truthy non-`true` fails the
+step. Completed steps are remembered across retries within one generation, so a later
+unavailable export cannot duplicate a registration that already succeeded.
+
+Retries stop after 300 attempts 100 ms apart — 30 seconds — and print the last real error.
+Nothing re-arms it after that except another start event or your own `retry()`.
+
+---
+
+## menuhost
+
+Lets one resource expose navigation slots that **other** resources may register links into.
+See [Menu Consumers](/docs/tLib/menu-consumers#optional-host-api-v1) for the worked example.
+
+| Member | Description |
+| --- | --- |
+| `menuhost.version` | `1`. Assert it. |
+| `menuhost.install(slots)` | Once only — a second call asserts. |
+| `RegisterPluginMenu(spec)` | Host-scoped **export** it registers. `{ id, label, menu, slot, description? }`. |
+| `UnregisterPluginMenu(id)` | The other one. |
+
+Per slot: `enabled` defaults to on, an absent `resources` allowlist admits any resource, and
+an unranked entry sorts at `1000`.
+
+Namespacing is enforced both ways: a slot's `menu` must be one of the host's own pages and
+a plugin's `menu` one of the plugin's. The caller is taken from `GetInvokingResource()`, not
+from an argument, so the host cannot register on its own behalf through this path.
+
+`install` fires `tlib:menu:hostReady` before it returns — wait on that event rather than on
+the host resource starting. A stopping plugin's links are removed for it.
+
+---
+
+## menu
+
+Loads tLib's menu validators and catalog builders into your VM.
+
+| Member | Description |
+| --- | --- |
+| `tlib.menu.schema` | `MenuSchema` — `id`, `text`, `copy` and the rest. |
+| `tlib.menu.catalog` | `MenuCatalog`. |
+
+Loading it also **defines the bare globals `MenuSchema` and `MenuCatalog`**. If your own
+shared files read those globals, declare `tlib_module { 'menu' }` — otherwise nothing has
+touched `tlib.menu` yet, the lazy load has not run, and they are `nil`. A missing file
+raises at import rather than at first use.
+
+---
+
+## healthcheck
+
+Ordered HTTP GET probes against a base URL, with retries, delivering one aggregate result.
+
+| Member | Description |
+| --- | --- |
+| `tlib.healthcheck(opts)` / `.check(opts)` | The same call. Returns **nothing**. |
+
+Everything arrives at `opts.callback` as
+`{ success, steps, attempts, failedStep, message, url }`, where each step is
+`{ name, passed, status, error }`.
+
+Defaults: one step (`reachable`, path `/`), `retries` 2 (so three attempts), `retryDelay`
+1000, `timeout` 8000, `delay` 500. A step's `path` defaults to `/` and, with no `expect`,
+passes on any status from 200 to 599.
+
+Give it either `opts.url` or `opts.waitEvent`; `waitEvent` wins, and takes the URL from the
+event payload. With neither it registers nothing and does nothing.
+
+The sequence short-circuits, so `result.steps` is shorter than `opts.steps` on a failure and
+a retry re-runs from step 1. A timeout is reported as `status = 0` rather than as an error.
+`%port%` in a step's `errorMsg` is substituted with the port parsed from the URL — 443 for
+`https://`, 80 for `http://`, and a literal `?` for neither.
+
+---
+
+## marketplace
+
+The consumer's half of the in-game marketplace: the payload that opens the browser, and the
+server-side installed-sound registry.
+
+### Client
+
+| Function | Description |
+| --- | --- |
+| `marketplace.openPanel(resource, layoutNames, soundEntries, opts)` | Open the standalone panel. |
+| `marketplace.provide(resource, layoutNames, soundEntries, opts)` | The same payload into a tab of a dialog you already opened. Takes no focus. |
+| `marketplace.baseUrl()` | The studio API host. Re-read per call, so `tlib_api_base_url` needs no rejoin. |
+
+`opts` carries `initialTab` (`uis` or `sounds`), `previewFn` and `previewState`.
+
+<Callout type="warning">
+  **The third argument is sounds, and `installedSlugs` carries sounds only.** A layout's
+  *folder name* (`QRX-720`) is never a marketplace slug (`tradio-qrx-720`), so a layout
+  passed there reads as not-installed. Layouts are
+  answered from `installedLayouts`, where the values are documented as names. The
+  `layoutNames` parameter is still spelled `layoutSlugs` in the source; it is misnamed, and
+  the four callers pass it positionally.
+</Callout>
+
+### Server
+
+| Function | Description |
+| --- | --- |
+| `marketplace.standardTypes(resourceName, opts)` | Register the standard `ui` and `sound` types and wire their lifecycle events. |
+| `marketplace.registerType(kind, installPath, warn)` | One type. `true` when tLib accepted it. |
+| `marketplace.upsertSound(installed, slug)` | The slug already owning that filename, or `nil`. |
+| `marketplace.removeSound(installed, toneWavMap, slug, scopedMaps)` | The filename removed, or `nil`. |
+| `marketplace.forgetSoundFile(filename, flatMap, scopedMaps)` | `changed`. |
+| `marketplace.soundConflict(conflict, slug, meta, warnEvent, warn)` | `true` only when a client was really messaged. |
+
+```lua
+tlib.marketplace.standardTypes(GetCurrentResourceName(), {
+    note = note, warn = warn,
+    layouts = { installed = onLayoutInstalled, uninstalled = onLayoutRemoved },
+    sounds  = { warnEvent = 'tdet:soundOverwriteWarning',
+                installed = onSoundInstalled, uninstalled = onSoundRemoved },
+})
+```
+
+Paths default to `layouts` and `layouts/sounds`; pass `layouts = false` or `sounds = false`
+to skip a type. On a server without `tlib_module { 'marketplace' }`, `registerType` returns
+`false` and warns with the manifest line to add; it never raises.
+
+`note` and `warn` take **one argument** — a message. They are not a logger plus a level;
+pass a bare `function(msg) ... end`.
+
+`meta.src` is the installing player, and is `nil` when that admin disconnected mid-install.
+Guard before you message them.
+
+---
+
+## hud
+
+A transport bridge for a consumer that has its **own** NUI and wants its widget in tLib's
+shared HUD editor.
+
+<Callout type="warning">
+  **This one is not reached through `tlib`.** It is loaded by path and exposes a global:
+
+```lua title="fxmanifest.lua"
+client_scripts { '@tLib/shared/imports/hud/client.lua' }
+```
+
+  Loading the file registers the `__tlib_hud_ready` NUI callback and tLib's start/stop
+  handlers, so it has to be in your script list. Reaching it as `tlib.hud` gives you the
+  boolean `true`, not the API.
+</Callout>
+
+| Function | Description |
+| --- | --- |
+| `tLibHud.register(id, definition)` | `ok, err`. |
+| `tLibHud.unregister(id)` | Also purges the cache, so the widget cannot come back. |
+| `tLibHud.set(id, layout)` | `ok, err`. |
+| `tLibHud.edit()` | Open the shared editor. |
+
+Updates reach your page as `SendNUIMessage({ tlibHud = data })` — one wrapper key, not an
+`action` string — and are **queued until your own NUI calls `__tlib_hud_ready`**, so nothing
+is dispatched into a page that has not loaded.
+
+Definitions survive a tLib restart — register once and do not re-register on
+`onClientResourceStart`. A registration made while tLib is stopped is cached and installed
+when it returns.
+
+When tLib stops you receive the last **committed** geometry with `phase = 'rollback'` and
+`editing = false`. Handle that phase, or a stop mid-edit leaves your widget showing a
+preview the player can no longer cancel.
+
+---
+
+## ratelimit
+
+A per-player minimum interval on a net event, as a closure you call at the top of the
+handler.
+
+| Function | Description |
+| --- | --- |
+| `ratelimit.bucket(name, intervalMs)` | Returns `fn(src) -> boolean`. **`true` means refused.** |
+| `ratelimit.forget(src)` | Drop one player's timestamps. `nil` drops every player. |
+| `ratelimit.reset()` | Drop the buckets themselves. Tests only. |
+
+```lua
+local gate = tlib.ratelimit.bucket('requestVehicleProps', 1000)
+
+RegisterNetEvent('tdet:requestVehicleProps', function()
+    local src = source
+    if not src or src <= 0 then return end
+    if gate(src) then return end
+    -- ...
+end)
+```
+
+<Callout type="warning">
+  **The return is inverted from the obvious reading.** `gate(src)` answers "was this
+  refused?", so the guard is `if gate(src) then return end`. Writing `if not gate(src)
+  then return end` disables the handler rather than the rate limit.
+</Callout>
+
+`gate(nil)` answers `false` — allowed — so a missing source is not silently a denial.
+Buckets are named inside your own VM, so a name can neither collide with another resource's
+nor be shared with one. Asking for the same name twice hands back two closures over **one**
+timestamp table, and the last `intervalMs` wins. Disconnected players are swept for you.
+
+`tlib.net.fromClient` already applies one of these. Use `ratelimit` directly for something
+that is not a net event, or to put several events on one budget.
+
+---
+
+## realtime
+
+Rooms, typed events and the upstream control socket, over tLib's WebSocket router.
+
+<Callout type="warning">
+  **Every function is colon-called.** `tlib.realtime:issueToken(...)`, never
+  `tlib.realtime.issueToken(...)` — the dot form passes your first argument as `self` and
+  fails in a way that does not name the cause.
+</Callout>
+
+```lua title="fxmanifest.lua"
+tlib_module { 'realtime' }
+```
+
+That line is **required**. tLib's server bundle registers the `rt*` exports only if some
+resource's manifest names `realtime`; without it every method below fails on a missing
+export.
+
+| Function | Description |
+| --- | --- |
+| `realtime:issueToken(playerId, opts)` | `{ token, expiresAt, wsUrl }`. `opts.meta` travels as JSON. |
+| `realtime:connectionInfo()` | `{ wsUrl, port, host }`. |
+| `realtime:kick(playerId, reason)` | Sessions closed. `reason` defaults to `kicked`. |
+| `realtime:setRooms(playerId, roomIds)` / `:getRooms(playerId)` | Membership. `getRooms` never returns `nil`. |
+| `realtime:sendEvent(playerId, type, payload)` | Sessions reached. |
+| `realtime:broadcastEvent(roomId, type, payload, opts)` | Sessions reached. `opts.exceptPlayerId` skips one. |
+| `realtime:publish(roomId, bytes)` | A fanout frame, stamped `senderId 0`. |
+| `realtime:onConnect(fn)` / `:onDisconnect(fn)` | `fn(playerId, sessionId, meta)` / `(…, code, reason)`. |
+| `realtime:onEvent(type, fn)` / `:onEvent(fn)` | One type, or all as `fn(playerId, sessionId, type, payload)`. |
+| `realtime:stats()` | Transport counters. |
+| `realtime:startControl(cfg)` / `:stopControl()` | The upstream socket. `cfg` is `{ license, tokenEndpoint }`. |
+| `realtime:sendControl(type, data, correlation)` | One control frame. |
+| `realtime:onControlRecv(fn)` / `:onControlState(fn)` | `fn(type, data, correlation)` / `fn(state, wsUrl)`. |
+| `realtime:controlState()` | The state string, or `nil`. |
+
+```lua
+local info = tlib.realtime:issueToken(playerId, { meta = { hello = 'world' } })
+tlib.realtime:setRooms(playerId, { 'radio:freq:154.125' })
+tlib.realtime:onEvent('ptt', function(playerId, sessionId, payload) end)
+tlib.realtime:broadcastEvent('radio:freq:154.125', 'talker', { id = 42, on = true })
+```
+
+Handler lists are per consumer VM, so two resources can subscribe to the same event and
+each gets its own callback. A handler that throws is caught and printed, not propagated —
+check the console before concluding an event never arrived.
+
+Audio frames do not come through here. This module is membership, typed events and
+lifecycle only.
+
+---
+
+## inference
+
+Announce a model runtime this resource started, and find one another resource already has
+up for the same weights. The exports underneath are in
+[Exports](/docs/tLib/exports#local-inference); to *start* the engine, see
+[Child processes](/docs/tLib/exports#child-processes).
+
+<Callout type="warning">
+  Colon-called, like `realtime`: `tlib.inference:lookup(...)`.
+</Callout>
+
+| Function | Description |
+| --- | --- |
+| `inference:advertise(descriptor)` | A handle, or `nil` if the advertisement was rejected. |
+| `inference:lookup(capability, workload)` | Another resource's advertisement, or `nil`. Never your own. |
+| `inference:withdraw(handle)` | Drop one of yours. Stopping the resource does this anyway. |
+| `inference:list()` | Everything registered, for diagnostics. |
+
+```lua
+local shared = tlib.inference:lookup('text', 'qwen3-1.7b-q4_k_m')
+if shared then
+    -- someone else already has these weights loaded; talk to shared.url
+else
+    local handle = tlib.inference:advertise({
+        capability = 'text',
+        workload   = 'qwen3-1.7b-q4_k_m',
+        url        = 'http://127.0.0.1:18291/v1',
+        model      = 'local',
+    })
+end
+```
+
+<Callout type="warning">
+  **The field is `url`, and a rejected advertisement is silent.** `advertise` returns `nil`
+  with no error and no log line, so a misspelled field, a missing one and a non-loopback
+  URL are indistinguishable. Check the return.
+</Callout>
+
+Give `url` as the **full** URL including the route — a looked-up engine is called at
+exactly what you advertised, with nothing appended. Only `127.0.0.1`, `[::1]` and
+`localhost` are accepted.
+
+Re-advertising replaces every entry for the same resource **and capability**, so moving an
+engine to a new port needs no `withdraw` first.
+
+---
+
+## soundstore
+
+The tone-key to `.wav` registry behind a resource's sound settings, with a boot
+reconciliation against what is actually on disk.
+
+| Function | Description |
+| --- | --- |
+| `soundstore.open(opts)` | The store. `opts.log` is **required**. |
+| `store:config()` | `{ soundWavMap, installedSounds, defaultSoundKeys }`. |
+| `store:setMapping(key, filename)` | Map a key to a file; an empty filename clears it. Saves. |
+| `store:removeSound(filename)` | Forget a file everywhere it is mapped. Saves. |
+| `store:install(slug)` | The slug already claiming that filename, if any. Saves. |
+| `store:uninstall(slug)` | The filename removed, if it was tracked. Saves. |
+| `store:save()` | Write now. Every mutator above already does. |
+
+Defaults: `resource` to `GetCurrentResourceName()`, `dir` to `layouts/sounds`, `file` to
+`data.json`, `keys` to `{}`.
+
+<Callout type="warning">
+  **Name a default sound's file in lowercase.** The disk index is keyed on the real
+  directory entry, and the `LoadResourceFile` fallback behind it is case-insensitive on
+  Windows and case-sensitive on Linux — so a capitalised default re-seeds on a dev box and
+  silently does not on a Linux server. Fix the filename, not the comparison.
+</Callout>
+
+An empty directory scan counts as a **failed** scan, not an empty folder, so a directory
+the server cannot read leaves your mappings alone instead of wiping them.
+
+The store shares your resource's `jsonstore` object, so you do not need to coordinate
+writes with it.
+
+---
+
+## secrets
+
+Overlays a gitignored `config.local.lua` and then matching convars onto `Config` in place,
+so the tracked config file ships blank.
+
+| Function | Description |
+| --- | --- |
+| `secrets.overlay(config, opts)` | Apply both layers. `{ applied, errors, sidecar }`. |
+| `secrets.read(resource)` | The sidecar table, or `nil, err`. `nil, nil` when there is no file. |
+| `secrets.credentialPaths(config)` | Dotted paths of every credential-shaped key, sorted. |
+
+Precedence is **convar, then `config.local.lua`, then `config.lua`**. A convar is named
+`<prefix>_<dotted_path_with_underscores>`; `opts.convarPrefix` defaults to the resource name
+lowercased, `opts.resource` to `GetCurrentResourceName()`, and `opts.quiet` is falsy, so by
+default it prints what it applied.
+
+Server-only — there is no client half. The sidecar is loaded into an **empty**
+environment: it must `return` a plain table and can call nothing, not even `print`. In the
+merge, a list in the sidecar **replaces** the one in `config.lua` rather than appending to
+it.
+
+<Callout type="warning">
+  If `tlib.diag` is unreachable, `credentialPaths` returns `{}` and the convar pass
+  silently does nothing — your convars are ignored and `applied` is empty, with no error.
+  Check `applied` lists what you expected.
+</Callout>
+
+---
+
+## spatial
+
+A throttled index of player positions: the cached counterpart to
+`tlib.platform.getNearbyPlayers`.
+
+| Function | Side | Description |
+| --- | --- | --- |
+| `spatial.getNearbyPlayers(coords, radius)` | both | Server IDs within `radius`. |
+| `spatial.setReady()` | server | Start building the index. See below. |
+| `spatial.setRefreshRate(ms)` | both | Rebuild interval. Default `100`. |
+| `spatial.clear()` | both | Empty the index. |
+
+<Callout type="warning">
+  **On the server the index stays empty until `setReady()` is called**, and
+  `getNearbyPlayers` then returns `{}` with no error — which reads as "nobody is nearby"
+  rather than "the index is not running". Call it once the first tick has passed. The
+  client half has no such gate.
+</Callout>
+
+The server and client halves are separate indexes with separate clocks.
+`setRefreshRate` applies to the whole VM, not to one call site.
+
+---
+
+## telemetry
+
+The diagnostics pipeline: scrubbing, fingerprinting, operation timing and the batched send.
+
+<Callout type="note">
+  **You almost certainly do not need to call this.** It is in `AUTOLOAD` and loads itself
+  into studio-authored resources; declare `tlib_module { 'telemetry' }` to opt in from any
+  other. Whether anything is *collected* is the `tlib_telemetry` convar — see
+  [Convars](/docs/tLib/convars#diagnostics) for what it gathers and what it does not.
+</Callout>
+
+| Function | Description |
+| --- | --- |
+| `telemetry.error(err, site, kind)` | Report a fault. Returns the stack hash — **even when deduped**. |
+| `telemetry.warn(code, kind, message)` | Report a warning. A `code` that slugs to empty is dropped. |
+| `telemetry.timed(operation, thresholdMs, fn)` | Run `fn`, recording how long it took. Re-raises a throw. |
+| `telemetry.record(operation, thresholdMs, ms)` | The same, for something you timed yourself. |
+| `telemetry.consent()` | `{ enabled, source, locked }`. A cache, not the authority. |
+| `telemetry.flush()` | Send the pending batch now. |
+| `telemetry.scrub(text)` / `.scrubIdentifiers(text)` | Redact registered values / anything identifier-shaped. |
+| `telemetry.registerScrubValue(value)` | Add a value to redact. Refuses anything under 3 characters. |
+| `telemetry.createTimers(opts)` | A private `{ record, timed, reset }`. `opts.report` is required. |
+
+While consent is off, events are dropped rather than queued — turning diagnostics on sends
+no backlog. With it on, the queue caps at 32 and discards oldest first.
+
+A fault is deduped for 120 seconds per fingerprint, so a throw inside a per-frame thread is
+sent once. `error` returns the hash on a suppressed call too, so you can still log it
+locally.
+
+`registerScrubValue` refuses anything under three characters: a player named `Al` would
+turn every `Already` in a stack trace into `[redacted]ready`.
+
+---
+
+## screentarget
+
+Picks the **one** vehicle whose device screen this client renders.
+
+`AddReplaceTexture` is keyed on the texture name, so it is global to the archetype and two
+vehicles cannot show different screens at once. This picks the winner: your own vehicle
+always, otherwise the nearest in range, with hysteresis so a passing car does not steal the
+screen.
+
+| Member | Description |
+| --- | --- |
+| `screentarget.create(opts)` | An arbiter. `opts.hasScreen` is required. |
+| `self.update()` | `vehicle, netId, source` — or a single `nil` when nothing qualifies. |
+| `self.current()` | The same, without re-deciding. |
+| `self.currentDistance()` | Distance at the last `update`; `0` for your own vehicle. |
+| `self.onChange(fn)` | `fn(vehicle, netId, source)`. Returns an **unsubscribe** function. |
+| `self.reset()` | Forget the incumbent. |
+| `self.settings()` | `{ range, switchMargin, dwellMs }`. |
+
+Defaults: `range` 8.0 m, `switchMargin` 2.0 m (absolute metres, not a fraction), `dwellMs`
+1500. `source` is `own` or `nearest`.
+
+`onChange` fires only when the vehicle or the source changes, never on distance alone, so
+it is safe to rebuild a browser inside it. Treat `update()` returning `nil` as the signal to
+tear that browser down — leave it up and it paints stale pixels onto a vehicle the player
+has driven away from.
+
+`dwellMs` delays *displacement* only. Losing the incumbent takes effect at once.
+
+Create one arbiter per **device kind** — not one per resource, and not one globally.
+
+---
+
+## runtimetxd
+
+Calls `CREATE_RUNTIME_TXD` at most once per resource load, and mints names a `restart`
+cannot collide with.
+
+| Function | Description |
+| --- | --- |
+| `runtimetxd.create(prefix)` | A per-resource txd owner. |
+| `txds.ensure()` | The txd handle, created on first call and cached. |
+| `txds.name()` / `txds.tag()` | The dictionary name, and the per-load tag inside it. |
+| `txds.textureName(stem, serial)` | `<stem>_<tag>`, or `<stem>_<tag>_<serial>`. |
+| `txds.count()` | How many times the native was **called**. |
+
+```lua
+local txds = tlib.runtimetxd.create('tdet_scr_txd')
+local txd  = txds.ensure()
+local name = txds.textureName('tdet_screen', serial)
+```
+
+Budget one permanently pinned streaming slot per resource load: the engine frees neither a
+runtime txd nor a runtime texture, so restarting repeatedly in one session accumulates them.
+That is the price of the tag — reuse a name across a restart instead and
+`AddReplaceTexture` resolves against the previous load's dictionary and silently does
+nothing.
+
+`count()` counts calls, not distinct names, so it catches the native being called twice with
+the *same* name.
+
+---
+
+## soundfields
+
+Builds the Sounds tab of a settings dialog and keeps it live, remembering which keys the
+open dialog actually drew.
+
+| Function | Description |
+| --- | --- |
+| `soundfields.append(fields, opts)` | Append the dropdowns. Mutates `fields`; returns the keys drawn. |
+| `soundfields.refresh(dialogId, data, patch)` | Re-push options after a server change. Returns how many it patched. |
+| `soundfields.keyOf(fieldId)` / `.fieldId(key)` | Convert between a tone key and its field id. |
+| `soundfields.drawn()` | The remembered key list. |
+| `soundfields.clear()` | Forget it. |
+
+```lua
+local fields = {}
+tlib.soundfields.append(fields, { config = soundConfig, noun = 'detector' })
+
+-- in onChange:
+local soundKey = tlib.soundfields.keyOf(fieldId)
+if soundKey then saveMapping(soundKey, value) end
+
+-- when the server pushes a new sound config:
+tlib.soundfields.refresh('tdet_settings', data)
+```
+
+<Callout type="warning">
+  **Call `clear()` on submit, on cancel, *and* when the viewer turns out not to be an
+  admin** — the last of which never ran `append` at all. Left set, `refresh` patches fields
+  in a dialog that is not open.
+</Callout>
+
+The remembered list is module-level, so keep one dialog open at a time per resource.
+
+`refresh` patches what was **drawn**, not the current config: a sound key added server-side
+after the dialog opened has no control to patch and appears only at the next open. It
+returns `0` instead of erroring, so you can call it unconditionally.
+
+---
+
+## propeditor and vehicleprop
+
+The in-vehicle prop stack. `vehicleprop` owns the model registry, the placement store and
+the attach/detach lifecycle; `propeditor` owns the orbit camera and the editing UI. Create
+`vehicleprop` and reach the editor through `instance.editor`.
+
+```lua
+local prop = tlib.vehicleprop.create({
+    prefix = 'tdet', model = 'prop_cs_police_torch', decor = 'tdet_prop',
+    saveEvent = 'tdet:savePlacement', removeEvent = 'tdet:removePlacement',
+})
+```
+
+| Member | Description |
+| --- | --- |
+| `instance.setRegistry(cfg)` / `.isRegisteredModel(n)` / `.resolveModel(n)` / `.defaultModel()` | The model registry. |
+| `instance.getPlacement(veh)` / `.setPlacements(src)` / `.getAttached(veh)` / `.detach(veh)` | Placements and props. |
+| `instance.reconcile()` / `.tick()` / `.reclaimOrphans()` / `.cleanupAll()` | Lifecycle, exposed so a suite can drive it without a thread. |
+| `instance.editor` | The `propeditor` instance, including `editor.driver`. |
+| `propeditor.create(descriptor)` | The editor on its own, if you are not using `vehicleprop`. |
+| `propeditor.orbit.*` | The camera maths — `new`, `eye`, `lookFrom`, `applyDrag`, `zoom`, `command`. |
+| `vehicleprop.normaliseModelName(m)` / `.buildRegistry(builtin, cfg)` | Pure helpers. |
+
+`create` asserts `prefix`, `model`, `decor`, `saveEvent` and `removeEvent`.
+
+<Callout type="warning">
+  **`create` is not a constructor you can call twice.** One call registers 13 NUI callbacks,
+  two render threads, a decor type, a 2.5-second lifecycle thread and `playerSpawned` /
+  `onResourceStop` handlers. Create one per resource, at load, and share
+  `instance.editor.driver` rather than making a second driven-prop driver.
+</Callout>
+
+Three behaviours are worth knowing before using either:
+
+- **Scale decides the attach mechanism.** A unit scale attaches with
+  `AttachEntityToEntity`; anything else is driven per frame through
+  [`drivenprop`](#drivenprop). So never test "is this attached" to decide whether a prop is
+  live — every scaled prop answers no. Ask the tracking table.
+- **`CreateObject` signals failure with `0`, which Lua treats as true.** `if not prop then`
+  never catches it, and the prop simply never appears.
+- **The placement, attached and model tables are emptied in place, never replaced.**
+  Consumers alias them, so table identity is part of the contract.
+
+A record the editor did not change round-trips byte-identical — it never writes a resolved
+model name back, so a legacy placement is not silently pinned to today's default.
+
+`receiveEvent` accepts server-triggered events only (`source == 65535`); a local
+`TriggerEvent` under that name does nothing.
+
+---
+
+## versioncheck
+
+`tlib.versioncheck(opts)` — the startup banner, version comparison and changelog. It is both
+callable and a table, so `tlib.versioncheck(opts)` and `tlib.versioncheck.check(opts)` are
+the same call, alongside `.github(repo)`, `.studios(product, current)` and `.lean(...)`.
+
+It has its own page: see [Version Check](/docs/tLib/versioncheck).
+
+---
+
+## Next steps
+
+- The export surface these modules sit beside: [Exports](/docs/tLib/exports)
+- A complete menu consumer, end to end: [Menu Consumers](/docs/tLib/menu-consumers)
+- The startup banner and update check: [Version Check](/docs/tLib/versioncheck)
+- What an owner sets in `server.cfg`: [Convars](/docs/tLib/convars)

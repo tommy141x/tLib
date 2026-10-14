@@ -1,9 +1,14 @@
 ---
 title: "Menu Consumers"
-description: "Building a standalone resource on the shared menu engine — ownership, lifecycle, host slots and placement."
+description: "Build a standalone resource on tLib's shared menu engine: who owns what, the lifecycle adapter, host slots, and where a page is allowed to sit."
 order: 4
 group: "tLib"
+published: true
 ---
+
+A consumer declares pages on the server and handles rows on the client. This page is the
+complete shape of one, from the manifest to an optional host exposing slots to other
+resources.
 
 ## Ownership
 
@@ -23,7 +28,7 @@ Manifest:
 fx_version 'cerulean'
 game 'gta5'
 dependency 'tLib'
-tlib_min_version '0.6'
+tlib_min_version '1.0'
 shared_script '@tLib/imports.lua'
 server_script 'server.lua'
 client_script 'client.lua'
@@ -104,8 +109,10 @@ dependency's exports are available. An exhausted registration can retry on a lat
 event or explicit retry. Avoid native gameplay effects in registration; use authorized actions
 and SetMenuEffect for ongoing behavior and revocation cleanup.
 
-The import versions identify this source contract; the resource's baseline version 0.6 alone
-does not identify every local API addition. Deploy matching tLib source and imports. No UI
+The import versions — `lifecycle.version`, `menuhost.version` — identify this source contract.
+The resource's own `version` in `fxmanifest.lua` (`1.0.0`) does not: it moves for any change,
+so it cannot tell you which local API additions a checkout has. Assert the import version, as
+both examples above do, and deploy matching tLib source and imports. No UI
 build is required for these Lua APIs, but reload resources to run changed Lua files.
 
 ## Optional host (API v1)
@@ -139,8 +146,7 @@ page's dynamic link collection directly using SetMenuLinks.
 
 When the engine restarts, consumers must recreate their own pages and host links. Invalidate
 the host-link watcher when engine registrations are lost, then retry it after the page has
-registered. tCinematic's server/main.lua is the complete working example of this dependency
-relationship. A host adapter does not itself recreate the host's built-in features.
+registered. A host adapter does not itself recreate the host's built-in features.
 
 ## Placement is not permission ancestry
 
@@ -150,11 +156,50 @@ search, and it does not change any permission. Omit the option or use true for a
 Keep an independently usable page parented to `main`; parenting it to a host page also
 makes that host's ancestor permissions mandatory, including for direct command access.
 
-## Verification and deployment
+## The shared "Send feedback" row
 
-- Pure Lua suites test schemas, ownership, exact rows, filtering and transport.
-- Consumer mocks test native state cleanup and lifecycle transitions, not visual correctness.
-- In-game checks must cover initial startup, dependency restarts, late host availability,
-  permission loss, direct access, root-hidden navigation and NUI focus.
-- Refresh resource discovery before authorized reload/start operations. Source edits alone
-  do not update running resources. Do not infer live success from mocked tests.
+tLib's menu adds one row of its own to **every namespace's entry page** — the
+page whose `parent` is `main` or absent. You do not register it, you cannot
+register it, and there is nothing to wire: the row and its dialog live in tLib's
+own browser bundle, which every menu renders through.
+
+⚠️ **It is not one of your rows.** It is a client-side synthetic row, like a
+cross-menu search hit: it has no ACE, no action handler and no item id in your
+catalog, and it never reaches `resolveAction`. A parity test that counts the rows
+on an entry page will see one more than it registered, and a snapshot assertion
+will not — the row is added in the browser, after the wire.
+
+The dialog sends the player's message to TIMMYG Studios with the resource name,
+its manifest `version`, and tLib's random per-install id. Nothing else: no
+player name, licence, Steam or Discord id, no server name and no IP.
+
+Two things worth knowing:
+
+- **It does not need telemetry consent** and is not affected by `tlib_telemetry`.
+  ⚠️ The per-install id is sent either way — it accompanies every request tLib
+  makes to timmygstudios.com, whether or not diagnostics are on — so a message is
+  attributable to an install, though never to a person. See `tlib_telemetry` in
+  [Convars](/docs/tLib/convars#diagnostics).
+- **It is not permission-gated**, and no ACE hides it. Feedback is about the
+  software rather than about the server.
+
+It appears only on an entry page, it is hidden while the player is filtering, and
+a page with no `owner:` prefix — the shared `main` root — gets no row.
+
+## Verifying a consumer
+
+In-game checks must cover initial startup, dependency restarts, late host availability,
+permission loss, direct access, root-hidden navigation and NUI focus. Mocked tests cover
+native state cleanup and lifecycle transitions, never visual correctness, so do not infer
+live success from them.
+
+Refresh resource discovery before an authorized reload or start. Source edits alone do not
+update a running resource.
+
+---
+
+## Next steps
+
+- The lifecycle, menuhost and menu modules as reference: [Import Modules](/docs/tLib/import-modules#lifecycle)
+- Every menu export, and the row and page shapes: [Exports](/docs/tLib/exports#menu-system)
+- The keybinding and locale convars a player sees: [Convars](/docs/tLib/convars#menu)

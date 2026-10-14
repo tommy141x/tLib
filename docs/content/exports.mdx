@@ -1,8 +1,9 @@
 ---
 title: "Exports"
-description: "All tLib Lua exports — menus, dialogs, toasts, themes, HUD layout, marketplace, logger, HTTP and permissions."
+description: "Every Lua export tLib registers, which side it lives on, and what it returns — menus, dialogs, toasts, themes, HUD layout, marketplace, logger, HTTP, permissions and child processes."
 order: 2
 group: "tLib"
+published: true
 ---
 
 All exports are called via `exports['tLib']:FunctionName(...)`.
@@ -185,9 +186,9 @@ string and the press instead asks that question first, and only a second, explic
 of **Confirm** fires the callback. Escape and **Cancel** both answer the question without
 firing anything; the dialog itself stays open either way.
 
-It is the same key, with the same meaning, as a menu row's `confirm` above — one
-confirmation design in the product rather than two. `variant = 'destructive'` is colour
-and nothing else, so a button that cannot be undone wants both.
+It is the same key, with the same meaning, as a menu row's `confirm` above.
+`variant = 'destructive'` is colour and nothing else, so a button that cannot be undone
+wants both.
 
 ```lua
 {
@@ -331,10 +332,10 @@ player can move, scale and hide it alongside every other resource's HUD.
 | `RegisterHudComponent(id, options, fn)` | Register a draggable component. `fn(layout)` is called whenever its layout changes. |
 | `UnregisterHudComponent(id)` | Remove it again. |
 | `GetHudLayout(id)` | The component's current layout, or `nil`. |
+| `SetHudLayout(id, layout)` | Move one of your own components from code. `true`, or `false, reason`. |
 | `OpenHudEditor(options)` | Open the editor for this resource. `{ demo = true }` adds a sample component. |
 | `CloseHudEditor()` | Close it, if this resource opened it. |
 | `ResetHudLayout(id?)` | Restore factory placements and clear the saved record. With no `id`, everything. Returns how many components it restored. |
-| `GetHudLayoutCapabilities()` | Feature flags for consumers that support several tLib versions. |
 
 There is one editor, not one per resource. Registering puts your component in the same list,
 and on the same screen, as everyone else's:
@@ -345,6 +346,13 @@ and on the same screen, as everyone else's:
   height={900}
   alt="The HUD layout editor listing Lightbar HUD from tELS, Radio from tRadio and Radar from tRadar, with all three drag frames outlined inside a safe-area border"
 />
+
+`SetHudLayout` returns `false, 'Close the layout editor first'` while the editor is open —
+the editor is one transaction over every component, and **Cancel** would discard your write
+along with the rest. Handle that refusal; do not retry in a loop.
+
+For a `persist` component the record is written before your `fn` is called, so a `true` means
+the position survives a reload.
 
 `options` is `{ label, width, height, canHide?, canScale?, minScale?, maxScale?, persist?,
 minVisiblePixels?, minVisibleFraction?, defaults = { x, y, scale, visible, anchor }, layout? }`.
@@ -369,8 +377,8 @@ exports['tLib']:RegisterHudComponent('radio', {
 }, onLayout)
 ```
 
-`layout` needs tLib 0.10; check `GetHudLayoutCapabilities().separateDefaults` before relying on
-it, and fall back to `defaults = savedPlacement` on older versions.
+Pass both, always. There is no capability to probe for — pin `tlib_min_version '1.0'`, which
+is the first release carrying `layout`. There is no `GetHudLayoutCapabilities()` export.
 
 Every layout tLib is given — saved record, `layout`, or `defaults` — is validated independently
 and falls through to the next when it is unusable, and the survivor is clamped against the live
@@ -389,8 +397,39 @@ further from the anchor than the editor's outline, and drags stop being 1:1.
 ### If a player loses their HUD
 
 `/tlibhud reset` restores every registered component to its factory placement and clears the
-saved layout, with the editor open or shut. It is deliberately not restricted to the resource
-that opened the editor.
+saved layout, with the editor open or shut, whichever resource opened it.
+
+---
+
+## Keybind registry
+
+**Client.** The one place on the server where two *different* resources' key bindings are
+visible at once. A resource's own `tlib.platform.keybindConflicts()` runs inside its own VM, so
+it cannot see the collisions players actually hit: two resources that both default to `B`, both
+firing on one press.
+
+| Export | Description |
+| --- | --- |
+| `ReportKeybind(entry)` | Record one bind: `{ token, resource?, label?, default?, group? }`. `tlib.platform.bindKey` calls this for you. |
+| `GetKeybinds()` | Every bind reported so far, as a flat array of `{ resource, token, label, default, group }`. |
+| `GetKeybindConflicts()` | `{ { group, key, claims = { { resource, token, label, default, group }, … } }, … }`. |
+
+Only `token` is required. `resource` defaults to `?`, `label` to the token, and `group` to
+`keyboard`. A malformed entry is dropped rather than raised, so a bad call cannot break your
+startup — but it also means a typo here is silent, and the bind simply never appears in
+`GetKeybinds()`.
+
+An entry with no `default` is recorded and never counted as a collision, and a conflict needs
+**more than one resource** — two binds on one key from the same resource are left to that
+resource's own `tlib.platform.keybindConflicts()`.
+
+tLib prints its own report ten seconds after start, once. Resource start order is not
+guaranteed, so a bind reported later is still recorded but misses that printout — call
+`GetKeybindConflicts()` yourself if you need an answer after then.
+
+Nothing here reassigns a key. The player's rebind is authoritative and FiveM stores it against
+the command token, so act on a reported conflict by changing a **default** and shipping it, not
+at runtime.
 
 ---
 
@@ -495,8 +534,53 @@ exports['tLib']:Fetch({ url = 'https://example.com/api', method = 'GET' },
 | `IsPlayerAdmin(playerId)` | Server | `true` if that player is at least admin. |
 | `GetPlayerLevel(playerId)` | Server | That player's numeric level. |
 | `HasPermission(source, key)` | Server | Check one arbitrary permission key. |
+| `HasPermissionBatch(source, keys)` | Server | A whole key list in one call. Returns `{ [key] = boolean }`. |
 | `RegisterAdminEvent(eventName, handler)` | Server | Register a net event that only fires for admins. Denied attempts are logged. |
 | `RegisterPermissionResolver(fn)` | Server | Replace ACE checks with a framework's own permission system. |
+
+---
+
+## Diagnostics consent
+
+**Server.** Two exports, and a UI needs both. Everything crosses as a JSON
+string, so a caller never has to branch on a type. See `tlib_telemetry` in
+[Convars](/docs/tLib/convars#what-is-deliberately-not) for what is collected and
+what deliberately is not.
+
+| Export | Side | Description |
+| --- | --- | --- |
+| `GetTelemetryConsent()` | Server | `{ enabled, source, locked, convar, convarValue, queued, transport }`. |
+| `SetTelemetryConsent(enabled)` | Server | `{ ok = true, consent }`, or `{ ok = false, reason, detail }`. |
+
+```lua
+local c = json.decode(exports['tLib']:GetTelemetryConsent())
+```
+
+⚠️ **Render a switch only when `locked` is false.** `locked` is true when
+`tlib_telemetry` is set, and then the convar is the answer: there is nothing to
+toggle, and a switch that appears to offer one is a control that lies. Show
+`convarValue` and the `convar` name instead, so the operator can find what set
+it. `source` is `convar`, `switch` or `default`.
+
+⛔ **There is no `provisioned` field, and a UI must not render a "cannot
+transmit" state.** The ingest authenticates with the same public key every studio
+API call uses, so there is no credential for a consumer to resolve or report on.
+
+⚠️ **Call `SetTelemetryConsent`, never the bundle's `DiagSetConsent` directly.**
+This wrapper is what tells the already-connected clients; without that broadcast
+a change takes effect for players who reconnect and for nobody else, which reads
+as "the switch does nothing". It refuses with `reason = 'locked'` while the
+convar has decided, rather than storing a preference that would be ignored.
+
+⛔ It is **not** permission-gated here. A consumer exposing it to players must
+gate it at its own call site.
+
+⛔ **And never on an unauthenticated surface.** tLib's own hub binds `0.0.0.0` by
+default and its index carries no auth, so it calls neither of these and shows no
+diagnostics state at all. For an operator, `tlib_telemetry` is the only control.
+
+`tlib_telemetry_status` on the server console prints the same answer, plus the
+queue depth and whether the transport has given up.
 
 ---
 
@@ -519,30 +603,26 @@ Starting those engines is a separate, gated surface — see [Child processes](#c
 ## Child processes
 
 **Server.** One `add_unsafe_child_process_permission` line for a whole box, however many
-first-party resources ship a local engine.
+resources on it ship a local engine.
 
 FXServer attributes the child-process check to whichever resource's runtime made the call, so
-every resource that spawns needs its own grant, and a customer who drops in a new one gets a
-feature that silently does not work until they find out why. tLib makes the call instead:
+without this every resource that spawns would need its own grant. tLib makes the call instead,
+so the only line you need is:
 
 ```cfg
 add_unsafe_child_process_permission tLib
 ```
 
-That is the only line. It replaced four.
-
 ### What sits behind the one line
 
-A single grant is only an improvement if what it permits is *narrower* than the grants it
-replaced, so it is. **The caller names a program, never a path.** tLib holds a catalog —
-`server/lib/spawn/catalog.ts` — of which resources may spawn, which programs each may run,
-where those programs live inside that resource, and what their arguments are allowed to look
-like. It resolves the executable itself, checks the resolved path is inside the calling
-resource after `realpath` (so neither a `..` nor a symlink escapes), rebuilds the argv token by
-token from a declared shape, and execs with **no shell**.
+**The caller names a program, never a path.** tLib holds a catalog of which resources may
+spawn, which programs each may run, where those programs live inside that resource, and what
+their arguments are allowed to look like. It resolves the executable itself, checks the
+resolved path is inside the calling resource after `realpath` (so neither a `..` nor a symlink
+escapes), rebuilds the argv token by token from a declared shape, and execs with **no shell**.
 
-What tDB could run before was *anything*. What it can run now is `pocketbase`, from its own
-directory, with PocketBase's own flags.
+So what tDB can run through this grant is `pocketbase`, from its own directory, with
+PocketBase's own flags — not an arbitrary command line.
 
 <Callout type="warning">
 This narrows what a **compromised first-party resource** can do. It is not a defence against a
@@ -573,23 +653,17 @@ base64 with nothing dropped and keeps stdin open; it exists for a child that exc
 frames rather than log lines, and it widens the **data** path only — the program, its path and
 its arguments go through the same gate either way.
 
-### Cross-platform by construction
+### Cross-platform
 
-Linux containers are a first-class target, not a port, so there is no
-platform branch anywhere in this surface. The catalog declares a binary per platform — tDB's
-`.runtime/pocketbase-win.exe` against `.runtime/pocketbase-linux`, matching what its own
-setup script fetches — and the caller never says which one it wants. Containment compares
-paths **exactly**, never case-folded: `/opt/res/tdb` and `/opt/res/tDB` are two directories
-on Linux, and folding them would accept the wrong one there while weakening the check on
-Windows. The gate's whole environment — platform, separator, `realpath`, `GetResourcePath` —
-is injected, and the test suite runs every containment, resolution and traversal case twice,
-once against `path.posix` fixtures and once against `path.win32` fixtures.
+There is no platform branch in this surface. The catalog declares a binary per platform —
+tDB's `.runtime/pocketbase-win.exe` against `.runtime/pocketbase-linux` — and the caller never
+says which one it wants.
 
-tLib briefly ran two fixed PowerShell commands on a caller's behalf, to resolve a live PID's
-executable and to count physical cores. They are gone. They were not exploitable — tLib owned
-every byte of those command lines — but they were Windows-only, which meant one question with
-two implementations, and a minimal container has no PowerShell. Both answers are computed
-in-process by the consumers now, the same way on every host.
+Containment compares paths **exactly**, never case-folded: `/opt/res/tdb` and `/opt/res/tDB`
+are two directories on Linux, so folding them would accept the wrong one there while weakening
+the check on Windows.
+
+Nothing here shells out to PowerShell, so a minimal Linux container needs no extra packages.
 
 ### Lifecycle
 
@@ -602,31 +676,26 @@ it no longer dies with its owner for free. tLib reaps it instead:
   held by its own children.
 
 A caller restarting is **kill-and-respawn, not reuse**. `onResourceStop` fires before the
-restarted copy starts, so the old engine is signalled and waited for before a new one is
-asked for. Reuse was the alternative and was rejected: the new copy may have a different model,
-context size or port, and adopting a process started under the old configuration is how you get
-a server silently running yesterday's settings.
+restarted copy starts, so the old engine is signalled and waited for before a new one is asked
+for. Expect a fresh process: a restarted resource may want a different model, context size or
+port, and none of those would reach an adopted one.
 
-An orphan here is a genuinely unpleasant bug — a leftover PocketBase holds its HTTP port and
-locks its SQLite directory, and the next start fails as a bind error that reads like
-misconfiguration. Each product keeps its own PID file as well, because that is the only thing
-that covers the *unclean* case: `kill -9` and txAdmin give neither resource a chance to run a
-handler.
+Watch for orphans. A leftover PocketBase holds its HTTP port and locks its SQLite directory,
+and the next start then fails as a bind error that reads like misconfiguration. Keep your own
+PID file too — it is the only thing that covers the *unclean* case, since `kill -9` and txAdmin
+give neither resource a chance to run a handler.
 
-### Not pinned, and why
+### Binary integrity
 
-tLib has a pinned-asset system with sha256 and `.pin.json` markers, and the spawn catalog
-supports a `sha256` list per program. Nothing uses it today, which is a real gap rather than an
-oversight:
+The spawn catalog supports a `sha256` list per program, and nothing uses it today. These
+binaries are verified where they are fetched, not where they are run:
 
 - PocketBase **updates itself**, so its hash changes underneath any pin tLib could ship.
 - `llama-server`, `whisper-server`, `piper` and the vendored Node are fetched per platform and
-  per upstream release by each product's own setup script, which verifies them against the
-  publisher's checksums *at fetch time*. A hash table in tLib would need an entry per product
-  per version per platform and would block a legitimate upgrade the day it went stale.
+  per upstream release by each resource's own setup script, which verifies them against the
+  publisher's checksums *at fetch time*.
 
-So integrity for these binaries lives at fetch time in each product; what tLib adds is
-containment and argument shape.
+What this gate adds on top is containment and argument shape, not integrity.
 
 ---
 
@@ -640,6 +709,16 @@ containment and argument shape.
 | `CreateServerSettings(opts)` | Server | Admin-configurable settings for one resource, persisted to a JSON file inside it. |
 | `CommunityConfigsImport(...)` / `CommunityConfigsUpload(...)` | Server | Proxy for the community configs API, so a consumer neither repeats the HTTP boilerplate nor sees the server hash. |
 | `CommunityConfigsPeek(id, cb)` | Server | The same config payload `CommunityConfigsImport` returns, but it does **not** increment the config's import counter. Use it to render or preview a listing; use `CommunityConfigsImport` only when a player actually installs one. |
+| `CommunityConfigsList(opts, cb)` | Server | Browse published configs. `opts` is `{ script, configType, key?, limit? }` — the first two are required, `limit` defaults to `30`. `cb(ok, items, err)` with `items` already decoded. |
+| `CommunityConfigsMatch(opts, cb)` | Server | **Candidates** for a vehicle, by model fingerprint. `opts` is `{ fp, script?, configType?, key?, limit? }`; `fp` is required, `configType` defaults to `led_layout`, `limit` to `30`. Same `cb(ok, items, err)`. |
+| `IsDemoMode()` | Server | `true` while `tlib_demo` is on. The export behind `tlib.demo.active()`. |
+
+`CommunityConfigsMatch` returns **candidates, not matches**. Each item carries the
+publisher's own fingerprint in `fp`; comparing it is yours to do.
+
+Call both from the game server, never from your NUI. `/api/v1` sends no
+`Access-Control-Allow-Origin`, so a `fetch` from `cfx-nui-<resource>` is refused by the browser
+*after* the request has already succeeded.
 
 `CreateDiscovery` must be given `resourceName = GetCurrentResourceName()` when it is called at
 module init time: `GetInvokingResource()` returns `nil` during top-level script execution, and
@@ -654,43 +733,42 @@ the model — a vehicle pack ships `tels.json` beside its `.yft`, declares it in
 `fxmanifest.lua`, and the config travels with the vehicle instead of living in a server-specific
 data file.
 
-That write crosses a resource boundary, and FiveM does not allow it by default.
+That write crosses a resource boundary, which FiveM constrains — but does not forbid.
 
 <Callout type="warning">
-FiveM sandboxes every resource to its own directory. From one resource's runtime,
-`SaveResourceFile` into your **own** resource returns `1`, into **another** started resource
-returns `false`, and into a resource that does not exist **raises**. Node's `fs` is sandboxed the
-same way. Reads are not restricted — `LoadResourceFile` works everywhere.
+FiveM sandboxes a write to the resource it **originates in**, not to the one it lands in. From
+one resource's runtime, `SaveResourceFile` into your **own** resource returns `1`, into
+**another** started resource returns `false`, and into a resource that does not exist **raises**.
+Node's `fs` behaves the same way. Reads are not restricted — `LoadResourceFile` works everywhere.
 </Callout>
 
-There are two ways to run this feature, and it works either way. Nothing is ever reported as
-exported unless the file actually landed.
+So the write has to be performed *by the destination*. Every resource that bundles tLib's
+`shared/ts` registers its own `WriteResourceFile` export, and a FiveM export is callable across
+resources, so tLib asks the target to write its own file. Nothing is ever reported as exported
+unless the file actually landed.
 
-### Option A — allow it once, in server.cfg
-
-One line, added once, for every resource on the server:
-
-```cfg
-add_filesystem_permission tLib write *
-```
-
-With that in place the export is one click: tLib writes the JSON into the target resource and
-adds the metadata line to its `fxmanifest.lua` for you.
-
-<Callout type="note">
-`add_filesystem_permission` is a **configuration-file directive**, not a console command. Running
-it from the live console — or from a file you `exec` at runtime — is refused with
-*"add_filesystem_permission is only executable from inside a configuration file or command line
-argument."* It has to be in `server.cfg` before the server starts, so adding it needs a restart.
+<Callout type="warning">
+**No `server.cfg` line changes this — do not add one.** `add_filesystem_permission tLib
+write *` looks like the fix and does nothing: the sandbox is not asking about permission, it is
+asking which resource is writing. `--allow-fs-write` is a server *launch argument*, so it is
+not open to you either. If that line is already in your config, delete it.
 </Callout>
 
-This grants tLib write access to every resource on the server. If you would rather not do that,
-do nothing — option B is the behaviour you get without it, and it is fully supported.
+Which of the two paths below you get is decided by the target, not by your configuration.
 
-### Option B — export to a file you copy
+### When the target runs its own code
 
-Without the grant, the export cannot write into the vehicle, so tLib writes the **finished file**
-into its own directory instead and tells you exactly what to do with it. The player sees the
+Any resource with a server bundle that calls `registerWriteResourceFile()` from
+`tLib/shared/ts/fs/server.ts` accepts the export directly.
+tLib writes the JSON into it and adds the metadata line to its `fxmanifest.lua` for you. One
+click, nothing to copy.
+
+### When the target is a plain asset pack
+
+A vehicle pack is usually just models and a `tels.json` — no scripts, no bundle, so there is no
+runtime inside it to perform the write. That case cannot be configured away. tLib writes the
+**finished file** into its own directory instead and tells you exactly what to do with it. The
+player sees the
 steps in chat and the server console logs the same three lines:
 
 ```
@@ -714,3 +792,11 @@ tels_config 'tels.json'
 ```
 
 Without that line the file is never read, however it got there.
+
+---
+
+## Next steps
+
+- The Lua modules behind most of this: [Import Modules](/docs/tLib/import-modules)
+- A complete standalone menu resource: [Menu Consumers](/docs/tLib/menu-consumers)
+- What an owner sets in `server.cfg`: [Convars](/docs/tLib/convars)

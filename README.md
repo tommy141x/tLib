@@ -1,6 +1,6 @@
 # tLib
 
-A shared utility library for FiveM resources. Provides a UI component suite (menus, dialogs, toasts, themes), reusable Lua import modules (settings, KVP, coords, layouts, move mode), and TypeScript/NUI utilities (3D gizmo, undo system, coordinate helpers) that other resources can depend on.
+A shared utility library for FiveM resources. Provides a UI component suite (menus, dialogs, toasts, themes), 40 reusable Lua import modules (access, permission, config, KVP, settings, platform, and more), and TypeScript/NUI utilities (3D gizmo, undo system, coordinate helpers) that other resources can depend on.
 
 FiveM is the only supported runtime. Everything goes through an internal `Platform`
 adapter, so a second runtime could be added without touching the subsystems above it.
@@ -218,7 +218,6 @@ gives the player a single place to move, scale and hide every registered element
   maxScale?, defaults = { x, y, scale, visible, anchor } }`.
 - `UnregisterHudComponent(id)`, `GetHudLayout(id)`
 - `OpenHudEditor(opts)` / `CloseHudEditor()` — `{ demo = true }` adds a sample component.
-- `GetHudLayoutCapabilities()` — Feature flags, for consumers supporting several tLib versions.
 
 Layouts are stored per server endpoint. Without one — no `tlib_hud_profile` convar and no
 endpoint — they are session-only, and tLib logs that at startup rather than silently losing
@@ -238,10 +237,10 @@ The marketplace needs **no credential and no setup** — it works on a fresh ins
 The only convar here is optional, and only if you self-host:
 
 ```cfg
-setr tmarketplace_base_url "https://timmygstudios.com"   # only to self-host
+setr tlib_api_base_url "https://timmygstudios.com"   # only to self-host
 ```
 Unset, browse/preview/install and community-config publish refuse and log the convar
-name once rather than falling back to a shared built-in value. `tmarketplace_base_url`
+name once rather than falling back to a shared built-in value. `tlib_api_base_url`
 is the opposite case: client Lua reads it too, so it needs `setr` or the in-game panel
 keeps talking to the default host while the server talks to yours.
 
@@ -434,11 +433,10 @@ Redirect following is enabled. This wrapper does not expose custom timeout or TL
 
 ## Import Modules
 
-Lightweight Lua modules that dependent resources declare in their `fxmanifest.lua` and load on demand via `tLib.imports`. Each module is isolated and only loaded if requested.
+Lightweight Lua modules a dependent resource reaches through the `tlib` global. Each is isolated and loads on first access, so nothing has to be declared — `@tLib/imports.lua` in `shared_scripts` is the whole setup. `tlib_modules` is still accepted as a parts list; see `docs/content/import-modules.mdx` for what it does and does not buy.
 
 ```lua
--- fxmanifest.lua
-tlib_modules { 'coords', 'kvp', 'settings', 'layouts' }
+local coords = tlib.coords
 ```
 
 ### coords
@@ -469,14 +467,33 @@ Typed settings store backed by KVP. Supports default values, user-set tracking, 
 - `store:applyDefaults(table)` — Apply server defaults only to keys the player hasn't set
 - `store:reset(key)` — Reset to default and remove from KVP
 
-### layouts
+### modules
 
-Server-side layout discovery and file loading with template variable substitution.
+Server-side content discovery. A module is a self-contained folder plus a
+`module.json` declaring what it is — `kind` (`layout` | `theme` | `sound`), `id`,
+`name`, `version`, and optionally `author`, `license`, `description` and `slug`.
 
-- `layouts.scan(basePath, matchFile, resourceName?)` — Scan a directory for layout folders
-- `layouts.load(basePath, layoutName, fileName, resourceName?)` — Load a layout file's contents
-- `layouts.loadTemplate(basePath, layoutName, fileName, vars, resourceName?)` — Load and replace `{{KEY}}` placeholders
-- `layouts.clearCache()` — Clear the scan cache
+- `modules.scan(basePath, kind, resourceName?)` — The ids of every usable module of `kind`, sorted
+- `modules.list(basePath, kind, resourceName?)` — The same, as `{ id, manifest }`
+- `modules.read(basePath, id, kind?, resourceName?)` — One validated manifest, or `nil, err`
+- `modules.load(basePath, id, fileName, resourceName?)` — Read a file out of a module folder
+- `modules.hasFile(basePath, id, fileName, resourceName?)` — Whether a module ships an optional asset
+- `modules.validate(raw, id, kind?)` — Validate a decoded manifest directly
+- `modules.clearCache()` — Clear the scan cache, for modules added at runtime
+- `modules.onRefusal(basePath, id, err)` — Replace with your logger
+
+`sounds` and `themes` are reserved names: they are the category directories
+inside `layouts/` and cannot be module ids. A `kind` that disagrees with the
+directory it sits in is refused rather than loaded.
+
+⚠️ **This module discovers `layout` and `theme` only.** `kind: "sound"` is valid
+in the TypeScript contract — the studio generates it and the marketplace
+installer consumes it — but on a FiveM resource a sound is a flat audio file in
+`layouts/sounds/`, so that an operator can drag a `.wav` in with no manifest to
+author. The installer reads a sound module and writes only its audio.
+
+**Replaces `tlib.layouts`, which never shipped outside this tree** — see
+`docs/content/import-modules.mdx` for what a consumer writes instead.
 
 ---
 
@@ -536,12 +553,17 @@ bun run build     # emit client/ui/index.html, client/ui/assets/hud-layout.js, s
 ### Checks
 
 ```bash
-bun run check:regression   # typecheck + bun tests + Lua suites
+bun run check:regression   # typecheck + bun tests + Lua suites + the gates
 bun run check              # biome lint + format
 bun run check:fix          # ...and apply what it can
+bun run check:comments     # the comment-style gate
 ```
 
 The Lua suites run on Fengari through Bun, so no Lua interpreter is needed.
+
+Comments have a written standard — [docs/CODE-STYLE.md](docs/CODE-STYLE.md) —
+and `check:comments` enforces the mechanical parts of it. Read it before adding
+a comment.
 
 ---
 
