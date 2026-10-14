@@ -42,10 +42,12 @@ dofile('client/cl_layout.lua')
 HudLayout.init({})
 local checks = 0
 local function check(value, message) checks = checks + 1; assert(value, message) end
-local capabilities = exports.GetHudLayoutCapabilities()
-check(capabilities.consumerPersistence == true, 'Consumers can detect safe persistence opt-out support')
-capabilities.consumerPersistence = false
-check(exports.GetHudLayoutCapabilities().consumerPersistence == true, 'Capability result is not mutable shared state')
+-- There is deliberately no GetHudLayoutCapabilities export to probe. It was
+-- eight hardcoded `true` flags naming tLib releases; only 0.6 ever shipped and it
+-- has none of them, so the probe could not distinguish anything reachable. The
+-- capabilities it advertised are asserted directly below instead, as behaviour.
+check(exports.GetHudLayoutCapabilities == nil,
+    'the tLib-version capability probe is gone, not relocated')
 local messages = {}
 local options = { label = 'Test HUD', width = 200, height = 100,
     defaults = { x = -0.02, y = -0.02, scale = 1, visible = true, anchor = 'bottom-right' } }
@@ -277,7 +279,6 @@ local constrainedOptions = { label = 'Radio bounds', width = 630, height = 440,
     minVisiblePixels = 100, minVisibleFraction = 0.35, persist = false,
     defaults = { x = 0, y = 0, scale = 1, visible = true, anchor = 'top-left' } }
 local boundsMessages = {}
-check(exports.GetHudLayoutCapabilities().minVisibility == true)
 check(exports.RegisterHudComponent('bounds', constrainedOptions, function(data) boundsMessages[#boundsMessages + 1] = data end))
 check(exports.OpenHudEditor())
 session = latestSession()
@@ -317,7 +318,7 @@ constrainedOptions.minVisiblePixels = -1
 check(not exports.RegisterHudComponent('invalidBounds', constrainedOptions, function() end))
 constrainedOptions.minVisiblePixels, constrainedOptions.minVisibleFraction = 100, 1.1
 check(not exports.RegisterHudComponent('invalidBounds', constrainedOptions, function() end))
--- ── Recovery: reset must work from ANY stored state ─────────────────────────
+-- Recovery: reset must work from ANY stored state
 --
 -- The unrecoverable-HUD bug. A consumer that owns its own storage (persist =
 -- false) used to have only one slot to put a placement in, so it passed its
@@ -374,7 +375,7 @@ check(not exports.RegisterHudComponent('owned', consumerOptions, function() end)
     'An unusable factory default is refused at registration, not discovered at Reset')
 consumerOptions.defaults = FACTORY
 
--- ── Clamp on load ───────────────────────────────────────────────────────────
+-- Clamp on load
 -- A record written at another resolution, or by a version with the wrong units,
 -- heals on the way IN. The tool for rescuing a lost widget is the one you cannot
 -- see to open, so it must never be needed for this case.
@@ -396,7 +397,7 @@ do
         'A healed record keeps the minimum visible height on screen')
 end
 
--- ── The unbrick command ─────────────────────────────────────────────────────
+-- The unbrick command
 -- /tlibhud reset has to work with the editor shut, with the editor open, and
 -- with every widget dragged somewhere the player cannot reach.
 consumerOptions.layout = CURRENT
@@ -418,11 +419,11 @@ exports.UnregisterHudComponent('owned')
 exports.UnregisterHudComponent('kept')
 
 
--- ── Live placement: dragging a device by its own background ─────────────────
+-- Live placement: dragging a device by its own background
 -- SetHudLayout has to be the editor's Save for one component and nothing
 -- looser, because a position a player produced by dragging their remote has to
 -- be exactly as recoverable as one produced in the editor.
-check(capabilities.liveLayoutWrite == true, 'Consumers can detect that live placement exists')
+check(type(exports.SetHudLayout) == 'function', 'live placement is an export, not a capability flag')
 local liveMessages = {}
 local live = { label = 'Live', width = 220, height = 488,
     defaults = { x = -600 / 1080, y = -40 / 1080, scale = 1, visible = true, anchor = 'bottom-right' } }

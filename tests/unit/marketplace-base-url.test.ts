@@ -1,5 +1,5 @@
 /**
- * `tmarketplace_base_url` is meant to be ONE switch: point it at a local dev
+ * `tlib_api_base_url` is meant to be ONE switch: point it at a local dev
  * worker and every call this codebase makes to the TIMMYG Studios API follows
  * it. Two things used to stop that, and this suite is what keeps them fixed.
  *
@@ -23,7 +23,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import {
-  MARKETPLACE_BASE_URL_CONVAR,
+  API_BASE_URL_CONVAR,
   MARKETPLACE_DEFAULT_BASE_URL,
   marketplaceBaseUrl,
   normalizeStudioBaseUrl,
@@ -45,9 +45,9 @@ describe("the studio API base URL has one definition per language", () => {
     expect(luaDefault()).toBe(MARKETPLACE_DEFAULT_BASE_URL);
   });
 
-  test("the convar name agrees, and is still the contract name", () => {
-    expect(MARKETPLACE_BASE_URL_CONVAR).toBe("tmarketplace_base_url");
-    expect(read("shared/sh_api.lua")).toContain("StudioApi.CONVAR = 'tmarketplace_base_url'");
+  test("the convar name agrees across the two languages", () => {
+    expect(API_BASE_URL_CONVAR).toBe("tlib_api_base_url");
+    expect(read("shared/sh_api.lua")).toContain("StudioApi.CONVAR = 'tlib_api_base_url'");
   });
 
   test("no tLib reader carries its own copy of the host or its own convar read", () => {
@@ -61,7 +61,7 @@ describe("the studio API base URL has one definition per language", () => {
     ]) {
       const source = read(file);
       expect(`${file}: ${source.includes("https://timmygstudios.com")}`).toBe(`${file}: false`);
-      expect(`${file}: ${/GetConvar\(\s*['"]tmarketplace_base_url/.test(source)}`).toBe(
+      expect(`${file}: ${/GetConvar\(\s*['"]tlib_api_base_url/.test(source)}`).toBe(
         `${file}: false`
       );
     }
@@ -114,7 +114,9 @@ describe("value sanity", () => {
 
   test("an API path the callers append themselves is trimmed, not doubled", () => {
     for (const suffix of ["/api", "/api/v1", "/api/v2", "/api/v2/marketplace"])
-      expect(normalizeStudioBaseUrl(`http://localhost:8787${suffix}`)).toBe("http://localhost:8787");
+      expect(normalizeStudioBaseUrl(`http://localhost:8787${suffix}`)).toBe(
+        "http://localhost:8787"
+      );
     expect(normalizeStudioBaseUrl("http://localhost:8787/api/v1/")).toBe("http://localhost:8787");
   });
 
@@ -147,8 +149,7 @@ describe("value sanity", () => {
     const original = g.GetConvar;
     try {
       let value = "http://localhost:8787/api/v1/";
-      g.GetConvar = (name, fallback) =>
-        name === MARKETPLACE_BASE_URL_CONVAR ? value : fallback;
+      g.GetConvar = (name, fallback) => (name === API_BASE_URL_CONVAR ? value : fallback);
       expect(marketplaceBaseUrl()).toBe("http://localhost:8787");
       // No memoisation anywhere on this path: a mid-session change takes effect.
       value = "http://127.0.0.1:9999";
@@ -170,8 +171,7 @@ describe("resolveConfig is not memoised", () => {
     const original = g.GetConvar;
     try {
       let value = "http://localhost:8787";
-      g.GetConvar = (name, fallback) =>
-        name === MARKETPLACE_BASE_URL_CONVAR ? value : fallback;
+      g.GetConvar = (name, fallback) => (name === API_BASE_URL_CONVAR ? value : fallback);
       expect(resolveConfig().apiBase).toBe("http://localhost:8787/api/v1");
       value = "http://localhost:9999";
       expect(resolveConfig()).toMatchObject({

@@ -11,7 +11,7 @@ local function near(a, b, eps)
     return math.abs(a - b) <= (eps or 1e-6)
 end
 
--- ── eye / lookFrom are inverses ─────────────────────────────────────────────
+-- eye / lookFrom are inverses
 
 local s = orbit.new(10.0, 20.0, 30.0)
 s.yaw, s.pitch, s.dist = 37.0, -18.0, 6.5
@@ -33,7 +33,7 @@ assert(near(opened.dist, 2.0), 'a camera inside the car opens clamped to 2m')
 orbit.lookFrom(opened, 0.0, 0.5, 0.0, false)
 assert(near(opened.dist, 0.5), 'without clampOpen the true distance is kept')
 
--- ── camRight / camUp ────────────────────────────────────────────────────────
+-- camRight / camUp
 
 local flat = orbit.new()
 flat.yaw, flat.pitch = 0.0, 0.0
@@ -66,9 +66,9 @@ assert(near(math.sqrt(qrx * qrx + qry * qry + qrz * qrz), 1.0), 'camRight is a u
 assert(near(math.sqrt(qux * qux + quy * quy + quz * quz), 1.0), 'camUp is a unit vector')
 assert(near(qrx * qux + qry * quy + qrz * quz, 0.0), 'camRight and camUp are perpendicular')
 
--- ── applyDrag ───────────────────────────────────────────────────────────────
+-- applyDrag
 
--- ── The four drag axes, pinned one at a time ────────────────────────────────
+-- The four drag axes, pinned one at a time
 --
 -- Two controls, two axes each, and ONE convention between all four: **the scene
 -- follows the cursor**. Drag right and what you are looking at moves right; drag
@@ -159,7 +159,7 @@ assert(near(dolly.dist, orbit.DIST_MAX), 'dolly clamps at the far limit')
 orbit.applyDrag(dolly, 0.0, -1e9, 'dolly')
 assert(near(dolly.dist, orbit.DIST_MIN), 'dolly clamps at the near limit')
 
--- ── The command switch ──────────────────────────────────────────────────────
+-- The command switch
 
 -- Every command the TSX half can send that does not need an entity handle. If
 -- one of these stops being handled here it has to be handled in the Editor
@@ -198,7 +198,7 @@ orbit.command(vp, 'panUp')
 assert(near(vp.focus.x, 0.0) and near(vp.focus.y, 0.0), 'panUp at zero pitch is vertical only')
 assert(near(vp.focus.z, -orbit.PAN_STEP), 'panUp moves the focus down, so the subject rises')
 
--- ── localToWorld ────────────────────────────────────────────────────────────
+-- localToWorld
 
 -- Identity matrix: right=+X, fwd=+Y, up=+Z. The offset is (right, fwd, up), i.e.
 -- GTA's vehicle-local ordering, not (x, y, z) of the matrix.

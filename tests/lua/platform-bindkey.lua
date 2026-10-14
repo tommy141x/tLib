@@ -68,8 +68,9 @@ local function fixture()
     _ENV.GetConvarInt = function(_, default) return default end
 
     -- The module reports each bind to tLib for cross-resource conflict detection.
-    -- It is pcall-guarded on purpose (an older tLib has no such export), so an
-    -- absent `exports` must not break registration. Leaving it nil proves that.
+    -- It is pcall-guarded on purpose -- consumers bind at FILE SCOPE, so tLib's own
+    -- client VM may not have registered its exports yet -- so an absent `exports`
+    -- must not break registration. Leaving it nil proves that.
     _ENV.exports = nil
     _ENV.tlib = { name = 'tLib' }
 
@@ -78,7 +79,7 @@ local function fixture()
     return platform, mappings, commands
 end
 
--- ── 1. Backward compatibility: the positional form is untouched ──────────────
+-- 1. Backward compatibility: the positional form is untouched
 
 test('positional form keeps the caller-supplied token verbatim', function()
     local platform, mappings = fixture()
@@ -116,7 +117,7 @@ test("eventType 'Released' still routes a bare function to release", function()
     assertEq(fired, true, 'release fired')
 end)
 
--- ── 2. Input groups — the blocker that kept three resources on raw calls ─────
+-- 2. Input groups — the blocker that kept three resources on raw calls
 
 test('MOUSE_BUTTON is accepted', function()
     local platform, mappings = fixture()
@@ -137,7 +138,7 @@ test('an unknown input group is a hard error, not a silent keyboard fallback', f
     assertEq(err:match('unknown input group') ~= nil, true, 'names the problem: ' .. tostring(err))
 end)
 
--- ── 3. Namespacing, and the opt-out that protects stored rebinds ─────────────
+-- 3. Namespacing, and the opt-out that protects stored rebinds
 
 test('id is namespaced to the resource', function()
     local platform, mappings = fixture()
@@ -153,7 +154,7 @@ test('token opts OUT of namespacing so an existing rebind survives', function()
     assertEq(mappings[1].command, '+talkOnRadio', 'legacy token verbatim')
 end)
 
--- ── 4. pair = false, for one-shot commands ──────────────────────────────────
+-- 4. pair = false, for one-shot commands
 
 test('pair=false registers one command and no release half', function()
     -- tDetector's mute/dim/mark are plain toggles. A forced +/- pair would create a
@@ -166,7 +167,7 @@ test('pair=false registers one command and no release half', function()
     assertEq(mappings[1].command, 'tDetMute', 'mapping targets the bare token')
 end)
 
--- ── 5. when — gating, because a mapping is permanent once seen ───────────────
+-- 5. when — gating, because a mapping is permanent once seen
 
 test('when=false registers nothing at all', function()
     -- A RegisterKeyMapping is permanent in the player's settings from first sight,
@@ -183,7 +184,7 @@ test('when=true registers normally', function()
     assertEq(#mappings, 1, 'mapping registered')
 end)
 
--- ── 6. Composed labels ──────────────────────────────────────────────────────
+-- 6. Composed labels
 
 test('product and action compose to one house format', function()
     local platform, mappings = fixture()
@@ -206,7 +207,7 @@ test('an explicit label still wins over composition', function()
     assertEq(mappings[1].label, 'Exactly This', 'explicit label')
 end)
 
--- ── 7. Registry and conflict detection ──────────────────────────────────────
+-- 7. Registry and conflict detection
 
 test('every bind lands in the registry', function()
     local platform = fixture()
@@ -244,9 +245,10 @@ test('the same key in DIFFERENT input groups is not a conflict', function()
     assertEq(#platform.keybindConflicts(), 0, 'groups are independent namespaces')
 end)
 
-test('registration survives tLib having no ReportKeybind export', function()
+test('registration survives ReportKeybind not answering yet', function()
     -- The cross-resource report is pcall-guarded because a missing export RAISES
-    -- rather than returning nil. An older tLib must not break a consumer's binds.
+    -- rather than returning nil. tLib's client VM not being up yet must not break
+    -- a consumer's binds -- a diagnostic is never worth a dead keybind.
     local platform, mappings = fixture() -- fixture leaves _ENV.exports nil
     platform.bindKey{ id = 'x', default = 'Q', press = function() end }
     assertEq(#mappings, 1, 'bind still registered')

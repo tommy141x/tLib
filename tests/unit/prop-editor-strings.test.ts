@@ -16,9 +16,22 @@ import type { PropEditorStringKey } from "../../shared/ts/prop-editor/types";
 describe("prop editor strings", () => {
   test("every key has a non-empty English default", () => {
     const entries = Object.entries(DEFAULT_PROP_EDITOR_STRINGS);
-    // 36 + the uniform scale handle's four: btn_scale_title, section_scale,
-    // hint_s_key, hint_s_label.
-    expect(entries.length).toBe(40);
+    // 36 + the uniform scale handle's four (btn_scale_title, section_scale,
+    // hint_s_key, hint_s_label) + the discard guard's four (discard_title,
+    // discard_body, discard_keep, discard_confirm). The guard's strings are
+    // translatable rather than hard-coded English because it is the one prompt
+    // in this editor that appears at the moment the player is being asked to
+    // lose work.
+    //
+    // + the Remove arm-confirm's two (btn_remove_prop_title,
+    // btn_remove_prop_armed). Same reason as the guard's four, one step further:
+    // Remove is the ONLY action in this editor whose second click reaches the
+    // server irreversibly, so the sentence warning about that and the "click
+    // again" label have to be translatable or the warning is in English over a
+    // translated editor. `btn_remove_prop_armed` is read twice — it is both the
+    // armed label and the armed tooltip, because `ConfirmDelete` is not a toggle
+    // and has no pressed state to announce the arm through.
+    expect(entries.length).toBe(46);
     for (const [key, value] of entries) {
       expect(typeof value, key).toBe("string");
       expect(value.length, key).toBeGreaterThan(0);

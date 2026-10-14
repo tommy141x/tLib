@@ -35,7 +35,7 @@ local function printedContains(needle)
     return false
 end
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 
 local convars = {}
 local netHandlers, eventHandlers, commands = {}, {}, {}
@@ -69,7 +69,7 @@ local function loadDemo(side)
     return dofile(SRC)
 end
 
--- ── The convar spelling ─────────────────────────────────────────────────────
+-- The convar spelling
 --
 -- An owner who writes `setr tlib_demo true` and gets a LIVE server is the worst
 -- outcome this module can produce, so every spelling either side accepts is
@@ -91,7 +91,7 @@ end
 convars.tlib_demo = nil
 assert(demo.active() == false, 'an unset convar is not demo mode')
 
--- ── The server reads the convar live ────────────────────────────────────────
+-- The server reads the convar live
 --
 -- Not cached at load. A server VM that cached would never see `set tlib_demo 1`
 -- typed into the console, and the command below sets an override rather than the
@@ -102,7 +102,7 @@ assert(demo.active(), 'the server re-reads the convar rather than caching it')
 convars.tlib_demo = '0'
 assert(demo.active() == false, 'and sees it turn off again')
 
--- ── The override ────────────────────────────────────────────────────────────
+-- The override
 
 demo.set(true)
 assert(demo.active(), 'an override of true wins over a convar that says off')
@@ -113,7 +113,7 @@ demo.set(nil)
 assert(demo.active(), 'clearing the override falls back to the convar')
 convars.tlib_demo = '0'
 
--- ── dropWrite ───────────────────────────────────────────────────────────────
+-- dropWrite
 
 printed = {}
 assert(demo.dropWrite('data.json') == false, 'nothing is dropped while demo mode is off')
@@ -132,7 +132,7 @@ assert(#printed == 0, 'the same target is announced once, not on every write')
 demo.dropWrite('tELS/data.json')
 assert(#printed == 1, 'but a different target gets its own line')
 
--- ── The client half ─────────────────────────────────────────────────────────
+-- The client half
 --
 -- A client can only read a convar set with `setr`. Rather than make that
 -- spelling load-bearing, tLib pushes the state -- so the client must accept a
@@ -159,7 +159,7 @@ assert(client.active() == false, 'and a push of false turns it off again')
 push('nonsense')
 assert(client.active() == false, 'a non-boolean push is not a grant')
 
--- ── tLib's own copy ─────────────────────────────────────────────────────────
+-- tLib's own copy
 --
 -- sv_demo.lua is server_scripts, so nothing else in this repository parses it.
 -- Loading it here is what turns a typo in the banner or the command from a

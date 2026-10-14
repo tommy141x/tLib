@@ -89,7 +89,7 @@ test("missing payload with a receipt is modified, not available for installation
   f.receipt();
   expect(f.inspect().status).toBe("modified");
 });
-test("authoritative policy protects absent built-ins and all raw-format variants", () => {
+test("authoritative policy protects absent built-ins and both destination shapes", () => {
   const f = fixture();
   f.target.protectedInventory = {
     schema: 1,
@@ -100,10 +100,25 @@ test("authoritative policy protects absent built-ins and all raw-format variants
   expect(f.inspect()).toMatchObject({ status: "protected", policyAvailable: true });
   fs.rmdirSync(f.base);
   expect(f.inspect().status).toBe("protected");
-  f.target.protectedInventory = { ...f.target.protectedInventory, files: ["layouts/item.wav"] };
+  // Any file INSIDE the module's directory protects the module.
+  f.target.protectedInventory = {
+    ...f.target.protectedInventory,
+    files: ["layouts/item/item.wav"],
+  };
+  expect(f.inspect().status).toBe("protected");
+  // And so does the FLAT audio name, because that is the shape a sound takes: a
+  // plain `.wav` in `layouts/sounds/`. Both are probed regardless of item type —
+  // a target is a target, and refusing more is the safe direction.
+  f.target.protectedInventory = {
+    ...f.target.protectedInventory,
+    files: ["layouts/item.wav"],
+  };
   expect(f.inspect().status).toBe("protected");
 });
-test("raw audio with exact receipt inventory is managed", () => {
+test("a FLAT installed sound with an exact receipt inventory is managed", () => {
+  // The shape a sound actually takes on a resource: one audio file, no folder and
+  // no manifest. The receipt names the file as its destination and hashes it as a
+  // single empty-keyed entry, which is the flat-payload convention.
   const f = fixture();
   f.file("item.ogg");
   f.receipt({ destination: "item.ogg", files: { "": hash("payload") } });
@@ -112,9 +127,14 @@ test("raw audio with exact receipt inventory is managed", () => {
 test("ambiguous destinations and case aliases fail closed", () => {
   const f = fixture();
   f.file("item/ui.html");
+  // Two claims on one slug: the module directory AND the flat audio name are both
+  // candidate destinations, so a disk holding both is ambiguous and neither may
+  // be reported as managed.
   f.file("item.wav");
   expect(f.inspect().status).toBe("unsafe");
   fs.rmSync(join(f.base, "item.wav"));
+  // And two entries differing only by case, which is what a case-sensitive
+  // filesystem makes possible.
   fs.renameSync(join(f.base, "item"), join(f.base, "Item"));
   expect(f.inspect().status).toBe("unsafe");
 });

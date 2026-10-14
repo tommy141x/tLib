@@ -27,7 +27,7 @@
 -- carries a host at all: client.lua is the one engine file that needs one.
 
 
--- ── The host ────────────────────────────────────────────────────────────────
+-- The host
 
 _TLIB_SIDE = 'client'
 _TLIB_IS_FIVEM = false -- no RegisterCommand/RegisterKeyMapping in this state
@@ -104,7 +104,7 @@ local function ordered(list, field, expected, message)
     end
 end
 
--- ── The fixture ─────────────────────────────────────────────────────────────
+-- The fixture
 
 local function menu(spec)
     local clean, err = S.menu(spec, 'alpha', true)
@@ -152,7 +152,7 @@ equal(built, 0, 'registering a catalog provider does not build it inline')
 pump()
 equal(built, 1, 'it is built on the next frame instead, before any snapshot needs it')
 
--- ── What an unchanged manifest must not repeat ──────────────────────────────
+-- What an unchanged manifest must not repeat
 
 local snapshots, syncs = 0, 0
 assert(MC.registerHooks('alpha', { snapshot = function() snapshots = snapshots + 1 end }))
@@ -188,7 +188,7 @@ check(secondIndex[1].data == firstIndex[1].data,
     'but it is the index already built rather than ~51,000 entries walked again')
 equal(#messagesOf('menu:snapshot'), 1, 'and the tree is sent again, because opening is a new session for the browser')
 
--- ── What a changed manifest must do ─────────────────────────────────────────
+-- What a changed manifest must do
 
 uiMessages = {}
 refresh(manifest('101'))
@@ -214,7 +214,7 @@ ordered(messagesOf('menu:searchIndex')[1].data, 'i',
     { 'alpha:one:open', 'alpha:a', 'alpha:b', 'alpha:d', 'alpha:c' },
     'with the restored row back in the index')
 
--- ── A consumer that arrives late ────────────────────────────────────────────
+-- A consumer that arrives late
 --
 -- The quiet failure this whole mechanism could cause: a resource restarts,
 -- registers its hooks again, and is never told about a tree that has not changed
@@ -230,7 +230,7 @@ refresh(manifest())
 equal(lateSnapshots, 1, 'and then settles: the manifest is unchanged again')
 equal(snapshots, 4, 'for every listener')
 
--- ── A row that moved underneath the manifest ────────────────────────────────
+-- A row that moved underneath the manifest
 --
 -- A server-owned delta arrives outside a manifest. One that changes a row has moved
 -- the tree away from the manifest that built it, so the tree can no longer stand in
@@ -251,7 +251,7 @@ equal(snapshots, 5, 'a delta that changes a row does: the tree no longer matches
 ordered(messagesOf('menu:snapshot')[1].data.menus, 'id', { 'main', 'alpha:one', 'alpha:two' },
     'and the rebuilt tree is the manifest\'s, not the patched copy')
 
--- ── A per-player option list ────────────────────────────────────────────────
+-- A per-player option list
 --
 -- The same rule, on the path resources actually use most: a snapshot hook that
 -- pushes the player's own list of choices into a selector. It runs on every
@@ -271,7 +271,7 @@ pushOptions({ menuId = 'alpha:one', itemId = 'alpha:d', changes = {
 refresh(manifest())
 equal(snapshots, 6, 'pushing a different one does')
 
--- ── The other inputs to hydration ───────────────────────────────────────────
+-- The other inputs to hydration
 --
 -- The tree is a function of (manifest, catalogs, root page). Reuse is only sound
 -- while all three are the ones that produced the standing tree, and a listener that
@@ -297,7 +297,7 @@ MC.dropOwner('bravo')
 refresh(manifest())
 equal(snapshots, 10, 'dropping an owner rebuilds: its rows are gone from the tree')
 
--- ── A manifest that cannot be hydrated ──────────────────────────────────────
+-- A manifest that cannot be hydrated
 --
 -- A refusal must not leave a reusable tree behind, or the refusal would be
 -- forgotten the moment the same bad manifest arrived twice.

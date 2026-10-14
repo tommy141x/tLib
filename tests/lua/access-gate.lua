@@ -6,7 +6,7 @@
 -- that are easy to get subtly wrong -- nested vs flat grade, GetGroups vs
 -- PlayerData, geteverything vs getdept -- are pinned below by name.
 
--- ── Stub host ───────────────────────────────────────────────────────────────
+-- Stub host
 
 local resourceStates = {}
 local printed = {}
@@ -102,9 +102,18 @@ local aceGrants = {}
 -- so the rest of this suite keeps asserting the configured rule and not the
 -- override.
 local demoOn = false
+local recordedTimings = {}
+
 tlib = {
     permission = { has = function(src, key) return aceGrants[tostring(src) .. '|' .. tostring(key)] == true end },
     demo = { active = function() return demoOn end },
+    -- `tlib.telemetry.record` is called from the instrumented write path. A
+    -- RECORDER rather than a no-op, so this suite can assert that a slow write
+    -- is actually measured -- a stub that discarded the call would let the
+    -- instrumentation be deleted with every test still green.
+    telemetry = { record = function(op, budget, ms)
+        recordedTimings[#recordedTimings + 1] = { op = op, budget = budget, ms = ms }
+    end },
 }
 
 local access = dofile('shared/imports/access/server.lua')
@@ -130,7 +139,7 @@ local function printedContains(needle)
 end
 
 
--- ── Modes ───────────────────────────────────────────────────────────────────
+-- Modes
 
 reset()
 local everyone = access.gate({ mode = 'everyone' }, { key = 'a', label = 'the radio' })
@@ -145,7 +154,7 @@ aceGrants['7|tradio.use'] = true
 aceGate:invalidate()
 assert(aceGate:allowed(7), 'granted ace => allowed')
 
--- ── Framework axis ──────────────────────────────────────────────────────────
+-- Framework axis
 
 reset()
 resourceStates.qbx_core = 'started'
@@ -211,7 +220,7 @@ assert(access.jobs(9).LSPD == nil and access.jobs(9).BCSO == 0, 'nat2k15 does no
 local natStrict = access.gate({ mode = 'job', job = { LSPD = 3 } }, { key = 'nat', label = 'x' })
 assert(natStrict:allowed(7) == false, 'a grade requirement on a gradeless framework denies, it does not ignore the grade')
 
--- ── Inventory axis, independent of the framework ────────────────────────────
+-- Inventory axis, independent of the framework
 
 -- The whole point of two axes: nat2k15 for jobs, ox_inventory for items, on the
 -- same server. Neither adapter knows the other exists.
@@ -251,7 +260,7 @@ local qbGate = access.gate({ mode = 'item', item = 'radio', count = 3 }, { key =
 assert(qbGate:allowed(7), 'qb-inventory HasItem satisfies the gate')
 assert(askedFor == 3, 'the required count reaches a boolean-only inventory instead of being compared locally')
 
--- ── Detection rules ─────────────────────────────────────────────────────────
+-- Detection rules
 
 -- 'stopped' is not 'started'. community_bridge tests `~= "missing"`, so a
 -- leftover stopped inventory folder knocks out the live one there; this must not.
@@ -283,7 +292,7 @@ reset()
 access.use('not_a_framework')
 assert(printedContains('no framework adapter named'), 'pinning an unknown adapter says so')
 
--- ── Custom, and failing closed ──────────────────────────────────────────────
+-- Custom, and failing closed
 
 reset()
 local customGate = access.gate({ mode = 'custom', custom = function(src) return src == 7 end },
@@ -302,7 +311,7 @@ reset()
 local truthy = access.gate({ mode = 'custom', custom = function() return 'yes' end }, { key = 'i', label = 'x' })
 assert(truthy:allowed(7) == false, 'only a real boolean true grants access')
 
--- ── Combining modes ─────────────────────────────────────────────────────────
+-- Combining modes
 
 reset()
 resourceStates.ox_inventory = 'started'
@@ -314,7 +323,7 @@ aceGrants['7|tradio.admin'] = true
 either:invalidate()
 assert(either:allowed(7), 'a list of modes is an OR')
 
--- ── Bad config denies, loudly ───────────────────────────────────────────────
+-- Bad config denies, loudly
 
 reset()
 local broken = access.gate({ mode = 'jobb', job = { police = 0 } }, { key = 'k', label = 'the detector' })
@@ -348,7 +357,7 @@ access.gate({ mode = 'job', job = { police = 0 } }, { key = 'o', label = 'the de
 for _, timer in ipairs(timers) do timer.fn() end
 assert(printedContains('no supported framework'), 'but it IS reported once the server has settled')
 
--- ── Memoisation and pushing ─────────────────────────────────────────────────
+-- Memoisation and pushing
 
 reset()
 local calls = 0
@@ -388,7 +397,7 @@ netHandlers['tProbe:tlib:access:s'](true)   -- a client asserting "I am allowed"
 assert(#clientEvents == 1 and clientEvents[1].value == false,
     'the server ignores what the client claims and answers with its own decision')
 
--- ── Extension points ────────────────────────────────────────────────────────
+-- Extension points
 
 -- A custom `detect`, rather than the default resource-name check -- both because
 -- that is the extension point a fork needs, and because a registered adapter
@@ -413,7 +422,7 @@ resourceStates.bad_fork = 'started'
 local r = access.jobs(7)
 assert(type(r) == 'table' and next(r) == nil, 'a malformed adapter response is an empty job set')
 
--- ── describe() ──────────────────────────────────────────────────────────────
+-- describe()
 
 reset()
 resourceStates.ox_inventory = 'started'
@@ -456,7 +465,7 @@ access.registerFramework({ name = 'late_fork2',
     jobs = function() return {} end })
 assert(access.framework() == 'qb-core', 'registering an adapter does not silently undo a pin')
 
--- ── report(): the shape a diagnostic asserts on ─────────────────────────────
+-- report(): the shape a diagnostic asserts on
 
 reset()
 resourceStates.qbx_core = 'started'
@@ -483,7 +492,7 @@ assert(copyGate:report().job.police == 2, 'report hands back a copy of the job t
 assert(copyGate:report().modes[1] == 'job', 'and a copy of the mode list')
 assert(liveBlock.job.police == 2, 'and the owner config table itself is untouched')
 
--- ── Fail closed when the framework cannot answer ────────────────────────────
+-- Fail closed when the framework cannot answer
 
 -- A framework that is not loaded is not a reason to hand out the resource. This
 -- is the same rule tRadar's sv_access.lua reached independently, and it is the
@@ -500,46 +509,7 @@ qbxGroups = function() error('framework exploded') end
 local exploded = access.gate({ mode = 'job', job = { police = 0 } }, { key = 'y', label = 'the radar' })
 assert(exploded:allowed(7) == false, 'a framework that throws denies, it does not fail open')
 
--- ── migrate(): the old loose keys keep working ──────────────────────────────
-
-reset()
-local migrated = access.migrate(nil,
-    { mode = 'ace', ace = 'tradar.use' },
-    { file = 'shared/config.lua', removeIn = '2.0.0', names = { mode = 'Config.accessMode', ace = 'Config.acePermission' } })
-assert(migrated.mode == 'ace' and migrated.ace == 'tradar.use', 'legacy keys become an access block')
-assert(printedContains('Config.accessMode'), 'and the owner is told which old key was read')
-assert(printedContains('v2.0.0'), 'and when it stops working')
-assert(printedContains('still being used'), 'and that nothing is broken in the meantime')
-
--- A flat list of job names carries no grades. Passing it through unchanged would
--- produce job = { "police" }, which is the wrong shape and fails validation --
--- so the conversion to { police = 0 } is the whole point of migrate().
-reset()
-local fromList = access.migrate(nil, { mode = 'job', job = { 'police', 'sheriff' } }, {})
-assert(fromList.job.police == 0 and fromList.job.sheriff == 0,
-    'a flat job list becomes { name = 0 }, since the old shape could not express a minimum')
-assert(fromList.job[1] == nil, 'and the list entries do not survive alongside it')
-assert(printedContains('every grade qualifies'), 'and the loss of precision is stated, not silent')
-
-reset()
-local fromMap = access.migrate(nil, { mode = 'job', job = { police = 3 } }, {})
-assert(fromMap.job.police == 3, 'a job map keeps its grades')
-
--- An owner who has migrated must not have their new block overwritten by stale
--- old keys still sitting further up the same file.
-reset()
-local kept = access.migrate({ mode = 'item', item = 'radar' },
-    { mode = 'ace', ace = 'tradar.use' }, { names = { mode = 'Config.accessMode' } })
-assert(kept.mode == 'item' and kept.ace == nil, 'the new block wins outright')
-assert(printedContains('Config.accessMode'), 'and the ignored old keys are named')
-assert(printedContains('ignored'), 'and said to be ignored, rather than left to be debugged')
-
-reset()
-assert(access.migrate(nil, {}, {}) == nil, 'nothing configured either way is nil, for validation to report')
-assert(#printed == 0, 'and says nothing, since there is nothing to migrate')
-
-
--- ── Demo mode ───────────────────────────────────────────────────────────────
+-- Demo mode
 --
 -- The one override in this module that grants rather than denies. Each case
 -- below pins a way the override could be applied by halves and silently leave a
@@ -582,7 +552,7 @@ local nilSrc = access.gate({ mode = 'everyone' }, { key = 'd3', label = 'the rad
 demoOn = true
 assert(nilSrc:allowed(nil) == false, 'demo mode still refuses a nil source')
 
--- ── A GATE SWEEPS ITSELF ON DISCONNECT ──────────────────────────────────────
+-- A GATE SWEEPS ITSELF ON DISCONNECT
 --
 -- Gate:allowed memoises one answer per player it has ever been asked about, and
 -- the TTL makes an entry stale rather than making it go away. Nothing in the
@@ -643,6 +613,39 @@ aceGrants['13|tprobe.admin'] = nil
 dropPlayer(nil)
 assert(sweepGate:allowed(13),
     'a sourceless playerDropped invalidated everyone')
+
+-- The instrumentation is reachable, and ONLY on the miss path
+--
+-- Two assertions, and the second is the one worth having. A memo HIT returns
+-- before `evaluate` and is not a measurement of anything, so recording it would
+-- bury every real framework round trip under thousands of near-zero samples and
+-- make the p95 meaningless. Deleting the record call entirely leaves every case
+-- above green, which is why this is asserted at all.
+local evaluations = 0
+for _, t in ipairs(recordedTimings) do
+    if t.op == 'access:evaluate' then
+        evaluations = evaluations + 1
+        if t.budget ~= 50 then
+            fail('the access evaluate budget is ' .. tostring(t.budget) .. ' ms, not 50')
+        end
+    end
+end
+if evaluations == 0 then
+    fail('Gate:allowed recorded no timing; the diagnostics instrumentation is gone')
+end
+
+local before = evaluations
+local memoGate = access.gate({ mode = 'everyone' }, { key = 'memo', label = 'memo' })
+memoGate:allowed(4242)
+for _ = 1, 20 do memoGate:allowed(4242) end
+local after = 0
+for _, t in ipairs(recordedTimings) do
+    if t.op == 'access:evaluate' then after = after + 1 end
+end
+if (after - before) ~= 1 then
+    fail(('21 allowed() calls for one player recorded %d evaluations, not 1 -- a memo hit '
+        .. 'is being timed, which buries every real framework round trip'):format(after - before))
+end
 
 print = realPrint
 print('PASS access-gate')

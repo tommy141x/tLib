@@ -53,7 +53,7 @@ local function menu(owner, spec)
     return clean
 end
 
--- ── Fingerprints ────────────────────────────────────────────────────────────
+-- Fingerprints
 --
 -- The signature is the entire basis for not sending the catalog. If two different
 -- trees can produce the same one, a client hydrates somebody else's rows against
@@ -91,7 +91,7 @@ check(sliced > 0, 'the checkpoint is called, so a caller on a game thread can yi
 equal(K.fingerprint(wide, function() end), K.fingerprint(wide),
     'and yielding partway through does not change the answer')
 
--- ── Building a catalog ──────────────────────────────────────────────────────
+-- Building a catalog
 
 local alphaMenus = {
     menu('alpha', { id = 'alpha:one', title = 'One', rootLabel = 'One Page', items = {
@@ -129,7 +129,7 @@ check(dupeErr:find('alpha:one', 1, true) ~= nil, 'and names the one it refused')
 local swapped = assert(K.build({ alphaMenus[2], alphaMenus[1] }))
 check(swapped.signature ~= alpha.signature, 'reordering the definitions changes the signature')
 
--- ── Hydration ───────────────────────────────────────────────────────────────
+-- Hydration
 
 local catalogs = { alpha = alpha, bravo = bravo }
 local function provide(owner) return catalogs[owner] end
@@ -179,7 +179,7 @@ local unranked = assert(K.hydrate(compact({ order = NONE }), provide, { root = r
 ordered(unranked.menus, 'id', { 'main', 'alpha:one', 'bravo:one' },
     'without a ranked list, pages fall back to raw byte order')
 
--- ── Hydration refuses ───────────────────────────────────────────────────────
+-- Hydration refuses
 --
 -- Every one of these must produce nil and a message. Hydration is all-or-nothing on
 -- purpose: a partially applied snapshot is a player holding rows from a tree the
@@ -229,7 +229,7 @@ refuses({ menus = { { id = 'main', title = 'Impostor', items = {} } } },
 refuses({ menus = { { id = 'nocolon', title = 'Impostor', items = {} } } },
     'a descriptor with no namespace at all')
 
--- ── Descriptors that are allowed ────────────────────────────────────────────
+-- Descriptors that are allowed
 --
 -- The pre-split engine refused every descriptor inside its own namespace, which
 -- only worked because it had one consumer. A resource must be able to register a page
@@ -247,7 +247,7 @@ ordered(dynamic.menus[4].items, 'id', { 'charlie:go' }, 'with its rows')
 ordered(dynamic.menus[1].items, 'menu', { 'bravo:one', 'alpha:one', 'charlie:live' },
     'and it gets a root row like any other page')
 
--- ── Deltas ──────────────────────────────────────────────────────────────────
+-- Deltas
 
 local delta = assert(K.hydrate(compact({
     grants = {
@@ -270,7 +270,7 @@ equal(wrongKind, nil, 'options on a row that is not a selector are refused')
 local badPatch = K.applyDelta(alpha.menus[1].items[1], { label = 42 }, 'alpha')
 equal(badPatch, nil, 'and a delta the schema would have refused at registration is refused here too')
 
--- ── Themes ──────────────────────────────────────────────────────────────────
+-- Themes
 --
 -- Themes are permission-filtered with the snapshot, so they have to survive
 -- hydration rather than being pushed separately -- a page the player cannot see
@@ -283,7 +283,7 @@ equal(themed.themes.owners.alpha.accent, '#ff0000', 'a namespace theme survives 
 equal(themed.themes.menus['bravo:one'].accent, '#00ff00', 'as does a per-page one')
 equal(hydrated.themes, nil, 'and a snapshot with no themes carries none')
 
--- ── Instructions ────────────────────────────────────────────────────────────
+-- Instructions
 --
 -- A control hint points at a row. If the bitmap dropped that row, the hint is a
 -- lie, and a lie about a control is worse than a missing hint.

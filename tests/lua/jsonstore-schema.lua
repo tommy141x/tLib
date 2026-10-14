@@ -6,7 +6,7 @@
 -- migrated forward when the shape changes, and never clobbered on the way.
 --
 -- Separate rather than appended, for a reason that is about the stub and not
--- about tidiness. ⚠️ The other suite's codec stores tables BY IDENTITY --
+-- about tidiness. The other suite's codec stores tables BY IDENTITY --
 -- `encode` keeps the live table and `decode` hands the same one back -- which is
 -- right there, because what it tests is whether the correct DOCUMENT was
 -- written. It is wrong here: the pre-migration backup would then be the very
@@ -29,7 +29,7 @@
 
 local function fail(message) error(message, 2) end
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 
 local files = {}
 function LoadResourceFile(resource, name) return files[resource .. '|' .. name] end
@@ -84,9 +84,18 @@ local function defaultWrite(file, contents, resource)
     return true
 end
 
+local recordedTimings = {}
+
 tlib = {
     logger = { DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4 },
     fs = { writeResourceFile = defaultWrite },
+    -- A sink for jsonstore's instrumented write path. A RECORDER rather than
+    -- a no-op even where this suite does not read it, so the call is exercised
+    -- rather than merely tolerated; tests/lua/jsonstore.lua is where the
+    -- assertion that the instrumentation still FIRES lives.
+    telemetry = { record = function(op, budget, ms)
+        recordedTimings[#recordedTimings + 1] = { op = op, budget = budget, ms = ms }
+    end },
 }
 
 local JsonStore = dofile('shared/imports/jsonstore/server.lua')
@@ -124,7 +133,7 @@ local function countWrites(file)
     return n
 end
 
--- ── 1. Created on first start ───────────────────────────────────────────────
+-- 1. Created on first start
 --
 -- Property 2 of the three the module exists for. The release never ships the
 -- file (that half is a build gate), so an absent file is the ORDINARY state of
@@ -164,7 +173,7 @@ if store:schemaState().action ~= 'current' then
 end
 if #writes ~= 0 then fail('a current document was rewritten at boot: ' .. #writes .. ' write(s)') end
 
--- ── 2. ⛔ An unparseable file is NEVER seeded over ───────────────────────────
+-- 2. An unparseable file is NEVER seeded over
 --
 -- The single most destructive thing this module could do. `read()` answers an
 -- empty table for an absent file AND for an unparseable one, so a seeder that
@@ -212,7 +221,7 @@ if files['tProbe|' .. quarantine] ~= '{ "props": { oops' then
     fail('the quarantined copy does not hold the original bytes')
 end
 
--- ── 3. Migrated forward, with a backup first ────────────────────────────────
+-- 3. Migrated forward, with a backup first
 
 reset()
 onDisk({ props = { a = 1 }, legacySettings = { volume = 0.4 } }, { tProbe = 1 })
@@ -264,7 +273,7 @@ if after.props == nil or after.props.a ~= 1 then
     fail('migration dropped a section no step mentioned')
 end
 
--- ⛔ The backup, and that it holds the document AS IT WAS. A migration with no
+-- The backup, and that it holds the document AS IT WAS. A migration with no
 -- way back is the one that cannot be undone when it turns out to be wrong.
 if not state.backup then fail('no pre-migration backup was recorded') end
 if not state.backup:find('v1', 1, true) then
@@ -279,7 +288,7 @@ end
 if backupDoc.alerts ~= nil then fail('the backup was taken after a step had already run') end
 if files['tProbe|data.json'] == nil then fail('the migrated document is not on disk') end
 
--- ── 4. A migration never runs twice, and is idempotent anyway ───────────────
+-- 4. A migration never runs twice, and is idempotent anyway
 --
 -- Two separate guarantees. "Never twice" is the stamp plus the memoisation.
 -- "Idempotent" is required ANYWAY, because in demo mode the stamp never reaches
@@ -336,7 +345,7 @@ if probe.settings.volume ~= firstPass.settings.volume then
     fail('the idempotence fixture is not idempotent, so it proves nothing')
 end
 
--- ── 5. ⛔ A newer document is refused, never reset ───────────────────────────
+-- 5. A newer document is refused, never reset
 --
 -- The downgrade: an owner rolled the resource back, or restored a resource
 -- folder from a backup older than their data. The shape on disk is one this
@@ -395,7 +404,7 @@ if files['tProbe|data.json'] ~= badVersionFile then
     fail('a document with an unreadable version was written')
 end
 
--- ── 6. ⛔ A migration may not delete, unless it says so ─────────────────────
+-- 6. A migration may not delete, unless it says so
 --
 -- "Never delete" enforced rather than intended, matching the tlib_demo
 -- convention of resetting by dropping writes and never deleting. A removal that
@@ -451,7 +460,7 @@ if files['tProbe|data.json'] ~= beforeThrow then
 end
 if not loggedContains('bad migration') then fail('the migration error was swallowed') end
 
--- ── 7. ⛔ No backup, no migration ───────────────────────────────────────────
+-- 7. No backup, no migration
 --
 -- A disk that refuses the backup is a disk that may refuse the half-written
 -- result too, and an unrecoverable migration is worse than a stale document.
@@ -477,7 +486,7 @@ if not loggedContains('EACCES') then
     fail("the disk's own errno was dropped; it is what names the thing to fix")
 end
 
--- ── 8. The schema is validated loudly, at open ──────────────────────────────
+-- 8. The schema is validated loudly, at open
 --
 -- A gap in the migration list is the quiet one: without this, v1 → v3 with only
 -- a [1] step would stamp the document v3 while its shape is v2, and nothing
@@ -507,7 +516,7 @@ if opening({ version = 2, migrations = { [1] = function() end }, assume = 1 }) =
     fail('a correct schema was rejected, so the rejections above prove nothing')
 end
 
--- ── 9. Two owners version one document independently ───────────────────────
+-- 9. Two owners version one document independently
 --
 -- Every one of these documents is co-owned: tELS's `vehicles` belongs to tLib
 -- Discovery, tDetector's `soundWavMap` to tlib.soundstore. One scalar version
@@ -560,7 +569,7 @@ if store:locked() ~= nil then
     fail('a document was locked because a DIFFERENT owner was ahead of this build')
 end
 
--- ── 10. Defaults fill absent keys without stamping ──────────────────────────
+-- 10. Defaults fill absent keys without stamping
 --
 -- tAFK wrote the rule down after it cost them the whole mechanism: "stamping
 -- the current version here is what stopped migrations from ever running".
@@ -585,7 +594,7 @@ end
 if after.alerts == nil then fail('a newly added default key did not arrive') end
 if after.props.a ~= 1 then fail('an existing section was replaced by its default') end
 
--- ── 11. Demo mode: a migration that cannot land must not look landed ───────
+-- 11. Demo mode: a migration that cannot land must not look landed
 --
 -- `tlib.fs.writeResourceFile` DROPS the write and reports SUCCESS when
 -- `tlib_demo` is set. Without the write-behind mirror the migration reports
@@ -631,7 +640,7 @@ store:write({ props = { a = 2 } })
 if store:read().props.a ~= 2 then fail('a write was invisible to the mirror') end
 if store:read().modern == nil then fail('a write reverted the mirror to the on-disk shape') end
 
--- ── 12. A first-start seed that cannot be written is not a lock ────────────
+-- 12. A first-start seed that cannot be written is not a lock
 --
 -- There is nothing on disk to protect and the consumer's own shipped
 -- configuration is still the live answer, so a read-only resource directory
@@ -650,7 +659,7 @@ if not loggedContains('nothing will survive a restart') then
     fail('a failed first seed did not say that nothing persists')
 end
 
--- ── 13. Nothing is written when there is nothing to do ─────────────────────
+-- 13. Nothing is written when there is nothing to do
 --
 -- A boot that rewrites the file for no reason is a boot that can lose a save
 -- for no reason, and it is also how a release that must never ship the file

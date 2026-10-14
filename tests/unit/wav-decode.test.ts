@@ -28,29 +28,49 @@ function wav(opts: {
   const extra = extraChunk ? 8 + 3 + 1 : 0;
   const b = Buffer.alloc(12 + 24 + extra + 8 + dataBytes);
   let o = 0;
-  b.write("RIFF", o); o += 4;
-  b.writeUInt32LE(b.length - 8, o); o += 4;
-  b.write("WAVE", o); o += 4;
+  b.write("RIFF", o);
+  o += 4;
+  b.writeUInt32LE(b.length - 8, o);
+  o += 4;
+  b.write("WAVE", o);
+  o += 4;
 
-  b.write("fmt ", o); o += 4;
-  b.writeUInt32LE(16, o); o += 4;
-  b.writeUInt16LE(1, o); o += 2;
-  b.writeUInt16LE(channels, o); o += 2;
-  b.writeUInt32LE(rate, o); o += 4;
-  b.writeUInt32LE(rate * channels * 2, o); o += 4;
-  b.writeUInt16LE(channels * 2, o); o += 2;
-  b.writeUInt16LE(bits, o); o += 2;
+  b.write("fmt ", o);
+  o += 4;
+  b.writeUInt32LE(16, o);
+  o += 4;
+  b.writeUInt16LE(1, o);
+  o += 2;
+  b.writeUInt16LE(channels, o);
+  o += 2;
+  b.writeUInt32LE(rate, o);
+  o += 4;
+  b.writeUInt32LE(rate * channels * 2, o);
+  o += 4;
+  b.writeUInt16LE(channels * 2, o);
+  o += 2;
+  b.writeUInt16LE(bits, o);
+  o += 2;
 
   if (extraChunk) {
-    b.write("LIST", o); o += 4;
-    b.writeUInt32LE(3, o); o += 4;
-    b.write("abc", o); o += 3;
+    b.write("LIST", o);
+    o += 4;
+    b.writeUInt32LE(3, o);
+    o += 4;
+    b.write("abc", o);
+    o += 3;
     o += 1; // pad byte, not counted in the declared size
   }
 
-  b.write("data", o); o += 4;
-  b.writeUInt32LE(opts.declaredDataLen ?? dataBytes, o); o += 4;
-  for (const frame of frames) for (const s of frame) { b.writeInt16LE(s, o); o += 2; }
+  b.write("data", o);
+  o += 4;
+  b.writeUInt32LE(opts.declaredDataLen ?? dataBytes, o);
+  o += 4;
+  for (const frame of frames)
+    for (const s of frame) {
+      b.writeInt16LE(s, o);
+      o += 2;
+    }
   return truncateBy > 0 ? b.subarray(0, b.length - truncateBy) : b;
 }
 
@@ -63,12 +83,20 @@ const CHECKS: Record<string, (decode: Decoder) => void> = {
     if (got.channels !== 1) throw new Error(`channels ${got.channels}`);
     const want = [0, 0.5, -1, 32767 / 32768];
     for (let i = 0; i < want.length; i++) {
-      if (Math.abs(got.samples[i] - want[i]) > 1e-9) throw new Error(`sample ${i} = ${got.samples[i]}`);
+      if (Math.abs(got.samples[i] - want[i]) > 1e-9)
+        throw new Error(`sample ${i} = ${got.samples[i]}`);
     }
   },
 
   "downmixes multi-channel by averaging"(decode) {
-    const got = decode(wav({ frames: [[32767, -32767], [16384, 16384]] }));
+    const got = decode(
+      wav({
+        frames: [
+          [32767, -32767],
+          [16384, 16384],
+        ],
+      })
+    );
     if (got.channels !== 2) throw new Error(`channels ${got.channels}`);
     if (Math.abs(got.samples[0]) > 1e-4) throw new Error(`cancelling frame = ${got.samples[0]}`);
     if (Math.abs(got.samples[1] - 0.5) > 1e-9) throw new Error(`frame 1 = ${got.samples[1]}`);
@@ -78,7 +106,8 @@ const CHECKS: Record<string, (decode: Decoder) => void> = {
   "skips an unknown chunk and honours its pad byte"(decode) {
     const got = decode(wav({ frames: [[1000], [2000]], extraChunk: true }));
     if (got.samples.length !== 2) throw new Error(`frames ${got.samples.length}`);
-    if (Math.abs(got.samples[1] - 2000 / 32768) > 1e-9) throw new Error(`frame 1 = ${got.samples[1]}`);
+    if (Math.abs(got.samples[1] - 2000 / 32768) > 1e-9)
+      throw new Error(`frame 1 = ${got.samples[1]}`);
   },
 
   /**
@@ -87,9 +116,13 @@ const CHECKS: Record<string, (decode: Decoder) => void> = {
    */
   "decodes what a truncated file actually contains"(decode) {
     // 8 frames declared, 3 frames' worth of bytes cut off the end.
-    const got = decode(wav({ frames: Array.from({ length: 8 }, (_, i) => [i * 100]), truncateBy: 6 }));
-    if (got.samples.length !== 5) throw new Error(`expected 5 surviving frames, got ${got.samples.length}`);
-    if (Math.abs(got.samples[4] - 400 / 32768) > 1e-9) throw new Error(`frame 4 = ${got.samples[4]}`);
+    const got = decode(
+      wav({ frames: Array.from({ length: 8 }, (_, i) => [i * 100]), truncateBy: 6 })
+    );
+    if (got.samples.length !== 5)
+      throw new Error(`expected 5 surviving frames, got ${got.samples.length}`);
+    if (Math.abs(got.samples[4] - 400 / 32768) > 1e-9)
+      throw new Error(`frame 4 = ${got.samples[4]}`);
   },
 
   /** The same hazard stated by the header rather than by a short read. */
@@ -145,7 +178,7 @@ describe("decodeWav", () => {
   }
 });
 
-// ── Negative controls: the two bodies this replaced ──────────────────────────
+// Negative controls: the two bodies this replaced
 
 /** tRadio `audio-analyze.ts` / `audio-render.ts`: `dataLen = size`, unclamped. */
 const unclampedData: Decoder = (bytes, label = "<buffer>") => {

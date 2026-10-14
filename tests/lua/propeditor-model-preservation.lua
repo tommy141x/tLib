@@ -31,7 +31,7 @@ local function resolve(name)
     return DEFAULT
 end
 
--- ── savedModelFor: the WRITE guard ──────────────────────────────────────────
+-- savedModelFor: the WRITE guard
 
 assert(PropEditor.savedModelFor(nil, isRegistered) == nil,
     'a brand new placement has no model to preserve')
@@ -59,7 +59,7 @@ assert(PropEditor.savedModelFor(legacy, isRegistered) ~= resolve(legacy.model),
     'preservation and resolution must disagree on a legacy record; if they ever '
     .. 'agree here the guard has been inlined away')
 
--- ── placementView: the READ guard ───────────────────────────────────────────
+-- placementView: the READ guard
 
 local record = { x = 1.5, y = 2.5, z = 3.5, rx = 0.0, ry = 0.0, rz = 0.0 }
 local view = PropEditor.placementView(record, resolve)
@@ -76,7 +76,7 @@ assert(record.x == 1.5, 'mutating the view does not reach the record')
 
 assert(PropEditor.placementView(nil, resolve) == nil, 'no record, no view')
 
--- ── The composition: read, then save ────────────────────────────────────────
+-- The composition: read, then save
 --
 -- A consumer that reads a placement through placementView and then saves it must
 -- still write nil. If placementView returned the live record this would come back

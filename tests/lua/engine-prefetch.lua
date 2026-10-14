@@ -23,7 +23,7 @@
 -- there is no path to `visible` that skips it.
 
 
--- ── The host ────────────────────────────────────────────────────────────────
+-- The host
 
 _TLIB_SIDE = 'client'
 _TLIB_IS_FIVEM = false
@@ -133,7 +133,7 @@ end
 local function drainPushed() local value = pushed; pushed = {}; return value end
 local function drainPasses() local value = passes; passes = {}; return value end
 
--- ── The fixture ─────────────────────────────────────────────────────────────
+-- The fixture
 --
 -- Two owners. `alpha` gates nothing, so its pages are prefetchable; `gamma` has an
 -- `enter` hook, which is the one thing that makes a page unsafe to paint early --
@@ -215,7 +215,7 @@ local function rest(menuId, itemId, frames)
     for _ = 1, frames or 1 do pump() end
 end
 
--- ── Opening ─────────────────────────────────────────────────────────────────
+-- Opening
 
 uiCallbacks['menu_ready'](nil, function() end)
 answerSnapshot()
@@ -232,7 +232,7 @@ equal(browser['alpha:two'].placeholder, true, 'including the ones a level down')
 equal(browser['gamma:one'].placeholder, true, 'and the gated one')
 equal(browser['alpha:one'].rows, 0, 'a placeholder carries navigation metadata and no rows')
 
--- ── A cursor at rest on a gated page ────────────────────────────────────────
+-- A cursor at rest on a gated page
 --
 -- First, because it is the case that must NOT happen: `gamma` may refuse entry, so
 -- its page keeps costing the round trip and keeps arriving only once the game has
@@ -245,7 +245,7 @@ equal(browser['gamma:one'].placeholder, true, 'and stays a placeholder until the
 equal(entries, 0, 'the entry hook is not consulted either: prefetch does not pre-ask permission')
 list(drainPasses(), { 'main', 'main' }, 'the frames cost only the 750ms refresh of the open page')
 
--- ── A cursor at rest on a page worth having ─────────────────────────────────
+-- A cursor at rest on a page worth having
 
 drainPasses()
 rest('main', 'alpha:one:open', 2)
@@ -257,7 +257,7 @@ equal(browser['alpha:one'].rows, 4, 'with the rows the manifest granted')
 list(drainPasses(), { 'alpha:one', 'main', 'main' },
     'and costs exactly one extra pass, for exactly the one page')
 
--- ── Stepping into it ────────────────────────────────────────────────────────
+-- Stepping into it
 --
 -- The navigation still happens, and still projects both pages: the browser painting
 -- from what it holds is an optimism the game confirms, never a substitute for it.
@@ -275,13 +275,13 @@ pump()
 list(drainPasses(), { 'alpha:one' }, 'the refresh poll follows the player: one page, the open one')
 list(drainPushed(), {}, 'and pushes nothing while that page is unchanged')
 
--- ── A row that leads nowhere to prefetch ────────────────────────────────────
+-- A row that leads nowhere to prefetch
 
 rest('alpha:one', 'alpha:a', 2)
 list(drainPushed(), {}, 'a row that is not a submenu projects nothing')
 list(drainPasses(), { 'alpha:one', 'alpha:one' }, 'and costs only the poll')
 
--- ── A held arrow key ────────────────────────────────────────────────────────
+-- A held arrow key
 --
 -- The reason this runs on the settle window at all: a walk down a list touches
 -- every row on the way, and a projection per row passed over is precisely the cost
@@ -299,7 +299,7 @@ rest('alpha:one', 'alpha:go4', 2)
 list(drainPushed(), {}, 'returning to a row whose page the browser already holds projects nothing again')
 list(drainPasses(), { 'alpha:one', 'alpha:one' }, 'so a resting cursor is not a second refresh poll')
 
--- ── The window outliving the menu ───────────────────────────────────────────
+-- The window outliving the menu
 --
 -- The settle window is long enough for the menu to have closed inside it, and a
 -- page projected into a browser that is no longer showing anything is work done for
@@ -317,7 +317,7 @@ pump(); pump()
 list(drainPushed(), {}, 'a window that resolves after the close projects nothing')
 list(drainPasses(), {}, 'and the refresh poll has stopped with the session')
 
--- ── And again on the next session ───────────────────────────────────────────
+-- And again on the next session
 --
 -- Nothing about the close may leave prefetching switched off: reuse of an unchanged
 -- manifest means the second open runs against the tree the first one built.

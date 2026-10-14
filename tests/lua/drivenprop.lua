@@ -4,7 +4,7 @@
 --
 -- Run via `bun run test:lua`.
 --
--- ── Why this suite exists ───────────────────────────────────────────────────
+-- Why this suite exists
 --
 -- Every rule in `shared/imports/drivenprop/client.lua` fails SILENTLY in game,
 -- and two of them fail in ways no amount of reading numbers back can catch:
@@ -18,7 +18,7 @@
 --
 --   * HANDEDNESS. A left-handed basis renders the mesh inside-out: right size,
 --     right place, right orientation, inverted normals — and on a symmetric prop
---     you may not see it at all. ⚠️ IT CANNOT BE CAUGHT BY READING THE MATRIX
+-- you may not see it at all. IT CANNOT BE CAUGHT BY READING THE MATRIX
 --     BACK, because a sign does not change a length, so every scale assertion
 --     passes either way. That is why the module asserts rather than warns, and
 --     why this suite asserts that the assert fires.
@@ -28,7 +28,7 @@
 --     every comparison against NaN is false. It reaches SetEntityMatrix as a
 --     basis that puts the prop nowhere at no size.
 --
--- ── Where the fixtures came from ────────────────────────────────────────────
+-- Where the fixtures came from
 --
 -- MEASURED, not derived. On a live Enhanced client, 2026-10-07: an object parent
 -- was created and `SetEntityRotation(parent, 0, 0, 0)` applied, so the parent's
@@ -41,7 +41,7 @@
 -- The three single-axis cases are what identify the axes and the signs; the two
 -- mixed cases are what identify the ORDER, which no single-axis case can.
 --
--- ── The per-frame cost, for the record ──────────────────────────────────────
+-- The per-frame cost, for the record
 --
 -- Measured on the same client. `GetGameTimer()` is the FRAME clock — it does not
 -- advance within a frame, so it cannot time intra-frame work directly — but work
@@ -84,7 +84,7 @@ local function nearVec(got, want, label, tol)
     return label
 end
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 --
 -- The module is loaded FOR REAL against these rather than reimplemented here. A
 -- suite that reimplements its subject asserts that two copies agree and notices
@@ -149,15 +149,13 @@ _ENV.Citizen = {
 local handlers = {}
 _ENV.AddEventHandler = function(name, fn) handlers[name] = fn end
 
--- ── Load the real module ────────────────────────────────────────────────────
+-- Load the real module
 
 local chunk = assert(loadfile('shared/imports/drivenprop/shared.lua'))
 local DP = chunk()
 if type(DP) ~= 'table' then fail('drivenprop/client.lua did not return a table') end
 
--- ══════════════════════════════════════════════════════════════════════════
 --  THE ENGINE FIXTURES — the rotation convention
--- ══════════════════════════════════════════════════════════════════════════
 
 local FIXTURES = {
     { rot = {   0,   0,   0 }, right = {  1,       0,        0       },
@@ -202,7 +200,7 @@ test('localRotation reproduces the engine on all nine measured fixtures', functi
     end
 end)
 
--- ⚠️ BROKEN-CONTROL DRILL.
+-- BROKEN-CONTROL DRILL.
 --
 -- The nine assertions above being green proves the shipped formula matches the
 -- engine. It does NOT prove they would have noticed a formula that did not — a
@@ -258,9 +256,7 @@ test('localRotation defaults a nil angle to zero rather than erroring', function
     nearVec(r, { 1, 0, 0 }); nearVec(fw, { 0, 1, 0 }); nearVec(u, { 0, 0, 1 })
 end)
 
--- ══════════════════════════════════════════════════════════════════════════
 --  SCALE NORMALISATION
--- ══════════════════════════════════════════════════════════════════════════
 
 test('normaliseScale: an absent scale is normal size, not a rejection', function()
     -- Every record written before records had a scale has no `scale` key. If nil
@@ -291,7 +287,7 @@ test('normaliseScale clamps an in-range-ish value to [SCALE_MIN, SCALE_MAX]', fu
 end)
 
 test('normaliseScale: zero, negative and infinity are NOT SUPPLIED, not SMALLEST', function()
-    -- ⚠️ They resolve to 1.0, not to SCALE_MIN. A corrupt or hostile record must
+    -- They resolve to 1.0, not to SCALE_MIN. A corrupt or hostile record must
     -- render as a normal-sized prop, not as one shrunk to a tenth — which is a
     -- worse failure and a far more confusing one to diagnose. This also has to
     -- agree exactly with `clampUniformScale` in shared/ts/gizmo/types.ts, which
@@ -326,9 +322,7 @@ test('isUnitScale is true for absent and 1.0, false for a real scale', function(
     if not DP.isUnitScale(0 / 0) then fail('NaN normalises to 1.0, so it is unit scale') end
 end)
 
--- ══════════════════════════════════════════════════════════════════════════
 --  HANDEDNESS
--- ══════════════════════════════════════════════════════════════════════════
 
 test('handedness is positive for the right-handed basis and negative for the flip', function()
     -- The exact pair from the module header, with f = (0.6, 0.8, 0).
@@ -365,9 +359,7 @@ test('a sign flip does not change any basis LENGTH', function()
     near(g1, b1); near(g2, b2); near(g3, b3)
 end)
 
--- ══════════════════════════════════════════════════════════════════════════
 --  THE TRANSFORM
--- ══════════════════════════════════════════════════════════════════════════
 
 test('transform carries the scale in the basis-vector LENGTHS', function()
     local basis = identityBasis(10, 20, 30)
@@ -449,9 +441,7 @@ test('transform: the result is right-handed for a non-trivial rotation', functio
     near(h, 8.0, 1e-6)
 end)
 
--- ══════════════════════════════════════════════════════════════════════════
 --  hasMoved — the "a parked car is free" rule
--- ══════════════════════════════════════════════════════════════════════════
 
 test('hasMoved is true when nothing has been written yet', function()
     if not DP.hasMoved(nil, identityBasis()) then
@@ -481,9 +471,7 @@ test('hasMoved catches ROTATION ON THE SPOT', function()
     if not DP.hasMoved(last, turned) then fail('missed a rotation on the spot') end
 end)
 
--- ══════════════════════════════════════════════════════════════════════════
 --  THE INSTANCE
--- ══════════════════════════════════════════════════════════════════════════
 
 local function freshDriver()
     matrixWrites = {}

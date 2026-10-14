@@ -18,7 +18,13 @@ import {
   safezoneRect,
   scaleLayout,
 } from "../../shared/ts/hud-geometry";
-import { LayoutHistory } from "../../client/web/src/layout/history";
+
+// The `gesture history` block that used to live at the bottom of this file
+// covered `client/web/src/layout/history.ts`'s `LayoutHistory`. That class is
+// deleted — the estate has one undo primitive now — and all five of its
+// scenarios are re-proven against `shared/ts/undo.ts` in `undo.test.ts`, under
+// the heading that names where they came from. They are not here because they
+// were never about the geometry this file checks.
 
 const base: Layout = { x: 0, y: 0, scale: 1, visible: true, anchor: "top-left" };
 const component: Component = {
@@ -434,58 +440,5 @@ describe("HUD geometry (no DOM)", () => {
     expect(resizeLayout({ ...component, canScale: false }, base, viewport, "se", 100, 50)).toBe(
       base
     );
-  });
-});
-
-describe("gesture history", () => {
-  test("one gesture restores its starting snapshot, redo restores its end", () => {
-    const history = new LayoutHistory();
-    const end = { ...base, x: 0.3, scale: 1.4 };
-    history.record("a", base, end);
-    expect(history.undo()).toEqual({ key: "a", layout: base });
-    expect(history.canUndo).toBe(false);
-    expect(history.redo()).toEqual({ key: "a", layout: end });
-  });
-  test("snapshots are owned copies and returned layouts are not history references", () => {
-    const history = new LayoutHistory();
-    const start = { ...base },
-      end = { ...base, visible: false };
-    history.record("a", start, end);
-    start.x = 999;
-    end.x = 999;
-    const undone = history.undo()!;
-    undone.layout.x = 999;
-    expect(history.redo()!.layout).toEqual({ ...base, visible: false });
-    expect(history.undo()!.layout).toEqual(base);
-  });
-  test("no-op gestures do not clear redo, new edits do", () => {
-    const history = new LayoutHistory();
-    history.record("a", base, { ...base, x: 1 });
-    history.undo();
-    history.record("a", base, { ...base });
-    expect(history.canRedo).toBe(true);
-    history.record("a", base, { ...base, y: 1 });
-    expect(history.canRedo).toBe(false);
-  });
-  test("removal fences undo and redo for a stopped resource", () => {
-    const history = new LayoutHistory();
-    history.record("a", base, { ...base, x: 1 });
-    history.record("b", base, { ...base, y: 1 });
-    history.undo();
-    history.remove("b");
-    expect(history.canRedo).toBe(false);
-    expect(history.undo()!.key).toBe("a");
-    history.remove("a");
-    expect(history.canRedo).toBe(false);
-  });
-  test("history is bounded and session clear drops both directions", () => {
-    const history = new LayoutHistory(2);
-    for (let x = 1; x <= 3; x++) history.record("a", { ...base, x: x - 1 }, { ...base, x });
-    expect(history.undo()!.layout.x).toBe(2);
-    expect(history.undo()!.layout.x).toBe(1);
-    expect(history.undo()).toBeUndefined();
-    history.clear();
-    expect(history.canUndo).toBe(false);
-    expect(history.canRedo).toBe(false);
   });
 });

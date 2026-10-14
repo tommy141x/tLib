@@ -64,7 +64,7 @@ describe("the private internal/ tree stays out of this public repo", () => {
       // The repo root is internal/ itself; tProvenance is a directory inside it.
       // A nested repo is a directory containing .git; on a worktree .git is a file.
       expect(existsSync(join(REPO, "internal", ".git"))).toBe(true);
-    },
+    }
   );
 
   test("the release allowlist names nothing under it", () => {

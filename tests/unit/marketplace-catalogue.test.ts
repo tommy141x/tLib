@@ -26,13 +26,14 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { setInstallIdResolver } from "../../shared/ts/install-id";
 
 const g = globalThis as unknown as Record<string, unknown>;
 /**
- * No secret stub here, deliberately.
+ * No key stub here, deliberately.
  *
- * The resource secret is a BAKED-IN constant, not a convar — see
- * `MARKETPLACE_RESOURCE_SECRET`'s comment for why that is intended and not an
+ * The tLib public key is a BAKED-IN constant, not a convar — see
+ * `TLIB_PUBLIC_KEY`'s comment for why that is intended and not an
  * oversight. So the tests assert against the real exported value: if someone
  * converts it back to operator-supplied configuration, these fail.
  */
@@ -51,11 +52,12 @@ const {
   ITEM_RESOURCE_MISMATCH,
   ITEM_RESOURCE_UNKNOWN,
   MARKETPLACE_HASH_HEADER,
-  MARKETPLACE_RESOURCE_SECRET,
+  TLIB_PUBLIC_KEY,
   marketplaceApiV2,
   marketplaceHeaders,
   MARKETPLACE_IDENTITY_HEADER,
   setCatalogueLike,
+  studioHeaders,
   toCatalogueItem,
 } = await import("../../shared/ts/marketplace/catalogue");
 
@@ -73,7 +75,7 @@ interface Captured {
   url: string;
   headers: Record<string, string>;
   /**
-   * ⚠️ Captured because the like path's METHOD is its verb — POST adds and
+   * Captured because the like path's METHOD is its verb — POST adds and
    * DELETE withdraws, with no body either way. A test that only looked at the
    * URL could not tell a like from an un-like.
    */
@@ -175,11 +177,46 @@ describe("the request", () => {
     expect(url.searchParams.get("type")).toBe("theme");
   });
 
-  test("sends the resource secret and the install label", async () => {
+  test("sends the public key and the install label", async () => {
     const calls = captureFetch(emptyPage);
     await browseCatalogue({});
-    expect(calls[0]?.headers["x-resource-secret"]).toBe(MARKETPLACE_RESOURCE_SECRET);
+    expect(calls[0]?.headers["x-resource-secret"]).toBe(TLIB_PUBLIC_KEY);
     expect(calls[0]?.headers["x-fivem-server"]).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  /**
+   * THE WHOLE REASON ONE SHARED KEY IS ACCEPTABLE. `x-resource-secret` says
+   * "some install of something in this estate" and nothing more, so
+   * `x-install-id` is what lets tWeb rate-limit, filter or mute ONE server. It
+   * is set in `studioHeaders`, which is the single builder every call below goes
+   * through — a test per endpoint would be a test that passes while the next
+   * endpoint added forgets it.
+   *
+   * And it must be OMITTED, never blank, when nothing resolves: an empty
+   * value fails tWeb's `/^[0-9a-z]{25}$/` and a 400 on a browse reads as "the
+   * marketplace is down". `setInstallIdResolver(null)` is the state of a
+   * consumer's bundle, which does not install tLib's reader.
+   */
+  test("carries the install id on every call, and omits it rather than blanking it", async () => {
+    const id = "a1b2c3d4e5f6g7h8i9j0k1l2m";
+    setInstallIdResolver(() => id);
+    try {
+      const browse = captureFetch(emptyPage);
+      await browseCatalogue({});
+      expect(browse[0]?.headers["x-install-id"]).toBe(id);
+
+      // Same builder, so the unauthenticated variant carries it too — that is
+      // the one community-configs' open reads go out on.
+      expect(studioHeaders()["x-install-id"]).toBe(id);
+      expect(marketplaceHeaders()["x-install-id"]).toBe(id);
+    } finally {
+      setInstallIdResolver(null);
+    }
+
+    const anon = captureFetch(emptyPage);
+    await browseCatalogue({});
+    expect(anon[0]?.headers).not.toHaveProperty("x-install-id");
+    expect(marketplaceHeaders()).not.toHaveProperty("x-install-id");
   });
 
   test("never sends the raw licence key", async () => {
@@ -194,10 +231,10 @@ describe("the request", () => {
   });
 
   test("honours a self-hosted base URL instead of pinning production", async () => {
-    // An operator who points tmarketplace_base_url at their own host must not
+    // An operator who points tlib_api_base_url at their own host must not
     // have this silently keep hitting ours.
     g.GetConvar = (name: string, d: string) =>
-      name === "tmarketplace_base_url" ? "https://example.test/" : convarStub(name, d);
+      name === "tlib_api_base_url" ? "https://example.test/" : convarStub(name, d);
     expect(marketplaceApiV2()).toBe("https://example.test/api/v2/marketplace");
   });
 
@@ -209,7 +246,7 @@ describe("the request", () => {
   test("lets a caller add headers without losing the credential", () => {
     const h = marketplaceHeaders({ Accept: "text/html" });
     expect(h.Accept).toBe("text/html");
-    expect(h["X-Resource-Secret"]).toBe(MARKETPLACE_RESOURCE_SECRET);
+    expect(h["X-Resource-Secret"]).toBe(TLIB_PUBLIC_KEY);
   });
 
   test("authenticates with no operator setup at all", async () => {
@@ -224,8 +261,8 @@ describe("the request", () => {
     g.GetConvar = (_name: string, d: string) => d;
     const calls = captureFetch(emptyPage);
     await browseCatalogue({});
-    expect(calls[0]?.headers["x-resource-secret"]).toBe(MARKETPLACE_RESOURCE_SECRET);
-    expect(MARKETPLACE_RESOURCE_SECRET).toBeTruthy();
+    expect(calls[0]?.headers["x-resource-secret"]).toBe(TLIB_PUBLIC_KEY);
+    expect(TLIB_PUBLIC_KEY).toBeTruthy();
   });
 });
 
@@ -355,7 +392,7 @@ describe("item ownership", () => {
     const calls = captureFetch(owned);
     await fetchCatalogueItem("midnight");
     expect(calls[0]?.url).toBe(`${marketplaceApiV2()}/items/midnight`);
-    expect(calls[0]?.headers["x-resource-secret"]).toBe(MARKETPLACE_RESOURCE_SECRET);
+    expect(calls[0]?.headers["x-resource-secret"]).toBe(TLIB_PUBLIC_KEY);
   });
 
   test("escapes the slug rather than pasting it into a path", async () => {
@@ -438,7 +475,7 @@ describe("item ownership", () => {
   });
 });
 
-/* ── Likes ─────────────────────────────────────────────────────────────────── */
+/* Likes */
 
 describe("the like count on the wire", () => {
   const base = {
@@ -456,9 +493,7 @@ describe("the like count on the wire", () => {
   };
 
   /**
-   * ═══════════════════════════════════════════════════════════════════════
-   * ⚠️ `likes` MUST NOT GO THROUGH `num()` THE WAY `downloads` DOES.
-   * ═══════════════════════════════════════════════════════════════════════
+   * `likes` MUST NOT GO THROUGH `num()` THE WAY `downloads` DOES.
    *
    * `num()` maps a missing value to `0`, and `0` is a real like count — so
    * coercing would make a host that predates likes indistinguishable from an
@@ -488,7 +523,7 @@ describe("the like count on the wire", () => {
   });
 
   /**
-   * ⚠️ `liked` is a PRESENCE check and not a truthiness one. Absent means "no
+   * `liked` is a PRESENCE check and not a truthiness one. Absent means "no
    * identity was asserted" and renders no control at all; `false` means "you
    * have not liked this" and renders a working empty heart. Collapsing them
    * takes the control away from everybody who has not yet liked the item.
@@ -504,9 +539,7 @@ describe("the like count on the wire", () => {
 
 describe("the identity a browse carries", () => {
   /**
-   * ═══════════════════════════════════════════════════════════════════════
-   * ⚠️ A PLAYER LICENSE IS A HEADER AND NEVER A QUERY PARAMETER.
-   * ═══════════════════════════════════════════════════════════════════════
+   * A PLAYER LICENSE IS A HEADER AND NEVER A QUERY PARAMETER.
    *
    * A URL is a cache key and a URL is what gets logged. Serialising a per-player
    * identifier into the query string would give every player on a server a
@@ -525,10 +558,10 @@ describe("the identity a browse carries", () => {
     await browseCatalogue({ identity: "a1b2c3d4" });
     const headers = calls[0]?.headers ?? {};
     expect(headers[MARKETPLACE_IDENTITY_HEADER.toLowerCase()]).toBe("a1b2c3d4");
-    // ⚠️ The secret must still be there. The identity is an ADDITION to the
+    // The secret must still be there. The identity is an ADDITION to the
     // request, not a replacement for the credential — and `marketplaceHeaders`
     // merges caller extras last, so a careless spread could have dropped it.
-    expect(headers["x-resource-secret"]).toBe(MARKETPLACE_RESOURCE_SECRET);
+    expect(headers["x-resource-secret"]).toBe(TLIB_PUBLIC_KEY);
   });
 
   test("sends no identity header at all when there is no player", async () => {
@@ -561,7 +594,7 @@ describe("setCatalogueLike", () => {
   });
 
   /**
-   * ⚠️ The identity goes in the header the backend's write path reads, and the
+   * The identity goes in the header the backend's write path reads, and the
    * SECRET is still sent. The secret is what gets the request past the door; the
    * identity is what names the player once inside. Losing either one is a
    * different failure and both are silent at the panel.
@@ -571,11 +604,11 @@ describe("setCatalogueLike", () => {
     await setCatalogueLike("midnight", "a1b2c3d4", true);
     const headers = calls[0]?.headers ?? {};
     expect(headers[MARKETPLACE_IDENTITY_HEADER.toLowerCase()]).toBe("a1b2c3d4");
-    expect(headers["x-resource-secret"]).toBe(MARKETPLACE_RESOURCE_SECRET);
+    expect(headers["x-resource-secret"]).toBe(TLIB_PUBLIC_KEY);
   });
 
   /**
-   * ⚠️ REFUSED BEFORE ANY REQUEST IS MADE. A caller that forgot to resolve the
+   * REFUSED BEFORE ANY REQUEST IS MADE. A caller that forgot to resolve the
    * license is a bug in the caller; letting it through would produce a 400 from
    * the host that reads, at the panel, as "the marketplace is down".
    */
@@ -592,7 +625,7 @@ describe("setCatalogueLike", () => {
   });
 
   /**
-   * ⚠️ The SERVER'S numbers, read as-is. The caller must not keep its own ±1 —
+   * The SERVER'S numbers, read as-is. The caller must not keep its own ±1 —
    * the count may have moved for other reasons, and the write is idempotent, so
    * a second like answers the SAME count rather than one more.
    */
@@ -620,18 +653,20 @@ describe("setCatalogueLike", () => {
    */
   test("surfaces the host's refusal, not the bare status", async () => {
     captureFetch(
-      { error: "A game server may only like as a FiveM license, never as an account on this site." },
-      403,
+      {
+        error: "A game server may only like as a FiveM license, never as an account on this site.",
+      },
+      403
     );
     await expect(setCatalogueLike("midnight", "a1b2c3d4", true)).rejects.toThrow(
-      /may only like as a FiveM license/,
+      /may only like as a FiveM license/
     );
   });
 
   test("reports a non-JSON body as an unexpected response", async () => {
     captureFetch("<html>502</html>");
     await expect(setCatalogueLike("midnight", "a1b2c3d4", true)).rejects.toThrow(
-      "unexpected_response",
+      "unexpected_response"
     );
   });
 });

@@ -24,7 +24,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 /**
- * ⚠️ These must run BEFORE the module under test is imported.
+ * These must run BEFORE the module under test is imported.
  *
  * `server/lib/marketplace/fivem.ts` snapshots the FiveM natives off
  * `globalThis` into `const` bindings at module-evaluation time, so a stub
@@ -32,9 +32,9 @@ import { afterEach, describe, expect, test } from "bun:test";
  * one would be hoisted above these assignments.
  */
 const g = globalThis as unknown as Record<string, unknown>;
-// Every convar returns its default: the secret is baked in, not configured,
+// Every convar returns its default: the key is baked in, not configured,
 // so an unconfigured server is still authenticated. See the comment on
-// `MARKETPLACE_RESOURCE_SECRET` for why that is deliberate.
+// `TLIB_PUBLIC_KEY` for why that is deliberate.
 g.GetConvar = (_name: string, defaultValue: string) => defaultValue;
 g.GetCurrentResourceName = () => "tLib";
 
@@ -249,7 +249,7 @@ describe("the UI preview document", () => {
   }
 
   test("asks v2 by slug, with the secret", async () => {
-    // ⚠️ By SLUG. The v1 route this replaces was addressed by item id, so a
+    // By SLUG. The v1 route this replaces was addressed by item id, so a
     // caller that kept passing `item.id` would 404 on every preview.
     const calls = captureHtml("<html><body>hi</body></html>");
     await previewHtml("midnight-hud");
@@ -282,8 +282,23 @@ describe("the UI preview document", () => {
   test("refuses a document too large to cross into Lua", async () => {
     // Not a hostile-host guard: this string is marshalled into the Lua VM and
     // then into a NUI message, and an unbounded one stalls both.
-    captureHtml("x".repeat(2 * 1024 * 1024 + 1));
+    //
+    // Tracks `MAX_PREVIEW_BYTES`, raised 2 MB → 10 MB on 2026-10-08. The old
+    // number was refusing real catalogue items — two shipped tELS documents
+    // (12.9 MB and 8.6 MB) could never preview — so it had stopped being a
+    // stall backstop and become a size gate.
+    captureHtml("x".repeat(10 * 1024 * 1024 + 1));
     await expect(previewHtml("midnight-hud")).rejects.toThrow(/preview_too_large/);
+  });
+
+  test("accepts a document that the OLD 2 MB cap would have refused", async () => {
+    // The point of the change, asserted directly rather than left implicit in
+    // the boundary test above: a 4 MB document is real content, not an attack,
+    // and it now reaches the player.
+    captureHtml(
+      `<div data-radio-width="200" data-radio-height="400">${"x".repeat(4 * 1024 * 1024)}</div>`
+    );
+    await expect(previewHtml("midnight-hud")).resolves.toContain("data-radio-width");
   });
 
   test("surfaces a missing preview as an error rather than empty markup", async () => {

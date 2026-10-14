@@ -1,7 +1,7 @@
 /**
  * The socket-level test the Stream Deck link layer never had.
  *
- * ── Why this file exists ─────────────────────────────────────────────────────
+ * Why this file exists
  *
  * Three products each ran their own copy of this transport, and the copies had
  * quietly diverged into a set of fixes that never travelled between them: one
@@ -16,7 +16,7 @@
  * bind contention and the retry budget, stale expiry, both keepalive layers,
  * reconnect backoff, fault state read by a late subscriber, and the hold grace.
  *
- * ── The negative controls ────────────────────────────────────────────────────
+ * The negative controls
  *
  * A test that cannot fail measures nothing, and this repo has shipped several of
  * those. So each of the four load-bearing properties also has a control that
@@ -39,7 +39,7 @@ import {
 import { createDeckLinkClient, reconnectDelayFor } from "../../shared/ts/deck/page/link.ts";
 import { DECK_PORTS, KEEPALIVE_MS, PING_MS, STALE_MS } from "../../shared/ts/deck/protocol.ts";
 
-/* ── Fixtures ───────────────────────────────────────────────────────────────── */
+/* Fixtures */
 
 type Snap = { a: number; b: string };
 type Source = "radio" | "dispatch";
@@ -135,7 +135,7 @@ async function peer(port: number): Promise<WsClient> {
   return ws;
 }
 
-/* ── The protocol constants ─────────────────────────────────────────────────── */
+/* The protocol constants */
 
 describe("deck protocol", () => {
   test("the three ports are distinct and frozen", () => {
@@ -154,7 +154,7 @@ describe("deck protocol", () => {
   });
 });
 
-/* ── Bind contention and the retry budget ───────────────────────────────────── */
+/* Bind contention and the retry budget */
 
 describe("deck link server: binding", () => {
   test("binds loopback and reports the port", async () => {
@@ -239,7 +239,7 @@ describe("deck link server: binding", () => {
   });
 });
 
-/* ── State frames ───────────────────────────────────────────────────────────── */
+/* State frames */
 
 describe("deck link server: state", () => {
   test("offline defaults until a snapshot arrives", async () => {
@@ -417,7 +417,7 @@ describe("deck link server: state", () => {
   });
 });
 
-/* ── Liveness ───────────────────────────────────────────────────────────────── */
+/* Liveness */
 
 describe("deck link server: liveness", () => {
   test("a silent peer is dropped after staleMs", async () => {
@@ -484,7 +484,7 @@ describe("deck link server: liveness", () => {
   });
 });
 
-/* ── The page half ──────────────────────────────────────────────────────────── */
+/* The page half */
 
 describe("deck link client: backoff arithmetic", () => {
   test("doubles from the base and stops at the cap", () => {
@@ -785,7 +785,7 @@ describe("deck link client: hold grace", () => {
   });
 });
 
-/* ── Negative controls ──────────────────────────────────────────────────────── *
+/* Negative controls *
  *
  * Each one plants the OPPOSITE of a property asserted above and requires the
  * same probe to come out the other way. Without these, a layer that quietly

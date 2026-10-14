@@ -17,7 +17,7 @@
 
 local function fail(message) error(message, 2) end
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 
 local files = {}
 function LoadResourceFile(resource, name) return files[resource .. '|' .. name] end
@@ -59,9 +59,18 @@ local function defaultWrite(file, contents, resource)
     files[resource .. '|' .. file] = contents
     return true
 end
+local recordedTimings = {}
+
 tlib = {
     logger = { DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4 },
     fs = { writeResourceFile = defaultWrite },
+    -- `tlib.telemetry.record` is called from the instrumented write path. A
+    -- RECORDER rather than a no-op, so this suite can assert that a slow write
+    -- is actually measured -- a stub that discarded the call would let the
+    -- instrumentation be deleted with every test still green.
+    telemetry = { record = function(op, budget, ms)
+        recordedTimings[#recordedTimings + 1] = { op = op, budget = budget, ms = ms }
+    end },
 }
 
 local JsonStore = dofile('shared/imports/jsonstore/server.lua')
@@ -75,7 +84,7 @@ local function reset()
     JsonStore.reset()
 end
 
--- ── One document, one writer ────────────────────────────────────────────────
+-- One document, one writer
 --
 -- The memoisation IS the feature. Two `open` calls for the same file must hand
 -- back the same object, or the re-entrancy flag and the pending queue are
@@ -96,7 +105,7 @@ if JsonStore.open({ log = log, resource = 'tOther' }) == a then
 end
 if pcall(JsonStore.open, {}) then fail('a store was opened with no logger') end
 
--- ── Reading ─────────────────────────────────────────────────────────────────
+-- Reading
 
 reset()
 local store = JsonStore.open({ log = log })
@@ -131,7 +140,7 @@ local before = #logged
 store:read(); store:read(); store:section('props')
 if #logged ~= before then fail('the unparseable-JSON notice repeated on every read') end
 
--- ── Writing is read-modify-write over the WHOLE document ────────────────────
+-- Writing is read-modify-write over the WHOLE document
 --
 -- The one that matters. A write must not truncate a section it does not know
 -- about -- which is exactly what a "simplification" to a plain write does, and
@@ -166,7 +175,7 @@ if after.soundWavMap.BLIP ~= nil then fail('the section was merged rather than r
 -- Several sections in one call land together, as soundstore's save does.
 if writes ~= 2 then fail('expected one disk write per write() call, got ' .. writes) end
 
--- ── A burst collapses, and loses nothing ────────────────────────────────────
+-- A burst collapses, and loses nothing
 --
 -- Re-entrant rather than queued: a write arriving while one is in flight is
 -- merged and replayed once. Merged BY SECTION, not last-wins -- a burst that
@@ -198,7 +207,7 @@ if writes ~= 2 then
     fail('a burst of three writes should collapse to two disk writes, got ' .. writes)
 end
 
--- ── Failures are said out loud ──────────────────────────────────────────────
+-- Failures are said out loud
 --
 -- Swallowing a refusal leaves an admin looking at an edit that vanishes on
 -- restart with nothing in the console to explain it.
@@ -233,5 +242,28 @@ if not loggedContains('bridge exploded') then fail('a throw inside the write was
 
 -- A non-table is refused rather than written.
 if store:write('props') ~= false then fail('a non-table section set was accepted') end
+
+-- The instrumentation is reachable
+--
+-- This asserts the diagnostics timing is actually CALLED from the write path,
+-- which no other assertion in this file would notice the loss of: delete the
+-- `tlib.telemetry.record` line from Store:write and every case above stays
+-- green. The budget is pinned too, because the number IS the policy -- 150 ms is
+-- ~9 frames of a 60 Hz server tick, and a write slower than that is a stutter.
+local sawWriteTiming = false
+for _, t in ipairs(recordedTimings) do
+    if t.op == 'jsonstore:write' then
+        sawWriteTiming = true
+        if t.budget ~= 150 then
+            fail('the jsonstore write budget is ' .. tostring(t.budget) .. ' ms, not 150')
+        end
+        if type(t.ms) ~= 'number' or t.ms < 0 then
+            fail('the recorded write duration was not a non-negative number')
+        end
+    end
+end
+if not sawWriteTiming then
+    fail('Store:write recorded no timing; the diagnostics instrumentation is gone')
+end
 
 print('PASS jsonstore')

@@ -132,7 +132,7 @@ try {
   await open(100);
   await panel.waitFor();
 
-  // ── The panel is a list and two commit actions. Nothing else. ─────────────
+  // The panel is a list and two commit actions. Nothing else.
   assert.equal(await page.locator(".tlib-layout__row").count(), 3);
   assert.equal(await page.getByRole("combobox").count(), 0, "no dropdowns remain");
   assert.equal(await page.getByRole("checkbox").count(), 0, "no option checkboxes remain");
@@ -151,13 +151,13 @@ try {
     "Tab wraps inside editor"
   );
 
-  // ── Selection: the list is how you find a widget you cannot see. ──────────
+  // Selection: the list is how you find a widget you cannot see.
   await row("Channel list").click();
   assert.equal(await selectedProxy.getAttribute("aria-label"), "Channel list");
   await row("Radio preview").click();
   assert.equal(await selectedProxy.getAttribute("aria-label"), "Radio preview");
 
-  // ── Drag, with snapping to the safe zone and Alt to suspend it. ───────────
+  // Drag, with snapping to the safe zone and Alt to suspend it.
   const demo = proxy("Radio preview");
   const start = await demo.boundingBox();
   // Land the left edge 4px outside the safe edge: within the 8px threshold.
@@ -176,7 +176,7 @@ try {
   );
   await button("Undo").click();
 
-  // ── Nothing can be dragged off screen and lost. ───────────────────────────
+  // Nothing can be dragged off screen and lost.
   for (const [dx, dy] of [
     [4000, 4000],
     [-4000, -4000],
@@ -198,7 +198,7 @@ try {
   await dragBy(await demo.boundingBox(), -4000, -4000);
   assert.match(await page.locator(".tlib-layout__pinned").textContent(), /top left/);
 
-  // ── Scroll wheel scales about the anchor pivot. ───────────────────────────
+  // Scroll wheel scales about the anchor pivot.
   const beforeWheel = await demo.boundingBox();
   assert.equal(await page.locator(".tlib-layout__scale-badge").count(), 0, "no idle readout");
   await page.mouse.move(
@@ -225,7 +225,7 @@ try {
   await button("Reset this").click();
   assert.ok(Math.abs((await demo.boundingBox()).width - start.width) < 1);
 
-  // ── Corner handles resize about the opposite corner. ──────────────────────
+  // Corner handles resize about the opposite corner.
   const handle = await page.locator(".tlib-layout__handle--se").boundingBox();
   const beforeResize = await demo.boundingBox();
   await dragBy(handle, 120, 45);
@@ -237,7 +237,7 @@ try {
   assert.ok(Math.abs((await demo.boundingBox()).width - resized.width) < 1);
   await button("Undo").click();
 
-  // ── Visibility lives on the widget and in the list; both drive one state. ─
+  // Visibility lives on the widget and in the list; both drive one state.
   await proxy("Radio preview").getByRole("button", { name: "Hide Radio preview" }).click();
   assert.ok(
     await demo.evaluate((el: HTMLElement) => el.classList.contains("tlib-layout__proxy--hidden"))
@@ -248,7 +248,7 @@ try {
     await demo.evaluate((el: HTMLElement) => !el.classList.contains("tlib-layout__proxy--hidden"))
   );
 
-  // ── Arrow keys nudge the selected widget; the panel handle owns its own. ──
+  // Arrow keys nudge the selected widget; the panel handle owns its own.
   const beforeKeys = await demo.boundingBox();
   await surface.click({ position: { x: 4, y: 4 } });
   await page.keyboard.press("ArrowRight");
@@ -257,7 +257,7 @@ try {
   await page.keyboard.press("Control+z");
   await pause();
 
-  // ── The panel itself moves out of the way without becoming a layout entry. ─
+  // The panel itself moves out of the way without becoming a layout entry.
   const beforePanel = await panel.boundingBox();
   const grip = await button("Move editor panel").boundingBox();
   await dragBy(grip, -220, 60);
@@ -270,7 +270,7 @@ try {
   await page.keyboard.press("ArrowRight");
   assert.equal((await panel.boundingBox()).x, movedPanel.x + 10);
 
-  // ── A smaller window re-clamps everything rather than stranding it. ───────
+  // A smaller window re-clamps everything rather than stranding it.
   await page.setViewportSize({ width: 800, height: 450 });
   await pause();
   for (const label of ["Radio preview", "Channel list", "Notifications"]) {
@@ -286,7 +286,7 @@ try {
     "footer stays accessible while the list scrolls"
   );
 
-  // ── Commit. The backend owns close; a local click never hides the editor. ─
+  // Commit. The backend owns close; a local click never hides the editor.
   await button("Save HUD layout").click();
   await pause();
   assert.equal(calls.filter((c) => c.event === "layoutFinish").at(-1)?.data.save, true);
@@ -313,7 +313,7 @@ try {
     "backend close restores prior focus"
   );
 
-  // ── Theming, reduced motion and discard. ─────────────────────────────────
+  // Theming, reduced motion and discard.
   await page.setViewportSize(view);
   await open(101);
   await panel.waitFor();
@@ -355,7 +355,7 @@ try {
   await send("layoutClose", { session: 101 });
   await panel.waitFor({ state: "hidden" });
 
-  // ── Session fencing: a replacement session supersedes the old one. ────────
+  // Session fencing: a replacement session supersedes the old one.
   await open(102);
   await panel.waitFor();
   await open(103);

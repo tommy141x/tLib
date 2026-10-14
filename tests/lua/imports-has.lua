@@ -61,12 +61,19 @@ local function fixture(files, ctx)
     -- loads real source the same way.
     assert(loadfile('imports.lua'))()
 
+    -- Cleared in place, not reassigned, because the LoadResourceFile closure
+    -- above holds this table. imports.lua's AUTOLOAD list probes for its own
+    -- modules while it loads, and `probes` exists to answer one question only --
+    -- does has() touch the filesystem for a name it should reject -- so it has to
+    -- start at zero AFTER the library is up, not before.
+    for i = #probes, 1, -1 do probes[i] = nil end
+
     return _ENV.tlib, exportCalls, probes
 end
 
 local SHARED_ONLY = { ['shared/imports/diag/shared.lua'] = 'return { info = function() end }' }
 
--- ── The trap itself ─────────────────────────────────────────────────────────
+-- The trap itself
 
 test('a missing module is still truthy — the reason has() exists', function()
     local tlib = fixture({})
@@ -82,7 +89,7 @@ test('indexing a missing module throws the undebuggable error, as documented', f
         'expected "attempt to index a function value", got: ' .. tostring(err))
 end)
 
--- ── has() ───────────────────────────────────────────────────────────────────
+-- has()
 
 test('has() is false when the module is absent', function()
     local tlib = fixture({})
@@ -130,12 +137,16 @@ test('has() rejects non-string and empty names WITHOUT touching the filesystem',
     assert(#probes == 0, 'expected no file probes for invalid names, got ' .. #probes)
 end)
 
--- ── The bootstrap trap: has() cannot probe for its own absence ──────────────
+-- The bootstrap trap: has() cannot probe for its own absence
 
-test('on a tLib without has(), tlib.has is the proxy and CALLING it hits exports', function()
-    -- Simulates every released tLib: `has` is not a real key, so __index returns the
-    -- export proxy. This is why a bare `tlib.has('diag')` is unsafe on an old library --
-    -- it raises in the consumer's first script rather than answering "absent".
+test('with no has() key, tlib.has is the proxy and CALLING it hits exports', function()
+    -- KEPT AS AN ORACLE FOR THE PROXY, NOT AS A SUPPORTED INSTALL STATE. `has` is
+    -- defined in imports.lua, which must have run for `tlib` to exist at all, so a real
+    -- tLib 1.0+ always has it and consumers call it directly with no pcall. What this
+    -- pins is the __index behaviour that makes `has` necessary in the first place: an
+    -- unresolvable name becomes a truthy FUNCTION. If the proxy ever became a callable
+    -- table, `type(tlib.diag) == 'table'` would start answering true for a missing
+    -- module, and the docs above would be wrong.
     local tlib, exportCalls = fixture({})
     rawset(tlib, 'has', nil)                       -- as if imports.lua predated has()
     local probe = tlib.has
@@ -158,7 +169,7 @@ test('the documented pcall form survives a has() that is not there', function()
         end,
     })
     local ok, present = pcall(function() return tlib.has('diag') end)
-    assert(not ok, 'an old tLib should raise from the proxy')
+    assert(not ok, 'a name resolved through the proxy should raise')
     assert(present ~= false, 'a throw must not be mistaken for a definitive false')
 end)
 
@@ -178,4 +189,7 @@ test('the guard that works reads correctly both ways', function()
     assert(type(present.diag.info) == 'function', 'and its members are reachable')
 end)
 
-report(('PASS imports-has: %d checks passed'):format(passed))
+-- `imports-has: ok` is the line scripts/primitives-control.ts looks for; it
+-- plants a defect that makes imports.lua raise while this fixture is building,
+-- and a run that printed only a count would read as red to its baseline.
+report(('imports-has: ok — %d checks passed'):format(passed))

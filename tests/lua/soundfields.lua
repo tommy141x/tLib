@@ -8,7 +8,7 @@
 -- rather than off the current config, and it must be a no-op once the dialog is
 -- closed -- so this suite asserts them through their observable consequences.
 --
--- ⚠️ NEGATIVE CONTROLS are at the bottom. Each re-implements one thing the
+-- NEGATIVE CONTROLS are at the bottom. Each re-implements one thing the
 -- module does correctly, the wrong way, and the suite asserts the wrong body
 -- FAILS the scenario. A scenario the control also passes cannot discriminate
 -- and is worth nothing; the control is how that gets noticed.
@@ -19,7 +19,7 @@ local realPrint = print
 
 local function fail(message) error(message, 2) end
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 
 local SoundFields = dofile('shared/imports/soundfields/client.lua')
 
@@ -66,7 +66,7 @@ local function sameList(got, want, what)
     end
 end
 
--- ── Field ids carry the key, and survive a colon in it ──────────────────────
+-- Field ids carry the key, and survive a colon in it
 
 if SoundFields.fieldId('siren') ~= 'sound:siren' then fail('fieldId did not prefix the key') end
 if SoundFields.keyOf('sound:siren') ~= 'siren' then fail('keyOf did not recover the key') end
@@ -82,7 +82,7 @@ if SoundFields.keyOf('sound:') ~= nil then fail('an empty sound key was accepted
 if SoundFields.keyOf(nil) ~= nil then fail('a nil field id was accepted') end
 if SoundFields.keyOf(42) ~= nil then fail('a non-string field id was accepted') end
 
--- ── append: a key per field, sorted, one section heading ────────────────────
+-- append: a key per field, sorted, one section heading
 
 SoundFields.clear()
 local fields = {}
@@ -114,7 +114,7 @@ for _, f in ipairs(fields) do
     if f.type ~= 'dropdown' then fail('a sound field was not a dropdown') end
 end
 
--- ── A mapping can outlive the file it names ─────────────────────────────────
+-- A mapping can outlive the file it names
 --
 -- An admin removes a sound and the key still points at it. Rendered blank the
 -- select reads as "unmapped", which is a lie: the server still has the mapping
@@ -138,7 +138,7 @@ SoundFields.append(dupes, {
 })
 sameList(optionValues(dupes[1]), { '', 'a.wav' }, 'the options list was not deduplicated')
 
--- ── No keys: a disabled control, not an empty tab ───────────────────────────
+-- No keys: a disabled control, not an empty tab
 
 local empty = {}
 local emptyDrawn = SoundFields.append(empty, { config = config({}) })
@@ -157,7 +157,7 @@ if #noConfig ~= 1 or noConfig[1].id ~= 'soundsEmpty' then
 end
 if pcall(SoundFields.append, nil, {}) then fail('append accepted a nil field list') end
 
--- ── refresh keys off what was DRAWN, not off the config ─────────────────────
+-- refresh keys off what was DRAWN, not off the config
 --
 -- A sound key added server-side AFTER the dialog opened has no control to
 -- patch. Refreshing from the arriving config instead addresses a field that
@@ -187,7 +187,7 @@ local seenNew = false
 for _, v in ipairs(optionValues(calls[1].patch)) do if v == 'new.wav' then seenNew = true end end
 if not seenNew then fail('the patch validated its own value against a stale option list') end
 
--- ── refresh is a no-op once the dialog is closed ────────────────────────────
+-- refresh is a no-op once the dialog is closed
 
 SoundFields.clear()
 local afterClose, patch2 = recorder()
@@ -219,9 +219,7 @@ local copy = SoundFields.drawn()
 copy[1] = 'mutated'
 sameList(SoundFields.drawn(), { 'a', 'b' }, 'drawn() exposed the internal list')
 
--- ════════════════════════════════════════════════════════════════════════════
---  ⚠️ NEGATIVE CONTROLS
--- ════════════════════════════════════════════════════════════════════════════
+-- NEGATIVE CONTROLS
 --
 -- Each is one wrong implementation. The assertion is that it FAILS the scenario
 -- above that is supposed to catch it. Asserted as a SET OF NAMES rather than a

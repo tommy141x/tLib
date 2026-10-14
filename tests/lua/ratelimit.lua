@@ -10,7 +10,7 @@
 
 local function fail(message) error(message, 2) end
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 
 local now = 0
 function GetGameTimer() return now end
@@ -31,7 +31,7 @@ end
 
 local RateLimit = dofile('shared/imports/ratelimit/server.lua')
 
--- ── A floor on the interval, per player ─────────────────────────────────────
+-- A floor on the interval, per player
 
 local gate = RateLimit.bucket('requestVehicleProps', 1000)
 
@@ -52,7 +52,7 @@ if gate(1) then fail('a call exactly at the interval was refused') end
 -- here would make an absent source look like a flood.
 if gate(nil) then fail('a nil source was reported as rate limited') end
 
--- ── Two buckets are independent ─────────────────────────────────────────────
+-- Two buckets are independent
 
 local other = RateLimit.bucket('requestOpenSettings', 1000)
 now = 6000
@@ -66,7 +66,7 @@ end
 local again = RateLimit.bucket('requestVehicleProps', 1000)
 if not again(1) then fail('re-opening a bucket by name started fresh timestamps') end
 
--- ── The sweep ───────────────────────────────────────────────────────────────
+-- The sweep
 --
 -- Without it the bucket keeps one entry per player who has ever connected.
 -- Asserted through the OBSERVABLE consequence rather than by reading the table:
@@ -92,7 +92,7 @@ if gate(3) then fail('precondition broken') end
 drop(nil)
 if not gate(3) then fail('a sourceless playerDropped forgot every player') end
 
--- ── The sweep is LIVE over the bucket table, not a snapshot of it ───────────
+-- The sweep is LIVE over the bucket table, not a snapshot of it
 --
 -- This is what a consumer relies on when it DELETES its own hand-written sweep
 -- line and keeps the bucket: tRadio's sv_radio.lua and sv_integrations.lua each
@@ -130,7 +130,7 @@ for i = 1, 5 do
     end
 end
 
--- ── One handler, not one per bucket ─────────────────────────────────────────
+-- One handler, not one per bucket
 --
 -- `playerDropped` is an ordinary event; N handlers would mean N table walks per
 -- disconnect for no benefit.
@@ -140,7 +140,7 @@ if #(dropHandlers.playerDropped or {}) ~= 1 then
         .. ' times; it must be installed once')
 end
 
--- ── Bad arguments are a programming error, not a silent no-op ───────────────
+-- Bad arguments are a programming error, not a silent no-op
 --
 -- A bucket that quietly did nothing would be a rate limit that is not there,
 -- which is exactly the failure this module is supposed to make impossible.
@@ -149,7 +149,7 @@ if pcall(RateLimit.bucket, nil, 1000) then fail('a nil bucket name was accepted'
 if pcall(RateLimit.bucket, 'x', nil) then fail('a nil interval was accepted') end
 if pcall(RateLimit.bucket, 'x', -1) then fail('a negative interval was accepted') end
 
--- ── ⚠️ NEGATIVE CONTROLS ────────────────────────────────────────────────────
+-- NEGATIVE CONTROLS
 --
 -- Two sweeps that are wrong in ways nothing raises about, asserted to be caught
 -- by the scenarios above. Reported BY NAME, never by count: the point of a

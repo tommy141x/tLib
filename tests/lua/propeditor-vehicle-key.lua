@@ -14,7 +14,7 @@
 -- model-preservation rule end to end, because the save path is where preserving
 -- it actually has to happen.
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 --
 -- Deliberately minimal and deliberately inert: Citizen.CreateThread records the
 -- body and never runs it, so the per-frame loop and the decor registration do
@@ -32,6 +32,11 @@ function AddEventHandler() end
 function GetCurrentResourceName() return 'test_resource' end
 
 tlib = { platform = { setInputMode = function() end, setKeepInputActive = function() end } }
+-- The REAL drivenprop, not a stub. The editor asks it which of the two
+-- attachment mechanisms a placement needs (`isUnitScale`) and borrows its
+-- driver, so a stub here would let the editor take the attached path for a
+-- scaled placement and this suite would never notice.
+tlib.drivenprop = dofile('shared/imports/drivenprop/shared.lua')
 
 local VEHICLE = 42
 
@@ -71,7 +76,7 @@ function DecorGetBool() return true end
 
 local PropEditor = dofile('shared/imports/propeditor/client.lua')
 
--- ── Harness ─────────────────────────────────────────────────────────────────
+-- Harness
 
 local REGISTERED = { ztr540 = true, kbx2200 = true }
 
@@ -111,7 +116,7 @@ local function run(prefix, keyFn, store)
     return { editor = editor, init = init, saved = saved }
 end
 
--- ── The indirection ─────────────────────────────────────────────────────────
+-- The indirection
 
 local byHash = run('radar', function(veh) return tostring(GetEntityModel(veh)) end, {})
 local bySpawnName = run('radio', function() return 'police' end, {})
@@ -131,7 +136,7 @@ assert(bySpawnName.saved.name == 'radio:saveVehicleProp', 'not from the prefix a
 
 assert(byHash.editor.currentKey() == '', 'the key is cleared once the edit is closed')
 
--- ── The key is what is READ, too ────────────────────────────────────────────
+-- The key is what is READ, too
 
 local store = { ['police'] = { x = 1.5, y = 2.5, z = 3.5, rx = 10.0, ry = 20.0, rz = 30.0 } }
 local hit = run('radio', function() return 'police' end, store)
@@ -144,7 +149,7 @@ assert(miss.init.hasExisting == false,
     'the same store read with the wrong key function finds nothing -- this is the '
     .. 'silent failure the parameter exists to prevent')
 
--- ── Model preservation, end to end through the save path ────────────────────
+-- Model preservation, end to end through the save path
 
 local legacy = { ['police'] = { x = 1, y = 2, z = 3, rx = 0, ry = 0, rz = 0 } }
 local legacyRun = run('radio', function() return 'police' end, legacy)
@@ -160,7 +165,7 @@ local retired = { ['police'] = { x = 1, y = 2, z = 3, rx = 0, ry = 0, rz = 0, mo
 local retiredRun = run('radio', function() return 'police' end, retired)
 assert(retiredRun.saved[2].model == nil, 'a model the server no longer offers is dropped')
 
--- ── Descriptor validation ───────────────────────────────────────────────────
+-- Descriptor validation
 
 assert(not pcall(PropEditor.create), 'create requires a descriptor')
 assert(not pcall(PropEditor.create, { prefix = 'x' }), 'create requires every string field')

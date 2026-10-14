@@ -35,7 +35,7 @@ local function equal(actual, expected, message)
     end
 end
 
--- ── The validator ───────────────────────────────────────────────────────────
+-- The validator
 
 local accepted = {
     { name = 'a six-digit accent', theme = { accent = '#2865aa' } },
@@ -117,7 +117,7 @@ for _, case in ipairs(rejected) do
     check(type(reason) == 'string' and #reason > 0, 'and says why for ' .. case.name)
 end
 
--- ── Themes in the snapshot ──────────────────────────────────────────────────
+-- Themes in the snapshot
 
 local granted = {}
 local function newRegistry()
@@ -178,7 +178,7 @@ local plainOnly = registry:snapshot(1)
 equal(plainOnly.themes, nil, 'with nothing themed left visible, themes is absent rather than empty')
 check(#plainOnly.grants + #plainOnly.menus > 0, 'even though the player can still see other menus')
 
--- ── Re-theming, and who may do it ───────────────────────────────────────────
+-- Re-theming, and who may do it
 
 granted = { ['blue.open'] = true, ['blue.home'] = true, ['blue.admin'] = true,
     ['plain.open'] = true, ['plain.home'] = true }

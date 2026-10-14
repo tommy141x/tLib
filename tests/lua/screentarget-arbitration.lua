@@ -13,7 +13,7 @@
 -- tuned arbiter holding still would pass just as happily against an arbiter that
 -- could never change its mind at all.
 
--- ── Stub world ──────────────────────────────────────────────────────────────
+-- Stub world
 --
 -- Vehicles are plain integers. `world[v]` carries a position and whether it has a
 -- prop; absence from the table is "does not exist".
@@ -59,7 +59,7 @@ local function freshWorld()
     clock = 0
 end
 
--- ── The constants are part of the contract ──────────────────────────────────
+-- The constants are part of the contract
 --
 -- Pinned by name and by value: every assertion below is written against these
 -- numbers, so a silent retune would turn this suite into a description of
@@ -76,13 +76,13 @@ assert(screentarget.SOURCE_OWN == 'own' and screentarget.SOURCE_NEAREST == 'near
 assert(screentarget.DEFAULT_RANGE_M < 20.0,
     'the reading range is the short one; audio range is a different, longer number')
 
--- ── hasScreen is mandatory, and says so ─────────────────────────────────────
+-- hasScreen is mandatory, and says so
 
 local ok, err = pcall(function() return screentarget.create({}) end)
 assert(not ok and tostring(err):find('hasScreen', 1, true),
     'an arbiter with no candidate test is not a defaulting case, it is a mistake')
 
--- ── On foot: the nearest screen wins ────────────────────────────────────────
+-- On foot: the nearest screen wins
 
 freshWorld()
 put(10, 3.0)   -- three metres away
@@ -98,7 +98,7 @@ assert(src == screentarget.SOURCE_NEAREST, 'labelled as a proximity pick')
 put(30, 0.5, false)
 assert(arb.update() == 10, 'a vehicle without a prop of this kind is not a candidate')
 
--- ── Range is a cliff, not a preference ──────────────────────────────────────
+-- Range is a cliff, not a preference
 
 freshWorld()
 put(10, 8.5)
@@ -115,7 +115,7 @@ local wide = screentarget.create(providers({ range = 20.0 }))
 assert(wide.update() == 10, 'a consumer may widen the range from its own config')
 assert(wide.settings().range == 20.0, 'and can read back what is actually in force')
 
--- ── Rule 1: the vehicle you are aboard wins ─────────────────────────────────
+-- Rule 1: the vehicle you are aboard wins
 
 freshWorld()
 put(10, 4.0)              -- the car we are sitting in; our ped is inside it
@@ -139,7 +139,7 @@ assert(arb.update() == 10, 'and keeps winning while you are aboard')
 world[10].pos.x = 50.0
 assert(arb.update() == 10, 'your own vehicle is never out of range of you')
 
--- ── Aboard a vehicle with no screen: you can still read the one next door ───
+-- Aboard a vehicle with no screen: you can still read the one next door
 
 freshWorld()
 put(10, 0.0, false)       -- our own car, no prop
@@ -151,7 +151,7 @@ v, _, src = arb.update()
 assert(v == 20 and src == screentarget.SOURCE_NEAREST,
     'sitting in a car without the device does not blind you to the one beside you')
 
--- ── Rule 4: no candidate tears down ─────────────────────────────────────────
+-- Rule 4: no candidate tears down
 
 freshWorld()
 put(10, 3.0)
@@ -174,7 +174,7 @@ assert(#announcements == 2 and announcements[2].vehicle == nil,
 assert(arb.update() == nil)
 assert(#announcements == 2, 'and nothing is announced while there is still nothing')
 
--- ── Losing the incumbent is not a displacement, so nothing delays it ────────
+-- Losing the incumbent is not a displacement, so nothing delays it
 --
 -- The dwell is a floor on being DISPLACED by a rival. An incumbent that
 -- despawned, lost its prop or drove off has not been displaced, and holding it
@@ -198,7 +198,7 @@ clock = clock + 100
 world[10].pos.x = 30.0               -- it drove away
 assert(arb.update() == 20, 'and so is one that left range, without waiting out the dwell')
 
--- ── Rule 3a: the switch margin ──────────────────────────────────────────────
+-- Rule 3a: the switch margin
 
 freshWorld()
 put(10, 4.0)
@@ -214,7 +214,7 @@ world[20].pos.x = 1.9                -- 2.1 m nearer
 assert(arb.update() == 20, 'a challenger 2.1 m nearer has earned it')
 assert(arb.currentDistance() == 1.9, 'and the distance is reported for diagnostics')
 
--- ── Rule 3b: the dwell ──────────────────────────────────────────────────────
+-- Rule 3b: the dwell
 
 freshWorld()
 put(10, 4.0)
@@ -228,7 +228,7 @@ assert(arb.update() == 10, 'inside the dwell even an obvious challenger waits')
 clock = clock + 2
 assert(arb.update() == 20, 'and takes over the moment the dwell expires')
 
--- ── Hysteresis prevents the flap at equal distance ──────────────────────────
+-- Hysteresis prevents the flap at equal distance
 --
 -- The scenario the module exists for: two equipped vehicles side by side, our
 -- player between them, the sub-centimetre jitter of two networked entities
@@ -272,7 +272,7 @@ assert(tuned == 0,
 -- never anything to switch away from".
 assert(arb.current() == 10, 'the incumbent it started with is the one still drawn')
 
--- ── MUTATION PROOF ──────────────────────────────────────────────────────────
+-- MUTATION PROOF
 --
 -- Remove the hysteresis -- margin 0, dwell 0, which reduces the module to
 -- "nearest always wins" -- and replay the identical sequence. It must flap. If
@@ -293,7 +293,7 @@ assert(flapped >= FLAP_PASSES - 1,
 -- asserted against a constant that could drift apart.
 assert(flapped > tuned, 'the hysteresis is what makes the difference, not the input')
 
--- ── reset ───────────────────────────────────────────────────────────────────
+-- reset
 
 freshWorld()
 put(10, 3.0)
@@ -303,7 +303,7 @@ arb.reset()
 assert(arb.current() == nil, 'reset forgets the incumbent')
 assert(arb.update() == 10, 'and the next pass re-adopts from scratch')
 
--- ── The DEFAULT providers, against a native that answers the way the game does ──
+-- The DEFAULT providers, against a native that answers the way the game does
 --
 -- EVERY test above this line injects `exists`, which is exactly why the suite was
 -- green while the feature was dead in game. The default provider was

@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   INSTALL_ACTION_LABEL,
   INSTALL_FAILED_FALLBACK,
+  type InstallState,
   installAction,
   installError,
-  type InstallState,
   isInstallBusy,
   isInstalled,
 } from "../../shared/ts/marketplace/install-machine";
@@ -38,7 +38,7 @@ describe("isInstallBusy", () => {
 describe("isInstalled", () => {
   test("only the installed state", () => {
     expect(isInstalled({ state: "installed" })).toBe(true);
-    // ⚠️ A SUCCESSFUL attempt is not the same as "installed". `done` means the
+    // A SUCCESSFUL attempt is not the same as "installed". `done` means the
     // request finished; the installed set is updated separately, and conflating
     // them is how a card showed a delete button for something that was not there.
     expect(isInstalled({ state: "done", ok: true })).toBe(false);

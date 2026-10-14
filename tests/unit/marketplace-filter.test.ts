@@ -30,7 +30,7 @@ describe("normaliseSearchTerm", () => {
 
 describe("matchesSearchTerm", () => {
   test("an empty term matches EVERYTHING", () => {
-    // ⚠️ The inverse would hide the whole catalogue on first paint, which is
+    // The inverse would hide the whole catalogue on first paint, which is
     // what a search box at rest must never do.
     expect(matchesSearchTerm(["anything"], "")).toBe(true);
     expect(matchesSearchTerm([], "")).toBe(true);
@@ -90,7 +90,7 @@ describe("facetCounts", () => {
   const facets: readonly Kind[] = ["ui", "sound", "theme"];
 
   test("every declared facet gets a key, including the empty ones", () => {
-    // ⚠️ A chip with an absent count renders blank or `undefined` instead of
+    // A chip with an absent count renders blank or `undefined` instead of
     // `(0)`, and "there are no themes" is information the reader wants.
     const counts = facetCounts([item("a", "ui")], facets, (i) => i.type);
     expect(counts).toEqual({ all: 1, ui: 1, sound: 0, theme: 0 });
@@ -117,11 +117,7 @@ describe("facetCounts", () => {
   test("an item in an undeclared facet counts in all but creates no extra key", () => {
     // A catalogue that starts serving `anim` must not add a key nobody renders,
     // and must not be silently dropped from the total either — it IS in the shop.
-    const counts = facetCounts(
-      [item("a", "ui"), item("x", "anim" as Kind)],
-      facets,
-      (i) => i.type
-    );
+    const counts = facetCounts([item("a", "ui"), item("x", "anim" as Kind)], facets, (i) => i.type);
     expect(counts.all).toBe(2);
     expect(counts.ui).toBe(1);
     expect(Object.keys(counts).sort()).toEqual(["all", "sound", "theme", "ui"]);

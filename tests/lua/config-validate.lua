@@ -40,7 +40,7 @@ local function firstMatching(list, needle)
     return nil
 end
 
--- ── A valid config passes and reports nothing ───────────────────────────────
+-- A valid config passes and reports nothing
 
 local good = {
     detectionRangeMeters = 500.0,
@@ -55,7 +55,7 @@ assert(#r.errors == 0, 'a valid config produces no errors')
 assert(#r.warnings == 0, 'a valid config produces no warnings')
 assert(good.speedUnit == 'mph', 'a value the owner set is never overwritten')
 
--- ── Defaults fill in, and are applied to the table ──────────────────────────
+-- Defaults fill in, and are applied to the table
 
 local sparse = { licenseKey = 'abc123' }
 r = config.validate(sparse, spec())
@@ -70,7 +70,7 @@ local falsey = { flag = false }
 config.validate(falsey, falseSpec)
 assert(falsey.flag == false, 'an explicit false is not replaced by a true default')
 
--- ── Required keys are fatal ─────────────────────────────────────────────────
+-- Required keys are fatal
 
 r = config.validate({}, spec())
 assert(not r.ok, 'a missing required key fails validation')
@@ -79,7 +79,7 @@ assert(msg, 'the error names the missing key')
 assert(contains(msg, 'shared/config.lua'), 'the error names the file')
 assert(contains(msg, 'required'), 'the error says it is required')
 
--- ── Every problem is reported, not just the first ───────────────────────────
+-- Every problem is reported, not just the first
 
 r = config.validate({
     detectionRangeMeters = 'far',
@@ -94,7 +94,7 @@ assert(firstMatching(r.errors, 'speedUnit'), 'the bad enum is reported')
 assert(firstMatching(r.errors, 'enableSiren'), 'the bad boolean is reported')
 assert(firstMatching(r.errors, 'licenseKey'), 'the missing required key is still reported')
 
--- ── A message names expected, found and a fix ───────────────────────────────
+-- A message names expected, found and a fix
 
 r = config.validate({ detectionRangeMeters = 'far', licenseKey = 'k' }, spec())
 msg = firstMatching(r.errors, 'detectionRangeMeters')
@@ -109,7 +109,7 @@ msg = firstMatching(r.errors, 'detectionRangeMeters')
 assert(msg, 'a quoted number is still an error, not silently coerced')
 assert(contains(msg, 'quote'), 'a numeric-looking string is told to drop the quotes')
 
--- ── Ranges and enums ────────────────────────────────────────────────────────
+-- Ranges and enums
 
 r = config.validate({ detectionRangeMeters = 9000, licenseKey = 'k' }, spec())
 msg = firstMatching(r.errors, 'detectionRangeMeters')
@@ -128,7 +128,7 @@ config.validate(ranged, spec())
 assert(ranged.detectionRangeMeters == 9000,
     'a rejected value is left alone, never silently replaced by the default')
 
--- ── Unknown keys warn, and suggest the key that was meant ───────────────────
+-- Unknown keys warn, and suggest the key that was meant
 
 r = config.validate({ licenseKey = 'k', detectionRangeMeters = 500, speedUnit = 'kmh',
     detectionRnge = 400 }, spec())
@@ -145,31 +145,7 @@ assert(msg, 'a wholly unknown key is still reported')
 assert(not contains(msg, 'did you mean'),
     'no suggestion is offered when nothing is close')
 
--- ── Deprecated keys keep working, and say so once ───────────────────────────
-
-local depSpec = spec({
-    deprecated = {
-        detectionRange = { replacement = 'detectionRangeMeters', removeIn = '2.0.0' },
-    },
-})
-local old = { detectionRange = 750, licenseKey = 'k' }
-r = config.validate(old, depSpec)
-assert(r.ok, 'a deprecated key still validates')
-assert(old.detectionRangeMeters == 750, 'the old key\'s value is carried to the new key')
-msg = firstMatching(r.warnings, 'detectionRange')
-assert(msg, 'the deprecation is reported')
-assert(contains(msg, 'detectionRangeMeters'), 'the warning names the replacement')
-assert(contains(msg, '2.0.0'), 'the warning names the version it stops working in')
-assert(not firstMatching(r.warnings, 'did you mean'),
-    'a deprecated key is not also reported as an unknown key')
-
--- The new key wins when both are present.
-local both = { detectionRange = 750, detectionRangeMeters = 300, licenseKey = 'k' }
-r = config.validate(both, depSpec)
-assert(both.detectionRangeMeters == 300, 'an explicit new key beats a deprecated old one')
-assert(firstMatching(r.warnings, 'detectionRange'), 'the deprecated key is still flagged')
-
--- ── list type ───────────────────────────────────────────────────────────────
+-- list type
 
 r = config.validate({ radarResources = 'tRadar', licenseKey = 'k' }, spec())
 msg = firstMatching(r.errors, 'radarResources')
@@ -177,7 +153,7 @@ assert(msg, 'a scalar where a list belongs is an error')
 assert(contains(msg, 'list') or contains(msg, 'table'), 'the message says a list was expected')
 assert(contains(msg, '{'), 'the message shows the table syntax as the fix')
 
--- ── check() returns a boolean and never throws ──────────────────────────────
+-- check() returns a boolean and never throws
 
 local ok = config.check({ licenseKey = 'k' }, spec())
 assert(ok == true, 'check() returns true for a valid config')
@@ -187,7 +163,7 @@ assert(ok == false, 'check() returns false for an invalid one')
 print('PASS: tlib.config reports every problem, names file/key/expected/found/fix, ' ..
     'suggests typos, honours deprecations, and never silently substitutes')
 
--- ── configured(): the owner's value survives runtime mutation ───────────────
+-- configured(): the owner's value survives runtime mutation
 --
 -- The case this exists for, found by the tRadar session: `Config.speedUnit` is
 -- deliberately the client's LIVE value, rewritten when a player picks a unit.

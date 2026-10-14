@@ -68,7 +68,7 @@ local bus = audio3d.createBus({
     },
 })
 
--- ── The payload whitelist ────────────────────────────────────────────────────
+-- The payload whitelist
 
 assert(bus:sanitize({ kind = 'alert', sound = 'lock.wav' }) ~= nil,
     'a well-formed payload survives')
@@ -85,7 +85,7 @@ assert(bus:sanitize('not a table') == nil, 'a non-table payload is rejected')
 assert(bus:sanitize({ kind = 'alert', sound = 42 }) == nil,
     'one bad field rejects the message rather than being silently omitted')
 
--- ── The emitter is the vehicle ───────────────────────────────────────────────
+-- The emitter is the vehicle
 
 coordsById = { [1] = { x = 0, y = 0, z = 0 }, [2] = { x = 5, y = 0, z = 0 } }
 occupantVehicle = {} -- everybody on foot
@@ -96,7 +96,7 @@ assert(bus:emit(1, { kind = 'alert' }) == 0,
 assert(#sent == 0)
 assert(bus:stats().notAboard == 1, 'and it is counted as such rather than as a rejection')
 
--- ── Fan-out by distance around the vehicle, sender excluded ──────────────────
+-- Fan-out by distance around the vehicle, sender excluded
 
 occupantVehicle = { [1] = 77 }
 coordsById = {
@@ -120,7 +120,7 @@ vehicleExists = false
 assert(bus:emit(1, { kind = 'alert' }) == 0, 'a despawned vehicle reaches nobody')
 vehicleExists = true
 
--- ── The rate limit is per vehicle, partitioned by class ──────────────────────
+-- The rate limit is per vehicle, partitioned by class
 
 reset()
 assert(bus:emit(1, { kind = 'tone' }) > 0, 'first tone goes out')
@@ -145,7 +145,7 @@ occupantVehicle[6] = 88
 coordsById[6] = { x = 2, y = 0, z = 0 }
 assert(bus:emit(6, { kind = 'tone' }) > 0, 'another car is another emitter')
 
--- ── The per-second ceiling bounds the sum of the partitions ──────────────────
+-- The per-second ceiling bounds the sum of the partitions
 
 local capBus = audio3d.createBus({
     event = 'tradar:capped',
@@ -167,7 +167,7 @@ assert(through == 3, 'the per-second ceiling holds across partitions, got ' .. t
 now = now + 1001
 assert(capBus:emit(1, { kind = 'after' }) > 0, 'the window slides')
 
--- ── The per-broadcast receiver cap keeps the nearest ─────────────────────────
+-- The per-broadcast receiver cap keeps the nearest
 
 local capped = audio3d.createBus({
     event = 'tradar:many',
@@ -183,7 +183,7 @@ assert(capped:emit(1, { kind = 'alert' }) == 3, 'never more than the cap')
 assert(targets() == '2,3,4', 'and it is the nearest three, not an arbitrary three')
 assert(capped:stats().capped == 1)
 
--- ── Range is clamped, and required ───────────────────────────────────────────
+-- Range is clamped, and required
 
 local wide = audio3d.createBus({ event = 'x', range = 100000, fields = {} })
 assert(wide:getRange() == audio3d.MAX_RANGE,

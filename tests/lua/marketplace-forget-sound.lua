@@ -21,7 +21,7 @@
 -- The module is pure -- no natives, no resource files -- so this suite needs no
 -- host stubs at all. Everything below is the function's own contract.
 --
--- ── NEGATIVE CONTROL ───────────────────────────────────────────────────────
+-- NEGATIVE CONTROL
 --
 -- FORGET_CONTROL=1 plants the OLD call shape back: every call drops its
 -- `scopedMaps` argument, which is exactly what `removeSound` did before this
@@ -80,7 +80,7 @@ local function scoped(maps)
     return maps
 end
 
--- ── forgetSoundFile: the flat map ──────────────────────────────────────────
+-- forgetSoundFile: the flat map
 
 do
     local flat = { HORN = 'horn.wav', YELP = 'yelp.wav', ALSO_HORN = 'horn.wav' }
@@ -121,7 +121,7 @@ do
     must(byModel.police == nil, 'a sweep with no flat map did not reach the scoped map')
 end
 
--- ── forgetSoundFile: the scoped maps ───────────────────────────────────────
+-- forgetSoundFile: the scoped maps
 
 do
     local flat = { HORN = 'horn.wav' }
@@ -179,7 +179,7 @@ do
         'a scope whose value is not a table was rewritten rather than left alone')
 end
 
--- ── removeSound delegates, and still returns the filename ──────────────────
+-- removeSound delegates, and still returns the filename
 
 do
     local installed = {
@@ -225,7 +225,7 @@ do
     must(flat.HORN == nil, 'the three-argument form stopped sweeping the flat map')
 end
 
--- ── Verdict ────────────────────────────────────────────────────────────────
+-- Verdict
 
 if CONTROL then
     local expected = 5

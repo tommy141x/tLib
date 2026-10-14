@@ -7,7 +7,7 @@
  * other test here is about the scanner; that one is about the thing the whole
  * design rests on, which is that there is only one list.
  *
- * ⚠️ Coverage is asserted as a SET OF NAMES, never as a count. Three precedents
+ * Coverage is asserted as a SET OF NAMES, never as a count. Three precedents
  * in this tree for why: a control that passed by accident, one with a stale
  * expected count that refused its own run, and one that asserted what a stub had
  * been told to record. A count is satisfied by the wrong members.

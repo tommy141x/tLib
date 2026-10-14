@@ -55,7 +55,7 @@ const exhaustive: Required<CatalogueItem> = {
   thumbnail: "wire-thumbnail",
   previewUrl: "wire-preview-url",
   likes: 444,
-  // ⚠️ `true`, not `false`. The exhaustiveness test below compares JSON-stringified
+  // `true`, not `false`. The exhaustiveness test below compares JSON-stringified
   // VALUES, and `false` collides with nothing here while `true` is unique — but
   // more importantly a `false` that was silently dropped would be
   // indistinguishable from an omitted key, which is the one distinction this
@@ -84,9 +84,7 @@ describe("exhaustiveness: no wire field may be silently dropped", () => {
   test("the canonical item carries no more fields than the wire supplied", () => {
     // Guards the other direction: a field invented by the normaliser rather than
     // carried from the wire would be data the backend never sent.
-    expect(Object.keys(toCanonicalItem(exhaustive)).length).toBe(
-      Object.keys(exhaustive).length,
-    );
+    expect(Object.keys(toCanonicalItem(exhaustive)).length).toBe(Object.keys(exhaustive).length);
   });
 });
 
@@ -113,7 +111,7 @@ describe("optional fields are omitted, not set to undefined", () => {
     (key) => {
       const item = toCanonicalItem(base);
       expect(key in item).toBe(false);
-    },
+    }
   );
 
   test("present optional fields are carried through", () => {
@@ -141,11 +139,9 @@ describe("optional fields are omitted, not set to undefined", () => {
   });
 });
 
-describe("likes: omission means \"this host has no likes\", not zero", () => {
+describe('likes: omission means "this host has no likes", not zero', () => {
   /*
-   * ═══════════════════════════════════════════════════════════════════════
-   * ⚠️ THE ONE RULE ON THIS FIELD THAT IS EASY TO BREAK AND SILENT WHEN BROKEN.
-   * ═══════════════════════════════════════════════════════════════════════
+   * THE ONE RULE ON THIS FIELD THAT IS EASY TO BREAK AND SILENT WHEN BROKEN.
    *
    * `downloads` and `size_bytes` go through `num()`, which maps a missing value
    * to `0`. Doing the same to `likes` would be the obvious consistency — and it
@@ -185,9 +181,9 @@ describe("likes: omission means \"this host has no likes\", not zero", () => {
   });
 });
 
-describe("liked: absence means \"we did not ask\", and false must survive", () => {
+describe('liked: absence means "we did not ask", and false must survive', () => {
   /*
-   * ⚠️ A PRESENCE CHECK, NOT A TRUTHINESS ONE. `liked: false` means "you have
+   * A PRESENCE CHECK, NOT A TRUTHINESS ONE. `liked: false` means "you have
    * not liked this" and renders a working empty heart; an ABSENT `liked` means
    * no identity was asserted and renders no heart at all. A `raw.liked ? … : {}`
    * spread would collapse the first into the second, which takes the control

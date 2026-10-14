@@ -64,7 +64,7 @@ describe("byNumberDesc", () => {
   });
 
   test("a missing count sorts as 0 rather than poisoning the comparison", () => {
-    // ⚠️ The documented bug: `undefined - number` is NaN, a NaN comparator reads
+    // The documented bug: `undefined - number` is NaN, a NaN comparator reads
     // as "equal", and the result is neither sorted nor stable, with nothing
     // logged. `null` has to behave the same way — tRadio's own item shape
     // declares `previewColors?: string[] | null`, so null is a real wire value.
@@ -74,7 +74,12 @@ describe("byNumberDesc", () => {
       item({ name: "null", downloads: null }),
     ].sort(byNumberDesc((i) => i.downloads));
     expect(out[0]!.name).toBe("five");
-    expect(out.map((i) => i.name).slice(1).sort()).toEqual(["none", "null"]);
+    expect(
+      out
+        .map((i) => i.name)
+        .slice(1)
+        .sort()
+    ).toEqual(["none", "null"]);
   });
 
   test("byNumberAsc is the mirror", () => {
@@ -88,16 +93,22 @@ describe("byNumberDesc", () => {
 describe("text comparators", () => {
   test("A-Z and Z-A", () => {
     const names = () => [item({ name: "Bravo" }), item({ name: "alpha" })];
-    expect(names().sort(byTextAsc((i) => i.name)).map((i) => i.name)).toEqual(["alpha", "Bravo"]);
-    expect(names().sort(byTextDesc((i) => i.name)).map((i) => i.name)).toEqual(["Bravo", "alpha"]);
+    expect(
+      names()
+        .sort(byTextAsc((i) => i.name))
+        .map((i) => i.name)
+    ).toEqual(["alpha", "Bravo"]);
+    expect(
+      names()
+        .sort(byTextDesc((i) => i.name))
+        .map((i) => i.name)
+    ).toEqual(["Bravo", "alpha"]);
   });
 
   test("uses localeCompare, so digits and accents order as a reader expects", () => {
     // Codepoint order would put "Unit 10" before "Unit 9" and "Zebra" before
     // "Ägis". This asserts the accent case, which is the unambiguous one.
-    const out = [item({ name: "Zebra" }), item({ name: "Ägis" })].sort(
-      byTextAsc((i) => i.name)
-    );
+    const out = [item({ name: "Zebra" }), item({ name: "Ägis" })].sort(byTextAsc((i) => i.name));
     expect(out.map((i) => i.name)).toEqual(["Ägis", "Zebra"]);
   });
 
@@ -121,10 +132,9 @@ describe("byNewestFirst", () => {
 
 describe("byFlagFirst", () => {
   test("flagged items lead", () => {
-    const out = [
-      item({ name: "no" }),
-      item({ name: "yes", installed: true }),
-    ].sort(byFlagFirst((i) => i.installed === true));
+    const out = [item({ name: "no" }), item({ name: "yes", installed: true })].sort(
+      byFlagFirst((i) => i.installed === true)
+    );
     expect(out.map((i) => i.name)).toEqual(["yes", "no"]);
   });
 
@@ -154,10 +164,9 @@ describe("byRank", () => {
   test("an unranked type sorts LAST, not first", () => {
     // A type nobody added to the lookup appearing at the top of the grid is the
     // more surprising failure, so the default rank is the maximum.
-    const out = [
-      item({ name: "mystery", type: "anim" }),
-      item({ name: "u", type: "ui" }),
-    ].sort(byRank((i) => i.type ?? "", ranks));
+    const out = [item({ name: "mystery", type: "anim" }), item({ name: "u", type: "ui" })].sort(
+      byRank((i) => i.type ?? "", ranks)
+    );
     expect(out.map((i) => i.name)).toEqual(["u", "mystery"]);
   });
 });

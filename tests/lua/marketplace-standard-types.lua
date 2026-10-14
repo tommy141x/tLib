@@ -26,7 +26,7 @@
 
 local CONTROL = os.getenv('MKT_CONTROL') == '1'
 
--- ── Stub host ───────────────────────────────────────────────────────────────
+-- Stub host
 
 local registered = {}        -- kind -> installPath
 local registerCalls = 0
@@ -74,7 +74,7 @@ local function reset()
     handlers, clientEvents, notes, warns = {}, {}, {}, {}
 end
 
--- ── registerType: the opt-out a server is allowed to make ──────────────────
+-- registerType: the opt-out a server is allowed to make
 
 reset()
 must(marketplace.registerType('ui', 'layouts', warn) == true,
@@ -108,7 +108,7 @@ registerFails.ui = 'throw'
 local ok = pcall(marketplace.registerType, 'ui', 'layouts', nil)
 must(ok, 'registerType raised when it had no warn function')
 
--- ── standardTypes: both halves, the default paths, the event prefix ────────
+-- standardTypes: both halves, the default paths, the event prefix
 
 reset()
 local layoutInstalls, layoutUninstalls = {}, {}
@@ -169,11 +169,11 @@ installed('anim', 'wave', {})
 must(#layoutInstalls + #soundInstalls == before,
     'an unknown item type was dispatched to one of the two halves')
 
--- ── soundConflict: targeted, logged, and never a broadcast ─────────────────
+-- soundConflict: targeted, logged, and never a broadcast
 
 reset()
 
--- ⛔ THE CONTROL'S DEFECT, planted in the path under test rather than beside it.
+-- THE CONTROL'S DEFECT, planted in the path under test rather than beside it.
 --
 -- The module reads `TriggerClientEvent` as a global at call time, so replacing
 -- it here puts the shipped bug back inside `soundConflict`: the send still
@@ -202,7 +202,7 @@ must(sent.payload.filename == 'ka-band.wav', 'the payload did not carry the file
 must(sent.payload.newSlug == 'ka-band' and sent.payload.oldSlug == 'old-tone',
     'the payload did not carry both slugs')
 
--- ⛔ THE BUG, asserted directly. `-1` is every player on the server, for a
+-- THE BUG, asserted directly. `-1` is every player on the server, for a
 -- message about an admin action that, in three of the four resources, nothing
 -- could even receive. Under the control these two are the assertions that have
 -- to fail, and the verdict refuses the run if they do not.
@@ -242,7 +242,7 @@ must(marketplace.soundConflict('old-tone', 'ka-band', { src = 9 }, nil, warn) ==
 must(#warns == 1, 'the console record was dropped along with the client send')
 must(#clientEvents == 0, 'a client event was fired with no event name')
 
--- ── Either half may be absent ──────────────────────────────────────────────
+-- Either half may be absent
 
 reset()
 marketplace.standardTypes('tProbeUi', { note = note, warn = warn, sounds = false })
@@ -265,14 +265,14 @@ reset()
 marketplace.standardTypes('tProbePath', { layouts = { path = 'ui/skins' }, sounds = false })
 must(registered.ui == 'ui/skins', 'an explicit install path was ignored')
 
--- ── The pre-existing helpers are untouched ─────────────────────────────────
+-- The pre-existing helpers are untouched
 
 local sounds = {}
 must(marketplace.upsertSound(sounds, 'ka') == nil, 'upsertSound invented a conflict')
 must(#sounds == 1 and sounds[1].filename == 'ka.wav', 'upsertSound did not add the entry')
 must(marketplace.removeSound(sounds, {}, 'ka') == 'ka.wav', 'removeSound did not report the file')
 
--- ── Verdict ────────────────────────────────────────────────────────────────
+-- Verdict
 
 if CONTROL then
     -- Both target assertions must have tripped: the send went to -1 instead of

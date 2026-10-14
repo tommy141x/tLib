@@ -37,7 +37,7 @@ local function equal(actual, expected, message)
     end
 end
 
--- ── The host, as the client side of a FiveM resource ────────────────────────
+-- The host, as the client side of a FiveM resource
 
 _TLIB_IS_FIVEM = true
 _TLIB_SIDE = 'client'
@@ -79,7 +79,7 @@ Platform = { _stub = function(name) return function() error('stub ' .. name, 0) 
 assert(loadfile(UI, 't', _G),
     'shared/lib/adapter/ui.lua not found -- run this suite from the tLib resource root')()
 
--- ── The ready handshake ─────────────────────────────────────────────────────
+-- The ready handshake
 
 check(declared['__tlib_nui_ready'] == 1, 'the ready callback is declared to the host exactly once')
 check(handlers['__tlib_nui_ready'] ~= nil, 'the ready callback is registered')
@@ -89,7 +89,7 @@ handlers['__tlib_nui_ready'](nil, function(result) readyReply = result end)
 equal(type(readyReply), 'table', 'the ready handshake answers with a table, not an encoded string')
 check(Platform.isNUIReady(), 'the handshake marks the page ready')
 
--- ── onUIEvent: the one-way form still has to answer correctly ───────────────
+-- onUIEvent: the one-way form still has to answer correctly
 
 local heard
 Platform.onUIEvent({}, 'probe_event', function(data) heard = data end)
@@ -100,7 +100,7 @@ equal(type(eventReply), 'table', 'onUIEvent answers with a table, not an encoded
 equal(type(heard), 'table', 'onUIEvent decodes a string body into a table for its handler')
 equal(heard.field, 'value', 'the decoded body reaches the handler')
 
--- ── onUIRequest: the answering form, which is what the menu runs on ─────────
+-- onUIRequest: the answering form, which is what the menu runs on
 
 local received, answer
 Platform.onUIRequest({}, 'probe_request', function(data, finish)
@@ -138,14 +138,14 @@ handlers['probe_table_body']({ already = 'parsed' }, function() end)
 equal(type(secondReceived), 'table', 'a table body is handed over as a table')
 equal(secondReceived.already, 'parsed', 'a table body is not re-decoded')
 
--- ── And the encoder was never touched on the reply path ─────────────────────
+-- And the encoder was never touched on the reply path
 --
 -- The assertion that makes this suite exclusive rather than inclusion-only: every
 -- reply above could carry the right fields and still be wrong if the adapter
 -- serialized it on the way out. Nothing in these paths may call json.encode.
 equal(encodeCalls, 0, 'the adapter never encodes a reply itself -- resultCallback does that')
 
--- ── Outbound messages are unaffected ───────────────────────────────────────
+-- Outbound messages are unaffected
 --
 -- sendUIEvent is one-way and was never double-encoded; pinned here so a fix to the
 -- reply path cannot be "tidied" into changing the message envelope the renderer

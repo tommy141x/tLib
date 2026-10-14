@@ -45,7 +45,7 @@ local function mustApply(condition, message)
     end
 end
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 
 local FILES = {}
 local resourceName = 'tProbe'
@@ -74,7 +74,7 @@ if CONTROL then
     Secrets.read = function() return nil, nil end
 end
 
--- ── A sidecar supplies what the tracked config leaves blank ─────────────────
+-- A sidecar supplies what the tracked config leaves blank
 
 local TRACKED = [[
 Config = {
@@ -120,7 +120,7 @@ must(config.band == 'ka', 'the overlay touched a non-credential key it was not g
 must(TRACKED:find('authToken     = ""', 1, true) ~= nil,
     'the module mutated the tracked config source')
 
--- ── A convar beats the sidecar: production overrides the dev machine ────────
+-- A convar beats the sidecar: production overrides the dev machine
 
 convars['tprobe_authToken'] = 'from-the-host-secret-store'
 local withConvar = freshConfig()
@@ -142,7 +142,7 @@ Secrets.overlay(plain, { quiet = true })
 must(plain.band == 'ka', 'a convar overrode a non-credential key')
 convars = {}
 
--- ── No sidecar: the customer's case, and CI's ──────────────────────────────
+-- No sidecar: the customer's case, and CI's
 
 FILES['tProbe/config.local.lua'] = nil
 local bare = freshConfig()
@@ -151,7 +151,7 @@ must(bare.authToken == '', 'an absent sidecar did not leave the config alone')
 must(bareResult.sidecar == false, 'an absent sidecar was reported as read')
 must(#bareResult.errors == 0, 'an absent sidecar was reported as an error')
 
--- ── A broken sidecar is an ERROR, never a silent blank ─────────────────────
+-- A broken sidecar is an ERROR, never a silent blank
 
 FILES['tProbe/config.local.lua'] = 'return { authToken = '
 local broken = freshConfig()
@@ -175,7 +175,7 @@ local sandboxResult = Secrets.overlay(sandboxed, { quiet = true })
 mustApply(#sandboxResult.errors == 1, 'a sidecar calling a host global was not sandboxed')
 must(sandboxed.authToken == '', 'a raising sidecar still wrote a value')
 
--- ── credentialPaths derives from SECRET_PATTERNS, not from a list ──────────
+-- credentialPaths derives from SECRET_PATTERNS, not from a list
 
 FILES['tProbe/config.local.lua'] = nil
 local paths = Secrets.credentialPaths(freshConfig())
@@ -196,7 +196,7 @@ for _, p in ipairs(Secrets.credentialPaths(future)) do futurePaths[p] = true end
 must(futurePaths['s3.AccessKey'],
     'AccessKey — the key the old hand-written lists missed — is still not derived')
 
--- ── Verdict ────────────────────────────────────────────────────────────────
+-- Verdict
 
 if CONTROL then
     local expected = 8

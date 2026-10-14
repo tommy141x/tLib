@@ -33,7 +33,7 @@ tlib = {
 
 local occupancy = dofile('shared/imports/occupancy/client.lua')
 
--- ── On foot ─────────────────────────────────────────────────────────────
+-- On foot
 
 occupancy.poll()
 assert(occupancy.isFrontSeat() == false, 'a player on foot is in no front seat')
@@ -42,7 +42,7 @@ assert(occupancy.isController() == false, 'and controls no vehicle')
 assert(occupancy.myVehicle() == nil, 'and is in no vehicle')
 assert(occupancy.partner() == nil, 'and has nobody beside them')
 
--- ── Driving alone ───────────────────────────────────────────────────────
+-- Driving alone
 
 mySeat = { seat = -1, vehicle = 500, netId = 10 }
 frontIds = { driver = 1 }
@@ -55,7 +55,7 @@ local vehicle, netId = occupancy.myVehicle()
 assert(vehicle == 500 and netId == 10, 'the vehicle is reported with its network id')
 assert(occupancy.partner() == nil, 'an empty passenger seat is nobody')
 
--- ── A passenger joins: the driver keeps control ─────────────────────────
+-- A passenger joins: the driver keeps control
 
 frontIds = { driver = 1, passenger = 2 }
 occupancy.poll()
@@ -63,7 +63,7 @@ occupancy.poll()
 assert(occupancy.isController() == true, 'a passenger sitting down does not take control')
 assert(occupancy.partner() == 2, 'the driver sees the passenger beside them')
 
--- ── The same car, seen from the passenger's client ──────────────────────
+-- The same car, seen from the passenger's client
 
 myId = 2
 mySeat = { seat = 0, vehicle = 500, netId = 10 }
@@ -74,7 +74,7 @@ assert(occupancy.isDriver() == false, 'but is not the driver')
 assert(occupancy.isController() == false, 'and does not control a vehicle that has a driver')
 assert(occupancy.partner() == 1, 'the passenger sees the driver beside them')
 
--- ── The driver gets out: the passenger inherits ─────────────────────────
+-- The driver gets out: the passenger inherits
 
 frontIds = { passenger = 2 }
 occupancy.poll()
@@ -82,7 +82,7 @@ occupancy.poll()
 assert(occupancy.isController() == true, 'with the driver seat empty the passenger controls it')
 assert(occupancy.partner() == nil, 'and has nobody beside them')
 
--- ── A new driver sits down and takes over at once ───────────────────────
+-- A new driver sits down and takes over at once
 
 frontIds = { driver = 3, passenger = 2 }
 occupancy.poll()
@@ -91,7 +91,7 @@ assert(occupancy.isController() == false, 'a driver taking the seat takes contro
 assert(occupancy.isFrontSeat() == true, 'the passenger keeps their seat')
 assert(occupancy.partner() == 3, 'and sees the new driver')
 
--- ── Rear seats: the third tier ──────────────────────────────────────────
+-- Rear seats: the third tier
 -- A rear passenger is aboard and is not a front-seat occupant. Every field an
 -- existing consumer reads off the snapshot — seat, vehicle, netId, partner,
 -- isController — answers for them exactly as it did when a rear seat was
@@ -131,7 +131,7 @@ assert(occupancy.tier() == occupancy.TIER_REAR, "seat 14 of a bus is a rear pass
 assert(occupancy.isController() == false, 'and controls nothing from back there')
 assert(select(3, occupancy.cabin()) == 14, 'reported under its own index, not flattened')
 
--- ── On foot is still a fourth answer, distinct from the back seat ───────
+-- On foot is still a fourth answer, distinct from the back seat
 
 mySeat = nil
 frontIds = {}
@@ -142,7 +142,7 @@ assert(occupancy.cabin() == nil, 'and no cabin')
 assert(occupancy.isFrontSeat() == false)
 assert(occupancy.isController() == false)
 
--- ── Tier transitions ────────────────────────────────────────────────────
+-- Tier transitions
 
 local function poll(seat, vehicle, netId, ids)
     mySeat = seat and { seat = seat, vehicle = vehicle, netId = netId } or nil
@@ -181,7 +181,7 @@ assert(occupancy.isAboard() == false, 'and stepping out ends that too')
 myId = 1
 frontIds = {}
 
--- ── Changes are announced once per transition ───────────────────────────
+-- Changes are announced once per transition
 
 local changes = {}
 occupancy.onChange(function(state)

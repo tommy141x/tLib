@@ -72,7 +72,7 @@ end
 eq(type(exported.CommunityConfigsPeek), 'function', 'CommunityConfigsPeek is exported')
 eq(type(exported.CommunityConfigsImport), 'function', 'CommunityConfigsImport still exported')
 
--- ── The property this suite exists for ──────────────────────────────────────
+-- The property this suite exists for
 reset()
 local peeked = invoke('CommunityConfigsPeek', 'cfg_abc')
 eq(#calls, 1, 'peek makes exactly one bridge call')
@@ -83,12 +83,12 @@ reset()
 invoke('CommunityConfigsImport', 'cfg_abc')
 eq(calls[1].name, 'ccImport', 'import still counts, so the two are genuinely distinct')
 
--- ── The callback contract tELS is already written against ───────────────────
+-- The callback contract tELS is already written against
 eq(peeked.ok, true, 'peek ok')
 eq(peeked.configJson, '{"leds":[]}', 'peek hands back the raw config STRING, arg 2')
 eq(peeked.err, nil, 'no error on success')
 
--- ── Failure paths, matching Import's ────────────────────────────────────────
+-- Failure paths, matching Import's
 reset()
 local badId = invoke('CommunityConfigsPeek', '')
 eq(#calls, 0, 'an empty id never reaches the bridge')

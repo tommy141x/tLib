@@ -15,7 +15,7 @@ local function check(value, message)
     assert(value, message)
 end
 
--- ── Host ────────────────────────────────────────────────────────────────────
+-- Host
 
 local ENDPOINT = '203.0.113.7:30120'
 
@@ -76,7 +76,7 @@ local function loadSettings(env)
     return assert(loadfile('shared/imports/settings/client.lua', 't', env))()
 end
 
--- ── The server tag ──────────────────────────────────────────────────────────
+-- The server tag
 
 --- tRadio's implementation, transcribed from `client/cl_bridge.lua` before it
 --- moved. The shared one has to agree with this exactly or every player's
@@ -101,7 +101,7 @@ do
 end
 print('PASS the shared server tag is byte-identical to tRadio\'s')
 
--- ── Key composition matches both forks ──────────────────────────────────────
+-- Key composition matches both forks
 
 do
     local env = host({ tlib_community_id = 'tgstudios' })
@@ -141,7 +141,7 @@ do
 end
 print('PASS an unresolved endpoint does not revert a scoped setting')
 
--- ── nilWhenUnset ────────────────────────────────────────────────────────────
+-- nilWhenUnset
 
 do
     local env = host()
@@ -172,7 +172,7 @@ do
 end
 print('PASS nilWhenUnset changes only the never-written answer')
 
--- ── settings.serverScoped ───────────────────────────────────────────────────
+-- settings.serverScoped
 
 do
     local env = host({ tlib_community_id = 'tgstudios' })
@@ -225,7 +225,7 @@ do
 end
 print('PASS settings.serverScoped isolates per-server tuning and nothing else')
 
--- ── Negative controls, run ──────────────────────────────────────────────────
+-- Negative controls, run
 --
 -- Each control is a view-like object blind to exactly one option. The suite
 -- asserts each fails the scenario that option exists for, and that the real

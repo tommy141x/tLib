@@ -20,7 +20,7 @@
 -- PROCESS, and those differ only after a restart — which is exactly when it broke.
 -- So this suite models the taken names.
 --
--- ── The negative controls ───────────────────────────────────────────────────
+-- The negative controls
 --
 -- Both plant their defect in THE MODULE'S OWN SOURCE, by substituting one line and
 -- `load`ing the result — not by substituting a stub, which would only prove the stub
@@ -79,7 +79,7 @@ local function expect(label, ok, message)
     if not ok then error(('%s [%s]'):format(message, label), 0) end
 end
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 
 local clock = 1000
 function GetGameTimer() return clock end
@@ -96,7 +96,7 @@ function CreateRuntimeTxd(name)
     return 'txd:' .. handles
 end
 
--- ── The module, with the control's defect planted in its own source ─────────
+-- The module, with the control's defect planted in its own source
 --
 -- RUNTIMETXD_SOURCE names the file to load. It is the real module on a normal run; a
 -- control run points it at a copy with ONE line substituted. The copy is produced by
@@ -117,7 +117,7 @@ end
 
 local RuntimeTxd = assert(loadfile(SOURCE_PATH))()
 
--- ── One dictionary per load, however often it is asked for ──────────────────
+-- One dictionary per load, however often it is asked for
 
 local txds = RuntimeTxd.create('tdet_scr_txd')
 
@@ -145,7 +145,7 @@ expect('name-stable-within-load', nameStable, 'the dictionary name changed withi
 expect('name-carries-prefix', name:find('^tdet_scr_txd') ~= nil,
     'the dictionary name does not carry its prefix: ' .. name)
 
--- ── The tag is resolved LAZILY ──────────────────────────────────────────────
+-- The tag is resolved LAZILY
 --
 -- Natives are not reliably callable while a resource's scripts are still being
 -- loaded, which is when `create` runs. A tag taken at create time would be whatever
@@ -160,7 +160,7 @@ end)()
 expect('lazy-tag', lateTagName == ('tlate_%x'):format(clock),
     'the per-load tag was resolved when create() ran rather than on first use: ' .. lateTagName)
 
--- ── Texture names carry the tag, so they cannot survive a restart ───────────
+-- Texture names carry the tag, so they cannot survive a restart
 
 local texA = txds.textureName('tdet_screen', 1)
 local texB = txds.textureName('tdet_screen', 2)
@@ -175,7 +175,7 @@ local constantName = txds.textureName('tdet_key_lit')
 expect('constant-name-carries-tag', constantName:find(txds.tag(), 1, true) ~= nil,
     'a serial-less texture name does not carry the per-load tag: ' .. constantName)
 
--- ── A RESTART ───────────────────────────────────────────────────────────────
+-- A RESTART
 --
 -- A new resource load in the SAME game client: GetGameTimer has moved on, so every
 -- name this load takes must differ from every name the last one did. Modelled as a
@@ -207,7 +207,7 @@ expect('calls-across-two-loads', #txdCalls == 2,
     'expected 2 CreateRuntimeTxd calls across two loads, got '
         .. #txdCalls .. ': ' .. table.concat(txdCalls, ', '))
 
--- ── Two prefixes are two dictionaries, and that is the point ────────────────
+-- Two prefixes are two dictionaries, and that is the point
 --
 -- Nothing stops a consumer creating a second instance; what stops it being free is
 -- that `count` says so. The module's header says ONE dictionary per resource.
@@ -216,7 +216,7 @@ second.ensure()
 expect('prefixes-are-distinct', second.name() ~= reloaded.name(),
     'two prefixes produced the same dictionary name')
 
--- ── The prefix is required ──────────────────────────────────────────────────
+-- The prefix is required
 --
 -- Otherwise the name is `_<tag>`, which is a valid-looking dictionary nobody can
 -- find in a log.
@@ -228,7 +228,7 @@ expect('prefix-is-required', junkRejected, 'create accepted a junk or absent pre
 expect('stem-is-required', not pcall(second.textureName, ''),
     'textureName accepted an empty stem')
 
--- ── The control's own bookkeeping ───────────────────────────────────────────
+-- The control's own bookkeeping
 
 if CONTROL ~= nil then
     local missing, n = {}, 0

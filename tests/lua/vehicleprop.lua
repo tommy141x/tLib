@@ -24,7 +24,7 @@
 
 local function fail(message) error(message, 2) end
 
--- ── A fake world ────────────────────────────────────────────────────────────
+-- A fake world
 --
 -- Entities are integer handles into `world`. Enough of one that the adoption
 -- sweep, the orphan reclaim and the lifecycle pass are all exercised against
@@ -50,7 +50,7 @@ local function pool(kind)
     return out
 end
 
--- ── Host stubs ──────────────────────────────────────────────────────────────
+-- Host stubs
 
 -- Threads are CAPTURED, then run with a budget. Both long-lived threads in
 -- these two modules are `while true do ... Citizen.Wait(n) end`, so a Wait stub
@@ -152,11 +152,29 @@ function DeleteObject(e)
     if world[e] then world[e].deleted = true end
     deleted[#deleted + 1] = e
 end
+local attachCalls = {}
 function AttachEntityToEntity(obj, target)
     if world[obj] then world[obj].attachedTo = target end
+    attachCalls[#attachCalls + 1] = obj
+end
+
+-- Enough matrix for the driven path. A scaled placement does not attach at all
+-- — it is positioned by SetEntityMatrix every frame — so a suite with no matrix
+-- stubs would crash on the first scaled placement rather than assert anything
+-- about it.
+local matrixWrites = {}
+function GetEntityMatrix()
+    return { x = 0, y = 1, z = 0 }, { x = 1, y = 0, z = 0 },
+           { x = 0, y = 0, z = 1 }, { x = 0, y = 0, z = 0 }
+end
+function SetEntityMatrix(obj, fx, fy, fz)
+    matrixWrites[#matrixWrites + 1] = { prop = obj, scale = math.sqrt(fx * fx + fy * fy + fz * fz) }
 end
 function DetachEntity(obj)
     if world[obj] then world[obj].attachedTo = nil end
+end
+function IsEntityAttached(obj)
+    return world[obj] ~= nil and world[obj].attachedTo ~= nil
 end
 function FreezeEntityPosition() end
 
@@ -216,15 +234,19 @@ end
 tlib = {
     platform = { setInputMode = function() end, setKeepInputActive = function() end },
 }
+-- The REAL drivenprop, not a stub, for the same reason the propeditor below is
+-- real: the lifecycle asks `isUnitScale` to choose between attaching a prop and
+-- driving its matrix, and shares the editor's driver. A stub would let the
+-- attached path be taken for a scaled placement — the one measured failure this
+-- whole mechanism exists to avoid — and nothing here would see it.
+tlib.drivenprop = dofile('shared/imports/drivenprop/shared.lua')
 tlib.propeditor = dofile('shared/imports/propeditor/client.lua')
 
 local VehicleProp = dofile('shared/imports/vehicleprop/shared.lua')
 
--- ════════════════════════════════════════════════════════════════════════════
 --  THE PURE RULES
--- ════════════════════════════════════════════════════════════════════════════
 
--- ── Archetype names that reach a native ─────────────────────────────────────
+-- Archetype names that reach a native
 --
 -- An archetype name goes to GetHashKey and then to CreateObject. A path
 -- separator in one is never legitimate.
@@ -237,7 +259,7 @@ if VehicleProp.normaliseModelName('  rdx4000  ') ~= 'rdx4000' then
     fail('surrounding whitespace was not trimmed off an archetype name')
 end
 
--- ── The registry ────────────────────────────────────────────────────────────
+-- The registry
 
 local list, index, default = VehicleProp.buildRegistry('rdx4000', nil)
 if #list ~= 1 or list[1].model ~= 'rdx4000' or default ~= 'rdx4000' then
@@ -291,7 +313,7 @@ if #junkList ~= 1 then
     fail('junk model names were registered: ' .. #junkList .. ' entries survived')
 end
 
--- ── clearInPlace is the alias contract ──────────────────────────────────────
+-- clearInPlace is the alias contract
 --
 -- Consumers do `tdetAttachedProps = props.attached` and other files in the
 -- resource index that alias. If anything in this module ever reassigns instead
@@ -302,7 +324,7 @@ VehicleProp.clearInPlace(aliased)
 if alias ~= aliased then fail('clearInPlace replaced the table instead of emptying it') end
 if next(alias) ~= nil then fail('clearInPlace left entries behind') end
 
--- ── Placements are filtered, not trusted ────────────────────────────────────
+-- Placements are filtered, not trusted
 --
 -- data.json is a SHARED document: a server-side bug that handed the whole thing
 -- over instead of the `props` section would otherwise have the lifecycle thread
@@ -321,9 +343,7 @@ end
 VehicleProp.replacePlacements(target, nil)
 if next(target) ~= nil then fail('a nil payload did not clear the placements') end
 
--- ════════════════════════════════════════════════════════════════════════════
 --  THE INSTANCE
--- ════════════════════════════════════════════════════════════════════════════
 
 local notifications = {}
 local gizmoSeen = {}
@@ -366,7 +386,7 @@ for _, e in ipairs(serverEvents) do
 end
 if not asked then fail('the start-up placement request was never sent') end
 
--- ── Registry, through the instance ──────────────────────────────────────────
+-- Registry, through the instance
 
 if props.PROP_MODEL ~= 'rdx4000' then fail('the built-in model is not exposed') end
 if props.defaultModel() ~= 'rdx4000' then
@@ -413,7 +433,7 @@ if props.isRegisteredModel('no_such_model') then
     fail('an unregistered model was reported as registered')
 end
 
--- ── loadPropModel refuses an invalid archetype ──────────────────────────────
+-- loadPropModel refuses an invalid archetype
 --
 -- The IsModelValid gate. Without it the caller stalls for a second on a model
 -- that can never stream, once per lifecycle pass, forever.
@@ -426,7 +446,7 @@ props.setRegistry({
     models = { { model = 'arc360' }, { model = 'rdx8000' } },
 })
 
--- ── The receive event is server-only ────────────────────────────────────────
+-- The receive event is server-only
 --
 -- This decides which archetype gets streamed in and attached, so a local
 -- TriggerEvent from a cheat menu could otherwise name any model it liked.
@@ -449,7 +469,7 @@ if placementsAlias ~= props.placements then
 end
 if props.placements[POLICE_KEY] == nil then fail('a server placement was not stored') end
 
--- ── getPlacement is a COPY with the model resolved ──────────────────────────
+-- getPlacement is a COPY with the model resolved
 --
 -- Writing the resolved name back into the live record would give every record
 -- that never had a `model` key one, and the editor saves whatever it finds
@@ -466,9 +486,7 @@ if props.getPlacement(999999) ~= nil then
     fail('getPlacement answered for a vehicle that does not exist')
 end
 
--- ════════════════════════════════════════════════════════════════════════════
 --  THE LIFECYCLE PASS
--- ════════════════════════════════════════════════════════════════════════════
 
 local attachedAlias = props.attached
 
@@ -486,7 +504,7 @@ if props.getAttached(POLICE) ~= prop then fail('getAttached did not answer with 
 props.tick()
 if props.attached[POLICE] ~= prop then fail('a second pass replaced the attached prop') end
 
--- ── Adoption across an unclean restart ──────────────────────────────────────
+-- Adoption across an unclean restart
 --
 -- The tracking table is gone but the object is still on the windshield. It
 -- carries our mark, so it is re-adopted rather than duplicated.
@@ -496,7 +514,7 @@ if props.attached[POLICE] ~= prop then
     fail('a prop of ours already on the vehicle was not re-adopted; a second one was spawned')
 end
 
--- ── A prop of ours whose model is no longer the configured one ──────────────
+-- A prop of ours whose model is no longer the configured one
 --
 -- A leftover from before the owner changed the model for this vehicle. It has
 -- to go, or the vehicle silently ends up wearing two devices.
@@ -511,7 +529,7 @@ if world[replacement].model ~= 'arc360' then
     fail('the new prop is not the newly configured model: ' .. tostring(world[replacement].model))
 end
 
--- ── An object we did not mark is somebody else's problem ────────────────────
+-- An object we did not mark is somebody else's problem
 --
 -- Ownership is the decorator and nothing else: not the model hash, not "it is
 -- attached to a vehicle". A model filter reads as a cheap prefilter while there
@@ -530,7 +548,7 @@ local ORPHAN = props.markOwnedProp(spawn('CObject', 'rdx4000', nil))
 props.reclaimOrphans()
 if not world[ORPHAN].deleted then fail('an orphan carrying our mark was not collected') end
 
--- ── The vehicle goes away ───────────────────────────────────────────────────
+-- The vehicle goes away
 world[POLICE].deleted = true
 props.tick()
 if props.attached[POLICE] ~= nil then
@@ -549,7 +567,7 @@ if props.attached[GHOST] ~= nil then
     fail('with no placements configured, a dead vehicle kept its tracking entry')
 end
 
--- ── Suppressed while the editor holds a prop ────────────────────────────────
+-- Suppressed while the editor holds a prop
 --
 -- Otherwise the thread attaches a second prop to the vehicle being edited, or
 -- detaches the one the editor is moving on the pass after the editor took it
@@ -565,7 +583,7 @@ if props.attached[EDITED] ~= nil then
     fail('the lifecycle pass ran while the editor held a prop')
 end
 
--- ── cleanupAll ──────────────────────────────────────────────────────────────
+-- cleanupAll
 --
 -- Including the editor's working prop, which reclaimOrphanProps deliberately
 -- skips — without the explicit delete it is the one object that survives a
@@ -584,7 +602,7 @@ if world[FOREIGN].deleted then
     fail("cleanupAll deleted another resource's object")
 end
 
--- ── onResourceStop only fires for US ────────────────────────────────────────
+-- onResourceStop only fires for US
 local SURVIVOR = spawn('CVehicle', 'police4')
 props.setPlacements({ [tostring(GetEntityModel(SURVIVOR))] = { x = 0.0, y = 0.0, z = 0.0 } })
 props.tick()
@@ -596,5 +614,112 @@ if props.attached[SURVIVOR] ~= survivorProp then
 end
 TriggerEvent('onResourceStop', 'tTest')
 if next(props.attached) ~= nil then fail('onResourceStop did not clean up') end
+
+--  UNIFORM SCALE — WHICH OF THE TWO MECHANISMS THE LIFECYCLE PICKS
+--
+-- `AttachEntityToEntity` cannot carry a scale. Measured on a live client: a prop
+-- attached and then given a scaled matrix reads 3.000 in the same tick and 1.000
+-- on the next frame, because the attach recomputation rewrites the basis from
+-- the parent's matrix every frame and has no notion of scale. Driving the matrix
+-- every frame while attached does not rescue it either — it survived one frame
+-- and 300ms of sampling and then lost the scale anyway.
+--
+-- So the lifecycle has to choose, and choosing wrong is SILENT: a scaled prop
+-- that got attached appears at the right place in the wrong size, one frame
+-- after a check that read the right size.
+
+local SCALED = spawn('CVehicle', 'police5')
+local SCALED_KEY = tostring(GetEntityModel(SCALED))
+
+-- A unit-scaled placement must still ATTACH
+--
+-- Asserted in both directions deliberately. Attachment is free and every
+-- placement on every server today is unit-scaled, so a change that drove
+-- everything would put a per-frame cost on every existing install for no
+-- benefit — and would never be noticed, because it looks identical.
+attachCalls, matrixWrites = {}, {}
+props.setPlacements({ [SCALED_KEY] = { x = 0.1, y = 0.2, z = 0.3 } })
+props.tick()
+local unitProp = props.attached[SCALED]
+if unitProp == nil then fail('a unit-scaled placement did not attach a prop') end
+if world[unitProp].attachedTo ~= SCALED then
+    fail('a unit-scaled prop must be ATTACHED to its vehicle')
+end
+if #matrixWrites ~= 0 then
+    fail('a unit-scaled prop must not be matrix-driven; got ' .. #matrixWrites .. ' writes')
+end
+
+-- An explicit scale of exactly 1.0 is the same thing as an absent one. A record
+-- a player scaled up and then back down again must stop costing anything.
+props.cleanupAll()
+attachCalls, matrixWrites = {}, {}
+props.setPlacements({ [SCALED_KEY] = { x = 0.0, y = 0.0, z = 0.0, scale = 1.0 } })
+props.tick()
+if #matrixWrites ~= 0 then
+    fail('an explicit scale of 1.0 must take the attached path, not the driven one')
+end
+
+-- A SCALED placement must be DRIVEN, and must not be attached
+props.cleanupAll()
+attachCalls, matrixWrites = {}, {}
+props.setPlacements({ [SCALED_KEY] = { x = 0.1, y = 0.2, z = 0.3, scale = 2.5 } })
+props.tick()
+local scaledProp = props.attached[SCALED]
+if scaledProp == nil then fail('a scaled placement did not produce a prop') end
+if #attachCalls ~= 0 then
+    fail('a scaled prop was ATTACHED — the attach recomputation will discard its scale')
+end
+if world[scaledProp].attachedTo ~= nil then
+    fail('a scaled prop must not be attached to anything')
+end
+if #matrixWrites == 0 then fail('a scaled prop was never matrix-driven') end
+local lastWrite = matrixWrites[#matrixWrites]
+if lastWrite.prop ~= scaledProp then
+    fail('the matrix write was for the wrong entity')
+end
+if math.abs(lastWrite.scale - 2.5) > 1e-4 then
+    fail('the written basis does not carry the requested scale; got ' .. tostring(lastWrite.scale))
+end
+
+-- THE ORPHAN SWEEP MUST NOT EAT A SCALED PROP
+--
+-- The sweep used to ask `attached[GetEntityAttachedTo(obj)] ~= obj`. A scaled
+-- prop is deliberately attached to NOTHING, so that reads 0, `attached[0]` is
+-- nil, and every scaled prop on the server is deleted as an orphan — appearing
+-- and then vanishing, with nothing logged, and only for the placements that had
+-- been given a scale. This is the regression that cost the most to reason about
+-- and it is invisible to every other assertion in this file.
+props.reclaimOrphans()
+if world[scaledProp].deleted then
+    fail('the orphan sweep deleted a tracked SCALED prop')
+end
+if props.attached[SCALED] ~= scaledProp then
+    fail('the orphan sweep dropped the tracking entry for a scaled prop')
+end
+
+-- An untracked prop of ours is still an orphan, scaled or not. The sweep has to
+-- stay useful, or the above is just a disabled sweep.
+local ORPHAN = spawn('CObject', GetHashKey('rdx4000'))
+props.markOwnedProp(ORPHAN)
+props.reclaimOrphans()
+if not world[ORPHAN].deleted then
+    fail('the orphan sweep stopped reclaiming genuinely orphaned props')
+end
+if world[FOREIGN].deleted then
+    fail("the orphan sweep deleted another resource's object")
+end
+
+-- detach takes the prop off the driver as well as out of the world
+props.detach(SCALED)
+if not world[scaledProp].deleted then fail('detach did not delete the scaled prop') end
+attachCalls, matrixWrites = {}, {}
+props.tick()
+for _, w in ipairs(matrixWrites) do
+    if w.prop == scaledProp then
+        fail('the driver is still writing the matrix of a deleted prop')
+    end
+end
+
+props.cleanupAll()
 
 print('PASS vehicleprop')

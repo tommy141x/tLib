@@ -101,7 +101,7 @@ describe("cliArg", () => {
   }
 });
 
-// ── Negative controls: the three variants this replaced ──────────────────────
+// Negative controls: the three variants this replaced
 
 /** tRadio `panel-gallery/gallery.ts`, `assets/audit/probe.ts`. */
 const silentDefault: Reader = (name, fallback) => {
@@ -127,17 +127,29 @@ const CONTROLS: { name: string; reader: Reader; breaks: string[] }[] = [
   {
     name: "silent default",
     reader: silentDefault,
-    breaks: ["refuses a flag with no value at all", "refuses a flag whose value is another flag", "refuses an empty value"],
+    breaks: [
+      "refuses a flag with no value at all",
+      "refuses a flag whose value is another flag",
+      "refuses an empty value",
+    ],
   },
   {
     name: 'returns ""',
     reader: emptyString,
-    breaks: ["refuses a flag with no value at all", "refuses a flag whose value is another flag", "refuses an empty value"],
+    breaks: [
+      "refuses a flag with no value at all",
+      "refuses a flag whose value is another flag",
+      "refuses an empty value",
+    ],
   },
   {
     name: "no guard at all",
     reader: unguarded,
-    breaks: ["refuses a flag with no value at all", "refuses a flag whose value is another flag", "refuses an empty value"],
+    breaks: [
+      "refuses a flag with no value at all",
+      "refuses a flag whose value is another flag",
+      "refuses an empty value",
+    ],
   },
 ];
 

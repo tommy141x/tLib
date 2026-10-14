@@ -7,7 +7,7 @@
  * whose own font size, quietly stops working on some screens and not others, which is close to
  * undebuggable from a screenshot.
  *
- * Roughly half of the file is a shield, in shared/ts/cn.ts, around three defects in 0.10.0
+ * Roughly half of the file is a shield, in shared/ts/cn.ts, around four defects in 0.10.0
  * that DELETE a class rather than duplicate it. The header there explains the mechanism. This
  * file is the oracle for it, and is written so that removing the shield fails it: the groups
  * tagged SHIELD below all return the wrong answer from a bare `unoMerge(clsx(...))`.
@@ -23,7 +23,10 @@ import { describe, expect, test } from "bun:test";
 import { cn } from "../../shared/ts/cn.ts";
 
 /** The returned classes as a set-like array, for order-independent membership assertions. */
-const parts = (...args: Parameters<typeof cn>) => cn(...args).split(" ").filter(Boolean);
+const parts = (...args: Parameters<typeof cn>) =>
+  cn(...args)
+    .split(" ")
+    .filter(Boolean);
 
 describe("cn: the parts unocss-merge already gets right", () => {
   test("keeps the last of two genuinely conflicting utilities", () => {
@@ -175,7 +178,10 @@ describe("cn: SHIELD -- the ring offset colour does not eat the ring colour", ()
     // with the RING's colour and only the last survives. No variant and no custom token needed:
     // a stock palette collapses identically. Unshielded, each of these loses the ring colour.
     expect(parts("ring-ring", "ring-offset-surface")).toEqual(["ring-ring", "ring-offset-surface"]);
-    expect(parts("ring-red-500", "ring-offset-white")).toEqual(["ring-red-500", "ring-offset-white"]);
+    expect(parts("ring-red-500", "ring-offset-white")).toEqual([
+      "ring-red-500",
+      "ring-offset-white",
+    ]);
     expect(parts("ring-2 ring-ring ring-offset-2 ring-offset-surface")).toEqual([
       "ring-2",
       "ring-ring",
@@ -202,6 +208,135 @@ describe("cn: SHIELD -- the ring offset colour does not eat the ring colour", ()
 
   test("the ring inset flag is a boolean and is deliberately not shielded", () => {
     expect(parts("ring-inset", "ring-accent")).toEqual(["ring-inset", "ring-accent"]);
+  });
+});
+
+describe("cn: SHIELD -- the outline offset does not eat the outline colour", () => {
+  /*
+   * Gap 4 in shared/ts/cn.ts's header, and the one that matters most now: this estate's focus
+   * indicator is an OUTLINE and never a `ring-*`, because presetWind3 compiles a ring to an
+   * outward box-shadow and CEF 103 clips it to nothing inside the `overflow: hidden` ancestor
+   * every NUI panel is.
+   *
+   * The four cases below are the measured ones, verbatim. Unshielded, the first, second and
+   * fourth each silently LOSE a class; the third is the negative-offset spelling that escapes
+   * 0.10.0's tables and already worked, and it must keep working.
+   *
+   * IT WAS LIVE TWICE. tUnit's `ElementList.tsx` rows and `CharacterEditor.tsx` chips both
+   * shipped without `focus-visible:outline-ring` and painted focus in `currentColor`. Both were
+   * fixed at the call site, to the negative spelling; this is the shield so the next one is not
+   * a bug at all.
+   */
+  test("a width, a style, a colour and a POSITIVE offset all four survive", () => {
+    expect(parts("outline-2 outline-solid outline-ring/40 outline-offset-2").sort()).toEqual([
+      "outline-2",
+      "outline-offset-2",
+      "outline-ring/40",
+      "outline-solid",
+    ]);
+  });
+
+  test("the same, with the offset written as a bracketed arbitrary length", () => {
+    expect(parts("outline-2 outline-solid outline-ring/40 outline-offset-[2px]").sort()).toEqual([
+      "outline-2",
+      "outline-offset-[2px]",
+      "outline-ring/40",
+      "outline-solid",
+    ]);
+  });
+
+  test("the NEGATIVE offset spelling, which already worked, still does", () => {
+    // This is the one case that is green without the shield. It is asserted anyway, because the
+    // shield adds `-?` to the offset group and a shield that broke the spelling two live call
+    // sites were migrated TO would be a worse outcome than the defect.
+    expect(parts("outline-2 outline-solid outline-ring/40 -outline-offset-1").sort()).toEqual([
+      "-outline-offset-1",
+      "outline-2",
+      "outline-ring/40",
+      "outline-solid",
+    ]);
+  });
+
+  test("an offset and a colour under the same variant prefix both survive", () => {
+    // The prefixed form is how every focus indicator here is actually written, and the deletion
+    // goes BOTH ways depending on which token came last -- offset-then-colour loses the offset,
+    // colour-then-offset loses the colour. Unshielded each of these returns ONE class.
+    expect(parts("focus-visible:outline-offset-2 focus-visible:outline-ring/40").sort()).toEqual([
+      "focus-visible:outline-offset-2",
+      "focus-visible:outline-ring/40",
+    ]);
+    expect(parts("focus-visible:outline-ring focus-visible:outline-offset-1").sort()).toEqual([
+      "focus-visible:outline-offset-1",
+      "focus-visible:outline-ring",
+    ]);
+  });
+
+  test("the explicit width spellings and a bracketed length keep the colour too", () => {
+    // `outline-width-`/`outline-size-` are presetWind3's own aliases, and a bracketed CSS math
+    // value is routed to its width handler. All three landed in the colour group unshielded.
+    expect(parts("outline-width-2", "outline-ring/40").sort()).toEqual([
+      "outline-ring/40",
+      "outline-width-2",
+    ]);
+    expect(parts("outline-[2px]", "outline-ring/40").sort()).toEqual([
+      "outline-[2px]",
+      "outline-ring/40",
+    ]);
+  });
+
+  test("a bracketed value that is NOT a length is treated as the colour", () => {
+    // The `LENGTH` heuristic, same call presetWind3's `handleColorOrWidth` makes. A CSS variable
+    // in brackets is the dominant colour spelling in this estate.
+    expect(parts("outline-[var(--ring)]", "outline-offset-2").sort()).toEqual([
+      "outline-[var(--ring)]",
+      "outline-offset-2",
+    ]);
+  });
+
+  test("both signs of the offset are ONE group, so they deduplicate against each other", () => {
+    // The second half of Gap 4, and a MISSED conflict rather than an invented one: the negative
+    // spelling escapes every table in 0.10.0, so unshielded these two values of one property
+    // both ship. Order IS asserted here, because which one wins is the whole point.
+    expect(cn("outline-offset-[2px] -outline-offset-1")).toBe("-outline-offset-1");
+    expect(cn("-outline-offset-1 outline-offset-2")).toBe("outline-offset-2");
+  });
+
+  test("the shield does not cost the outline overrides that already worked", () => {
+    expect(cn("outline-offset-2", "outline-offset-4")).toBe("outline-offset-4");
+    expect(cn("outline-ring/40", "outline-ring/80")).toBe("outline-ring/80");
+    expect(cn("outline-2", "outline-4")).toBe("outline-4");
+    expect(cn("outline-solid", "outline-dashed")).toBe("outline-dashed");
+    expect(cn("outline-none", "outline-hidden")).toBe("outline-hidden");
+  });
+
+  test("the bare namespace word is a STYLE here, not a width", () => {
+    // Where the outline namespace parts company with border and ring: presetWind3 maps bare
+    // `outline` to `outline-style: solid`. So it must not deduplicate against a width, and it
+    // must not be read as one either.
+    expect(parts("outline", "outline-ring/40").sort()).toEqual(["outline", "outline-ring/40"]);
+    expect(parts("outline", "outline-2").sort()).toEqual(["outline", "outline-2"]);
+    expect(cn("outline", "outline-dashed")).toBe("outline-dashed");
+  });
+
+  test("ConfirmDelete's four focus tokens now survive INSIDE cn()", () => {
+    // `shared/ts/ui/confirm-delete.tsx` concatenates them outside `cn()` deliberately, with a
+    // measurement in its header saying why. This is the assertion that the workaround is no
+    // longer needed -- the icon-only form's box IS the glyph, so its offset has to be POSITIVE
+    // and it cannot use the negative spelling `buttonVariants` escapes through.
+    const focus =
+      "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:outline-offset-2";
+    const button = parts(focus, "transition-colors shrink-0 rounded-sm", "text-destructive");
+    expect(button).toContain("focus-visible:outline-2");
+    expect(button).toContain("focus-visible:outline-solid");
+    expect(button).toContain("focus-visible:outline-ring/40");
+    expect(button).toContain("focus-visible:outline-offset-2");
+    expect(button).toContain("outline-none");
+    // …and a caller may now override one of them without losing the other three, which the
+    // concatenated form cannot offer at all.
+    const overridden = parts(focus, "focus-visible:outline-offset-4");
+    expect(overridden).toContain("focus-visible:outline-offset-4");
+    expect(overridden).not.toContain("focus-visible:outline-offset-2");
+    expect(overridden).toContain("focus-visible:outline-ring/40");
   });
 });
 
@@ -270,8 +405,8 @@ describe("cn: SHIELD -- a variant that contains brackets no longer degrades the 
       parts(
         "border border-line-input",
         "data-[state=checked]:border-5",
-        "data-[state=checked]:border-accent",
-      ),
+        "data-[state=checked]:border-accent"
+      )
     ).toEqual([
       "border",
       "border-line-input",
@@ -305,7 +440,7 @@ describe("cn: SHIELD -- a variant that contains brackets no longer degrades the 
 
   test("a conflict under one of those variants is still resolved", () => {
     expect(cn("data-[state=checked]:border-2", "data-[state=checked]:border-4")).toBe(
-      "data-[state=checked]:border-4",
+      "data-[state=checked]:border-4"
     );
     expect(cn("data-[x]:text-sm", "data-[x]:text-lg")).toBe("data-[x]:text-lg");
   });
@@ -342,7 +477,7 @@ describe("cn: the real call sites the shield was measured against", () => {
       "z-50 rounded-md bg-secondary px-3 py-1.5 text-[12px] text-secondary-foreground",
       "origin-[var(--transform-origin)] transition-[opacity,transform] duration-150 ease-out",
       "data-[state=open]:opacity-100 data-[state=open]:scale-100",
-      "data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.96]",
+      "data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.96]"
     );
     expect(tooltip).toContain("text-[12px]");
     expect(tooltip).toContain("text-secondary-foreground");
@@ -374,7 +509,7 @@ describe("cn: the real call sites the shield was measured against", () => {
       "active:scale-[0.98]",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
       "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent",
-      "bg-card/80 border-border/60 hover:bg-secondary",
+      "bg-card/80 border-border/60 hover:bg-secondary"
     );
     expect(button).toContain("focus-visible:ring-ring");
     expect(button).toContain("focus-visible:ring-2");

@@ -54,7 +54,7 @@ end
 -- gate here instead would test the stub; this loads the real rule.
 _TLIB_IS_FIVEM = true
 -- shared_scripts run before server_scripts. The real StudioApi, not a stub: it
--- is the one definition of the download host and of how tmarketplace_base_url is
+-- is the one definition of the download host and of how tlib_api_base_url is
 -- normalised, and stubbing it here would let the two drift apart unseen.
 dofile('shared/sh_api.lua')
 dofile('server/sv_permission.lua')
@@ -231,7 +231,7 @@ source = 42; handlers.playerDropped(); r = #replies
 result(inspectionToken, 'a'); eq(#replies, r, 'inspection never replies to recycled player ID')
 req('inspect', 'a', 'ui', 'stop-inspect', 'view-5'); inspectionToken = last().token
 handlers.onResourceStop('a'); eq(replies[#replies].p.token, inspectionToken); eq(replies[#replies].p.ok, false)
--- ── The admin gate is tLib's rule, not a bare `tlib.admin` ACE ──────────────
+-- The admin gate is tLib's rule, not a bare `tlib.admin` ACE
 -- The gate used to inline `IsPlayerAceAllowed(src, 'tlib.admin')`, which denies
 -- a player holding only `tlib.superadmin` — while sv_permission.lua, and so
 -- exports.tLib:IsPlayerAdmin and every other admin surface in tLib, grants one.
@@ -266,7 +266,7 @@ aces = { ['some.other.ace'] = true }
 rejected('install', 'a', 'ui', 'perm-none')
 aces = nil
 
--- ── Cross-product install enforcement ──────────────────────────────────────
+-- Cross-product install enforcement
 --
 -- The gap these pin: the coordinator keys registrations `resource:type` and
 -- writes into that resource's own registered installPath, so a tELS item could

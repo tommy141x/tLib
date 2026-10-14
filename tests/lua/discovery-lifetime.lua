@@ -19,7 +19,7 @@ local function check(value, message)
     assert(value, message)
 end
 
--- ── host ────────────────────────────────────────────────────────────
+-- host
 local env = setmetatable({}, { __index = _G })
 env._G = env
 env._TLIB_IS_FIVEM = true
@@ -141,7 +141,7 @@ local function create()
     })
 end
 
--- ── a consumer restart must not leave the old instance answering ────
+-- a consumer restart must not leave the old instance answering
 local first = create()
 check(liveCount('demo:config_request') == 1, 'the first instance registers one request handler')
 env.replies = {}
@@ -163,7 +163,7 @@ check(env.replies[1].payload.car.siren.maxHz == 1200,
     'the reply is the config on disk now, not the one the disposed instance is holding')
 print('PASS discovery-lifetime: a consumer restart replaces its Discovery instead of stacking one')
 
--- ── disposal survives a host with no working RemoveEventHandler ─────
+-- disposal survives a host with no working RemoveEventHandler
 -- The flag has to carry this on its own: an unremovable handler must go quiet.
 local third = create()
 check(second:isDisposed(), 'the previous instance is disposed again')
@@ -175,7 +175,7 @@ check(#env.replies == 1, 'but only the undisposed one replies')
 check(env.replies[1].payload.car.siren.maxHz == 1200, 'and it is the live instance that replied')
 print('PASS discovery-lifetime: a disposed instance stays silent even if it cannot be unregistered')
 
--- ── the owner stopping disposes it ──────────────────────────────────
+-- the owner stopping disposes it
 for _, entry in ipairs(env.handlers['demo:config_request']) do entry.live = false end
 local fourth = create()
 check(third:isDisposed(), 'previous disposed on re-create')
@@ -189,14 +189,14 @@ emit('demo:config_request')
 check(#env.replies == 0, 'and nothing answers for a consumer that is not running')
 print('PASS discovery-lifetime: the owner stopping disposes its Discovery')
 
--- ── dispose is idempotent ───────────────────────────────────────────
+-- dispose is idempotent
 fourth:dispose()
 fourth:dispose()
 emit('onResourceStop', 'consumer')
 check(fourth:isDisposed(), 'still disposed, and disposing twice is not an error')
 print('PASS discovery-lifetime: dispose is idempotent (' .. checks .. ' checks)')
 
--- ── skipAutoBroadcast: the owner takes over delivery ────────────────
+-- skipAutoBroadcast: the owner takes over delivery
 -- The delivery counterpart of skipAutoSave, and tested beside it for the same
 -- reason: both hand a responsibility to the owning resource, and both fail as
 -- silence rather than as an error if the owner does not pick it up.

@@ -17,7 +17,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 /**
- * ⚠️ These two lines must run BEFORE the module under test is imported.
+ * These two lines must run BEFORE the module under test is imported.
  *
  * `server/lib/marketplace/fivem.ts` snapshots the FiveM natives off
  * `globalThis` at module-evaluation time into `const` bindings, so a stub
@@ -26,9 +26,9 @@ import { afterEach, describe, expect, test } from "bun:test";
  * of the file; a static import is hoisted above these assignments.
  */
 const g = globalThis as unknown as Record<string, unknown>;
-// Every convar returns its default: the secret is baked in, not configured,
+// Every convar returns its default: the key is baked in, not configured,
 // so an unconfigured server is still authenticated. See the comment on
-// `MARKETPLACE_RESOURCE_SECRET` for why that is deliberate.
+// `TLIB_PUBLIC_KEY` for why that is deliberate.
 g.GetConvar = (_name: string, defaultValue: string) => defaultValue;
 g.GetCurrentResourceName = () => "tLib";
 

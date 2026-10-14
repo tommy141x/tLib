@@ -10,7 +10,7 @@
  * a newer success" case, tELS had the "abort is observable on the superseded
  * signal" case. All of them are here.
  *
- * ── Why the negative controls exist ──
+ * Why the negative controls exist
  *
  * Every check below is written as a standalone function so it can be run
  * against a DELIBERATELY BROKEN implementation as well as the real one. A
@@ -53,12 +53,12 @@ const CHECKS: Record<string, (make: Factory) => Promise<void>> = {
         return a.promise;
       },
       () => {},
-      () => {},
+      () => {}
     );
     const newest = request.run(
       () => b.promise,
       () => {},
-      () => {},
+      () => {}
     );
     if (!first.aborted) throw new Error("superseded signal was not aborted");
     a.resolve("old");
@@ -75,19 +75,20 @@ const CHECKS: Record<string, (make: Factory) => Promise<void>> = {
     const old = request.run(
       () => a.promise,
       (v) => applied.push(v),
-      () => applied.push("failed"),
+      () => applied.push("failed")
     );
     const newest = request.run(
       () => b.promise,
       (v) => applied.push(v),
-      () => applied.push("failed"),
+      () => applied.push("failed")
     );
     a.resolve("old");
     await old;
     if (applied.length !== 0) throw new Error(`stale value applied: ${applied.join(",")}`);
     b.resolve("new");
     await newest;
-    if (applied.join(",") !== "new") throw new Error(`expected only "new", got ${applied.join(",")}`);
+    if (applied.join(",") !== "new")
+      throw new Error(`expected only "new", got ${applied.join(",")}`);
   },
 
   /** A superseded request REJECTING must not run the newer request's failure path. */
@@ -98,16 +99,17 @@ const CHECKS: Record<string, (make: Factory) => Promise<void>> = {
     const old = request.run(
       () => a.promise,
       (v) => applied.push(v),
-      () => applied.push("cleared"),
+      () => applied.push("cleared")
     );
     await request.run(
       async () => "new",
       (v) => applied.push(v),
-      () => applied.push("cleared"),
+      () => applied.push("cleared")
     );
     a.reject(new Error("old fetch failed"));
     await old;
-    if (applied.join(",") !== "new") throw new Error(`expected only "new", got ${applied.join(",")}`);
+    if (applied.join(",") !== "new")
+      throw new Error(`expected only "new", got ${applied.join(",")}`);
   },
 
   /** A→B→A: the fence is on request identity, never on the payload or a name. */
@@ -121,14 +123,15 @@ const CHECKS: Record<string, (make: Factory) => Promise<void>> = {
       request.run(
         () => value.promise,
         (v) => applied.push(v),
-        () => applied.push("failed"),
-      ),
+        () => applied.push("failed")
+      )
     );
     a2.resolve("A-new");
     a1.resolve("A-old");
     b.resolve("B");
     await Promise.all(runs);
-    if (applied.join(",") !== "A-new") throw new Error(`expected only "A-new", got ${applied.join(",")}`);
+    if (applied.join(",") !== "A-new")
+      throw new Error(`expected only "A-new", got ${applied.join(",")}`);
   },
 
   /** `pending` must stay true across a supersede and be cleared by the winner only. */
@@ -139,12 +142,12 @@ const CHECKS: Record<string, (make: Factory) => Promise<void>> = {
     const old = request.run(
       () => a.promise,
       () => {},
-      () => {},
+      () => {}
     );
     const newest = request.run(
       () => b.promise,
       () => {},
-      () => {},
+      () => {}
     );
     a.resolve("old");
     await old;
@@ -164,15 +167,16 @@ const CHECKS: Record<string, (make: Factory) => Promise<void>> = {
         throw new Error("404");
       },
       () => applied++,
-      () => failures++,
+      () => failures++
     );
     if (request.pending) throw new Error("pending stuck true after a failure");
     await request.run(
       async () => "retry",
       () => applied++,
-      () => failures++,
+      () => failures++
     );
-    if (failures !== 1 || applied !== 1) throw new Error(`expected 1 failure and 1 apply, got ${failures}/${applied}`);
+    if (failures !== 1 || applied !== 1)
+      throw new Error(`expected 1 failure and 1 apply, got ${failures}/${applied}`);
   },
 
   /** Dispose: nothing in flight commits, and no later run commits either. */
@@ -183,7 +187,7 @@ const CHECKS: Record<string, (make: Factory) => Promise<void>> = {
     const inflight = request.run(
       () => a.promise,
       () => touches++,
-      () => touches++,
+      () => touches++
     );
     request.dispose();
     a.resolve("late");
@@ -194,7 +198,7 @@ const CHECKS: Record<string, (make: Factory) => Promise<void>> = {
         return "later";
       },
       () => touches++,
-      () => touches++,
+      () => touches++
     );
     if (touches !== 0) throw new Error(`disposed instance did ${touches} units of work`);
     if (request.pending) throw new Error("pending true after dispose");
@@ -208,9 +212,10 @@ const CHECKS: Record<string, (make: Factory) => Promise<void>> = {
     await make().run(
       async () => "fresh",
       (v) => applied.push(v),
-      () => applied.push("failed"),
+      () => applied.push("failed")
     );
-    if (applied.join(",") !== "fresh") throw new Error(`fresh instance applied ${applied.join(",")}`);
+    if (applied.join(",") !== "fresh")
+      throw new Error(`fresh instance applied ${applied.join(",")}`);
   },
 };
 
@@ -224,7 +229,7 @@ describe("createLatestRequest", () => {
   }
 });
 
-// ── Negative controls ────────────────────────────────────────────────────────
+// Negative controls
 //
 // Each variant removes exactly one property of the real implementation. The
 // `breaks` list is the set of checks that MUST fail against it; every other

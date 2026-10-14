@@ -22,7 +22,7 @@
 
 local CONTROL = os.getenv('DIAG_CONTROL') == '1'
 
--- ── Stub host ───────────────────────────────────────────────────────────────
+-- Stub host
 
 local commands = {}          -- name -> { fn, restricted }
 local clientEvents = {}      -- { event, target, payload }
@@ -39,8 +39,8 @@ function TriggerClientEvent(event, target, payload)
 end
 
 local resourceMeta = {
-    tProbe = { version = '2.1.0', tlib_min_version = '0.14' },
-    tLib   = { version = '0.14.0' },
+    tProbe = { version = '2.1.0', tlib_min_version = '1.0' },
+    tLib   = { version = '1.0.0' },
 }
 function GetResourceMetadata(resource, key)
     local entry = resourceMeta[resource]
@@ -66,7 +66,7 @@ end
 
 -- The module PRINTS the report, so capturing print is the behaviour under test.
 --
--- ⚠️ scripts/run-lua-suite.lua reports a failed suite with a bare `print(err)`,
+-- scripts/run-lua-suite.lua reports a failed suite with a bare `print(err)`,
 -- which resolves to whatever `print` is at that moment -- so a naive hijack eats
 -- the failure message and a broken suite exits 1 with no output at all. `fail`
 -- below restores the real print first. This is the trap tCAD's runner fixed and
@@ -100,7 +100,7 @@ end
 --- inversion is the whole point. It is how this suite proves it can fail at all,
 --- and it is why the control's verdict is "the secret leaked, as it had to".
 ---
---- ⚠️ Only the value filter and `ctx.message`'s name-withholding are governed by
+--- Only the value filter and `ctx.message`'s name-withholding are governed by
 --- `redact`. The name-keyed layer in `describe`/`ctx.kv` is unconditional and is
 --- asserted with `must`, because there is no switch to turn it off -- a config
 --- key called `authToken` renders as `<redacted>` or this module is broken.
@@ -124,7 +124,7 @@ end
 
 local Diag = dofile('shared/imports/diag/shared.lua')
 
--- ── isSecretName: the whole point is that it is keyed on the NAME ───────────
+-- isSecretName: the whole point is that it is keyed on the NAME
 
 -- Asserted as a SET OF NAMES, never as a count. A count passes the moment the
 -- total happens to be right, which is how `AccessKey` went unnoticed: the real
@@ -171,7 +171,7 @@ end
 -- `Config.myWebhookURL`, not `Config.webhook`.
 must(Diag.isSecretName('MyWebhookURL'), 'the name test is case-sensitive or anchored')
 
--- ── describe: redaction by key name, tables summarised ─────────────────────
+-- describe: redaction by key name, tables summarised
 
 must(Diag.describe('authToken', 'hunter2-hunter2') == '<redacted>',
     'describe printed a credential value')
@@ -185,7 +185,7 @@ must(Diag.describe('discord', { botToken = 'abcdef123456', authEnabled = true })
         == '{ authEnabled = true, botToken = <redacted> }',
     'describe printed a credential nested one level down')
 
--- ── presence: the useful half of a credential, and never the value ─────────
+-- presence: the useful half of a credential, and never the value
 
 must(Diag.presence('abc') == 'set', 'a set credential did not report as set')
 must(Diag.presence(nil) == 'not set', 'an absent credential did not report as not set')
@@ -193,7 +193,7 @@ must(Diag.presence('') == 'not set', 'an empty string reported as set')
 must(Diag.presence(0) == 'not set (wrong type: number)',
     'a wrong-typed credential did not name its type')
 
--- ── harvest: derived, not hand-listed ──────────────────────────────────────
+-- harvest: derived, not hand-listed
 
 local config = {
     band = 'ka',
@@ -235,7 +235,7 @@ local cyclic = { authToken = 'cyclic-token-value' }
 cyclic.self = cyclic
 must(#Diag.harvest(cyclic) == 1, 'harvest did not survive a cycle')
 
--- ── redactor: a line carrying a value does not survive ─────────────────────
+-- redactor: a line carrying a value does not survive
 
 local filter = Diag.redactor(harvested)
 local leak = filter('  Config.authToken expected a string, got "super-secret-token-value"')
@@ -246,7 +246,7 @@ must(filter('  Config.band "ka"') == '  Config.band "ka"',
 must(Diag.redactor({})('anything') == 'anything',
     'the empty redactor was not the identity')
 
--- ── configKeys: spec-derived, with nothing dropped ─────────────────────────
+-- configKeys: spec-derived, with nothing dropped
 
 local spec = { keys = { band = true, maxRange = true, speedUnit = true, coneAngle = true } }
 local keys = Diag.configKeys(spec, { 'band', 'maxRange' },
@@ -280,7 +280,7 @@ local threw = Diag.configKeys(function() error('spec is broken') end, {}, { only
 must(#threw == 1 and threw[1] == 'onlyKey',
     'a raising spec function took the key list with it')
 
--- ── command: the defaults nobody has to remember ───────────────────────────
+-- command: the defaults nobody has to remember
 
 local tradarSpec = { keys = { band = true, maxRange = true } }
 
@@ -304,7 +304,7 @@ Diag.command({
         for _, key in ipairs(ctx.configKeys()) do ctx.kv(key, config[key]) end
         ctx.section('credentials')
         ctx.kv('authToken presence', ctx.presence(config.authToken))
-        -- ⚠️ Deliberate leaks, through the ONE route that is not name-keyed: a
+        -- Deliberate leaks, through the ONE route that is not name-keyed: a
         -- raw `ctx.line` carrying a credential value. This is the realistic
         -- drift -- nobody writes `ctx.kv('authToken', …)` by accident, they
         -- print a payload or an error that happens to contain one. Every one of
@@ -351,7 +351,7 @@ must(text:find('port set', 1, true) and text:find('public url not set', 1, true)
 must(text:find('console=true src=0', 1, true), 'ctx.console was wrong for the console')
 must(text:find('safe to paste', 1, true), 'the paste-safety footer is missing')
 
--- ── Layer 1: name-keyed, unconditional. `ctx.kv` through `describe`. ───────
+-- Layer 1: name-keyed, unconditional. `ctx.kv` through `describe`.
 --
 -- This is the layer tDetector had and the four resources with "no redactor"
 -- did not. It has no switch, because a key whose NAME reads like a credential
@@ -359,7 +359,7 @@ must(text:find('safe to paste', 1, true), 'the paste-safety footer is missing')
 must(consoleText:find('<redacted>', 1, true) ~= nil,
     'ctx.kv printed a credential value instead of <redacted>')
 
--- ── Layer 2: the value filter, which `redact` governs. ────────────────────
+-- Layer 2: the value filter, which `redact` governs.
 redactsValue(not consoleText:find('super-secret-token-value', 1, true),
     'the credential value appeared in a validation message')
 redactsValue(not consoleText:find('correct-horse', 1, true),
@@ -371,7 +371,7 @@ redactsValue(not consoleText:find('shared-key-value-here', 1, true),
 must(consoleText:find('withheld', 1, true) ~= nil or CONTROL,
     'the withheld lines did not say they were withheld')
 
--- ── Layer 3: a message that NAMES a credential but has masked its value. ──
+-- Layer 3: a message that NAMES a credential but has masked its value.
 --
 -- tRadio's rule. The value filter cannot see this one: the validator replaced
 -- the value with 0, so nothing in the line matches a harvested secret.
@@ -408,7 +408,7 @@ must(#clientEvents > 0, 'the in-game caller was told nothing')
 must(clientEvents[1].event == 'chat:addMessage' and clientEvents[1].target == 7,
     'the report did not reach the caller')
 
--- ── A config supplied as a function, resolved per invocation ───────
+-- A config supplied as a function, resolved per invocation
 --
 -- tAFK reads its settings out of data.json and tELS keeps serverDefaults, so
 -- neither has a table to hand in at registration time. The loader is called per
@@ -442,7 +442,7 @@ local badLoader = table.concat(commands.tprobe_badloader.fn(0), '\n')
 must(badLoader:find('still printed', 1, true),
     'a raising config loader took the whole report down with it')
 
--- ── Layer 3 for a credential that is NOT a string ──────────────────────────
+-- Layer 3 for a credential that is NOT a string
 --
 -- A credential written without its quotes is a number. `harvest` only collects
 -- strings, so the value filter has nothing to match, and the validator's message
@@ -465,7 +465,7 @@ redactsValue(numericText:find('a problem with authToken', 1, true) ~= nil,
 redactsValue(not numericText:find('Found 0', 1, true),
     'a message naming an unquoted (numeric) credential was echoed')
 
--- ── The pcall guard, and the partial report ────────────────────────────────
+-- The pcall guard, and the partial report
 
 Diag.command({
     name = 'tprobe_broken',
@@ -487,7 +487,7 @@ must(broken:find('deliberate explosion', 1, true),
 must(broken:find('everything after this point is missing', 1, true),
     'nothing told the operator the paste was a partial one')
 
--- ── diag.guard: the same property for a report that prints itself ──────────
+-- diag.guard: the same property for a report that prints itself
 
 local ran = false
 Diag.guard('tprobe_guarded', function() ran = true; error('boom') end)
@@ -506,7 +506,7 @@ Diag.warn('a plain block still works', { cause = 'because command is additive' }
 must(#printed > 0 and table.concat(printed, '\n'):find('a plain block still works', 1, true),
     'adding command broke diag.warn')
 
--- ── Verdict ────────────────────────────────────────────────────────────────
+-- Verdict
 
 print = realPrint
 
@@ -516,7 +516,7 @@ if CONTROL then
     -- something the `redact` flag does not actually control -- which is how the
     -- first draft of this file came to "pass" its own control while three of
     -- its five redaction checks were measuring an unrelated layer.
-    -- ⚠️ RAISE THIS WHEN YOU ADD A `redactsValue`. 43cc768 added the two
+    -- RAISE THIS WHEN YOU ADD A `redactsValue`. 43cc768 added the two
     -- unquoted-numeric-credential cases and left the count at 7, so the control
     -- reported "9 of 7 ... flipped" and REFUSED the run -- a control that cannot
     -- pass gets ignored, which is how the gate it guards stops being proved.

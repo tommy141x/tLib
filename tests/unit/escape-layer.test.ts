@@ -32,12 +32,12 @@
 import { expect, test } from "bun:test";
 import {
   type EscapeKeyEvent,
-  EscapeLayerRegistry,
   type EscapeLayerOptions,
+  EscapeLayerRegistry,
   type EscapeTarget,
 } from "../../shared/ts/escape-layer";
 
-// ── DOM harness ─────────────────────────────────────────────────────────────
+// DOM harness
 
 type Listener = (event: EscapeKeyEvent) => void;
 
@@ -95,7 +95,7 @@ function press(
   return { down, up };
 }
 
-// ── The negative controls ───────────────────────────────────────────────────
+// The negative controls
 
 interface Driver {
   add(options: EscapeLayerOptions): () => void;
@@ -181,7 +181,7 @@ const CONTROLS: { name: string; make(target: FakeTarget): Driver; mustFail: stri
   },
 ];
 
-// ── Scenarios ───────────────────────────────────────────────────────────────
+// Scenarios
 
 interface Scenario {
   name: string;
@@ -304,7 +304,7 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-// ── The real registry passes everything ─────────────────────────────────────
+// The real registry passes everything
 
 for (const scenario of SCENARIOS) {
   test(scenario.name, () => {
@@ -313,7 +313,7 @@ for (const scenario of SCENARIOS) {
   });
 }
 
-// ── Registry behaviour the control has no opinion about ─────────────────────
+// Registry behaviour the control has no opinion about
 
 test("a layer registered during the press does not own that press", () => {
   const target = new FakeTarget();
@@ -450,7 +450,7 @@ test("a non-Escape key is never sampled or consumed", () => {
   expect(enter.defaultPrevented).toBe(false);
 });
 
-// ── The negative control, actually run ──────────────────────────────────────
+// The negative control, actually run
 
 test("every control names real scenarios, and every mechanism has a control", () => {
   const names = new Set(SCENARIOS.map((scenario) => scenario.name));

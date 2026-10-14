@@ -181,9 +181,13 @@ try {
   // bundles never followed it and a tLib dialog opened over a tELS editor
   // repainted the primary button. Pinned as a literal on purpose: a token read
   // would agree with whatever the sheet says.
-  assert.equal(desktop.primary?.background, "rgb(48, 137, 232)", "stock primary is the shared blue");
+  assert.equal(
+    desktop.primary?.background,
+    "rgb(48, 137, 232)",
+    "stock primary is the shared blue"
+  );
   assert.equal(desktop.input?.border, "rgb(48, 137, 232)", "stock focus border is the shared blue");
-  // ⚠️ This asserted `shadow !== "none"` — "focused input has a visible soft
+  // This asserted `shadow !== "none"` — "focused input has a visible soft
   // ring" — and had been failing since a9695a2 ("one focus mechanism, and it is
   // an outline") without anyone noticing, because this harness is not in
   // `verify`. The affordance is deliberately an `outline`: an outward
@@ -511,7 +515,7 @@ try {
     3,
     "slider emits number"
   );
-  // ── A DRAG commits ONCE, at its end ───────────────────────────────────────
+  // A DRAG commits ONCE, at its end
   //
   // zag fires `onValueChange` on every pointer move, so wiring `dialogChange`
   // to it meant one NUI call per step of a drag — and tRadar's cl_settings.lua
@@ -529,7 +533,14 @@ try {
     const slider = page.getByRole("slider");
     const box = await slider.boundingBox();
     assert.ok(box, "the slider thumb has a box to drag");
-    const track = await page.locator('[data-scope="slider"][data-part="track"]').boundingBox();
+    // `[data-slider-track]`, not zag 1's `[data-scope="slider"][data-part="track"]`:
+    // zag 2's createAnatomy emits one combined `data-<component>-<part>` attribute.
+    // Read from the installed `@zag-js/slider` (anatomy.build().track.attr) rather
+    // than hand-converted. This file is not in `bun run test` -- it needs a browser --
+    // so a stale selector here survives a fully green gate run, which is how this one
+    // did; the assertion below would have failed only when someone next ran the
+    // browser suite.
+    const track = await page.locator("[data-slider-track]").boundingBox();
     assert.ok(track, "the slider track has a box to drag along");
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();

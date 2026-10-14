@@ -70,7 +70,7 @@ local function pageOf(value, id)
     for _, menu in ipairs(value.menus) do if menu.id == id then return menu end end
 end
 
--- ── The fixture ─────────────────────────────────────────────────────────────
+-- The fixture
 
 local function raw()
     return {
@@ -102,7 +102,7 @@ local function reset()
     printed = {}
 end
 
--- ── Registration ────────────────────────────────────────────────────────────
+-- Registration
 
 equal(C.count(), 0, 'the engine starts with no presenters, because it has no content of its own')
 equal((C.register('', {})), false, 'a presenter needs an owner')
@@ -118,7 +118,7 @@ check(C.unregister('alpha'), 'unregistering reports that it existed')
 equal(C.count(), 0, 'and it is gone')
 equal(C.unregister('alpha'), false, 'unregistering it twice is a no-op')
 
--- ── Requesting pages ────────────────────────────────────────────────────────
+-- Requesting pages
 
 reset()
 local all = C.present(raw())
@@ -152,7 +152,7 @@ ordered(expanded.menus, 'id', { 'alpha:one', 'alpha:two' },
 equal(#expandedFor, 1, 'and asks about each originally requested page exactly once')
 check(pageOf(expanded, 'bravo:one') == nil, 'expansion is one level deep, by design, not by accident')
 
--- ── The authority view ─────────────────────────────────────────────────────
+-- The authority view
 --
 -- The second argument every presenter is handed. It is SCOPED TO THE PASS, and that
 -- scoping is a performance decision with a correctness contract attached: a
@@ -220,7 +220,7 @@ C.present(raw(), { 'alpha:one' })
 ordered(saw.menus, 'id', { 'alpha:one', 'alpha:two' },
     'a page pulled in by expansion is part of the pass, and so is in the view')
 
--- ── A broken presenter ──────────────────────────────────────────────────────
+-- A broken presenter
 
 reset()
 local bravoRan = false
@@ -249,7 +249,7 @@ for _, stage in ipairs({ 'expand', 'identity', 'present', 'contextKey' }) do
     check(found, 'the report names the stage and the owner: ' .. stage)
 end
 
--- ── Mutate and return ───────────────────────────────────────────────────────
+-- Mutate and return
 --
 -- A presenter in another resource is called across an export boundary, and on FiveM
 -- that boundary COPIES its arguments. A presenter that only mutated in place would
@@ -274,7 +274,7 @@ local rejected = C.present(raw(), { 'alpha:one' })
 ordered(pageOf(rejected, 'alpha:one').items, 'id', { 'alpha:a', 'alpha:tint' },
     'a presenter that returns something that is not a snapshot leaves the projection standing')
 
--- ── Narrowing rows ──────────────────────────────────────────────────────────
+-- Narrowing rows
 
 reset()
 local row = { kind = 'select', value = 2, options = {
@@ -299,7 +299,7 @@ C.disable(plain, 'Not while driving')
 equal(plain.disabled, true, 'disabling sets the flag')
 equal(plain.description, 'Not while driving', 'and says why, because a greyed row with no reason reads as a bug')
 
--- ── The cache ───────────────────────────────────────────────────────────────
+-- The cache
 
 reset()
 local world, asked, invalidated = 'car:1', 0, 0
@@ -356,7 +356,7 @@ equal(ok, false, 'a cached lookup that throws propagates')
 pcall(C.cached, 'flaky', function() tries = tries + 1; return 1 end)
 equal(tries, 2, 'and is asked again next time rather than being remembered as broken')
 
--- ── Locally held state ──────────────────────────────────────────────────────
+-- Locally held state
 --
 -- An effect the player turned on is theirs, and has to be on the row BEFORE anyone
 -- narrows around it -- a presenter that disables "Infinite Ammo" while it is
@@ -374,7 +374,7 @@ equal(order[1], true, 'stored state is replayed onto the row before presenters r
 equal(pageOf(decorated, 'bravo:one').items[1].value, true, 'and survives the pass')
 MenuActions.cleanupAll()
 
--- ── Context keys ────────────────────────────────────────────────────────────
+-- Context keys
 
 reset()
 C.register('alpha', { contextKey = function(menu) return menu.id == 'alpha:one' and 'car=1' or nil end })
@@ -417,7 +417,7 @@ C.register('alpha', { contextKey = function() return '' end })
 equal(pageOf(C.present(raw(), { 'alpha:one' }), 'alpha:one').contextKey, nil,
     'an empty identity part contributes nothing at all')
 
--- ── Comparison ──────────────────────────────────────────────────────────────
+-- Comparison
 --
 -- C.equal is what decides whether a re-presented page is worth sending to the
 -- browser. A version that missed a difference would leave the screen showing a row
@@ -431,7 +431,7 @@ check(C.equal({ a = { b = { c = 3 } } }, { a = { b = { c = 3 } } }), 'nesting is
 check(not C.equal({ a = { b = { c = 3 } } }, { a = { b = { c = 4 } } }), 'including the deepest value')
 check(not C.equal(1, '1'), 'and a number is not its string')
 
--- ── Array encoding ──────────────────────────────────────────────────────────
+-- Array encoding
 --
 -- CitizenFX honours __jsontype. A list narrowed to nothing has to reach the browser
 -- as [] rather than {}, or the page renders a selector with no list at all.
@@ -447,7 +447,7 @@ equal(meta and meta.__jsontype, 'array', 'an emptied option list is still an arr
 equal(getmetatable(stamped.menus).__jsontype, 'array', 'as is the page list')
 equal(getmetatable(pageOf(stamped, 'alpha:one').items).__jsontype, 'array', 'and every page\'s row list')
 
--- ── Presentation is not permission ──────────────────────────────────────────
+-- Presentation is not permission
 --
 -- The narrowed copy must never be fed back into permission or effect
 -- reconciliation: a row disabled because the player got out of the car is not a

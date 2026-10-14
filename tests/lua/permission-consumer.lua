@@ -6,7 +6,7 @@
 
 local aces = {}      -- [ace] = value IsPlayerAceAllowed returns for player '7'
 local hasPermission  -- what exports.tLib:HasPermission does; nil = export missing
-local hasPermissionBatch -- ditto HasPermissionBatch; nil models a tLib too old to have it
+local hasPermissionBatch -- ditto HasPermissionBatch; nil models a tLib that cannot answer
 local singleCalls = 0    -- how many times the single-key export was reached
 local batchCalls = 0
 
@@ -24,9 +24,9 @@ exports = setmetatable({}, {
                 singleCalls = singleCalls + 1
                 return hasPermission(src, key)
             end,
-            -- Absent on a tLib whose VM predates the batch export. Indexing a
-            -- missing export RAISES in FiveM, which is the shape hasBatch's
-            -- fallback is written against, so model the raise, not a nil return.
+            -- A tLib that cannot answer at all. Indexing a missing export RAISES
+            -- in FiveM, so model the raise and not a nil return -- that is the
+            -- shape hasBatch's fail-closed pcall is written against.
             HasPermissionBatch = hasPermissionBatch and function(_, src, keys)
                 batchCalls = batchCalls + 1
                 return hasPermissionBatch(src, keys)
@@ -90,7 +90,9 @@ assert(not permission.has(7, nil) and not permission.has(7, ''), 'a missing key 
 -- hasBatch ----------------------------------------------------------------------
 -- The batch sibling of has(). Its reason to exist is the number of export round
 -- trips, so the two properties worth pinning are (a) it really does collapse to
--- one, and (b) when it cannot, it still answers correctly by looping has().
+-- one, and (b) when tLib cannot answer, it DENIES rather than falling through to
+-- local ACE. There is no per-key fallback: this module and the export it calls
+-- ship in the same tLib, so they cannot disagree about whether it exists.
 
 local function count(t) local n = 0; for _ in pairs(t) do n = n + 1 end; return n end
 
@@ -118,23 +120,25 @@ hasPermissionBatch = function() return { a = 1 } end
 assert(permission.hasBatch(7, {'a'}).a == false, 'only a boolean true from tLib is a grant')
 aces = {}
 
--- Degradation: a consumer can be NEWER than the tLib beside it. A missing batch
--- export must cost speed, never correctness -- so the answers below are the ones
--- looping has() gives, and they arrive one export call per key.
+-- FAILS CLOSED, and does NOT silently loop has() instead. An export that
+-- raises means tLib did not answer, and a resolver takes priority over ACE, so
+-- falling through to the single-key path -- let alone to local ACE -- could grant
+-- what the resolver denies. ACE is granted below precisely to prove it is ignored.
+aces = { a = true, b = true, c = true }
 hasPermission = function(src, key) return src == 7 and key == 'a' end
 hasPermissionBatch = nil
 singleCalls, batchCalls = 0, 0
-local fallback = permission.hasBatch(7, {'a', 'b', 'c'})
-assert(fallback.a == true and fallback.b == false and fallback.c == false,
-    'a tLib with no batch export still answers correctly, one key at a time')
-assert(batchCalls == 0 and singleCalls == 3, 'the fallback is the single-key export, three times')
+local denied = permission.hasBatch(7, {'a', 'b', 'c'})
+assert(count(denied) == 0, 'a tLib that cannot answer the batch grants nothing')
+assert(batchCalls == 0 and singleCalls == 0, 'and asks nothing else -- no per-key fallback exists')
 
 -- A batch export that exists but answers with something that is not a table is
--- the same situation: unusable, so fall back rather than hand back nils.
+-- the same situation: unusable, so deny rather than hand back nils or re-ask.
 hasPermissionBatch = function() return 'nope' end
 singleCalls = 0
-assert(permission.hasBatch(7, {'a', 'b'}).a == true and singleCalls == 2,
-    'a non-table answer falls back to looping has()')
+assert(count(permission.hasBatch(7, {'a', 'b'})) == 0 and singleCalls == 0,
+    'a non-table answer is a denial, not a reason to loop has()')
+aces = {}
 
 -- Fails closed on the awkward inputs, exactly as has() does.
 hasPermissionBatch = function(_, keys)
@@ -150,14 +154,50 @@ assert(count(mixed) == 1 and mixed.a == true, 'non-string and empty keys get no 
 -- And a duplicate is asked once, which is the whole point of the map shape.
 singleCalls, batchCalls = 0, 0
 assert(permission.hasBatch(7, {'a', 'a', 'a'}).a == true and batchCalls == 1, 'duplicates do not multiply calls')
+
+-- hasAll ------------------------------------------------------------------------
+-- The conjunction tMenu's shared/ace.lua had and this module did not. Over
+-- hasBatch rather than a loop over has(), so a four-key gate is still ONE export
+-- round trip -- which is the only reason to have it rather than let the caller
+-- write the loop.
+
+aces = {}
+hasPermissionBatch = function(src, keys)
+    local out = {}
+    for _, key in ipairs(keys) do out[key] = (src == 7 and key ~= 'nope') end
+    return out
+end
+
+batchCalls, singleCalls = 0, 0
+assert(permission.hasAll(7, {'a', 'b', 'c'}), 'every key held => true')
+assert(batchCalls == 1 and singleCalls == 0, 'three keys, one round trip')
+assert(not permission.hasAll(7, {'a', 'nope'}), 'one key missing => false')
+assert(not permission.hasAll(9, {'a'}), 'a different player is answered separately')
+
+-- Nothing was asked, so nothing was refused. Same answer tMenu's loop gives, and
+-- it matters: a feature whose required key list is built at registration can
+-- legitimately end up empty, and false there would deny a gate nobody asked for.
+assert(permission.hasAll(7, {}), 'an empty list is true')
+
+-- Fails closed on the awkward inputs, like its siblings.
+assert(not permission.hasAll(nil, {'a'}), 'a nil source holds nothing')
+assert(not permission.hasAll(7, 'a'), 'a non-table key list holds nothing')
+-- hasBatch files no entry for an unusable key, so it reads back nil, i.e. denied.
+assert(not permission.hasAll(7, {'a', ''}), 'an empty key is not silently skipped')
+
+-- Still goes THROUGH tLib: ACE granted below precisely to prove it is ignored.
+aces = { a = true, b = true }
+hasPermissionBatch = function() return {} end
+assert(not permission.hasAll(7, {'a', 'b'}),
+    'tLib answers, not local ACE, even with both ACEs granted')
 hasPermissionBatch = nil
-singleCalls = 0
-assert(permission.hasBatch(7, {'a', 'a', 'a'}).a == true and singleCalls == 1,
-    'nor in the fallback, where each call is a round trip')
+assert(not permission.hasAll(7, {'a'}), 'a tLib that cannot answer grants nothing')
+aces = {}
 
 -- demo mode ---------------------------------------------------------------------
 
 aces = {}
+hasPermissionBatch = nil
 assert(permission.level(7) == 0, 'no aces, demo off => level 0')
 demoOn = true
 assert(permission.level(7) == 2, 'demo mode makes every player a superadmin')

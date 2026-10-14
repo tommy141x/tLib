@@ -26,7 +26,7 @@
 -- through a simulated export call.
 
 
--- ── A funcref, shaped as the host builds one ────────────────────────────────
+-- A funcref, shaped as the host builds one
 --
 -- The target is held outside the table so its shape matches the real one exactly:
 -- one opaque string key, and a metatable that refuses to be read through.
@@ -86,7 +86,7 @@ local function equal(actual, expected, message)
     end
 end
 
--- ── The simulation is itself worth pinning ──────────────────────────────────
+-- The simulation is itself worth pinning
 --
 -- If this drifted into being an ordinary function, every assertion below would
 -- keep passing while testing nothing.
@@ -99,7 +99,7 @@ local sum, word = probe(2, 3)
 equal(sum, 5, 'a funcref is callable through its metatable')
 equal(word, 'ok', 'a funcref returns every value its target returned')
 
--- ── S.callable, the single answer every gate asks ───────────────────────────
+-- S.callable, the single answer every gate asks
 
 check(S.callable(function() end), 'a plain function is callable')
 check(S.callable(probe), 'a funcref is callable')
@@ -122,7 +122,7 @@ local copied = S.copy({ handler = probe })
 equal(type(copied.handler), 'table', 'a copied funcref is still a table')
 check(not S.callable(copied.handler), 'a COPIED funcref is dead -- handlers must be held by reference')
 
--- ── Client action handlers and effects ──────────────────────────────────────
+-- Client action handlers and effects
 
 MenuActions.setItemResolver(function() return nil end)
 local dispatcher = MenuActions.forOwner('consumer')
@@ -144,7 +144,7 @@ check(not pcall(function() dispatcher:setEffect('broken', true, { tick = { 1, 2 
     'an effect whose tick is a plain table is still refused')
 dispatcher:setEffect('godmode', false)
 
--- ── Presenters ──────────────────────────────────────────────────────────────
+-- Presenters
 
 local ok, reason = MenuContext.register('consumer', {
     identity = funcref(function() return 'consumer:1' end),
@@ -159,7 +159,7 @@ check(not bad, 'a presenter field that is a plain table is still refused')
 equal(badReason, 'presenter.present must be a function', 'the refusal names the field')
 MenuContext.unregister('consumer')
 
--- ── Snapshot hooks and server action handlers ───────────────────────────────
+-- Snapshot hooks and server action handlers
 
 local registry = MenuRegistry.new({ hasPermission = function() return true end, now = function() return clock end })
 check(registry:defineNamespace('consumer', { ace = 'consumer.open' }), 'the namespace is defined')

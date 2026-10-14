@@ -45,7 +45,7 @@ local occupancy = dofile('shared/imports/occupancy/server.lua')
 local DRIVER, PASSENGER = occupancy.SEAT_DRIVER, occupancy.SEAT_PASSENGER
 assert(DRIVER == -1 and PASSENGER == 0, 'seat constants match the GTA seat indices')
 
--- ── Seat index → tier, with no row assumption anywhere ──────────────────
+-- Seat index → tier, with no row assumption anywhere
 -- The classifier is pure and is the ONLY place an index becomes a tier, so a
 -- bus's fourteenth seat is ordinary rather than a special case somebody forgot.
 
@@ -62,13 +62,13 @@ assert(T.seatTier(nil) == nil, 'no seat is no tier')
 assert(T.seatTier('0') == nil, 'a seat index that is not a number is not a seat')
 assert(T.seatTier(-2) == nil, 'nothing below the driver seat is a seat we model')
 
--- ── An empty world answers "no", never "maybe" ──────────────────────────
+-- An empty world answers "no", never "maybe"
 
 assert(occupancy.seatOf(1) == nil, 'a player in no vehicle has no seat')
 assert(occupancy.controllerOf(10) == nil, 'a vehicle nobody is in has no controller')
 assert(occupancy.isFrontSeat(1, 10) == false, 'the gate is closed by default')
 
--- ── The driver is the controller ────────────────────────────────────────
+-- The driver is the controller
 
 seats[1] = { seat = DRIVER, netId = 10 }
 occupancy.refresh(1)
@@ -80,7 +80,7 @@ assert(occupancy.controllerOf(10) == 1, 'the driver controls the vehicle')
 assert(occupancy.isFrontSeat(1, 10) == true, 'the driver passes the gate')
 assert(occupancy.isFrontSeat(1, 11) == false, 'and only for the vehicle they are actually in')
 
--- ── A front passenger joins: shares the seat, not the control ───────────
+-- A front passenger joins: shares the seat, not the control
 
 seats[2] = { seat = PASSENGER, netId = 10 }
 occupancy.refresh(2)
@@ -95,7 +95,7 @@ assert(occupancy.isFrontSeat(2, 10) == true, 'but the passenger still passes the
 front.driver = 99
 assert(occupancy.frontSeats(10).driver == 1, 'frontSeats returns a copy, not the live table')
 
--- ── Driver leaves: the passenger inherits control ───────────────────────
+-- Driver leaves: the passenger inherits control
 
 seats[1] = nil
 occupancy.refresh(1)
@@ -104,7 +104,7 @@ assert(occupancy.frontSeats(10).driver == nil, 'the empty driver seat is release
 assert(occupancy.controllerOf(10) == 2, 'with no driver, the front passenger controls the vehicle')
 assert(occupancy.isFrontSeat(1, 10) == false, 'the departed driver no longer passes the gate')
 
--- ── A new driver sits down and takes over immediately ───────────────────
+-- A new driver sits down and takes over immediately
 
 seats[3] = { seat = DRIVER, netId = 10 }
 occupancy.refresh(3)
@@ -112,7 +112,7 @@ occupancy.refresh(3)
 assert(occupancy.controllerOf(10) == 3, 'a driver taking the seat takes control from the passenger')
 assert(occupancy.isFrontSeat(2, 10) == true, 'the passenger keeps their seat and their gate')
 
--- ── Rear seats: present, addressable, and powerless ─────────────────────
+-- Rear seats: present, addressable, and powerless
 -- The third tier. A rear passenger is now a distinct case rather than being
 -- indistinguishable from a player on foot — but every existing question about
 -- them answers exactly as it did when they were invisible. What they gain is
@@ -183,7 +183,7 @@ assert(occupancy.tierOf(4) == nil, 'a rear passenger who got out holds no tier')
 assert(next(occupancy.occupantsOf(10).rear) == nil, 'and no seat')
 assert(occupancy.controllerOf(10) == 3, 'the front of the car is undisturbed throughout')
 
--- ── Seat transitions across the tier boundary ───────────────────────────
+-- Seat transitions across the tier boundary
 
 -- rear -> front: they gain control candidacy at the moment of the read.
 seats[4] = { seat = 2, netId = 10 }
@@ -218,7 +218,7 @@ occupancy.refresh(2)
 assert(occupancy.controllerOf(10) == 3, 'the driver is seated')
 assert(occupancy.frontSeats(10).passenger == 2, 'and the front passenger is back')
 
--- ── The gate reads live, because a cache is not a permission ────────────
+-- The gate reads live, because a cache is not a permission
 -- A command arriving after the player left the car must be refused even though
 -- nothing has swept yet. This is why isFrontSeat costs a native read.
 
@@ -231,7 +231,7 @@ assert(occupancy.isFrontSeat(3, 10) == false, 'a stale cache entry does not auth
 assert(occupancy.controllerOf(10) == 2,
     'and the refusal repairs the cache, so the passenger inherits control')
 
--- ── Vehicles are independent ────────────────────────────────────────────
+-- Vehicles are independent
 
 seats[5] = { seat = DRIVER, netId = 20 }
 occupancy.refresh(5)
@@ -249,7 +249,7 @@ assert(occupancy.frontSeats(10).passenger == 5, 'the new seat replaces the old o
 -- half and is dropped rather than left holding a seat somebody else is in.
 assert(occupancy.seatOf(2) == nil, 'the displaced occupant is dropped, not left double-booked')
 
--- ── Changes are announced once, on transitions only ─────────────────────
+-- Changes are announced once, on transitions only
 
 local events = {}
 occupancy.onChange(function(id, now, prev)
@@ -264,7 +264,7 @@ occupancy.refresh(6)
 assert(#events == 1 and events[1].netId == 10 and events[1].driver == 6 and events[1].was == nil,
     'a seat change announces the vehicle with both the new and previous occupants')
 
--- ── Disconnects ─────────────────────────────────────────────────────────
+-- Disconnects
 
 occupancy.clear(6)
 assert(occupancy.seatOf(6) == nil, 'a dropped player holds no seat')
@@ -277,7 +277,7 @@ assert(#events == 2 and events[2].driver == nil, 'the drop is announced like any
 -- A drop for somebody who never sat anywhere is not an error.
 occupancy.clear(77)
 
--- ── Who acts directly, and who acts through somebody ────────────────────
+-- Who acts directly, and who acts through somebody
 -- isFrontSeat answers "may they act"; isControllerOf answers "may they act
 -- DIRECTLY". A passenger with a driver beside them is inside the first gate and
 -- outside the second — their commands get forwarded, not refused.
@@ -323,7 +323,7 @@ assert(occupancy.isControllerOf(4, 30) == false, 'a rear seat is not a front sea
 assert(occupancy.isAboard(4, 30) == true, 'but a rear seat IS aboard')
 assert(occupancy.controllerOf(30) == 3, 'and the driver is still the controller')
 
--- ── The cabin listener, and what it deliberately does not wake ──────────
+-- The cabin listener, and what it deliberately does not wake
 
 local cabinEvents, frontEvents = {}, {}
 local unsubCabin = occupancy.onCabinChange(function(id, now, prev)
@@ -362,7 +362,7 @@ assert(#cabinEvents == 4 and #frontEvents == 1, 'both unsubscribes take effect')
 
 print('PASS: occupancy elects driver-else-passenger, gates live, and seats rear passengers without arming them')
 
--- ── The delivery address ────────────────────────────────────────────────
+-- The delivery address
 -- partnerOf is not a permission, it is where the other front seat's copy of
 -- something goes. Both halves are read live, so it can never name somebody who
 -- has already got out.
@@ -410,7 +410,7 @@ assert(none == nil and noVeh == nil, 'a player on foot has no partner and no veh
 
 print('PASS: partnerOf names the other front seat, live, and never the caller')
 
--- ── Discovery ───────────────────────────────────────────────────────────
+-- Discovery
 -- The client-side ping that makes the above reachable for a passenger who has
 -- not done anything. The payload is a nudge: the seat is re-read here, so a
 -- client claiming a seat it is not in gets the truth written instead.

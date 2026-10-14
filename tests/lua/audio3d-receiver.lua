@@ -57,7 +57,7 @@ end
 -- The boot push: the page is told the range before any frame means anything.
 assert(lastOf('audio3d:range') ~= nil or true, 'range is pushed from the thread, which is stubbed')
 
--- ── A broadcast becomes a NUI sound with a resolvable emitter id ─────────────
+-- A broadcast becomes a NUI sound with a resolvable emitter id
 
 entityPos[77] = { x = 10.0, y = 0.0, z = 0.0 }
 reset()
@@ -68,14 +68,14 @@ assert(sound.id == 'veh:77', 'under the emitter id both sides agree on')
 assert(sound.kind == 'alert' and sound.sound == 'lock.wav', 'with its payload intact')
 assert(rx:activeEmitters()[1] == 'veh:77', 'and the emitter is now live')
 
--- ── Malformed traffic is refused ─────────────────────────────────────────────
+-- Malformed traffic is refused
 
 assert(rx:accept(nil) == false)
 assert(rx:accept('nope') == false)
 assert(rx:accept({ kind = 'alert' }) == false, 'a broadcast with no vehicle is not an emitter')
 assert(rx:accept({ vehicle = 'seventy-seven' }) == false, 'nor is a non-numeric one')
 
--- ── The dedup: nobody hears their own device twice ───────────────────────────
+-- The dedup: nobody hears their own device twice
 
 reset()
 rx:setLocal(77)
@@ -109,7 +109,7 @@ rx:setLocal(88)
 assert(#messages == first, 'an unchanged mark is not re-sent')
 rx:setLocal(nil)
 
--- ── The frame: one message, listener plus every emitter ──────────────────────
+-- The frame: one message, listener plus every emitter
 
 reset()
 entityPos[77] = { x = 10.0, y = 0.0, z = 0.0 }
@@ -134,7 +134,7 @@ assert(math.abs(fwd.x + 1.0) < 1e-9, 'a 90 degree yaw faces -X, got ' .. fwd.x)
 fwd = audio3d._forwardFrom({ x = 90.0, y = 0.0, z = 0.0 })
 assert(math.abs(fwd.z - 1.0) < 1e-9, 'pitching up faces +Z, got ' .. fwd.z)
 
--- ── The distance cull ────────────────────────────────────────────────────────
+-- The distance cull
 
 reset()
 entityPos[88] = { x = 500.0, y = 0.0, z = 0.0 }
@@ -157,7 +157,7 @@ assert(lastOf('audio3d:frame').dropped[1] == 'veh:77',
     'a vehicle this client cannot resolve is not a sound from the origin')
 assert(#rx:activeEmitters() == 0)
 
--- ── The max-age backstop ─────────────────────────────────────────────────────
+-- The max-age backstop
 
 reset()
 entityPos[99] = { x = 1.0, y = 0.0, z = 0.0 }
@@ -174,7 +174,7 @@ assert(lastOf('audio3d:frame').dropped[1] == 'veh:99',
     'leave a tone running for the session')
 assert(#rx:activeEmitters() == 0)
 
--- ── Stop-all on resource teardown ────────────────────────────────────────────
+-- Stop-all on resource teardown
 
 reset()
 rx:accept({ vehicle = 99, kind = 'alert' })
@@ -189,7 +189,7 @@ assert(lastOf('audio3d:stopAll') ~= nil,
 assert(#rx:activeEmitters() == 0)
 assert(rx:getLocal() == nil)
 
--- ── Rate by speed ────────────────────────────────────────────────────────────
+-- Rate by speed
 
 entityPos[77] = { x = 1.0, y = 0.0, z = 0.0 }
 rx:accept({ vehicle = 77, kind = 'alert' })
@@ -204,7 +204,7 @@ assert(rx:pushFrame() == 16, 'fast: 60 Hz')
 rx:stopAll()
 assert(rx:pushFrame() == 250, 'with no emitters the thread idles')
 
--- ── Required options ─────────────────────────────────────────────────────────
+-- Required options
 
 assert(not pcall(audio3d.createReceiver, { event = 'x', range = 10 }), '`send` is required')
 assert(not pcall(audio3d.createReceiver, { send = function() end, range = 10 }),

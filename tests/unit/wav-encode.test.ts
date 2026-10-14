@@ -14,12 +14,12 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { decodeWav, encodeWav, writeWav } from "../../shared/ts/audio/wav.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { decodeWav, encodeWav, writeWav } from "../../shared/ts/audio/wav.ts";
 
-/** ⚠️ NEGATIVE CONTROL — the retired mono writer, verbatim. Never call this for real. */
+/** NEGATIVE CONTROL — the retired mono writer, verbatim. Never call this for real. */
 function symmetricEncode(channelData: Float32Array[], rate: number): Buffer {
   const channels = channelData.length;
   const frames = channelData[0].length;
@@ -65,7 +65,7 @@ function ramp(n = 48000): Float32Array {
   return a;
 }
 
-// ── The scenarios, as a SET of names ────────────────────────────────────────
+// The scenarios, as a SET of names
 const COVERED = new Set([
   "negative full scale reaches the int16 floor",
   "positive full scale does not wrap",
@@ -78,13 +78,16 @@ function evaluate(enc: Encoder): Map<string, boolean> {
 
   r.set(
     "negative full scale reaches the int16 floor",
-    pcm(enc([new Float32Array([-1])], 48000))[0] === -32768,
+    pcm(enc([new Float32Array([-1])], 48000))[0] === -32768
   );
   r.set("positive full scale does not wrap", pcm(enc([new Float32Array([1])], 48000))[0] === 32767);
-  r.set("a full-scale ramp uses the whole range", (() => {
-    const s = pcm(enc([ramp()], 48000));
-    return Math.min(...s) === -32768 && Math.max(...s) === 32767;
-  })());
+  r.set(
+    "a full-scale ramp uses the whole range",
+    (() => {
+      const s = pcm(enc([ramp()], 48000));
+      return Math.min(...s) === -32768 && Math.max(...s) === 32767;
+    })()
+  );
 
   return r;
 }
@@ -109,7 +112,7 @@ describe("encodeWav", () => {
       new Set([
         "negative full scale reaches the int16 floor",
         "a full-scale ramp uses the whole range",
-      ]),
+      ])
     );
     // And the one it passes, it passes for the right reason, not by accident:
     // +1.0 * 32767 is 32767 in both bodies, so this scenario cannot discriminate.
@@ -157,7 +160,7 @@ describe("encodeWav", () => {
     // Only the 44-byte header, which is what "changes emitted bytes" must NOT
     // have meant: the RIFF/fmt/data framing is unchanged, only the samples are.
     expect(encodeWav(input, 48000).subarray(0, 44)).toEqual(
-      symmetricEncode(input, 48000).subarray(0, 44),
+      symmetricEncode(input, 48000).subarray(0, 44)
     );
   });
 
@@ -182,7 +185,7 @@ describe("encodeWav", () => {
 
   test("refuses ragged channels and a bad rate instead of writing a wrong header", () => {
     expect(() => encodeWav([new Float32Array(4), new Float32Array(5)], 48000)).toThrow(
-      /channel 1 has 5 frames/,
+      /channel 1 has 5 frames/
     );
     expect(() => encodeWav([], 48000)).toThrow(/no channels/);
     expect(() => encodeWav([new Float32Array(4)], 0)).toThrow(/bad sample rate/);
@@ -227,7 +230,6 @@ describe("decodeWavChannels", () => {
     // The downmix of that is very nearly silence, which is precisely why an
     // editing caller cannot use it.
     const mono = decodeWav(bytes);
-    expect(Math.abs(mono.samples[0])).toBeLessThan
-      (1 / 32768);
+    expect(Math.abs(mono.samples[0])).toBeLessThan(1 / 32768);
   });
 });

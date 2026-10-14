@@ -7,21 +7,13 @@
 // things carry that claim instead: `selector covers every element HudBinder
 // attaches a listener to`, which reads tLib's own binder source rather than a
 // list written from memory, and running the real thing in the game.
-import { readFileSync } from "node:fs";
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import {
-  attachHudDrag,
-  HUD_CONTROL_SELECTOR,
-  isHudControl,
-} from "../../shared/ts/hud-drag";
-import {
-  constrainLayout,
-  type Layout,
-  layoutRect,
-  MAX_OFFSET,
-} from "../../shared/ts/hud-geometry";
 
-// ── DOM harness ─────────────────────────────────────────────────────────────
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { attachHudDrag, HUD_CONTROL_SELECTOR, isHudControl } from "../../shared/ts/hud-drag";
+import { constrainLayout, type Layout, layoutRect, MAX_OFFSET } from "../../shared/ts/hud-geometry";
+
+// DOM harness
 class FakeElement {
   attrs: Record<string, string>;
   tag: string;
@@ -66,8 +58,7 @@ class FakeElement {
     });
   }
   closest(selector: string): FakeElement | null {
-    for (let at: FakeElement | null = this; at; at = at.parent)
-      if (at.matches(selector)) return at;
+    for (let at: FakeElement | null = this; at; at = at.parent) if (at.matches(selector)) return at;
     return null;
   }
 }
@@ -91,7 +82,10 @@ beforeAll(() => {
         listeners.set(name, [...(listeners.get(name) ?? []), fn]);
       },
       removeEventListener(name: string, fn: Listener) {
-        listeners.set(name, (listeners.get(name) ?? []).filter((it) => it !== fn));
+        listeners.set(
+          name,
+          (listeners.get(name) ?? []).filter((it) => it !== fn)
+        );
       },
     },
     requestAnimationFrame(fn: () => void) {
@@ -119,7 +113,7 @@ function vsync() {
   return queued.length;
 }
 
-// ── Fixture ─────────────────────────────────────────────────────────────────
+// Fixture
 // The RCX-150 remote: a 220x488 chassis with keys on top of it.
 const REMOTE = { width: 220, height: 488 };
 const START: Layout = {
@@ -192,10 +186,11 @@ const down = (target: unknown, x: number, y: number, extra = {}) =>
     preventDefault() {},
     ...extra,
   });
-const move = (x: number, y: number) => fire("pointermove", { pointerId: 1, clientX: x, clientY: y });
+const move = (x: number, y: number) =>
+  fire("pointermove", { pointerId: 1, clientX: x, clientY: y });
 const up = () => fire("pointerup", { pointerId: 1 });
 
-// ── 1. Background vs control ────────────────────────────────────────────────
+// 1. Background vs control
 test("a press on the chassis starts a drag; a press on a key does not", () => {
   const s = surface();
   down(s.key, 100, 100);
@@ -260,7 +255,12 @@ test("selector covers every element HudBinder attaches a listener to", () => {
   const scans = [...source.matchAll(/querySelectorAll<[^>]*>\("(\[[^"]+\])"\)/g)];
   expect(scans.length).toBeGreaterThan(0);
   const listens = scans
-    .filter((match) => source.slice(match.index ?? 0).slice(0, 400).includes("addEventListener"))
+    .filter((match) =>
+      source
+        .slice(match.index ?? 0)
+        .slice(0, 400)
+        .includes("addEventListener")
+    )
     .map((match) => match[1]);
   // If this ever drops to zero the proof has stopped proving anything.
   expect(listens).toContain("[data-hud-btn]");
@@ -277,7 +277,7 @@ test("a press outside the surface is ignored", () => {
   s.detach();
 });
 
-// ── 2. Activation ───────────────────────────────────────────────────────────
+// 2. Activation
 test("disabled means no drag at all", () => {
   const s = surface();
   s.enabled = false;
@@ -298,7 +298,7 @@ test("detach stops listening", () => {
   expect(s.previews.length).toBe(0);
 });
 
-// ── 3. 1:1 at every viewport, anchor, scale and delta ───────────────────────
+// 3. 1:1 at every viewport, anchor, scale and delta
 const VIEWPORTS = [
   { width: 1920, height: 1080 },
   { width: 3440, height: 1440 },
@@ -330,8 +330,7 @@ test("the surface moves by exactly the pointer delta, 240 combinations", () => {
             ? {}
             : {
                 x:
-                  (middle.left -
-                    (anchor.endsWith("right") ? viewport.width - middle.width : 0)) /
+                  (middle.left - (anchor.endsWith("right") ? viewport.width - middle.width : 0)) /
                   viewport.height,
                 y:
                   (middle.top -
@@ -382,7 +381,7 @@ test("a multi-step drag tracks the pointer, not the accumulated deltas", () => {
   s.detach();
 });
 
-// ── 4. Clamping, through the shared choke point ─────────────────────────────
+// 4. Clamping, through the shared choke point
 test("the surface cannot be dragged off screen, on either axis or either side", () => {
   for (const [dx, dy] of [
     [-100000, -100000],
@@ -439,7 +438,7 @@ test("the anchor is re-derived once, on release, and never mid-drag", () => {
   s.detach();
 });
 
-// ── 5. Performance: one apply per frame, no matter the event rate ───────────
+// 5. Performance: one apply per frame, no matter the event rate
 test("600 pointermoves across 30 frames produce 30 previews", () => {
   const s = surface();
   down(s.chassis, 900, 500);
@@ -471,7 +470,7 @@ test("release flushes the frame the last move queued", () => {
   s.detach();
 });
 
-// ── 6. Gesture lifecycle ────────────────────────────────────────────────────
+// 6. Gesture lifecycle
 test("a press that never moves is a click, not a drag", () => {
   const s = surface();
   down(s.chassis, 900, 500);

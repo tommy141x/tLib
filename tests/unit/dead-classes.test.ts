@@ -5,14 +5,9 @@
  * the same way: it reported source text that is not a class name, which is the
  * failure that gets a check switched off. A detector nobody trusts is worse
  * than no detector, so the noise cases matter at least as much as the hits.
- *
- * The generator is stubbed rather than real. What is under test is the
- * harvesting -- which fragments of source become candidate tokens -- and a real
- * UnoCSS instance would make the assertions depend on a preset's rule table
- * instead of on this module's own logic.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expandVariantGroups, findDeadClasses } from "../../shared/ts/build/dead-classes.ts";
@@ -37,7 +32,7 @@ async function deadIn(source: string, alive: string[] = [], file = "c.tsx") {
 describe("expandVariantGroups", () => {
   test("expands a group onto each member", () => {
     expect(expandVariantGroups("hover:(bg-red-500 text-white)")).toBe(
-      "hover:bg-red-500 hover:text-white",
+      "hover:bg-red-500 hover:text-white"
     );
   });
 
@@ -46,7 +41,7 @@ describe("expandVariantGroups", () => {
     // fragments `lg:(grid-cols-[minmax(0,13rem)` and `justify-center)`, both
     // dead by construction.
     expect(expandVariantGroups("lg:(grid-cols-[minmax(0,13rem)] justify-center)")).toBe(
-      "lg:grid-cols-[minmax(0,13rem)] lg:justify-center",
+      "lg:grid-cols-[minmax(0,13rem)] lg:justify-center"
     );
   });
 
@@ -88,11 +83,6 @@ describe("findDeadClasses", () => {
     // them. That arrived as the tokens `more:` and `y:` -- neither is a class,
     // and a report full of them is how a check stops being run.
     //
-    // The limitation this used to assert -- `q-2`, after the apostrophe, being
-    // swallowed by the same mispairing -- is gone: the string matcher now takes
-    // the other quote characters inside a string's body, so `"don't"` matches
-    // whole, carries no utility punctuation and is dropped, and the scan stays
-    // in sync for what follows. Both real classes are reported.
     const source = [
       'const v = cva("a-b", {',
       '  variants: { tone: { x: ["p-1"] } },',

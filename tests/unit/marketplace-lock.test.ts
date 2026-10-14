@@ -75,6 +75,8 @@ test("normal operations record owner and operation while holding the lock, then 
   const write = fs.writeFileSync;
   let checked = false;
   spyOn(fs, "writeFileSync").mockImplementation((p, data, opts) => {
+    // The staged PAYLOAD, written while the lock is held. A sound installs as a
+    // flat file, so the staged audio is literally the file named `payload`.
     if (path.basename(String(p)) === "payload") {
       const state = inspect();
       expect(state).toMatchObject({

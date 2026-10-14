@@ -21,8 +21,8 @@ import * as path from "node:path";
 import AdmZip from "adm-zip";
 import {
   type ContentValidator,
-  installFromData,
   type InstallTarget,
+  installFromData,
   type PreparedPayload,
 } from "../../shared/ts/marketplace/installer";
 
@@ -59,7 +59,15 @@ describe("install content validators", () => {
       "ui.html": "<p>hi</p>\n<!-- studio-design:YWJj-->",
       "css/a.css": "body{}",
     });
-    expect(installFromData(target((p) => void seen.push(p)), "demo", data, "", 0).ok).toBe(true);
+    expect(
+      installFromData(
+        target((p) => void seen.push(p)),
+        "demo",
+        data,
+        "",
+        0
+      ).ok
+    ).toBe(true);
 
     expect(seen).toHaveLength(1);
     const payload = seen[0] as PreparedPayload;
@@ -143,9 +151,9 @@ describe("install content validators", () => {
     ).toBe(true);
     expect(fs.existsSync(path.join(base(), "demo", "img", "old.png"))).toBe(true);
 
-    expect(
-      installFromData(target(), "demo", bundle({ "ui.html": "<p>v2</p>" }), "", 0).ok
-    ).toBe(true);
+    expect(installFromData(target(), "demo", bundle({ "ui.html": "<p>v2</p>" }), "", 0).ok).toBe(
+      true
+    );
     expect(fs.readFileSync(path.join(base(), "demo", "ui.html"), "utf8")).toBe("<p>v2</p>");
     expect(fs.existsSync(path.join(base(), "demo", "img", "old.png"))).toBe(false);
   });

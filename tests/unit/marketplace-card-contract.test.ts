@@ -13,17 +13,30 @@
 import { describe, expect, it } from "bun:test";
 import {
   CARD_COPY,
-  cardIdentity,
   type CardStat,
+  cardIdentity,
   cardStats,
   cardStatsOf,
   likeAffordance,
   nextLikedState,
 } from "../../shared/ts/marketplace/card-model";
+import {
+  BUILTIN_EXPLANATION,
+  canInstall,
+  canUninstall,
+  INSTALL_ACTION_LABEL,
+  type InstallState,
+  installAction,
+  isBuiltin,
+  isInstallBusy,
+  isInstalled,
+} from "../../shared/ts/marketplace/install-machine";
 import type { MarketplaceItem } from "../../shared/ts/marketplace/item";
 import {
   installedNameCandidates,
   isItemInstalledLocally,
+  localInstallKind,
+  matchLocalName,
   stripResourcePrefix,
 } from "../../shared/ts/marketplace/local-name";
 import {
@@ -52,7 +65,7 @@ function item(over: Partial<MarketplaceItem> = {}): MarketplaceItem {
   };
 }
 
-// ── The install-state match ───────────────────────────────────────────────────
+// The install-state match
 
 describe("local install-name matching", () => {
   /**
@@ -106,7 +119,132 @@ describe("local install-name matching", () => {
   });
 });
 
-// ── The stats row ─────────────────────────────────────────────────────────────
+// Which KIND of install, which is the difference between two wrong buttons
+
+describe("localInstallKind", () => {
+  /**
+   * The second half of the reported defect. Detection alone flips a shipped
+   * layout to its installed state, which offers DELETE — and the uninstaller
+   * addresses `<installPath>/<raw slug>`, so a Delete on `QRX-720` forms
+   * `layouts/tradio-qrx-720` and comes back `"tradio-qrx-720" is not installed`.
+   * The kind is what lets the card offer neither control.
+   */
+  it("calls the prefix-stripped spelling a BUILT-IN, because the installer never writes it", () => {
+    expect(localInstallKind(item({ slug: "tradio-qrx-720" }), ["QRX-720"])).toBe("builtin");
+  });
+
+  it("calls the raw slug MANAGED, because that is exactly the install target", () => {
+    expect(localInstallKind(item({ slug: "tradio-qrx-720" }), ["tradio-qrx-720"])).toBe("managed");
+  });
+
+  it("is null when neither spelling is on disk", () => {
+    expect(localInstallKind(item({ slug: "tradio-ztr-540" }), ["QRX-720"])).toBeNull();
+  });
+
+  /**
+   * A state a user can really be in: installing through the panel before this
+   * fix existed wrote `layouts/tradio-qrx-720/` beside the shipped
+   * `layouts/QRX-720/`. Nothing here deletes or migrates that duplicate, so the
+   * `"managed"` answer is what leaves them a Delete that can actually succeed.
+   */
+  it("prefers MANAGED when both spellings are on disk, in either list order", () => {
+    expect(localInstallKind(item(), ["QRX-720", "tradio-qrx-720"])).toBe("managed");
+    expect(localInstallKind(item(), ["tradio-qrx-720", "QRX-720"])).toBe("managed");
+  });
+
+  it("agrees with isItemInstalledLocally, so the two cannot drift", () => {
+    for (const onDisk of [["QRX-720"], ["tradio-qrx-720"], ["ZTR-540"], []]) {
+      expect(isItemInstalledLocally(item(), onDisk)).toBe(
+        localInstallKind(item(), onDisk) !== null
+      );
+    }
+  });
+
+  /**
+   * The one case a string compare cannot separate, asserted so it is a known
+   * limit rather than a surprise. An un-namespaced slug has `raw === stripped`,
+   * so a shipped directory of that name is indistinguishable from an install at
+   * the target. Not reachable on this estate — every shipped layout is
+   * model-named and every catalogue slug is product-namespaced — and not
+   * destructive in game either, since `owned()` still refuses a directory with
+   * no ownership receipt.
+   */
+  it("cannot distinguish a built-in when the slug was never namespaced", () => {
+    expect(localInstallKind({ slug: "qrx-720", resource: "tRadio" }, ["QRX-720"])).toBe("managed");
+  });
+});
+
+describe("matchLocalName", () => {
+  const catalogue = [item({ slug: "tradio-qrx-720" }), item({ slug: "tradio-swx-250" })];
+
+  /**
+   * The Installed tab walks `readdir(layouts/)`, so it needs the lookup
+   * inverted. It previously decided "may this be deleted" from `name in
+   * installStates` — true for every discovered layout, because the seed put
+   * them all there.
+   */
+  it("resolves a shipped folder name to its catalogue entry as a built-in", () => {
+    expect(matchLocalName("QRX-720", catalogue)).toEqual({ item: catalogue[0], kind: "builtin" });
+  });
+
+  it("resolves an install-target folder name as managed", () => {
+    expect(matchLocalName("tradio-swx-250", catalogue)).toEqual({
+      item: catalogue[1],
+      kind: "managed",
+    });
+  });
+
+  it("is null for a custom layout nothing in the catalogue claims", () => {
+    expect(matchLocalName("MyOwnHead", catalogue)).toBeNull();
+  });
+});
+
+// Which controls a state may draw
+
+describe("the builtin install state", () => {
+  const builtin: InstallState = { state: "builtin" };
+
+  /**
+   * BOTH directions, because offering either one is a wrong button: Install
+   * writes `layouts/tradio-qrx-720/` beside the shipped `layouts/QRX-720/`
+   * rather than over it, and Delete cannot address the shipped name at all.
+   */
+  it("draws neither Install nor Delete", () => {
+    expect(canInstall(builtin)).toBe(false);
+    expect(canUninstall(builtin)).toBe(false);
+  });
+
+  it("says what it is rather than being an unlabelled dead control", () => {
+    expect(installAction(builtin)).toBe("builtin");
+    expect(INSTALL_ACTION_LABEL.builtin).toBe("Built in");
+    expect(BUILTIN_EXPLANATION).toContain("cannot remove");
+  });
+
+  /**
+   * NOT `installed`. Every caller of `isInstalled` reads it to decide whether
+   * to draw a management control, so widening it is how the Delete button would
+   * come back.
+   */
+  it("is not reported as a marketplace install, and is not busy", () => {
+    expect(isInstalled(builtin)).toBe(false);
+    expect(isBuiltin(builtin)).toBe(true);
+    expect(isInstallBusy(builtin)).toBe(false);
+  });
+
+  it("leaves a real marketplace install removable, which is the control case", () => {
+    expect(canUninstall({ state: "installed" })).toBe(true);
+    expect(canUninstall({ state: "uninstalling" })).toBe(true);
+    expect(canInstall({ state: "installed" })).toBe(true);
+    expect(installAction({ state: "installed" })).toBe("reinstall");
+  });
+
+  it("still draws no Delete for an item that was never installed", () => {
+    expect(canUninstall({ state: "idle" })).toBe(false);
+    expect(canUninstall({ state: "done", ok: false })).toBe(false);
+  });
+});
+
+// The stats row
 
 describe("cardStats", () => {
   /**
@@ -139,7 +277,7 @@ describe("cardStats", () => {
 
 describe("cardStatsOf — the same contract for a host with its own item type", () => {
   /**
-   * ⚠️ These assertions are the reason `cardStatsOf` exists at all. tELS's
+   * These assertions are the reason `cardStatsOf` exists at all. tELS's
    * marketplace tab merges two catalogues into one `CardView` and so will never
    * hold a `MarketplaceItem`; without a narrowed contract its only options were
    * to fake the fields it does not have, or to word and order the stats itself —
@@ -178,11 +316,11 @@ describe("cardStatsOf — the same contract for a host with its own item type", 
   });
 });
 
-// ── The like affordance ───────────────────────────────────────────────────────
+// The like affordance
 
 describe("likeAffordance", () => {
   /**
-   * ⚠️ This asserts that "no like button" is CORRECT against the deployed
+   * This asserts that "no like button" is CORRECT against the deployed
    * backend, which sends neither field. It is the one symptom on the owner's
    * list that is not a bug, and a future pass must not "fix" it by guessing.
    */
@@ -218,7 +356,7 @@ describe("cardIdentity", () => {
   });
 });
 
-// ── The preview geometry ──────────────────────────────────────────────────────
+// The preview geometry
 
 describe("fitScale", () => {
   it("fits the constraining axis", () => {

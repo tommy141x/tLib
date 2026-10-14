@@ -1,7 +1,7 @@
 -- The vehicle frame relay: the controller election, the sequence numbering, the
 -- heartbeat, the stale expiry and the withdrawal.
 --
--- ── Why this suite exists at all ────────────────────────────────────────────
+-- Why this suite exists at all
 --
 -- A correctness regression in this module only manifests WITH TWO PLAYERS IN ONE
 -- VEHICLE, which is why the consolidation it came out of was deferred until there
@@ -27,7 +27,7 @@
 --     long as the car exists.
 --   * A `seq` THAT IS NOT A NUMBER is not merely invalid, it is UNEXPIRABLE.
 --
--- ── The negative controls ───────────────────────────────────────────────────
+-- The negative controls
 --
 --   FRAMERELAY_CONTROL=election   both clients report themselves the controller.
 --     This defects THE REAL CODE PATH: `publishTick` computes `mine` from
@@ -87,7 +87,7 @@ local function expect(label, ok, message)
     if not ok then fail(('%s [%s]'):format(message, label)) end
 end
 
--- ── The world ───────────────────────────────────────────────────────────────
+-- The world
 
 local entities = {}            -- [handle] = true while it exists
 local bags     = {}            -- [handle] = { [key] = value }
@@ -138,7 +138,7 @@ function IsDuplicityVersion() return false end
 function GetCurrentResourceName() return 'tTest' end
 Citizen = { CreateThread = function() end, Wait = function() end, SetTimeout = function() end }
 
--- ── Two clients ─────────────────────────────────────────────────────────────
+-- Two clients
 
 local FrameRelay
 
@@ -226,9 +226,7 @@ entities[OTHER] = true
 
 local function bagOf(vehicle) return bags[vehicle] and bags[vehicle].tTestFrame or nil end
 
--- ════════════════════════════════════════════════════════════════════════════
 --  A LONE DRIVER PUBLISHES
--- ════════════════════════════════════════════════════════════════════════════
 
 A.seat, A.vehicle, A.netId = -1, CAR, 10
 A.driver, A.passenger = 1, nil
@@ -247,9 +245,7 @@ expect('publish-is-sanitised',
     published.powered == true and published.extra == nil,
     'the published payload was not the sanitised shape')
 
--- ════════════════════════════════════════════════════════════════════════════
 --  TWO FRONT-SEAT OCCUPANTS, ONE WRITER
--- ════════════════════════════════════════════════════════════════════════════
 --
 -- The reason the election exists. Both clients run their own NUI and both have a
 -- frame; the driver is the controller, so the passenger must publish NOTHING.
@@ -280,9 +276,7 @@ expect('driver-keeps-writing',
     bagOf(CAR).text == 'A2',
     'the driver stopped being able to publish once a passenger sat down')
 
--- ════════════════════════════════════════════════════════════════════════════
 --  THE DRIVER SEAT EMPTIES
--- ════════════════════════════════════════════════════════════════════════════
 --
 -- A passenger is the controller only while the driver seat is genuinely empty. This
 -- is a decoy for the election control: with the election defected the passenger was
@@ -297,9 +291,7 @@ expect('passenger-takes-over',
     bagOf(CAR).text == 'B-NOW-MINE',
     'the front passenger did not take over publishing once the driver seat emptied')
 
--- ════════════════════════════════════════════════════════════════════════════
 --  THE READ SIDE
--- ════════════════════════════════════════════════════════════════════════════
 --
 -- A third client, on foot beside the car. It is not in the vehicle and has no frame
 -- of its own, which is the whole case the relay exists for.
@@ -338,9 +330,7 @@ asClient(C, function()
         'a vehicle with no published frame did not read as nil')
 end)
 
--- ════════════════════════════════════════════════════════════════════════════
 --  THE HEARTBEAT
--- ════════════════════════════════════════════════════════════════════════════
 --
 -- The publisher writes when the picture CHANGED or when the heartbeat is due. The
 -- heartbeat exists only for the reader's staleness test, so an UNCHANGED frame must
@@ -361,9 +351,7 @@ expect('heartbeat-republishes',
     B.relay.publishedSeq() == baseSeq + 1 and bagOf(CAR).seq == baseSeq + 1,
     'an unchanged frame was not republished once the heartbeat came due')
 
--- ════════════════════════════════════════════════════════════════════════════
 --  WITHDRAWAL
--- ════════════════════════════════════════════════════════════════════════════
 
 -- An OFF device publishes nothing rather than an off frame: the prop's baked artwork
 -- already is the off state. The relay reads `powered` and nothing else of a payload.
@@ -411,9 +399,7 @@ expect('on-foot-publishes-nothing',
     D.relay.publishedVehicle() == nil,
     'a client on foot published a frame')
 
--- ════════════════════════════════════════════════════════════════════════════
 --  THE DESCRIPTOR IS CHECKED AT CREATE TIME
--- ════════════════════════════════════════════════════════════════════════════
 --
 -- Every one of these is otherwise a nil call deep inside a publish pass, which in
 -- game is a client-side error once every 250ms and no picture at all.
@@ -429,9 +415,7 @@ expect('callbacks-are-required',
     refuses({ key = 'k', sanitise = sanitise, differs = differs }),
     'create accepted a descriptor with no frame provider')
 
--- ════════════════════════════════════════════════════════════════════════════
 --  THE CONTROL'S OWN BOOKKEEPING
--- ════════════════════════════════════════════════════════════════════════════
 
 if CONTROL ~= nil then
     local missing, n = {}, 0

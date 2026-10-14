@@ -77,7 +77,7 @@ local function equal(actual, expected, message)
     end
 end
 
--- ── Owner isolation ─────────────────────────────────────────────────────────
+-- Owner isolation
 
 -- The two owner names are the SAME LENGTH on purpose. Owner scoping is done by
 -- stripping an `owner:` prefix, so with names of different lengths a dispatcher
@@ -122,7 +122,7 @@ local threw, threwErr = M.execute('alpha', 'explodes')
 equal(threw, false, 'a throwing handler reports failure')
 equal(threwErr, 'boom', 'and the message reaches the caller')
 
--- ── Autosave ────────────────────────────────────────────────────────────────
+-- Autosave
 
 local persisted = {}
 alpha:onPersist(function(name) persisted[#persisted + 1] = name end)
@@ -140,7 +140,7 @@ persisted = {}
 M.execute('alpha', 'explodes')
 equal(#persisted, 0, 'a failed action is never persisted')
 
--- ── Local state and the snapshot ────────────────────────────────────────────
+-- Local state and the snapshot
 
 local published = {}
 alpha:bindPublisher(function(name, patch) published[#published + 1] = { name = name, patch = patch } end)
@@ -172,7 +172,7 @@ alpha:publish('other', { value = 1000 })
 alpha:decorate(snapshot)
 equal(snapshot.menus[1].items[2].value, false, 'a stored value the row rejects is not applied')
 
--- ── The effect scheduler ────────────────────────────────────────────────────
+-- The effect scheduler
 
 local ticks = { alphaGod = 0, bravoGod = 0 }
 published = {}
@@ -209,7 +209,7 @@ alpha:setEffect('fast', false)
 advance(20)
 equal(fast, 2, 'a disabled effect stops ticking')
 
--- ── Effects stop themselves when they break ─────────────────────────────────
+-- Effects stop themselves when they break
 
 local stopped = {}
 alpha:setEffect('cleanly', true, {
@@ -244,7 +244,7 @@ equal(never, 1, 'having tried exactly once')
 advance(200)
 equal(never, 1, 'and is never scheduled')
 
--- ── Revocation ──────────────────────────────────────────────────────────────
+-- Revocation
 
 equal(ticks.alphaGod > 0 and alpha:hasEffects(), true, 'alpha still has its effect running')
 
@@ -281,7 +281,7 @@ bravo:syncPermissions({ menus = { { id = 'alpha:page', items = {
 } } } })
 check(not bravo:hasEffects(), 'another owner\'s row does not keep bravo\'s effect alive')
 
--- ── Resource teardown ───────────────────────────────────────────────────────
+-- Resource teardown
 
 local order = {}
 alpha:onCleanup(function() order[#order + 1] = 'first' end)
@@ -316,7 +316,7 @@ check(not M.anyEffects(), 'cleanupAll leaves no effect running')
 equal(M.get('bravo'), nil, 'and no dispatcher registered')
 advance(1000)
 
--- ── The item resolver ───────────────────────────────────────────────────────
+-- The item resolver
 --
 -- Publishing a boolean onto a list row would overwrite whichever option the
 -- player had selected, so the engine tells the dispatcher what kind of row an

@@ -74,7 +74,7 @@ local function definition(ace)
     end }) }
 end
 
--- ── The default is to enforce ───────────────────────────────────────────────
+-- The default is to enforce
 --
 -- `trusted` is optional, and an engine that defaulted to exempt would make every
 -- consumer trusted the moment someone forgot to pass it.
@@ -92,7 +92,7 @@ equal(ok, false, 'the untrusted owner is refused at the limit')
 equal(reason, 'Maximum 3 menus per resource',
     'and is told the number it hit, so the refusal is diagnosable from the console alone')
 
--- ── Trusted skips the counts ────────────────────────────────────────────────
+-- Trusted skips the counts
 
 local trustedNames = { studio_resource = true }
 local registry = newRegistry(function(owner) return trustedNames[owner] == true end)
@@ -129,7 +129,7 @@ equal(afterRevoke, false, 'an owner that stops being trusted stops being exempt 
 equal(revokeWhy, 'Maximum 3 menus per resource', 'and lands on the ordinary per-owner limit')
 trustedNames.studio_resource = true
 
--- ── What trust does NOT buy ─────────────────────────────────────────────────
+-- What trust does NOT buy
 --
 -- Everything below runs against the TRUSTED owner. These are the assertions that
 -- would catch `trusted` growing from "skip two counts" into a bypass.

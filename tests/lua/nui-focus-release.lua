@@ -15,7 +15,7 @@
 -- comments imply, while each two-call ordering is broken under one of them.
 -- That is why the helper makes three calls instead of two.
 --
--- ⚠️ `IsNuiFocusKeepingInput()` is the real oracle. Read it in game after a
+-- `IsNuiFocusKeepingInput()` is the real oracle. Read it in game after a
 -- release before anyone shortens this.
 
 local checks = 0
@@ -25,7 +25,7 @@ local function check(value, message)
 end
 
 
--- ── Host ────────────────────────────────────────────────────────────────────
+-- Host
 
 local function host()
     local env = setmetatable({}, { __index = _G })
@@ -96,7 +96,7 @@ local function sequence(env)
     return table.concat(out, ' ')
 end
 
--- ── The two candidate semantics ─────────────────────────────────────────────
+-- The two candidate semantics
 --
 -- Each is a tiny model of what CitizenFX might be doing, taken straight from
 -- one of the two incompatible comments this code used to carry. Replaying a
@@ -190,7 +190,7 @@ check(
 )
 print('PASS negative control: the two semantics models genuinely disagree')
 
--- ── The helper really emits that sequence ───────────────────────────────────
+-- The helper really emits that sequence
 
 do
     local env = host()
@@ -232,7 +232,7 @@ do
 end
 print('PASS every release path in the platform adapter emits one ordering')
 
--- ── The deferred release and its generation guard ───────────────────────────
+-- The deferred release and its generation guard
 
 do
     local env = host()
