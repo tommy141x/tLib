@@ -19,6 +19,7 @@
     "build": "cd client/web && bun run build",
     "dev": "cd client/web && bunx vp dev",
     "prod": "bun run scripts/prod.ts",
+    "publish:public": "bun run scripts/publish-public.ts",
     "gallery": "bun run scripts/gallery.ts",
     "setup": "bun run secrets:install-hooks && bun install && cd client/web && bun install",
     "docs:check": "bun scripts/check-docs.mjs",
