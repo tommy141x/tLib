@@ -1,17 +1,12 @@
 // The one HTTP transport for everything this bundle asks the marketplace host.
 //
-// ⚠️ `fetch`, NOT `PerformHttpRequest`.
+// `fetch`, NOT `PerformHttpRequest`.
 //
 // `PerformHttpRequest` is a Lua-runtime native and is simply absent from
 // globalThis in FiveM's Node server runtime — `./fivem.ts` snapshots it at
 // module load and gets `undefined`, so every call through it dies with
 // "fPerformHttpRequest is not a function". It fails at CALL time, not load
 // time, which is why nothing catches it until a request is actually made.
-// `./api.ts`'s `nodeRequest` still routes through that native and has that
-// latent break in its download path; it is not touched here on purpose, since
-// fixing it means editing the hash-verified bundle path for a break this
-// module does not need to inherit.
-//
 // The manifest declares Node 22, so global `fetch` is here and is the better
 // tool regardless: real methods, real headers, and a real abort on timeout —
 // PerformHttpRequest has no cancellation at all.
@@ -39,21 +34,54 @@ export async function request(
 ): Promise<RawResponse> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: method === "GET" ? undefined : body,
-      signal: controller.signal,
-    });
-    return { ok: res.ok, status: res.status, body: await res.text() };
-  } catch (e: unknown) {
-    // An abort is a timeout; say so rather than surfacing "This operation was
-    // aborted", which reads like a bug to whoever sees it in game.
-    if (e instanceof Error && e.name === "AbortError") {
-      throw new MarketplaceError("request_timed_out", 0);
+
+  // `.then(onOk, onErr)`, NOT `try { await fetch(...) } catch`.
+  //
+  // Those are equivalent in Node and are NOT equivalent here. A try/catch
+  // around an `await` attaches its rejection handler a turn too late for
+  // FiveM's reporting, so an aborted fetch is caught correctly AND still
+  // printed as an unhandled rejection:
+  //
+  //   [js] Unhandled promise rejection in resource tLib
+  //   [js] Uncaught TypeError: Invalid state: Reader released
+  //         node:internal/webstreams/readablestream(159,19): lazyReadableReleasedError
+  //         ... readableStreamDefaultReaderRead / pullWithDefaultReader ...
+  //
+  // That is the stream being torn down mid-read when the timeout aborts it:
+  // the body reader is released while a pull is still in flight. It repeated
+  // six times in one evening on 305RP2 while the marketplace host was
+  // unreachable, and it is pure noise — the error IS handled and the caller
+  // does get `request_timed_out`.
+  //
+  // Settling with the two-argument form owns the rejection in the turn it is
+  // created, which is what stops the runtime also claiming it. This is the
+  // same fix tDB applied to its PocketBase client for an identical double
+  // report; it is a property of this runtime, not of these two modules.
+  const settle = fetch(url, {
+    method,
+    headers,
+    body: method === "GET" ? undefined : body,
+    signal: controller.signal,
+  }).then(
+    async (res) => {
+      // Read the body inside the same chain. `res.text()` is the half that
+      // actually races the abort — headers can arrive well before a stalled
+      // body does — so it must not be awaited outside this handler.
+      const text = await res.text();
+      return { ok: res.ok, status: res.status, body: text };
+    },
+    (e: unknown) => {
+      // An abort is a timeout; say so rather than surfacing "This operation
+      // was aborted", which reads like a bug to whoever sees it in game.
+      if (e instanceof Error && (e.name === "AbortError" || controller.signal.aborted)) {
+        throw new MarketplaceError("request_timed_out", 0);
+      }
+      throw e;
     }
-    throw e;
+  );
+
+  try {
+    return await settle;
   } finally {
     clearTimeout(timer);
   }
