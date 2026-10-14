@@ -20,7 +20,10 @@ export async function request(
     | "navigate"
     | "highlight"
     | "selftest"
-    | "sound",
+    | "sound"
+    // The shared feedback dialog. Not an "action": it addresses no row on any
+    // page, so it carries no menuId and nothing validates it against one.
+    | "feedback",
   data: unknown = {}
 ): Promise<NuiResult> {
   if (preview) return (await import("./preview")).previewRequest(event, data);

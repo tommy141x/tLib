@@ -1,0 +1,16 @@
+[test]
+# Installs happy-dom's globals, the production Solid compiler and the dedupe
+# rewrite before any test module is imported. Preload is used rather than an
+# in-file setup import because module top-level code runs at import time, which
+# is *before* any beforeAll() hook could install a DOM — and
+# @solidjs/testing-library reads `document` while it is being imported.
+preload = ["./tests/_setup.ts"]
+
+# NOTE: run this suite via `bun run test:dom` from the repo root, NOT a bare
+# `bun test`. Solid ships separate browser and server builds behind export
+# conditions and bun resolves the server one by default; the
+# `--conditions=browser` flag that fixes it lives in the root package.json
+# because bunfig.toml has no equivalent key (a `conditions` entry here is
+# silently ignored — this was verified in tRadio, not assumed). `_setup.ts`
+# asserts the flag is in force and refuses to run without it, so a bare
+# `bun test` here fails loudly rather than passing vacuously.

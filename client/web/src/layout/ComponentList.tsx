@@ -1,7 +1,7 @@
+import type { Component, Layout } from "@tlib/shared/hud-geometry";
 import { Eye, EyeOff } from "lucide-solid";
 import { For, Show } from "solid-js";
 import { NuiButton } from "@/components/ui/nui-field";
-import type { Component, Layout } from "@tlib/shared/hud-geometry";
 
 const anchorLabel = (anchor: Layout["anchor"]) =>
   anchor === "center" ? "the centre" : `the ${anchor.replace("-", " ")}`;

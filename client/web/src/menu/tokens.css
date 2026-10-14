@@ -37,7 +37,7 @@
      The full reasoning, and what the proper cross-bundle fix is, is beside
      --nui-accent-text in nui-kit/nui.css. */
   --selected-ink: #111111;
-  /* ⚠️ Bare HSL triplets for the colours above that something below needs a
+  /* Bare HSL triplets for the colours above that something below needs a
      translucent share of. NUI is CEF 103 and color-mix() landed in Chromium 111,
      and CEF does not merely ignore an unknown function — it invalidates the whole
      declaration. A token defined with color-mix() therefore resolves to nothing

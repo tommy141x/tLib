@@ -1,14 +1,14 @@
 /**
  * Packages whose Solid 1 specifiers must be rewritten for the in-game NUI bundle.
  *
- * ⚠️ NOT "packages this app depends on". A dependency that is already Solid 2
+ * NOT "packages this app depends on". A dependency that is already Solid 2
  * native does not belong here, and a TRANSITIVE one that still names the Solid 1
  * surface does — `@solid-primitives/props` is reached only through
  * `@ark-ui/solid`, and `@solid-primitives/refs` and
  * `@solid-primitives/transition-group` only through `solid-motionone`; nothing
  * in `src/` imports any of the three.
  *
- * ⛔ DO NOT COPY THIS LIST TO ANOTHER APP, AND DO NOT ADD TO IT BY GUESSING.
+ * DO NOT COPY THIS LIST TO ANOTHER APP, AND DO NOT ADD TO IT BY GUESSING.
  * A spurious entry never matches — the plugin gates on a `/node_modules/<pkg>/`
  * substring — so it is dead weight that READS as a supported case, and nothing
  * ever tells you. A missing entry fails as `"./web" is not exported … from
@@ -37,7 +37,7 @@
  *   lucide-solid                        solid-js/web, splitProps  (3700 files)
  *   solid-motionone                     solid-js/web, batch, splitProps
  *
- * ── TWO EXCLUSIONS THAT ARE DELIBERATE ──────────────────────────────────────
+ * TWO EXCLUSIONS THAT ARE DELIBERATE
  *
  * `@solid-primitives/keyed` and `@solid-primitives/utils` BOTH measured as hits
  * before the upgrade and neither is here, because the pins in `package.json`

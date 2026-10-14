@@ -30,7 +30,8 @@
   cursor: not-allowed;
 }
 :where(.tlib-menu) button:focus-visible,
-:where(.tlib-menu) input:focus-visible {
+:where(.tlib-menu) input:focus-visible,
+:where(.tlib-menu) textarea:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: -3px;
 }
@@ -611,6 +612,82 @@
   background: var(--selected);
   color: var(--selected-ink);
   border-color: transparent;
+}
+/* The shared feedback dialog
+   Same shell as .confirmation, which is why it carries that class too: one
+   shade, one width, one heading scale. Only what is genuinely different is
+   below.
+   Every size here is a declaration in this file rather than an arbitrary
+   `text-[12px]` in the markup: unoMerge treats an arbitrary text size and a
+   text colour as ONE conflict group, so a row carrying both silently loses
+   one of them. */
+:where(.tlib-menu) .feedback h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0;
+}
+:where(.tlib-menu) .feedback h2 svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+:where(.tlib-menu) .feedback-box {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px;
+  resize: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--menu-inset);
+  border: 1px solid var(--menu-control-border);
+  border-radius: var(--menu-radius);
+}
+:where(.tlib-menu) .feedback-box::placeholder {
+  color: var(--muted);
+}
+/* TWO CLASSES DEEP, and not for tidiness: `.confirmation p` above is one
+   class plus a type selector, which outranks a single class — a `.feedback-keys`
+   selector lost its own font-size and colour to it silently. */
+:where(.tlib-menu) .feedback .feedback-problem,
+:where(.tlib-menu) .feedback .feedback-sent {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+:where(.tlib-menu) .feedback .feedback-problem svg,
+:where(.tlib-menu) .feedback .feedback-sent svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+/* The danger colour at full strength on text, and a 12% wash of its -raw
+   partner behind it -- the same pairing the notice strip uses, and for the same
+   reason: CEF 103 has no color-mix(), so slash-alpha over a bare triplet is the
+   only expression of "this colour at 12%" the engine parses at all. */
+:where(.tlib-menu) .feedback .feedback-problem {
+  color: var(--menu-danger);
+  background: hsl(var(--menu-danger-raw) / 0.12);
+  border-radius: var(--menu-radius);
+  padding: 8px 10px;
+}
+:where(.tlib-menu) .feedback .feedback-sent {
+  color: var(--text);
+}
+:where(.tlib-menu) .feedback .feedback-keys {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 11px;
 }
 :where(.tlib-menu) .status-dot,
 :where(.tlib-menu) .pending-dot {

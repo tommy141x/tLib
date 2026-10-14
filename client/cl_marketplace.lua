@@ -1,7 +1,7 @@
 -- Client-side entry for the marketplace panel: opens it, forwards install
 -- requests to the server and relays the results back.
 --
--- ⚠️ Browsing and UI previews are NOT fetched by the NUI any more. They used to
+-- Browsing and UI previews are NOT fetched by the NUI any more. They used to
 -- be, and it could not work: CEF's origin is `cfx-nui-tLib`, the marketplace
 -- sends no Access-Control-Allow-Origin, so the browser refused the read and the
 -- panel listed nothing in tDetector and tRadar. Both now go NUI → here → the
@@ -15,7 +15,7 @@
 local log = Logger.create('tLib/marketplace')
 
 -- No /api/v1 suffix and no subdomain: the NUI appends `/api/v1/items...` itself.
--- Overridable for local dev with tmarketplace_base_url; the default and the
+-- Overridable for local dev with tlib_api_base_url; the default and the
 -- trailing-slash/`/api` trimming both live in shared/sh_api.lua so this VM, the
 -- server VM and a consumer's versioncheck cannot drift apart.
 
@@ -108,7 +108,7 @@ end)
 
 -- Liking goes through the server, and NOT because of CORS.
 --
--- ⚠️ THE REASON IS IDENTITY, WHICH IS A STRONGER ONE. A like is de-duplicated by
+-- THE REASON IS IDENTITY, WHICH IS A STRONGER ONE. A like is de-duplicated by
 -- the marketplace on the player's FiveM license, and that only stops one person
 -- boosting a count if the license is something they cannot choose. This VM
 -- cannot establish it — anything the NUI or the client knows is something the
@@ -116,7 +116,7 @@ end)
 -- deliberately NO identity. `server/sv_marketplace.lua` resolves it from the
 -- event's `source` with `GetPlayerIdentifierByType`.
 --
--- ⚠️ Do not add a license, an identifier or a player name to this payload, even
+-- Do not add a license, an identifier or a player name to this payload, even
 -- to "save the lookup". It would hand every player the ability to like as
 -- somebody else.
 RegisterNUICallback('marketplaceLike', function(data, cb)

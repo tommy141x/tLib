@@ -52,4 +52,22 @@ export const fr = {
     "Action de prévisualisation terminée. Aucun état de jeu modifié.",
   "Unable to close the menu. Use the menu key to try again.":
     "Impossible de fermer le menu. Réessayez avec la touche du menu.",
+  "Send feedback": "Envoyer un avis",
+  "About {{ resource }} itself — reaches TIMMYG Studios, not your server's staff.":
+    "À propos de {{ resource }} lui-même — destiné à TIMMYG Studios, pas au staff de votre serveur.",
+  "What's broken, slow, or worth changing?":
+    "Qu'est-ce qui ne marche pas, ralentit, ou mériterait d'être changé ?",
+  Send: "Envoyer",
+  "Sending…": "Envoi…",
+  "Thanks — that reached TIMMYG Studios.":
+    "Merci — le message est bien arrivé chez TIMMYG Studios.",
+  "Switch field": "Changer de champ",
+  "Too many messages just now. Try again in a minute — your text is still here.":
+    "Trop de messages en ce moment. Réessayez dans une minute — votre texte est conservé.",
+  "Could not reach TIMMYG Studios. Try again in a moment — your text is still here.":
+    "Impossible de joindre TIMMYG Studios. Réessayez dans un instant — votre texte est conservé.",
+  "That message was not accepted. Try rewording it.":
+    "Ce message n'a pas été accepté. Essayez de le reformuler.",
+  "Could not send that. Try again in a moment — your text is still here.":
+    "Envoi impossible. Réessayez dans un instant — votre texte est conservé.",
 } as const;

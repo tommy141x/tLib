@@ -3,6 +3,7 @@ import { Field } from "@ark-ui/solid/field";
 import { RadioGroup } from "@ark-ui/solid/radio-group";
 import { createListCollection, Select } from "@ark-ui/solid/select";
 import { Slider } from "@ark-ui/solid/slider";
+import { Portal } from "@solidjs/web";
 import { Check, ChevronDown } from "lucide-solid";
 import {
   createEffect,
@@ -14,7 +15,6 @@ import {
   Switch as MatchType,
   Show,
 } from "solid-js";
-import { Portal } from "@solidjs/web";
 // NuiButton moved into the shared package so tELS, tDetector and tRadar can
 // mount the marketplace components that use it; nothing in this app is
 // reachable from a sibling resource. Re-exported here so the existing import
@@ -234,7 +234,7 @@ export function NuiField(props: {
             step={props.field.step ?? 1}
             value={[Number(props.value ?? props.field.min ?? 0)]}
             disabled={props.field.disabled}
-            /* ⚠️ The DISPLAY value only. zag fires this on every pointer move of a
+            /* The DISPLAY value only. zag fires this on every pointer move of a
                drag, so committing from here was one `dialogChange` per step —
                and `tRadar/client/cl_settings.lua` answers each one with an
                `UpdateDialogField` push back, making a single drag a full

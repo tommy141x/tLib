@@ -38,7 +38,9 @@ export type MenuSkin = "default" | "vmenu";
 export const MENU_SKINS: readonly MenuSkin[] = ["default", "vmenu"];
 export const DEFAULT_MENU_SKIN: MenuSkin = "default";
 export function isMenuSkin(value: unknown): value is MenuSkin {
-  return value === "default" || value === "vmenu";
+  // Reads MENU_SKINS rather than repeating it. The two spellings were a second
+  // source of truth for one list, and the array was the copy nothing read.
+  return MENU_SKINS.includes(value as MenuSkin);
 }
 
 // Three layers, most specific first: the page's own theme, the theme of the

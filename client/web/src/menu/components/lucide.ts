@@ -3,6 +3,7 @@
 // component, statically imported so Rollup inlines them into the one entry
 // chunk. Never import() an icon: that emits a second file for CEF to fetch.
 
+import type { LucideProps } from "lucide-solid";
 import Anchor from "lucide-solid/icons/anchor";
 import Ban from "lucide-solid/icons/ban";
 import Banknote from "lucide-solid/icons/banknote";
@@ -37,6 +38,7 @@ import LoaderCircle from "lucide-solid/icons/loader-circle";
 import Lock from "lucide-solid/icons/lock";
 import LockKeyhole from "lucide-solid/icons/lock-keyhole";
 import Medal from "lucide-solid/icons/medal";
+import MessageSquare from "lucide-solid/icons/message-square";
 import Package from "lucide-solid/icons/package";
 import Pill from "lucide-solid/icons/pill";
 import Plane from "lucide-solid/icons/plane";
@@ -44,6 +46,7 @@ import Radio from "lucide-solid/icons/radio";
 import Scissors from "lucide-solid/icons/scissors";
 import Search from "lucide-solid/icons/search";
 import SearchX from "lucide-solid/icons/search-x";
+import Send from "lucide-solid/icons/send";
 import Shield from "lucide-solid/icons/shield";
 import ShieldAlert from "lucide-solid/icons/shield-alert";
 import Ship from "lucide-solid/icons/ship";
@@ -66,7 +69,6 @@ import Volume2 from "lucide-solid/icons/volume-2";
 import VolumeOff from "lucide-solid/icons/volume-off";
 import Wind from "lucide-solid/icons/wind";
 import X from "lucide-solid/icons/x";
-import type { LucideProps } from "lucide-solid";
 import type { Component } from "solid-js";
 
 // Built from lucide-solid's OWN props type rather than from Solid 2's
@@ -92,8 +94,10 @@ export {
   CircleAlert,
   Info,
   LoaderCircle,
+  MessageSquare,
   Search,
   SearchX,
+  Send,
   ShieldAlert,
   TriangleAlert,
   X,

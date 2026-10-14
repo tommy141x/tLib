@@ -1,7 +1,7 @@
 /**
  * `~icons/*` — unplugin-icons' virtual module namespace, typed for Solid 2.
  *
- * ⚠️ This REPLACES `"unplugin-icons/types/solid"` in this project's tsconfig
+ * This REPLACES `"unplugin-icons/types/solid"` in this project's tsconfig
  * `types`, and the replacement is required rather than tidier. That shipped
  * declaration is
  *
@@ -26,8 +26,9 @@
  * `@solidjs/web`, which is where the JSX namespace lives now.
  */
 declare module "~icons/*" {
-  import type { Component } from "solid-js";
   import type { JSX } from "@solidjs/web";
+  import type { Component } from "solid-js";
+
   const component: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   export default component;
 }

@@ -1,5 +1,5 @@
-import { createMemo, createSignal, Show } from "solid-js";
 import { Dynamic } from "@solidjs/web";
+import { createMemo, createSignal, Show } from "solid-js";
 import { inGame } from "../bridge";
 import { lucideFor } from "./lucide";
 

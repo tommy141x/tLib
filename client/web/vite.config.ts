@@ -86,7 +86,7 @@ export default defineConfig(({ command }) => ({
     modulePreload: { polyfill: false },
     chunkSizeWarningLimit: 1000,
   },
-  // ⚠️ `solid1CompatShim` MUST BE FIRST, and it is enforced rather than only
+  // `solid1CompatShim` MUST BE FIRST, and it is enforced rather than only
   // documented — the plugin throws at `configResolved` if any plugin named
   // `solid` or `solid:*` precedes it. It carries `enforce: "pre"` and has to win
   // the specifier race against `@solidjs/vite-plugin`'s own `enforce: "pre"`

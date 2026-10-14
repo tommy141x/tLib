@@ -1,3 +1,4 @@
+import { createEscapeLayer } from "@tlib/shared/escape-layer";
 import {
   createEffect,
   createMemo,
@@ -12,7 +13,6 @@ import {
 // One notification timing table for the whole bundle. See `notify()` below for
 // why this surface is not itself a toast.
 import { TOAST_DURATIONS } from "../lib/toast-lifetime";
-import { createEscapeLayer } from "@tlib/shared/escape-layer";
 import { applyScopedTheme, themeRevision } from "../stores/theme-store";
 import {
   accentFor,
@@ -32,8 +32,10 @@ import {
   ChevronUp,
   CircleAlert,
   Info,
+  MessageSquare,
   Search,
   SearchX,
+  Send,
   ShieldAlert,
   X,
 } from "./components/lucide";
@@ -63,6 +65,63 @@ import { normalizeSnapshot, sliderValueValid, snapshotError } from "./protocol";
 import { play } from "./sound";
 import { FormattedText, plainText } from "./text";
 import type { ActionRequest, MenuItem, NavigationCommand, NuiMessage, Snapshot } from "./types";
+
+/*
+ * The feedback copy, as settled, in one place
+ *
+ * THE SECOND LINE IS NOT DECORATION AND MUST NOT BE SHORTENED. A text box in
+ * a game menu WILL be used to report griefers and ask for help, because it is
+ * the only text box in front of the player. Without a line saying where the
+ * message goes, this becomes a dead letter box: people type a complaint about
+ * their server and nobody who could act on it ever reads it.
+ *
+ * Why these exact words:
+ *   · "reaches" states direction without jargon — no "forwarded to", no "ticket".
+ *   · "not your server's staff" is the whole misuse prevention in four words,
+ *     and "staff" covers moderators, where "admins" would not.
+ *   · the placeholder maps onto the error / performance / product-feedback split,
+ *     so it invites something actionable instead of "it's broken".
+ *
+ * DO NOT add a second sentence pointing server problems at the operator's own
+ * admins. It doubles the length to restate what the first line already says, and
+ * a dialog nobody reads is worse than one line they do.
+ *
+ * These are `t()` SOURCE KEYS as well as the English copy; `locales/en.ts` holds
+ * them verbatim and `locales/fr.ts` translates them.
+ */
+const FEEDBACK_TITLE = "Send feedback";
+const FEEDBACK_SUBTITLE =
+  "About {{ resource }} itself — reaches TIMMYG Studios, not your server's staff.";
+const FEEDBACK_PLACEHOLDER = "What's broken, slow, or worth changing?";
+const FEEDBACK_SEND = "Send";
+
+/**
+ * tWeb's `SUPPORT_MESSAGE_MAX`.
+ *
+ * Enforced here as well as at the server and at tWeb, because this is the
+ * only one of the three that can stop a player typing a 4,000-character report
+ * and only then being told it was refused.
+ */
+const FEEDBACK_MAX = 2000;
+
+/**
+ * The failure vocabulary `server/sv_feedback.lua` and the bundle answer with.
+ *
+ * A reason outside this table falls through to the generic line rather than
+ * being shown raw: the channel's own refusals ("Server request timed out",
+ * "Rate limit exceeded") are engine strings in one language, and a player
+ * reading French would get them in English beside translated copy.
+ */
+const FEEDBACK_FAILURES: Record<string, string> = {
+  "rate-limited": "Too many messages just now. Try again in a minute — your text is still here.",
+  unreachable: "Could not reach TIMMYG Studios. Try again in a moment — your text is still here.",
+  refused: "That message was not accepted. Try rewording it.",
+  invalid: "That message was not accepted. Try rewording it.",
+};
+const FEEDBACK_GENERIC = "Could not send that. Try again in a moment — your text is still here.";
+const FEEDBACK_SENDING = "Sending…";
+const FEEDBACK_THANKS = "Thanks — that reached TIMMYG Studios.";
+const FEEDBACK_KEYS = "Switch field";
 
 interface CapturedAction {
   request: ActionRequest;
@@ -98,6 +157,26 @@ export default function Menu() {
   const [confirmChoice, setConfirmChoice] = createSignal(false);
   const [notice, setNotice] = createSignal<{ text: string; error: boolean }>();
   const [confirmation, setConfirmation] = createSignal<CapturedAction>();
+  /*
+   * The shared feedback dialog.
+   *
+   * FOUR SIGNALS AND NOT A STORE, deliberately. A Solid 2 store write is not
+   * readable in the tick it happened, and `send()` reads the draft immediately
+   * after setting the sending flag — a store would hand it the pre-write value.
+   *
+   * `feedbackFor` doubles as the open flag: it is the resource the dialog is
+   * about, and there is no state where the dialog is open about nothing.
+   */
+  const [feedbackFor, setFeedbackFor] = createSignal<string>();
+  const [feedbackText, setFeedbackText] = createSignal("");
+  const [feedbackSending, setFeedbackSending] = createSignal(false);
+  const [feedbackSent, setFeedbackSent] = createSignal(false);
+  // Its own line INSIDE the dialog rather than `notify()`. The notice strip
+  // lives in the panel and the dialog's shade is absolutely positioned over the
+  // whole panel at z-index 2 — a refusal reported through notify() would be
+  // painted underneath the dialog that caused it and the player would see
+  // nothing happen at all.
+  const [feedbackError, setFeedbackError] = createSignal<string>();
   const parents = new Map<string, string | undefined>();
   const positions = new Map<string, number>();
   // A signal, not a counter: validAction() reads it from the confirmedItem memo,
@@ -105,6 +184,7 @@ export default function Menu() {
   // stale confirmation dialog over an action that is no longer valid.
   const [epoch, setEpoch] = createSignal(0);
   let search!: HTMLInputElement;
+  let feedback: HTMLTextAreaElement | undefined;
   let panel!: HTMLElement;
   let root!: HTMLDivElement;
   // A theme may supply full menu colors or shared shadcn HSL channels. Only the
@@ -145,87 +225,91 @@ export default function Menu() {
       return themeIdFor(state.branding, menuId());
     },
     (themeId) => {
-    for (const property of themeAliases) root.style.removeProperty(property);
-    themeAliases = [];
-    applyScopedTheme(themeId, root);
-    const color = (value: string) =>
-      CSS.supports("color", value)
-        ? value
-        : CSS.supports("color", `hsl(${value})`)
-          ? `hsl(${value})`
-          : undefined;
-    // The bare HSL triplet inside a theme value, or nothing.
-    //
-    // The one question asked is whether the consumers' own expression parses,
-    // because that is the only property of a partner that matters. Asking it in
-    // exactly the shape tokens.css writes means the check cannot drift from what
-    // is being checked. It is also why the legacy comma form is refused rather
-    // than unwrapped: `hsl(0, 0%, 93% / 0.5)` is invalid CSS, and a partner that
-    // makes its readers drop their declaration is worse than no partner at all.
-    const triplet = (value: string) => {
-      // `hsl(0 0% 93%)` is a triplet wearing a coat; take the coat off. An hsla()
-      // that carries its own alpha fails the test below, correctly — an alpha
-      // inside a partner would multiply against the reader's.
-      const wrapped = /^hsla?\((.*)\)$/.exec(value.trim());
-      const candidate = (wrapped ? wrapped[1]! : value).trim();
-      // var() satisfies CSS.supports() whatever it eventually points at, so a
-      // partner built from one would be a guess about a value not visible here.
-      if (!candidate || candidate.includes("var(")) return undefined;
-      return CSS.supports("color", `hsl(${candidate} / 0.5)`) ? candidate : undefined;
-    };
-    const aliases: Record<string, string> = {
-      text: "foreground",
-      panel: "card",
-      muted: "muted-foreground",
-    };
-    for (const token of [
-      "text",
-      "panel",
-      "muted",
-      "border",
-      "accent",
-      "selected",
-      "selected-ink",
-    ]) {
-      const property = `--${token}`;
-      const own = root.style.getPropertyValue(property).trim();
-      const alias = aliases[token] && root.style.getPropertyValue(`--${aliases[token]}`).trim();
-      // --muted is a surface in shadcn but text ink in the menu API.
-      const value =
-        token === "muted" && own && !CSS.supports("color", own) && alias ? alias : own || alias;
-      const resolved = value && color(value);
-      // Read off the same `value` the line above resolves, not off `resolved`:
-      // that is the point, and one statement later it is too late.
-      const raw = value && rawPartners.has(token) ? triplet(value) : undefined;
-      if (resolved) {
-        root.style.setProperty(property, resolved);
-        if (!own) themeAliases.push(property);
-        const partner = `${property}-raw`;
-        // A hex, a named colour or a comma-form hsl() gets no partner, and that
-        // is deliberate: tokens.css's stock triplet stays in force, so the tint
-        // paints a visible wash in the wrong hue instead of resolving to
-        // `hsl( / 0.32)` and painting nothing. Wrong-hue is a theme the owner can
-        // finish — name the colour as a triplet, or set the partner directly.
-        // Dropped is invisible, and reads as a broken control rather than an
-        // unfinished theme. That failure is the entire class of bug this pass
-        // exists to remove, so it is never the one chosen here.
-        //
-        // An explicitly themed partner wins over a derived one, the same way
-        // `own` wins over `alias` above: the owner stated it, so it is not ours
-        // to overwrite.
-        if (raw && !root.style.getPropertyValue(partner).trim()) {
-          root.style.setProperty(partner, raw);
-          // Tracked for removal even when the theme set the colour itself.
-          // applyScopedTheme only remembers properties a theme actually named,
-          // and this one is synthesized — untracked, it would outlive the theme
-          // that justified it and go on tinting the next one.
-          themeAliases.push(partner);
-        }
-      } else if (own) root.style.removeProperty(property);
-    }
+      for (const property of themeAliases) root.style.removeProperty(property);
+      themeAliases = [];
+      applyScopedTheme(themeId, root);
+      const color = (value: string) =>
+        CSS.supports("color", value)
+          ? value
+          : CSS.supports("color", `hsl(${value})`)
+            ? `hsl(${value})`
+            : undefined;
+      // The bare HSL triplet inside a theme value, or nothing.
+      //
+      // The one question asked is whether the consumers' own expression parses,
+      // because that is the only property of a partner that matters. Asking it in
+      // exactly the shape tokens.css writes means the check cannot drift from what
+      // is being checked. It is also why the legacy comma form is refused rather
+      // than unwrapped: `hsl(0, 0%, 93% / 0.5)` is invalid CSS, and a partner that
+      // makes its readers drop their declaration is worse than no partner at all.
+      const triplet = (value: string) => {
+        // `hsl(0 0% 93%)` is a triplet wearing a coat; take the coat off. An hsla()
+        // that carries its own alpha fails the test below, correctly — an alpha
+        // inside a partner would multiply against the reader's.
+        const wrapped = /^hsla?\((.*)\)$/.exec(value.trim());
+        const candidate = (wrapped ? wrapped[1]! : value).trim();
+        // var() satisfies CSS.supports() whatever it eventually points at, so a
+        // partner built from one would be a guess about a value not visible here.
+        if (!candidate || candidate.includes("var(")) return undefined;
+        return CSS.supports("color", `hsl(${candidate} / 0.5)`) ? candidate : undefined;
+      };
+      const aliases: Record<string, string> = {
+        text: "foreground",
+        panel: "card",
+        muted: "muted-foreground",
+      };
+      for (const token of [
+        "text",
+        "panel",
+        "muted",
+        "border",
+        "accent",
+        "selected",
+        "selected-ink",
+      ]) {
+        const property = `--${token}`;
+        const own = root.style.getPropertyValue(property).trim();
+        const alias = aliases[token] && root.style.getPropertyValue(`--${aliases[token]}`).trim();
+        // --muted is a surface in shadcn but text ink in the menu API.
+        const value =
+          token === "muted" && own && !CSS.supports("color", own) && alias ? alias : own || alias;
+        const resolved = value && color(value);
+        // Read off the same `value` the line above resolves, not off `resolved`:
+        // that is the point, and one statement later it is too late.
+        const raw = value && rawPartners.has(token) ? triplet(value) : undefined;
+        if (resolved) {
+          root.style.setProperty(property, resolved);
+          if (!own) themeAliases.push(property);
+          const partner = `${property}-raw`;
+          // A hex, a named colour or a comma-form hsl() gets no partner, and that
+          // is deliberate: tokens.css's stock triplet stays in force, so the tint
+          // paints a visible wash in the wrong hue instead of resolving to
+          // `hsl( / 0.32)` and painting nothing. Wrong-hue is a theme the owner can
+          // finish — name the colour as a triplet, or set the partner directly.
+          // Dropped is invisible, and reads as a broken control rather than an
+          // unfinished theme. That failure is the entire class of bug this pass
+          // exists to remove, so it is never the one chosen here.
+          //
+          // An explicitly themed partner wins over a derived one, the same way
+          // `own` wins over `alias` above: the owner stated it, so it is not ours
+          // to overwrite.
+          if (raw && !root.style.getPropertyValue(partner).trim()) {
+            root.style.setProperty(partner, raw);
+            // Tracked for removal even when the theme set the colour itself.
+            // applyScopedTheme only remembers properties a theme actually named,
+            // and this one is synthesized — untracked, it would outlive the theme
+            // that justified it and go on tinting the next one.
+            themeAliases.push(partner);
+          }
+        } else if (own) root.style.removeProperty(property);
+      }
     }
   );
   let dialog!: HTMLDivElement;
+  // Its own ref rather than sharing `dialog` with the confirmation: the two are
+  // mutually exclusive on screen, but a ref is only written on mount, so sharing
+  // would leave Tab querying a detached node after a confirmation had closed.
+  let feedbackDialog: HTMLDivElement | undefined;
   let noticeTimer: number | undefined;
   let disposed = false;
 
@@ -290,11 +374,62 @@ export default function Menu() {
   const hits = createMemo(() =>
     query().trim() ? searchCatalog(prepared(), query(), menuId(), state.menus) : []
   );
+  /*
+   * The shared "Send feedback" row
+   *
+   * INJECTED BY tLib'S MENU, NOT MOUNTED BY EIGHT RESOURCES. tELS, tRadar,
+   * tDetector, tUnit, tAFK, tCAD, tChirp and tRadio all render through THIS
+   * bundle, so one row here is one row in every one of their menus and none of
+   * them has to wire anything. That is the whole point: the alternative is
+   * eight copies of a dialog that then drift.
+   *
+   * It is a CLIENT-SIDE synthetic row, exactly as a cross-menu search hit
+   * is, and for the same two reasons. A server-side injection would have to
+   * append an item to a registered page — and a CATALOGUED page travels as a
+   * positional bitmap against a signature, so appending to one breaks the
+   * contract that makes a 256-row menu cost 256 bytes. It would also need an
+   * ACE and an action handler per owner, which is the per-resource wiring this
+   * avoids. Appended into `items()` means it inherits the cursor, the scroll
+   * window, the counter and every binding for free.
+   *
+   * ONLY ON AN OWNER'S ENTRY PAGE. A resource has up to 240 pages; a row on
+   * all of them is noise, and the entry page is the one every player passes
+   * through. A page with no `owner:` prefix — tLib's own `main` hub — gets no
+   * row, because there is no resource for the copy to name.
+   */
+  const FEEDBACK_ROW = "tlib:menu:feedback";
+  const feedbackResource = createMemo(() => {
+    const page = menu();
+    // A placeholder is navigation metadata with no rows yet: the player is not
+    // really standing on it.
+    if (!page || page.placeholder) return undefined;
+    if (page.parent && page.parent !== "main") return undefined;
+    return /^([^:]+):/.exec(page.id)?.[1] || undefined;
+  });
+  const feedbackRow = createMemo<MenuEntry | undefined>(() => {
+    const resource = feedbackResource();
+    // Hidden while filtering: a row that matches nothing the player typed has
+    // no business in a filtered list.
+    if (!resource || query().trim()) return undefined;
+    return {
+      id: JSON.stringify([FEEDBACK_ROW, "row", null]),
+      canonicalId: FEEDBACK_ROW,
+      kind: "action",
+      label: FEEDBACK_TITLE,
+      // Resolved here rather than left for FormattedText, which translates
+      // what it renders but has no arguments to interpolate. The already-
+      // resolved sentence then misses the dictionary and passes through, the
+      // same way a breadcrumb does.
+      description: t(FEEDBACK_SUBTITLE, { resource }),
+      feedback: resource,
+    } as MenuEntry;
+  });
   // The page's own rows first, then the rest of the catalog under a heading.
   // Appended rather than rendered as a second list so the results inherit the
   // cursor, scroll window, counter and bindings -- in game there is no pointer.
   const items = createMemo<MenuEntry[]>(() => {
-    const rows = local();
+    const extra = feedbackRow();
+    const rows = extra ? [...local(), extra] : local();
     const found = hits();
     if (!found.length) return rows as MenuEntry[];
     return [
@@ -413,7 +548,7 @@ export default function Menu() {
   /**
    * The menu's own in-panel notice strip.
    *
-   * ── Why this is NOT a toast, having been asked ─────────────────────────────
+   * Why this is NOT a toast, having been asked
    *
    * tLib shipped two notification lifetimes with two sets of numbers: this one
    * (error 7000, everything else 2500) and `lib/toast-lifetime.ts`'s
@@ -459,6 +594,7 @@ export default function Menu() {
     setQuery("");
     setSearchOpen(false);
     setConfirmation(undefined);
+    resetFeedback();
     panel?.focus();
   }
 
@@ -479,6 +615,10 @@ export default function Menu() {
   let navigationTimer: number | undefined;
   async function navigate(id: string, reason: "enter" | "back" = "enter") {
     if (!state.visible || closing() || !state.menus.some((entry) => entry.id === id)) return;
+    // The coalesced value names a row on the page being left, and `submit` reads
+    // the CURRENT menuId -- so flushing after the page changed would address the
+    // request to the wrong page and lose it.
+    flushChange();
     const serial = ++navigationSerial,
       from = menuId(),
       contextKey = menu()?.contextKey;
@@ -539,6 +679,9 @@ export default function Menu() {
 
   async function close() {
     if (closing()) return;
+    // Ahead of the close request, so a value stepped and then immediately closed
+    // out of is still the value the player set.
+    flushChange();
     setClosing(true);
     // The most latency-sensitive press there is: the panel goes straight away and
     // comes back only if the game refuses.
@@ -553,10 +696,19 @@ export default function Menu() {
   }
 
   function back() {
+    // Leaving the page is leaving the row, whichever of the branches below does it.
+    flushChange();
     play("back");
     if (confirmation()) {
       setConfirmation(undefined);
       panel?.focus();
+      return;
+    }
+    // Before search and before the page stack: the dialog is the frontmost thing
+    // on screen, so the first Escape has to be the one that dismisses it.
+    // It does NOT take the draft with it, unlike search and its query.
+    if (feedbackFor()) {
+      closeFeedback();
       return;
     }
     // One press, not two: leaving search takes the query with it.
@@ -573,6 +725,9 @@ export default function Menu() {
   }
 
   function move(direction: number) {
+    // Before the selection moves: a coalesced value belongs to the row the player
+    // was standing on, and it has to be sent while that row is still current.
+    flushChange();
     const next = moveSelection(items(), selectedId(), direction);
     if (next !== undefined) play("nav");
     setSelections((draft) => {
@@ -719,12 +874,20 @@ export default function Menu() {
       return;
     }
     if (!item || item.kind === "status" || confirmation() || pending() || closing()) return;
+    // The dialog owns the panel while it is up, exactly as a confirmation does.
+    if (feedbackFor()) return;
     play("select");
     // Picking a row ends the search, whichever input picked it. Here rather than in
     // the key handler so mouse, gamepad and keyboard cannot disagree.
     if (searchOpen()) endSearch();
     if (item.hit) {
       void openHit(item.hit);
+      return;
+    }
+    // Not an action: the row belongs to no resource, so there is nothing on the
+    // page to dispatch to and `validAction` would refuse it anyway.
+    if (item.feedback) {
+      openFeedback(item.feedback);
       return;
     }
     setSelections((draft) => {
@@ -761,7 +924,72 @@ export default function Menu() {
       });
   }
 
-  function submit(item: MenuEntry, event: CapturedAction["event"], value?: ActionRequest["value"]) {
+  /**
+   * Trailing-edge coalescing for `change` events.
+   *
+   * Stepping a select or a slider is a HELD arrow key, and each step used to be
+   * its own server request. Measured against a live server: a round trip is
+   * ~26ms, so holding one key produces ~39 requests a second, which tripped the
+   * engine's request limiter in 174ms and then refused every further step of an
+   * ordinary colour or ped-model row. The limiter was raised, but the requests
+   * were never worth sending in the first place -- the player passing through
+   * value 7 on the way to value 30 is not asking for 7 to be applied.
+   *
+   * Only the SUBMIT is delayed. The draft store still advances on every repeat,
+   * so the row reads as responsive and nothing about stepping feels throttled.
+   *
+   * Every path that leaves the row flushes first (`flushChange`), because a
+   * coalesced value that is never sent is a value the player set and lost -- a
+   * far worse bug than the one this fixes.
+   */
+  const CHANGE_COALESCE_MS = 120;
+  let changeTimer: number | undefined;
+  let changeQueued: { item: MenuEntry; value?: ActionRequest["value"] } | undefined;
+
+  function flushChange() {
+    window.clearTimeout(changeTimer);
+    changeTimer = undefined;
+    const queued = changeQueued;
+    changeQueued = undefined;
+    if (queued) submit(queued.item, "change", queued.value, true);
+  }
+
+  function queueChange(item: MenuEntry, value?: ActionRequest["value"]) {
+    // A row that opens a confirmation is never coalesced: the dialog IS the
+    // deliberate pause, and delaying it would make the row feel unresponsive
+    // while a timer nobody can see runs down.
+    if (item.confirm) {
+      submit(item, "change", value, true);
+      return;
+    }
+    changeQueued = { item, value };
+    window.clearTimeout(changeTimer);
+    changeTimer = window.setTimeout(flushChange, CHANGE_COALESCE_MS);
+  }
+
+  function submit(
+    item: MenuEntry,
+    event: CapturedAction["event"],
+    value?: ActionRequest["value"],
+    flushed = false
+  ) {
+    // Reached directly for `activate`, and for `change` only through the flush
+    // above. Anything else stepping a value would bypass the coalescer.
+    if (event === "change" && !flushed) {
+      queueChange(item, value);
+      return;
+    }
+    // An Enter on a row with apply = 'both' must not overtake the value the
+    // player just stepped on that same row.
+    if (event === "activate") flushChange();
+    return submitNow(item, event, value);
+  }
+
+  function submitNow(
+    item: MenuEntry,
+    event: CapturedAction["event"],
+    value?: ActionRequest["value"]
+  ) {
     const target: CapturedAction = {
       request: {
         menuId: menuId(),
@@ -801,6 +1029,70 @@ export default function Menu() {
     setSearchOpen(false);
     search?.blur();
     panel?.focus();
+  }
+
+  function openFeedback(resource: string) {
+    // Leaving search first: the two share the keyboard grab, and the box has to
+    // be the thing holding it.
+    if (searchOpen()) endSearch();
+    setFeedbackSent(false);
+    setFeedbackError(undefined);
+    setFeedbackFor(resource);
+    queueMicrotask(() => feedback?.focus());
+  }
+
+  // The draft is NOT cleared here. Dismissing the dialog on a 429 and
+  // reopening it has to find the text still there — that is the whole of "handle
+  // a 429 without losing what the player typed", and clearing on close would
+  // undo it from the one direction nobody tests.
+  function closeFeedback() {
+    setFeedbackFor(undefined);
+    feedback?.blur();
+    panel?.focus();
+  }
+
+  // Dismiss AND discard, for the two events that invalidate the draft rather
+  // than interrupting it: the page changing under the dialog (the text was about
+  // the old page's resource) and the menu closing (which discards every other
+  // draft too).
+  function resetFeedback() {
+    setFeedbackFor(undefined);
+    setFeedbackText("");
+    setFeedbackSending(false);
+    setFeedbackSent(false);
+    setFeedbackError(undefined);
+  }
+
+  /**
+   * Send, once.
+   *
+   * THE DRAFT SURVIVES EVERY FAILURE and is cleared only on a confirmed
+   * success. A rate limit is the expected failure here — tWeb allows ten a
+   * minute per IP, which for a game server is ten for the WHOLE server, so two
+   * players reporting the same bug in the same minute is enough to hit it — and
+   * a box that empties itself on a refusal makes the player retype a paragraph
+   * they already wrote.
+   */
+  async function sendFeedback() {
+    const resource = feedbackFor();
+    const message = feedbackText().trim();
+    if (!resource || feedbackSending() || !message) return;
+    setFeedbackError(undefined);
+    setFeedbackSending(true);
+    const result = await request("feedback", { message: message.slice(0, FEEDBACK_MAX) });
+    if (disposed) return;
+    setFeedbackSending(false);
+    // The dialog may have been dismissed, or the player moved off the page, while
+    // the request was out. The message still went; there is just nowhere to say so.
+    if (feedbackFor() !== resource) return;
+    if (!result.ok) {
+      play("error");
+      setFeedbackError(FEEDBACK_FAILURES[result.error ?? ""] ?? FEEDBACK_GENERIC);
+      return;
+    }
+    setFeedbackText("");
+    setFeedbackSent(true);
+    play("select");
   }
 
   function navigateCommand(command: NavigationCommand) {
@@ -871,7 +1163,12 @@ export default function Menu() {
     else if (message.action === "menu:navigate") navigateCommand(message.data);
     else if (message.action === "menu:input") {
       setTextEditing(message.data);
-      if (message.data) openSearch();
+      // The game releasing the keyboard while the feedback box is open leaves a
+      // box that cannot be typed in, so the dialog goes with it rather than
+      // sitting there dead. The draft survives: this is an interruption.
+      if (feedbackFor()) {
+        if (!message.data) closeFeedback();
+      } else if (message.data) openSearch();
       else endSearch();
     } else receive(message);
   }
@@ -901,6 +1198,38 @@ export default function Menu() {
   function onKey(event: KeyboardEvent) {
     if (!shown() || event.defaultPrevented) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    /*
+     * WHILE THE FEEDBACK DIALOG IS OPEN, THE BOX GETS EVERYTHING.
+     *
+     * This early return is not politeness, it is the feature: without it
+     * Backspace runs `back()` instead of deleting a character, Enter is
+     * swallowed instead of starting a line, and the arrow keys move the menu
+     * cursor behind the dialog instead of the caret. The confirmation branch
+     * below can get away with being narrower because it has no text field.
+     *
+     * Two keys are kept: Tab moves between the box and the buttons, which is
+     * the only way to reach Send in game — there is no cursor in NUI — and F1
+     * still closes the whole menu, because it is the key the game bound and the
+     * player's guaranteed way out.
+     */
+    if (feedbackFor()) {
+      if (event.key === "Tab") {
+        const focusable = feedbackDialog?.querySelectorAll<HTMLElement>("textarea, button");
+        if (focusable?.length) {
+          event.preventDefault();
+          const order = Array.from(focusable);
+          const at = order.indexOf(document.activeElement as HTMLElement);
+          const step = event.shiftKey ? -1 : 1;
+          order[(at + step + order.length) % order.length]?.focus();
+        }
+        return;
+      }
+      if (event.key === "F1") {
+        event.preventDefault();
+        void close();
+      }
+      return;
+    }
     // The one key the field never sees: it is how the player gets back out, and in
     // game it is also the key the game bound.
     if (searchOpen() && (event.key === "F3" || event.key === "Tab")) {
@@ -968,10 +1297,16 @@ export default function Menu() {
   // keyboard, so the box being open and the grab being held are one state. Held
   // here rather than at each of the five exits, where only the ones that remembered
   // to call back into the game released it.
-  createEffect(searchOpen, (open) => {
-    if (!inGame || open === textEditing()) return;
-    void request("input", { active: open });
-  });
+  // The feedback box needs the SAME grab, so the two are one condition. Two
+  // effects would race: closing the dialog while search had never been open
+  // would release a grab the box still needed, or the reverse.
+  createEffect(
+    () => searchOpen() || Boolean(feedbackFor()),
+    (open) => {
+      if (!inGame || open === textEditing()) return;
+      void request("input", { active: open });
+    }
+  );
   createEffect(
     () => state.menus,
     (menus) => {
@@ -995,7 +1330,7 @@ export default function Menu() {
       // A search hit is not a row on this page, so its synthetic id would report a
       // highlight on an item the game has never heard of.
       const data =
-        item && !item.hit
+        item && !item.hit && !item.feedback
           ? {
               menuId: menuId(),
               itemId: item.canonicalId,
@@ -1045,6 +1380,7 @@ export default function Menu() {
         setEpoch((value) => value + 1);
         setTextEditing(false);
         setConfirmation(undefined);
+        resetFeedback();
         setNotice(undefined);
         // Closing resets the game to the main menu, so the page resets too, and an
         // uncommitted draft must not reappear as the live value on the next open.
@@ -1147,6 +1483,10 @@ export default function Menu() {
       disposeEscape();
       window.clearTimeout(noticeTimer);
       window.clearTimeout(navigationTimer);
+      // Cleared, NOT flushed: teardown is not a moment to start a request. Every
+      // ordinary way of leaving a row flushes already, so what is dropped here is
+      // only a value whose menu is being destroyed under it.
+      window.clearTimeout(changeTimer);
     };
   });
 
@@ -1177,7 +1517,7 @@ export default function Menu() {
           class={[
             "menu-panel",
             {
-              "is-blocked": Boolean(confirmedItem()),
+              "is-blocked": Boolean(confirmedItem()) || Boolean(feedbackFor()),
               "is-hidden": state.hidden,
               "has-accent": Boolean(accent()),
               [`align-${state.align}`]: true,
@@ -1563,7 +1903,7 @@ export default function Menu() {
                   <p id="confirm-description">
                     <FormattedText text={item().confirm} />
                   </p>
-                  {/* ⚠️ AFFIRMATIVE LEFT, deliberately. The source order is the
+                  {/* AFFIRMATIVE LEFT, deliberately. The source order is the
                       visual order and the Tab order both; the reasoning and the
                       count behind it are in `layout/LayoutEditor.tsx`. */}
                   <div class="flex gap-2 mt-5">
@@ -1576,6 +1916,98 @@ export default function Menu() {
                       {t("Cancel")}
                     </button>
                   </div>
+                </div>
+              </div>
+            )}
+          </Show>
+          {/* INSIDE THE PANEL, not a second layer over it. A feature reached
+              from an open UI renders within it; a stacked dialog would also put
+              a second modal over the confirmation's shade, and the two can
+              never be on screen together anyway — `activate` refuses while
+              either is up. */}
+          <Show when={feedbackFor()}>
+            {(resource) => (
+              <div class="confirmation-shade">
+                <div
+                  ref={feedbackDialog}
+                  class="confirmation feedback"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="feedback-title"
+                  aria-describedby="feedback-description"
+                >
+                  <h2 id="feedback-title">
+                    <MessageSquare aria-hidden="true" />
+                    {t(FEEDBACK_TITLE)}
+                  </h2>
+                  <p id="feedback-description">{t(FEEDBACK_SUBTITLE, { resource: resource() })}</p>
+                  <textarea
+                    ref={feedback}
+                    class="feedback-box"
+                    value={feedbackText()}
+                    onInput={(event) => {
+                      setFeedbackText(event.currentTarget.value);
+                      // A refusal is about the attempt, not about the text; it
+                      // clears the moment the player changes it.
+                      setFeedbackError(undefined);
+                      setFeedbackSent(false);
+                    }}
+                    placeholder={t(FEEDBACK_PLACEHOLDER)}
+                    aria-label={t(FEEDBACK_PLACEHOLDER)}
+                    maxlength={String(FEEDBACK_MAX)}
+                    rows="4"
+                  />
+                  <Show when={feedbackError()}>
+                    {(message) => (
+                      <p class="feedback-problem" role="alert">
+                        <CircleAlert aria-hidden="true" />
+                        {message()}
+                      </p>
+                    )}
+                  </Show>
+                  <Show when={feedbackSent()}>
+                    <p class="feedback-sent" role="status">
+                      <Check aria-hidden="true" />
+                      {t(FEEDBACK_THANKS)}
+                    </p>
+                  </Show>
+                  {/* Affirmative left, as the confirmation above: source order
+                      is the visual order and the Tab order both. */}
+                  <div class="flex gap-2 mt-5">
+                    <button
+                      type="button"
+                      class="dialog-confirm"
+                      disabled={feedbackSending() || feedbackText().trim() === ""}
+                      onClick={() => void sendFeedback()}
+                    >
+                      <Send aria-hidden="true" />
+                      {feedbackSending() ? t(FEEDBACK_SENDING) : t(FEEDBACK_SEND)}
+                    </button>
+                    <button type="button" class="dialog-cancel" onClick={closeFeedback}>
+                      <X aria-hidden="true" />
+                      {t("Cancel")}
+                    </button>
+                  </div>
+                  {/* In game there is no pointer, so the two keys that reach the
+                      buttons are part of the dialog rather than a hint. */}
+                  <p class="feedback-keys">
+                    <kbd>Tab</kbd> {t(FEEDBACK_KEYS)}
+                    {/* In game the exit is Tab-to-Cancel and Enter, NOT Escape.
+                        The search box above says the same thing by offering F3
+                        instead of Esc in game: with the keyboard handed to CEF,
+                        Escape is not a key this surface can rely on. Promising
+                        it here would be a hint that does nothing. */}
+                    <Show
+                      when={inGame}
+                      fallback={
+                        <>
+                          <kbd>Esc</kbd> {t("Cancel")}
+                        </>
+                      }
+                    >
+                      <kbd>↵</kbd> {t("Select")}
+                    </Show>
+                  </p>
                 </div>
               </div>
             )}

@@ -28,7 +28,7 @@ export interface DialogField {
    * On a `button` field: require an explicit confirmation before
    * `onButtonClick` fires, and use this string as the question.
    *
-   * ── Why `variant` was not enough, and why this is not a second mechanism ───
+   * Why `variant` was not enough, and why this is not a second mechanism
    *
    * `variant: "destructive"` is COLOUR. It makes a button that deletes something
    * look like one and does nothing else, so "Clear all patterns" and "Rename"

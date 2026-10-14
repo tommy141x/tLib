@@ -5,7 +5,7 @@
     here. That is the only place in the stack where two different resources'
     bindings are visible at the same time, and it is the reason this file exists.
 
-    ── Why a per-resource check is not enough ──────────────────────────────────
+     Why a per-resource check is not enough
 
     `platform.keybindConflicts()` runs inside the consumer's own VM, so it can
     only see that resource's own bindings. It catches the case tELS shipped —
@@ -19,7 +19,7 @@
     Both are certainties on a police server: one key, two products, both fire.
     Neither VM can see the other, so neither could ever report it.
 
-    ── Why this warns and does not resolve ────────────────────────────────────
+     Why this warns and does not resolve
 
     A default key is a *suggestion*; the player's own rebind is authoritative and
     stored by FiveM against the command token. Silently reassigning a default

@@ -31,7 +31,7 @@
       "@tlib/shared": ["../../shared/ts/index.ts"],
       "@tlib/shared/*": ["../../shared/ts/*"],
 
-      /* ⚠️ THIS REDIRECT IS WHAT MAKES @ark-ui/solid TYPE-CHECK ON SOLID 2.
+      /* THIS REDIRECT IS WHAT MAKES @ark-ui/solid TYPE-CHECK ON SOLID 2.
          DO NOT REMOVE IT WITHOUT READING src/types/solid-js.d.ts.
 
          Ark builds EVERY part's props from
@@ -76,5 +76,12 @@
       "solid-js/jsx-runtime": ["./src/types/solid-js.d.ts"]
     }
   },
-  "include": ["src"]
+  /* `tests` is in here deliberately. The DOM suite is TypeScript that imports
+     the same components the app does, through the same `@tlib/shared` and `@/`
+     aliases, so leaving it out would make the one directory asserting those
+     components the one directory with no type checking at all. Measured when it
+     was added: three real errors, including a `HudAnchor` written as `topleft`
+     where the union is `top-left` — a fixture that was wrong in a way no runtime
+     assertion in the suite could see. */
+  "include": ["src", "tests"]
 }

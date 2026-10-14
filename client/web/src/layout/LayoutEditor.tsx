@@ -1,25 +1,11 @@
-import { Check, Grip, LayoutDashboard, Redo2, RotateCcw, ShieldAlert, Undo2, X } from "lucide-solid";
-import {
-  createMemo,
-  createRenderEffect,
-  createSignal,
-  createStore,
-  For,
-  onSettled,
-  Show,
-} from "solid-js";
 import { createEscapeLayer } from "@tlib/shared/escape-layer";
-import { NuiButton } from "@/components/ui/nui-field";
-import { applyNuiTheme, nuiThemeDeps } from "@/components/ui/nui-theme";
-import { fetchNui, onNuiEvent } from "@/lib/nui";
-import ComponentList from "./ComponentList";
 import {
   type Anchor,
   anchors,
   buildSnapTargets,
-  clamp,
   type Component,
   type Corner,
+  clamp,
   constrainLayout,
   type Layout,
   layoutRect,
@@ -35,7 +21,31 @@ import {
   scaleLayout,
   type Viewport,
 } from "@tlib/shared/hud-geometry";
-import { LayoutHistory } from "./history";
+import { UndoHistory, type UndoState } from "@tlib/shared/undo";
+import { createUndoScope } from "@tlib/shared/undo-keys";
+import {
+  Check,
+  Grip,
+  LayoutDashboard,
+  Redo2,
+  RotateCcw,
+  ShieldAlert,
+  Undo2,
+  X,
+} from "lucide-solid";
+import {
+  createMemo,
+  createRenderEffect,
+  createSignal,
+  createStore,
+  For,
+  onSettled,
+  Show,
+} from "solid-js";
+import { NuiButton } from "@/components/ui/nui-field";
+import { applyNuiTheme, nuiThemeDeps } from "@/components/ui/nui-theme";
+import { fetchNui, onNuiEvent } from "@/lib/nui";
+import ComponentList from "./ComponentList";
 import LayoutProxy from "./LayoutProxy";
 import { PreviewChannel } from "./preview";
 import "./layout.css";
@@ -54,10 +64,15 @@ interface Gesture {
   corner?: Corner;
   target?: HTMLElement;
 }
-/** A burst of wheel notches is one thing the player did, so it is one undo step. */
+/**
+ * A burst of wheel notches is one thing the player did, so it is one undo step.
+ *
+ * There is no `before` here any more: the open batch holds it. The first notch
+ * calls `history.push`, every later notch in the burst extends that same batch
+ * (same label, same key), and `flushWheel` commits it once the burst settles.
+ */
 interface WheelGesture {
   key: string;
-  before: Layout;
   timer: number;
 }
 const WHEEL_SETTLE_MS = 250;
@@ -77,20 +92,28 @@ export default function LayoutEditor() {
   const [safezone, setSafezone] = createSignal(1);
   const [guides, setGuides] = createSignal<{ x?: number; y?: number }>({});
   const [scalingKey, setScalingKey] = createSignal("");
-  const [historyVersion, setHistoryVersion] = createSignal(0);
   const [finishing, setFinishing] = createSignal(false);
   const [notice, setNotice] = createSignal("");
   /**
    * Whether the discard question is up.
    *
-   * ── Why this editor now has one ───────────────────────────────────────────
+   * Why this editor now has one
    *
    * Cancel called `finish(false)` straight out, which cancels every pending
    * preview and tells the game `save: false` — the backend rolls the HUD back and
    * the whole positioning session is gone. Hand-placing a HUD is minutes of work
-   * with no undo once the editor closes, and this was the only surface in the
+   * with no undo once the editor closes, and this surface threw it away without
+   * asking.
+   *
+   * The sentence that used to be here — "this was the ONLY surface in the
    * stack that threw it away without asking: tELS prompts, the prop editor
-   * prompts, tAFK prompts.
+   * prompts, tAFK prompts" — was WRONG about the prop editor, and being wrong
+   * here sent a later audit down the wrong path. tELS and tAFK did prompt;
+   * tLib's own shared `PropEditor` did not, and had no dirty tracking anywhere
+   * in its chain — Escape and Cancel both called `propEditorCancel` straight
+   * out, in tRadar, tDetector and tRadio simultaneously. It prompts now, off the
+   * same `isDirty()` this editor uses, so the claim is finally true; it was not
+   * when it was written.
    *
    * Gated on `canUndo()`, so Cancel on a session where nothing was touched still
    * closes in one click. The question is only worth asking when there is
@@ -107,7 +130,27 @@ export default function LayoutEditor() {
   let panelGesture:
     | { pointer: number; x: number; y: number; left: number; top: number; target: HTMLElement }
     | undefined;
-  const history = new LayoutHistory();
+  /**
+   * One instance, scoped to this editor.
+   *
+   * This used to be `LayoutHistory`, a class that lived next door and was
+   * hard-typed to `Layout`. It is gone; `@tlib/shared/undo`'s `UndoHistory` is
+   * the one primitive for the estate and carries both of the things that class
+   * knew — `remove(key)` and a no-op guard — as general capabilities. The guard
+   * is `sameLayout`, passed per tag at `register()` rather than hard-coded,
+   * which is the whole reason the class could not be reused elsewhere.
+   *
+   * One tag per component (`layout:<key>`), registered when the host announces
+   * the component and disposed when it withdraws it. That is what makes an entry
+   * per-component — the `key` on the entry — and what makes `remove(key)`
+   * meaningful here. This editor is the one surface in the estate that needs it:
+   * the host can unregister a HUD component mid-session, and the entries about
+   * it are then about something that no longer exists.
+   */
+  const history = new UndoHistory({ label: "hud-layout" });
+  const [undoState, setUndoState] = createSignal<UndoState>(history.state());
+  /** `tag` disposers, one per live component. */
+  const undoables = new Map<string, () => void>();
   const preview = new PreviewChannel(viewport, () =>
     setNotice("A HUD preview could not be applied. Save will retry; Cancel remains available.")
   );
@@ -122,11 +165,45 @@ export default function LayoutEditor() {
   const index = createMemo(() => new Map(components().map((c) => [c.key, c])));
   const active = () => index().get(selected());
   const current = (component: Component) => layouts[component.key] ?? component.layout;
-  const tick = () => setHistoryVersion((v) => v + 1);
-  const canUndo = () => (historyVersion(), history.canUndo);
-  const canRedo = () => (historyVersion(), history.canRedo);
+  const canUndo = () => undoState().canUndo;
+  const canRedo = () => undoState().canRedo;
+  const undoTitle = () => {
+    const label = undoState().undoLabel;
+    return label ? `Undo ${label} · Ctrl Z` : "Nothing to undo";
+  };
+  const redoTitle = () => {
+    const label = undoState().redoLabel;
+    return label ? `Redo ${label} · Ctrl Shift Z` : "Nothing to redo";
+  };
 
-  // ── Placement ───────────────────────────────────────────────────────────
+  // Undo registration
+  const tagOf = (key: string) => `layout:${key}`;
+  /** What one entry is called. The shared UI renders it as "Undo move Speedometer". */
+  const verbFor = (component: Component, verb: string) => `${verb} ${component.label}`;
+  function trackComponent(component: Component) {
+    const key = component.key;
+    undoables.get(key)?.();
+    undoables.set(
+      key,
+      history.register<Layout>(tagOf(key), {
+        capture: () => ({ ...(layouts[key] ?? component.layout) }),
+        restore: (layout) => update(key, layout),
+        // The no-op guard: a gesture that ended where it started records nothing,
+        // which is what `LayoutHistory.record`'s early return did.
+        equal: sameLayout,
+      })
+    );
+  }
+  function untrackComponent(key: string) {
+    undoables.get(key)?.();
+    undoables.delete(key);
+  }
+  function untrackAll() {
+    for (const dispose of undoables.values()) dispose();
+    undoables.clear();
+  }
+
+  // Placement
   function update(key: string, layout: Layout) {
     const component = index().get(key);
     if (!component) return;
@@ -140,15 +217,24 @@ export default function LayoutEditor() {
     preview.queue(key, next);
   }
 
-  /** Re-derive the anchor from where it ended up, then record one history entry. */
-  function settleKey(key: string, before: Layout) {
+  /**
+   * Re-derive the anchor from where it ended up, then close the open batch.
+   *
+   * The batch was opened at gesture START (`grab`, the first wheel notch, the
+   * first arrow key), so the "before" it compares against is the state the
+   * gesture began from — one entry for a whole drag, not one per frame. It no
+   * longer takes a `before` argument, because the history holds it.
+   */
+  function settleKey(key: string) {
     const component = index().get(key);
     const after = layouts[key];
-    if (!component || !after) return;
+    if (!component || !after) {
+      history.abort();
+      return;
+    }
     const anchored = reanchor(component, after, viewport());
     if (!sameLayout(anchored, after)) update(key, anchored);
-    history.record(key, before, layouts[key]);
-    tick();
+    history.commit();
   }
   function flushWheel() {
     const burst = wheel;
@@ -156,7 +242,7 @@ export default function LayoutEditor() {
     if (!burst) return;
     window.clearTimeout(burst.timer);
     setScalingKey("");
-    settleKey(burst.key, burst.before);
+    settleKey(burst.key);
   }
   function releaseGestureCapture(completed: Gesture | undefined) {
     if (completed?.pointer !== undefined && completed.target?.hasPointerCapture(completed.pointer))
@@ -169,10 +255,17 @@ export default function LayoutEditor() {
     snapTargets = undefined;
     setGuides({});
     releaseGestureCapture(completed);
-    if (!layouts[completed.key]) return;
-    if (cancel) update(completed.key, completed.before);
-    else settleKey(completed.key, completed.before);
-    tick();
+    if (!layouts[completed.key]) {
+      history.abort();
+      return;
+    }
+    if (cancel) {
+      update(completed.key, completed.before);
+      // The caller has already put the old value back, so there is nothing to
+      // compare and nothing to record. `abort` makes no claim about the current
+      // state, which is why it is not `commit` on an unchanged batch.
+      history.abort();
+    } else settleKey(completed.key);
   }
   /** Commit every in-progress gesture before doing something discrete. */
   function settle() {
@@ -182,17 +275,24 @@ export default function LayoutEditor() {
     endGesture();
     flushWheel();
   }
-  function change(component: Component, next: Layout) {
+  /** One discrete edit — a visibility toggle, a reset — as one entry. */
+  function change(component: Component, next: Layout, verb = "change") {
     if (finishing()) return;
     settle();
-    const before = current(component);
-    update(component.key, next);
-    history.record(component.key, before, layouts[component.key]);
-    tick();
+    history.with(
+      verbFor(component, verb),
+      [tagOf(component.key)],
+      () => update(component.key, next),
+      component.key
+    );
   }
   function toggleVisible(component: Component) {
     if (!component.canHide) return;
-    change(component, { ...current(component), visible: !current(component).visible });
+    change(
+      component,
+      { ...current(component), visible: !current(component).visible },
+      current(component).visible ? "hide" : "show"
+    );
   }
   /**
    * The factory placement for one component, sanitised. `defaults` crosses the
@@ -224,34 +324,38 @@ export default function LayoutEditor() {
   function resetSelected() {
     const component = active();
     if (!component) return;
-    change(component, factory(component));
+    change(component, factory(component), "reset");
   }
-  /** Every component at once, for when more than one has been lost. History is
-   *  per component, so this pushes one undo entry per component that moved. */
+  /**
+   * Every component at once, for when more than one has been lost. History is
+   * per component, so this pushes one undo entry per component that MOVED — the
+   * ones that were already at their defaults are filtered out by the registered
+   * `sameLayout` guard rather than by a hand-written check here, which is what
+   * this loop used to carry.
+   */
   function resetAll() {
     if (finishing()) return;
     settle();
-    const before = new Map(components().map((c) => [c.key, current(c)]));
-    for (const component of components()) update(component.key, factory(component));
-    for (const component of components()) {
-      const was = before.get(component.key);
-      const now = layouts[component.key];
-      if (was && now && !sameLayout(was, now)) history.record(component.key, was, now);
-    }
-    tick();
+    for (const component of components())
+      history.with(
+        verbFor(component, "reset"),
+        [tagOf(component.key)],
+        () => update(component.key, factory(component)),
+        component.key
+      );
   }
   function travel(direction: "undo" | "redo") {
     if (finishing()) return;
     settle();
-    const entry = history[direction]();
-    if (entry) {
-      update(entry.key, entry.layout);
-      setSelected(entry.key);
-    }
-    tick();
+    // The history applies the snapshot itself through the registered `restore`,
+    // which routes back through `update` and so is clamped and previewed like any
+    // other placement. What comes back is which entry it applied, so the
+    // component that just moved can be re-selected.
+    const applied = history[direction]();
+    if (applied?.key) setSelected(applied.key);
   }
 
-  // ── Gestures ────────────────────────────────────────────────────────────
+  // Gestures
   function grab(event: PointerEvent, component: Component, corner?: Corner) {
     if (event.button !== 0 || finishing()) return;
     event.preventDefault();
@@ -276,6 +380,13 @@ export default function LayoutEditor() {
       corner,
       target: event.currentTarget as HTMLElement,
     };
+    // Open the batch at gesture START. Every frame of the drag then extends it,
+    // so the whole drag is one entry; `settleKey` closes it on release.
+    history.push(
+      verbFor(component, corner ? "resize" : "move"),
+      [tagOf(component.key)],
+      component.key
+    );
     (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
   }
   function onWheel(event: WheelEvent, component: Component) {
@@ -286,8 +397,10 @@ export default function LayoutEditor() {
     endGesture();
     if (wheel && wheel.key !== component.key) flushWheel();
     setSelected(component.key);
-    if (!wheel) wheel = { key: component.key, before: { ...current(component) }, timer: 0 };
-    else window.clearTimeout(wheel.timer);
+    if (!wheel) {
+      wheel = { key: component.key, timer: 0 };
+      history.push(verbFor(component, "resize"), [tagOf(component.key)], component.key);
+    } else window.clearTimeout(wheel.timer);
     const burst = wheel;
     burst.timer = window.setTimeout(flushWheel, WHEEL_SETTLE_MS);
     setScalingKey(component.key);
@@ -303,7 +416,7 @@ export default function LayoutEditor() {
       )
     );
   }
-  // ── Pointer move, one application per animation frame ────────────────────
+  // Pointer move, one application per animation frame
   //
   // `pointermove` fires well above the frame rate — a 1000 Hz mouse delivers a
   // coalesced burst per frame at best and several events per frame at worst — and
@@ -414,7 +527,7 @@ export default function LayoutEditor() {
     }
   }
 
-  // ── Panel placement (session-local UI state, never a HUD layout entry) ───
+  // Panel placement (session-local UI state, never a HUD layout entry)
   function clampPanel(position: { x: number; y: number }) {
     const { width, height } = viewport();
     return {
@@ -475,7 +588,7 @@ export default function LayoutEditor() {
     );
   }
 
-  // ── Keyboard ────────────────────────────────────────────────────────────
+  // Keyboard
   const arrows: Record<string, [number, number]> = {
     ArrowLeft: [-1, 0],
     ArrowRight: [1, 0],
@@ -514,12 +627,15 @@ export default function LayoutEditor() {
       return;
     }
     if (finishing()) return;
-    if ((event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase())) {
-      event.preventDefault();
-      if (!event.repeat)
-        travel(event.key.toLowerCase() === "y" || event.shiftKey ? "redo" : "undo");
-      return;
-    }
+    /*
+     * Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y are NOT handled here any more. They are a
+     * registered scope — see the `createUndoScope` call in `onSettled` below —
+     * for the same reason Escape is a registered layer: a raw window listener
+     * has no notion of depth, so a press another editor has already consumed
+     * still reaches this one. That is not hypothetical for the estate this
+     * primitive is for; tRadio's settings app hosts tLib's shared PropEditor
+     * inside itself, and two raw listeners means one press undoes in both.
+     */
     const direction = arrows[event.key],
       component = active();
     // The panel's own drag handle owns arrows while it is focused.
@@ -527,7 +643,11 @@ export default function LayoutEditor() {
     if ((event.target as HTMLElement | null)?.closest(".tlib-layout__drag")) return;
     event.preventDefault();
     flushWheel();
-    if (!gesture) gesture = { key: component.key, before: { ...current(component) }, x: 0, y: 0 };
+    if (!gesture) {
+      gesture = { key: component.key, before: { ...current(component) }, x: 0, y: 0 };
+      // A held arrow key is one nudge gesture, committed on keyup by `endGesture`.
+      history.push(verbFor(component, "move"), [tagOf(component.key)], component.key);
+    }
     const step = event.shiftKey ? 10 : 1;
     update(
       component.key,
@@ -557,7 +677,7 @@ export default function LayoutEditor() {
     endPanelDrag();
   }
 
-  // ── Session ─────────────────────────────────────────────────────────────
+  // Session
   function stop() {
     settle();
     endPanelDrag();
@@ -572,6 +692,7 @@ export default function LayoutEditor() {
     snapTargets = undefined;
     preview.reset();
     history.clear();
+    untrackAll();
     setSession(null);
     setFinishing(false);
     setComponents([]);
@@ -630,7 +751,6 @@ export default function LayoutEditor() {
     void finish(false);
   }
 
-
   onSettled(() => {
     const offOpen = onNuiEvent<LayoutOpen>("layoutOpen", (data) => {
       if (!Number.isFinite(data.session) || data.session <= highSession) return;
@@ -639,7 +759,8 @@ export default function LayoutEditor() {
       previousFocus =
         document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
       history.clear();
-      tick();
+      untrackAll();
+      for (const component of data.components) trackComponent(component);
       preview.open(data.session);
       setViewport({ width: window.innerWidth, height: window.innerHeight });
       setComponents(data.components);
@@ -674,8 +795,11 @@ export default function LayoutEditor() {
         wheel = undefined;
       }
       preview.drop(data.key);
+      // The HOST withdrew this component, so every entry about it is about
+      // something that no longer exists. This is the one `remove(key)` caller in
+      // the estate, and the reason that capability is in the shared primitive.
       history.remove(data.key);
-      tick();
+      untrackComponent(data.key);
       setComponents((all) => all.filter((c) => c.key !== data.key));
       setLayouts((draft) => {
         delete draft[data.key];
@@ -711,6 +835,26 @@ export default function LayoutEditor() {
       },
       onEscape: requestCancel,
     });
+    /*
+     * Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, through the shared registry rather than
+     * this component's own keydown listener. `onUndo`/`onRedo` are given because
+     * travelling here has to settle any in-flight gesture first, and the button
+     * pair and the keyboard must go through the SAME function or the two
+     * disagree about what one step is.
+     *
+     * `ignoreWhenTyping` is left at its default (true). This surface has no text
+     * entry today, so it changes nothing here, and if one is ever added the field
+     * keeps its own native undo for free.
+     */
+    const disposeUndoKeys = createUndoScope({
+      label: "hud-layout-editor",
+      depth: 1,
+      history,
+      active: () => session() !== null && !finishing(),
+      onUndo: () => travel("undo"),
+      onRedo: () => travel("redo"),
+    });
+    const offHistory = history.onChange(setUndoState);
     window.addEventListener("resize", resized);
     window.addEventListener("blur", blurred);
     // Solid 2's `onSettled` takes its teardown as the RETURNED function rather
@@ -726,6 +870,8 @@ export default function LayoutEditor() {
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
       disposeEscape();
+      disposeUndoKeys();
+      offHistory();
       window.removeEventListener("resize", resized);
       window.removeEventListener("blur", blurred);
       stop();
@@ -831,17 +977,24 @@ export default function LayoutEditor() {
             <p class="tlib-layout__help">Drag to move · Scroll to resize · Alt disables snapping</p>
             <div class="tlib-layout__actions">
               <div class="tlib-layout__history">
+                {/*
+                 * The label comes off the history now, so these say what they
+                 * will take back — "Undo move Speedometer" — rather than just
+                 * "Undo". `shared/ts/ui/undo-redo.tsx` is the same pair for
+                 * adopters; this surface keeps NuiButton because that is the
+                 * control the rest of this panel is built from.
+                 */}
                 <NuiButton
-                  aria-label="Undo"
-                  title="Undo · Ctrl Z"
+                  aria-label={undoTitle()}
+                  title={undoTitle()}
                   disabled={finishing() || !canUndo()}
                   onClick={() => travel("undo")}
                 >
                   <Undo2 aria-hidden="true" />
                 </NuiButton>
                 <NuiButton
-                  aria-label="Redo"
-                  title="Redo · Ctrl Shift Z"
+                  aria-label={redoTitle()}
+                  title={redoTitle()}
                   disabled={finishing() || !canRedo()}
                   onClick={() => travel("redo")}
                 >
@@ -874,7 +1027,7 @@ export default function LayoutEditor() {
             </p>
           </Show>
           {/*
-           * ⚠️ AFFIRMATIVE LEFT, and all four of tLib's affirmative/cancel pairs
+           * AFFIRMATIVE LEFT, and all four of tLib's affirmative/cancel pairs
            * were moved together to get there.
            *
            * Counted rather than assumed. Before: this editor, the dialog footer
@@ -904,11 +1057,7 @@ export default function LayoutEditor() {
               <Check aria-hidden="true" />
               {finishing() ? "Saving…" : "Save"}
             </NuiButton>
-            <NuiButton
-              class="tlib-layout__discard"
-              disabled={finishing()}
-              onClick={requestCancel}
-            >
+            <NuiButton class="tlib-layout__discard" disabled={finishing()} onClick={requestCancel}>
               <X aria-hidden="true" />
               Cancel
             </NuiButton>
@@ -944,21 +1093,58 @@ export default function LayoutEditor() {
                   The HUD goes back to where it was before you opened the editor. This cannot be
                   undone.
                 </p>
+                {/*
+                 * THE LOSSY ANSWER IS ON THE RIGHT, and this is NOT the same
+                 * rule as the Save/Cancel footer above it. Both are correct and
+                 * they point opposite ways on purpose.
+                 *
+                 * That footer is a primary action beside its escape hatch:
+                 * affirmative-left, the convention all four of tLib's
+                 * affirmative/cancel pairs were moved to, and the native order
+                 * on Windows — the only OS a FiveM client runs on.
+                 *
+                 * This is a DESTRUCTIVE CONFIRMATION, which is a different
+                 * widget answering a different question. The estate rule there
+                 * is that the lossy button goes right and the safe one takes the
+                 * affirmative slot, because "Keep editing" IS the affirmative
+                 * answer to "discard?" — the primary action of this dialog is to
+                 * NOT lose the work. tELS's discard guard, tUnit's
+                 * `CharacterEditor` footer and tLib's own shared `PropEditor`
+                 * prompt are all spelled this way.
+                 *
+                 * This editor was the odd one out: it put Discard left, with the
+                 * primary tone AND the autofocus, under an affirmative-left
+                 * reading of a dialog whose affirmative answer is the other
+                 * button. So one Enter on the keyboard threw the layout away.
+                 * Converged here; the footer above is untouched.
+                 *
+                 * `data-discard-answer` is the semantic handle, the same role
+                 * `data-prop-editor-keep` / `-discard` play in the shared editor:
+                 * the captions are prose and an order assertion must not key on
+                 * glyphs or on DOM position alone.
+                 */}
                 <div class="tlib-nui-confirm-actions">
                   <NuiButton
+                    data-discard-answer="keep"
                     tone="primary"
                     autofocus
+                    onClick={() => setDiscarding(false)}
+                  >
+                    {/* The glyphs follow the tone, not the DOM order: the tick
+                        belongs on the affirmative answer, which is now this one. */}
+                    <Check aria-hidden="true" />
+                    Keep editing
+                  </NuiButton>
+                  <NuiButton
+                    data-discard-answer="discard"
+                    tone="destructive"
                     onClick={() => {
                       setDiscarding(false);
                       void finish(false);
                     }}
                   >
-                    <Check aria-hidden="true" />
-                    Discard
-                  </NuiButton>
-                  <NuiButton onClick={() => setDiscarding(false)}>
                     <X aria-hidden="true" />
-                    Keep editing
+                    Discard
                   </NuiButton>
                 </div>
               </div>

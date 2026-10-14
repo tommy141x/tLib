@@ -5,20 +5,14 @@
 
    Everything here is an override of the shared default in ../menu.css, and every
    rule is written against `.tlib-menu[data-skin=vmenu]` so it is strictly heavier
-   than the `:where(.tlib-menu)` rule it replaces; it is also imported after
-   menu.css from Menu.tsx, so order agrees with specificity. Nothing in this file
-   should ever be the answer for the default skin — if a rule belongs to both, it
-   belongs in menu.css. */
+   than the `:where(.tlib-menu)` rule it replaces. Nothing here should ever be the
+   answer for the default skin: a rule that belongs to both belongs in menu.css. */
 
-/* Source geometry: vMenu draws a 431px-wide menu with 38px rows at 1080p.
-   Every number here is the 1080p number and nothing resolves it against the
-   viewport, because the panel must stay pixel-identical at the resolution it
-   was drawn against. vMenu's scaleform is authored in safe-zone units and the
-   engine redraws it against the backbuffer, so it keeps its share of the
-   screen on a 1440p or 4K client; a panel pinned to 431 device pixels does
-   not — at 2160p it is half the apparent size. The min-height steps at the
-   foot of this file restate these tokens for those clients, the same way the
-   max-height steps already restate them for short ones. */
+/* Source geometry: vMenu draws a 431px-wide menu with 38px rows at 1080p. Every
+   number here is the 1080p number and nothing resolves it against the viewport,
+   because the panel must stay pixel-identical at the resolution it was drawn
+   against. The min-height steps at the foot of this file restate these tokens for
+   taller clients, the same way the max-height steps do for short ones. */
 .tlib-menu[data-skin="vmenu"] {
   --menu-width: 431px;
   --row-height: 38px;
@@ -41,24 +35,20 @@
   --menu-panel-bg: var(--panel);
 }
 
-/* The default's lit top edge is a tLib cue, not a vMenu one: the source panel
-   has one flat border on all four sides. */
+/* The default's lit top edge is a tLib cue; the source has one flat border. */
 .tlib-menu[data-skin="vmenu"] .menu-panel {
   border-top-color: var(--border);
 }
 
 /* The 107px band with the word centred in it, rather than the default's 46px
-   left-aligned bar. No gutters and no rule beneath it: the banner fills the band
-   edge to edge and the heading below supplies the only border. */
+   left-aligned bar. No gutters and no rule beneath it. */
 .tlib-menu[data-skin="vmenu"] .menu-brand {
   justify-content: center;
   padding: 0;
   border-bottom: 0;
 }
-/* Tight tracking at 43px is the source's own look. The word is not clipped here
-   the way the default clips it, because it is centred in a band with no gutter to
-   clip against; only a real source subtitle (.source-title) is bounded, by the
-   close button. */
+/* Tight tracking at 43px is the source's own look, and the word is not clipped
+   the way the default clips it -- it is centred in a band with no gutter. */
 .tlib-menu[data-skin="vmenu"] .brand-word {
   letter-spacing: -2px;
 }
@@ -71,16 +61,15 @@
   border-radius: 0;
 }
 
-/* A ruled table, not a padded list: rows are full-bleed and square, separated by
-   a hairline, and the selection is the white bar across the whole panel. */
+/* A ruled table, not a padded list: rows are full-bleed and square, and the
+   selection is the white bar across the whole panel. */
 .tlib-menu[data-skin="vmenu"] .menu-items {
   padding: 0;
 }
-/* The hairline is a softened --border, and this skin's panel is opaque, so 55%
-   alpha over --border-raw composites to precisely the old mix with transparent.
-   It has to be written this way round because NUI is CEF 103: color-mix() is a
-   Chromium 111 function, CEF invalidates the entire declaration rather than
-   ignoring the function, and the replica's rows went unruled. */
+/* The hairline is a softened --border, written as alpha over --border-raw rather
+   than a color-mix(): that is a Chromium 111 function, and CEF 103 invalidates
+   the whole declaration rather than ignoring it, so the replica's rows went
+   unruled. */
 .tlib-menu[data-skin="vmenu"] .menu-row {
   border-radius: 0;
   border-bottom-color: hsl(var(--border-raw) / 0.55);
@@ -92,8 +81,7 @@
   padding: 0 12px;
 }
 
-/* vMenu marks a submenu with three chevrons rather than a single arrow, overlapped
-   so they read as one glyph. The default hides all but the last. */
+/* vMenu marks a submenu with three overlapped chevrons; the default hides two. */
 .tlib-menu[data-skin="vmenu"] .row-chevron svg {
   margin-right: -6px;
 }
@@ -101,10 +89,8 @@
   margin-right: 0;
 }
 
-/* The square outline toggle. Checked is left alone deliberately — the shared
-   control already fills with --nui-accent and inverts inside a selected row,
-   which is exactly what the hand-written .toggle.is-on rules used to do — so only
-   the unfilled box differs: an outline in the row's own ink rather than a well. */
+/* The square outline toggle. Checked is left alone deliberately: only the
+   unfilled box differs, an outline in the row's own ink rather than a well. */
 .tlib-menu[data-skin="vmenu"] .toggle.tlib-nui-checkbox-control[data-state="unchecked"] {
   background: none;
   border-color: currentColor;
@@ -122,8 +108,8 @@
   margin: -2px 0;
 }
 
-/* Both confirmation buttons carry the control border in this skin, including the
-   primary one, which the default leaves borderless like .tlib-nui-button. */
+/* Both confirmation buttons carry the control border here; the default leaves
+   the primary one borderless. */
 .tlib-menu[data-skin="vmenu"] .dialog-confirm {
   border-color: var(--menu-control-border);
 }

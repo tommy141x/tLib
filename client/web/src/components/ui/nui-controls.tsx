@@ -18,9 +18,9 @@
 // Anything that is NOT a menu row uses `shared/ts/ui/*`. A second surface
 // wanting a bare control is a signal to re-read that rule, not to add one here.
 
+import type { JSX } from "@solidjs/web";
 import Check from "lucide-solid/icons/check";
 import { omit, Show } from "solid-js";
-import type { JSX } from "@solidjs/web";
 import "../../../../../shared/ts/nui-kit/nui.css";
 
 /** Shared with Ark's Checkbox.Control, which wears the same class. */

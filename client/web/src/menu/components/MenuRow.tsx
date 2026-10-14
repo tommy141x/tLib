@@ -89,9 +89,7 @@ export function MenuRow(props: Props) {
           class="row-main"
           type="button"
           aria-current={props.active ? "true" : undefined}
-          aria-pressed={
-            props.item.kind === "toggle" ? (on() ? "true" : "false") : undefined
-          }
+          aria-pressed={props.item.kind === "toggle" ? (on() ? "true" : "false") : undefined}
           title={name()}
           aria-disabled={props.item.disabled || props.pending ? "true" : "false"}
           aria-label={

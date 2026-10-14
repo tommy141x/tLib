@@ -27,6 +27,8 @@
 
 import type { JSX } from "@solidjs/web";
 import { createEscapeLayer } from "@tlib/shared/escape-layer";
+import { isBuiltin } from "@tlib/shared/marketplace/install-machine";
+import { localInstallKind } from "@tlib/shared/marketplace/local-name";
 import {
   browseMarketplace,
   ErrorPane,
@@ -44,12 +46,12 @@ import {
   PreviewOverlay,
   summarizeInspection,
 } from "@tlib/shared/marketplace/ui";
-import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
-import { fetchNui, onNuiEvent } from "@/lib/nui";
 // See the note on the Lucide imports in `../MarketplacePanel.tsx`: the package
 // form in an app, `~icons/lucide` in `shared/ts/**`, and nothing mixed.
 import IconLoaderCircle from "lucide-solid/icons/loader-circle";
 import IconSearch from "lucide-solid/icons/search";
+import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
+import { fetchNui, onNuiEvent } from "@/lib/nui";
 import { NuiButton } from "../ui/nui-field";
 import { MarketplaceSort } from "./MarketplaceSort";
 
@@ -255,6 +257,19 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     setPreviewFn(data.previewFn ?? null);
     setPreviewState(data.previewState ?? null);
 
+    /**
+     * SOUND SLUGS ONLY NOW REACH THIS SEED, and a layout's state is DERIVED
+     * instead — see `itemInstallState` below.
+     *
+     * This record is keyed by MARKETPLACE SLUG: every write to it
+     * (`handleInstall`, both NUI result handlers, `handleUninstallBySlug`) and
+     * every read of it (`installStates()[item.slug]`) uses a slug. The seed was
+     * the one place feeding it something else — `installedSlugs` used to carry
+     * layout FOLDER NAMES, so the keys `QRX-720` and the lookups
+     * `tradio-qrx-720` never met and all eleven shipped radio heads offered
+     * Install for something already on disk. `client.lua` no longer sends them,
+     * so the two keyspaces that were sharing this object are now one.
+     */
     const seed: Record<string, InstallState> = {};
     for (const slug of data.installedSlugs ?? []) {
       seed[slug] = { state: "installed" };
@@ -376,7 +391,49 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     }
   }
 
+  /**
+   * What this catalogue item's state is, taking an operation in flight first and
+   * falling back to what is on disk.
+   *
+   * Why the layout answer is DERIVED and not seeded
+   *
+   * Because the two sides are named differently and only one of them is a slug.
+   * `installedLayouts` is `readdir(layouts/)` — `QRX-720` — and `item.slug` is
+   * product-namespaced and lowercased — `tradio-qrx-720`. A seeded record can
+   * only hold one spelling, which is how every shipped layout came to read as
+   * not-installed. `localInstallKind` compares both spellings and, crucially,
+   * reports WHICH matched:
+   *
+   *   · `"managed"`  — the name IS the install target (`installFromData` is
+   *                    handed the raw slug), so Delete can address it.
+   *   · `"builtin"`  — only the prefix-stripped spelling is on disk, which the
+   *                    installer never writes. The consumer shipped it: present,
+   *                    and not removable by us. Neither Install nor Delete.
+   *
+   * SOUNDS ARE NOT DERIVED, deliberately. Their installed records are written
+   * by `marketplace.upsertSound` from the catalogue slug, so the seed's key and
+   * `item.slug` are the same string by construction and there is no second
+   * naming to reconcile. Running them through the same match would invent the
+   * possibility of a prefix-stripped sound directory that nothing creates.
+   */
+  function itemInstallState(item: MarketplaceItem): InstallState {
+    const operation = installStates()[item.slug];
+    if (operation) return operation;
+    if (item.type === "ui") {
+      const kind = localInstallKind(item, installedLayouts());
+      if (kind === "builtin") return { state: "builtin" };
+      if (kind === "managed") return { state: "installed" };
+    }
+    return { state: "idle" };
+  }
+
   function handleInstall(item: MarketplaceItem) {
+    // Defence in depth only: `canInstall` already removes the control, and
+    // `ItemCard`/`PreviewOverlay` drop the handler outright for a built-in. This
+    // is here because a reinstall writes `layouts/<raw slug>/` BESIDE the
+    // shipped directory rather than over it, and a duplicate is not something a
+    // later refactor should be able to reintroduce by re-enabling one button.
+    if (isBuiltin(itemInstallState(item))) return;
     if ((item.type === "ui" || item.type === "sound") && inspectionBlocks(item.type, item.slug))
       return;
     clearInspection();
@@ -393,6 +450,11 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   }
 
   function handleUninstall(item: MarketplaceItem) {
+    // Same defence in depth, and the more important of the two: the uninstaller
+    // addresses `<installPath>/<raw slug>` and requires an ownership receipt
+    // beside it, so a Delete on a shipped built-in can only come back
+    // `"tradio-qrx-720" is not installed`.
+    if (isBuiltin(itemInstallState(item))) return;
     const current = installStates()[item.slug]?.state;
     if (current === "installing" || current === "uninstalling") return;
     setInstallState(item.slug, { state: "uninstalling" });
@@ -407,7 +469,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
    * Slugs with a like round trip in flight, so the heart can say so and cannot
    * be double-pressed into two outbound requests.
    *
-   * ⚠️ A SET OF SLUGS AND NOT ONE BOOLEAN. The grid renders a whole page of
+   * A SET OF SLUGS AND NOT ONE BOOLEAN. The grid renders a whole page of
    * cards; a single flag would disable every heart on the page while one of them
    * was waiting.
    */
@@ -416,7 +478,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   /**
    * Toggle this player's like on one item.
    *
-   * ── ⚠️ NO OPTIMISTIC UPDATE, DELIBERATELY ──────────────────────────────────
+   * NO OPTIMISTIC UPDATE, DELIBERATELY
    *
    * The count and the filled state are both replaced only with what the SERVER
    * answers. An optimistic ±1 would be wrong in two ways that both show:
@@ -442,7 +504,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
           const { [item.slug]: _done, ...rest } = prev;
           return rest;
         });
-        // ⚠️ Patched by SLUG into whatever the list currently holds, rather than
+        // Patched by SLUG into whatever the list currently holds, rather than
         // by index or by re-fetching the page. The player may have paged or
         // changed the search while the round trip was out, in which case the
         // item is simply no longer there and `map` leaves the list alone — where
@@ -450,9 +512,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
         // throw away a scroll position for one number.
         const patch = (list: MarketplaceItem[]) =>
           list.map((entry) =>
-            entry.slug === item.slug
-              ? { ...entry, likes: state.likes, liked: state.liked }
-              : entry
+            entry.slug === item.slug ? { ...entry, likes: state.likes, liked: state.liked } : entry
           );
         setItems(patch);
         setInstalledMarketplaceItems(patch);
@@ -462,7 +522,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
           const { [item.slug]: _done, ...rest } = prev;
           return rest;
         });
-        // ⚠️ The host's own sentence, not a generic one. The marketplace words
+        // The host's own sentence, not a generic one. The marketplace words
         // its refusals to be shown to a person — "A game server may only like as
         // a FiveM license…" is more use to whoever is looking at it than
         // "request failed", and the rate-limit refusal names the wait.
@@ -609,7 +669,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
                           {(item) => (
                             <ItemCard
                               item={item}
-                              installState={installStates()[item.slug] ?? { state: "idle" }}
+                              installState={itemInstallState(item)}
                               onInstall={() => handleInstall(item)}
                               onUninstall={() => handleUninstall(item)}
                               onPreview={() => setPreviewItem(item)}
@@ -651,7 +711,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
               <PreviewOverlay
                 item={item()}
                 baseUrl={baseUrl()}
-                installState={installStates()[item().slug] ?? { state: "idle" }}
+                installState={itemInstallState(item())}
                 onClose={() => setPreviewItem(null)}
                 onInstall={() => handleInstall(item())}
                 onUninstall={() => handleUninstall(item())}

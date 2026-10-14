@@ -13,8 +13,6 @@
  */
 
 import type { OpenData } from "@tlib/shared/marketplace/ui";
-import { createSignal, onCleanup, Show } from "solid-js";
-import { fetchNui, onNuiEvent } from "@/lib/nui";
 // Lucide comes from `lucide-solid/icons/*` here, never `~icons/lucide`.
 //
 // Both resolve the same icon set, and this app had four imports in the virtual
@@ -31,6 +29,8 @@ import { fetchNui, onNuiEvent } from "@/lib/nui";
 // left to whichever file you opened first.
 import IconStore from "lucide-solid/icons/store";
 import IconX from "lucide-solid/icons/x";
+import { createSignal, onCleanup, Show } from "solid-js";
+import { fetchNui, onNuiEvent } from "@/lib/nui";
 import { MarketplaceBrowser } from "./marketplace/MarketplaceBrowser";
 import { NuiButton } from "./ui/nui-field";
 

@@ -9,7 +9,6 @@
  * entry and be circular. Everything real therefore comes from the package
  * itself and stays genuinely type-checked — nothing is widened or invented.
  */
-export * from "../../node_modules/solid-js/types/index";
 
 /**
  * The missing namespace, aliased to the real `@solidjs/web` types.
@@ -32,3 +31,4 @@ export * from "../../node_modules/solid-js/types/index";
  * `@solidjs/web` type.
  */
 export type { JSX } from "@solidjs/web";
+export * from "../../node_modules/solid-js/types/index";

@@ -112,7 +112,7 @@ end
 function H.isEditing() return active ~= nil or transitioning end
 function H.close() return close(false) end
 
--- ── The safety net ──────────────────────────────────────────────────────────
+-- The safety net
 -- Restore factory placements without needing the editor, because the editor is
 -- the thing you cannot reach once a widget has been lost. Any open session is
 -- discarded first: a draft is never worth more than being able to see your HUD.
@@ -145,7 +145,7 @@ local function resetLayouts(only)
 end
 function H.resetAll() return resetLayouts(nil) end
 
--- ── Live placement ──────────────────────────────────────────────────────────
+-- Live placement
 -- A device UI that lets the player drag it by its own background has to write
 -- the result HERE. Keeping its own copy would make a dragged position a
 -- second-class one: not healed on the next resolution change, not cleared by
@@ -286,19 +286,18 @@ function H.init(webui)
         defaults = { x = -24 / 1080, y = 24 / 1080, scale = 1, visible = true, anchor = 'top-right' } }, function(data)
         Platform.sendUIEvent(ui, 'toastLayout', data)
     end)
-    Platform.export('tLib', 'GetHudLayoutCapabilities', function()
-        -- referenceOffsets marks the v2 unit change: x/y are ratios of a 1080px
-        -- reference height, not fractions of the viewport. A consumer that does its
-        -- own geometry must check this before trusting a layout it is handed.
-        -- separateDefaults: RegisterHudComponent takes `layout` (where the widget
-        -- is) alongside `defaults` (where Reset puts it back). A consumer that
-        -- owns its storage must pass both, or Reset resets to the saved value.
-        -- liveLayoutWrite: SetHudLayout exists, so a consumer can let the player
-        -- drag its surface directly and still have tLib own the placement.
-        return { consumerPersistence = true, minVisibility = true,
-            universalMinVisibility = true, referenceOffsets = true, layoutVersion = 2,
-            separateDefaults = true, resetExport = true, liveLayoutWrite = true }
-    end)
+    -- There is NO GetHudLayoutCapabilities export, and do not reintroduce one.
+    -- It returned eight flags (consumerPersistence, minVisibility,
+    -- universalMinVisibility, referenceOffsets, layoutVersion, separateDefaults,
+    -- resetExport, liveLayoutWrite), every one of them a hardcoded `true` naming a
+    -- tLib release that introduced something. Only 0.6 was ever released and it has
+    -- none of them, so the flags could not distinguish anything a consumer could
+    -- reach -- while four consumers each carried a pcall-wrapped probe of it and
+    -- collapsed `layout` into `defaults` when it did not answer, which is exactly
+    -- the bug that made the shared editor unrecoverable for tRadio. The contract is
+    -- now unconditional: RegisterHudComponent takes `layout` (where the widget is)
+    -- alongside `defaults` (where Reset puts it back), x/y are ratios of a 1080px
+    -- reference height on both axes, and SetHudLayout/ResetHudLayout exist.
     Platform.export('tLib', 'RegisterHudComponent', function(id, options, fn)
         local name = owner()
         if not name then return false, 'Cannot identify calling resource' end

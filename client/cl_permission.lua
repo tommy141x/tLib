@@ -8,12 +8,13 @@ local isAdmin   = false  -- kept for backward compat: true when permLevel >= 1
 -- arrives with a different source; a server-triggered net event is always 65535.
 Platform.AddNetEventHandler("tLib:receiveAdminPermission", function(result)
     if source ~= 65535 then return end
-    if type(result) == "number" then
-        permLevel = result
-    else
-        -- Backward compat: old servers sent a boolean
-        permLevel = (result == true) and 1 or 0
-    end
+    -- A number, and only a number. An "old servers sent a boolean" branch was
+    -- removed 2026-10-12: every tagged release v0.1..v0.6 sends
+    -- Permission.getPlayerLevel(src), and this file ships in the same resource as
+    -- the server half that sends it, so the two cannot disagree about the shape.
+    -- Anything that is not a number is level 0, which is also the right answer
+    -- for a spoofed payload.
+    permLevel = type(result) == "number" and result or 0
     isAdmin = permLevel >= 1
 end)
 

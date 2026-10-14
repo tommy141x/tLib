@@ -51,4 +51,20 @@ export const en = {
     "Preview action completed. No game state changed.",
   "Unable to close the menu. Use the menu key to try again.":
     "Unable to close the menu. Use the menu key to try again.",
+  "Send feedback": "Send feedback",
+  "About {{ resource }} itself — reaches TIMMYG Studios, not your server's staff.":
+    "About {{ resource }} itself — reaches TIMMYG Studios, not your server's staff.",
+  "What's broken, slow, or worth changing?": "What's broken, slow, or worth changing?",
+  Send: "Send",
+  "Sending…": "Sending…",
+  "Thanks — that reached TIMMYG Studios.": "Thanks — that reached TIMMYG Studios.",
+  "Switch field": "Switch field",
+  "Too many messages just now. Try again in a minute — your text is still here.":
+    "Too many messages just now. Try again in a minute — your text is still here.",
+  "Could not reach TIMMYG Studios. Try again in a moment — your text is still here.":
+    "Could not reach TIMMYG Studios. Try again in a moment — your text is still here.",
+  "That message was not accepted. Try rewording it.":
+    "That message was not accepted. Try rewording it.",
+  "Could not send that. Try again in a moment — your text is still here.":
+    "Could not send that. Try again in a moment — your text is still here.",
 } as const;

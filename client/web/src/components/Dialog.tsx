@@ -590,7 +590,7 @@ function DialogSession(props: {
                   {notice()}
                 </p>
               </Show>
-              {/* ⚠️ AFFIRMATIVE LEFT. See the note in `layout/LayoutEditor.tsx`
+              {/* AFFIRMATIVE LEFT. See the note in `layout/LayoutEditor.tsx`
                   for the count behind that and why all four of tLib's
                   affirmative/cancel pairs moved together rather than one. */}
               <NuiButton type="submit" tone="primary" disabled={submitting()}>

@@ -32,6 +32,7 @@ function applyTheme(): void {
 }
 
 const [themeRevision, setThemeRevision] = createSignal(0);
+
 /**
  * The dependency `applyScopedTheme` reads internally, exported so a Solid 2
  * `createEffect(compute, apply)` can read it in COMPUTE.
@@ -43,6 +44,7 @@ const [themeRevision, setThemeRevision] = createSignal(0);
  * theme id it is passing.
  */
 export { themeRevision };
+
 const scopedProperties = new WeakMap<HTMLElement, string[]>();
 
 export function applyScopedTheme(themeId: string | undefined, el: HTMLElement): void {

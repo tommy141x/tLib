@@ -43,6 +43,10 @@ local CALLBACK = {
     highlight = 'menu_highlight',
     action    = 'menu_action',
     selftest  = 'menu_selftest',
+    -- The shared feedback dialog tLib's menu injects into every owner's root
+    -- page. One callback for every t* resource, because the browser is tLib's
+    -- and so is the row.
+    feedback  = 'menu_feedback',
 }
 
 -- Client-local events, for resources in this player's own Lua runtime.
@@ -79,30 +83,12 @@ local function convarNumber(name, fallback, minimum, maximum)
     return math.floor(value)
 end
 
--- Three of these convars were named without their unit, so `10000` on
--- `tlib_menu_request_timeout` read as seconds to more than one owner. The `_ms`
--- names are the real ones now; the old spellings still work and say so once, so
--- nobody's existing server.cfg silently stops applying.
---
--- Removal is a MAJOR-version change, not "soon". Until then the old name is
--- read whenever the new one is unset.
-local DEPRECATED_CONVARS = {
-    tlib_menu_request_timeout_ms    = 'tlib_menu_request_timeout',
-    tlib_menu_permission_refresh_ms = 'tlib_menu_permission_refresh',
-    tlib_menu_highlight_settle_ms   = 'tlib_menu_highlight_settle',
-}
-
--- The old name wins over the DEFAULT but never over the new name, so an owner
--- mid-migration who has set both gets the one they just wrote.
-local function convarMs(name, fallback, minimum, maximum)
-    if convar(name, '') ~= '' then return convarNumber(name, fallback, minimum, maximum) end
-    local old = DEPRECATED_CONVARS[name]
-    if old and convar(old, '') ~= '' then
-        print(('[tLib/menu] DEPRECATED convar `%s`; use `%s` instead (same value, milliseconds). The old name still works but will be removed in the next major version.'):format(old, name))
-        return convarNumber(old, fallback, minimum, maximum)
-    end
-    return fallback
-end
+-- Every duration convar carries its unit (`_ms`). Three once did not, and the
+-- unit-less spellings were read as aliases with a deprecation print. Do not
+-- bring that back: the only released tLib is 0.6, which predates all three
+-- names, so there has never been a server.cfg carrying one. The alias existed
+-- purely to smooth an unreleased rename, and its own message said it went in the
+-- next major version — 1.0.0 is that version.
 
 local settings = {
     command          = convar('tlib_menu_command', 'tlibmenu'),
@@ -112,9 +98,9 @@ local settings = {
     searchKey        = convar('tlib_menu_search_key', 'F3'),
     keySlots         = convarNumber('tlib_menu_key_slots', 8, 0, 16),
     locale           = convar('tlib_menu_locale', 'en'),
-    requestTimeoutMs = convarMs('tlib_menu_request_timeout_ms', 10000, 1000, 60000),
-    refreshMs        = convarMs('tlib_menu_permission_refresh_ms', 5000, 1000, 60000),
-    settleMs         = convarMs('tlib_menu_highlight_settle_ms', 120, 0, 2000),
+    requestTimeoutMs = convarNumber('tlib_menu_request_timeout_ms', 10000, 1000, 60000),
+    refreshMs        = convarNumber('tlib_menu_permission_refresh_ms', 5000, 1000, 60000),
+    settleMs         = convarNumber('tlib_menu_highlight_settle_ms', 120, 0, 2000),
 }
 MC.settings = settings
 
@@ -793,6 +779,23 @@ local function installCallbacks()
         if name and visible and not stopping and _TLIB_IS_FIVEM then
             PlaySoundFrontend(-1, name, 'HUD_FRONTEND_DEFAULT_SOUNDSET', false)
         end
+    end)
+
+    -- THE OWNING RESOURCE IS RESOLVED HERE, NOT TAKEN FROM THE BROWSER.
+    -- `selectedMenuId` is the page the game believes it is on, and the owner is
+    -- its `owner:` prefix -- so the attribution on a message cannot be chosen by
+    -- whoever is talking to the NUI callback. The server checks the name against
+    -- the registry again anyway, which is where a stale page is caught.
+    nui(CALLBACK.feedback, function(data, finish, active)
+        if not visible or not ready then finish({ ok = false, error = 'Menu is closed' }); return end
+        if type(data) ~= 'table' or type(data.message) ~= 'string' or data.message == '' then
+            finish({ ok = false, error = 'invalid' }); return
+        end
+        request({ kind = 'feedback', message = data.message, resource = ownerOf(selectedMenuId) },
+            function(result)
+                if not active() then return end
+                finish(result)
+            end)
     end)
 
     nui(CALLBACK.input, function(data, finish)
