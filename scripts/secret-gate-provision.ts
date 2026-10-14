@@ -43,20 +43,13 @@ const SIDECAR_IGNORE = [
   "",
 ].join("\n");
 
-/** The three scripts every resource gets, and the doc line that explains them. */
+/**
+ * The three scripts every resource gets. What the gate is and why it is shaped
+ * this way lives in the header of secret-gate.ts, which is the file they run.
+ */
 function scriptsFor(repo: string): Record<string, string> {
   const gate = repo === "tLib" ? "scripts/secret-gate.ts" : "../tLib/scripts/secret-gate.ts";
   return {
-    "//secrets:check":
-      "Layer 3 of the credential gate, and the only layer that cannot be skipped: every " +
-      "credential-shaped key in every tracked config file must be BLANK at HEAD. The key " +
-      "set is derived from Diag.SECRET_PATTERNS in tLib (one list, parsed out of the Lua " +
-      "that the runtime redactor uses) rather than hand-listed -- a four-name array is " +
-      "exactly how Advanced.S3.AccessKey went uncovered. Layer 1 is .githooks/pre-commit, " +
-      "which refuses the commit; layer 2 blanks the staged copy of a release. The real " +
-      "value lives in the gitignored config.local.lua sidecar, so there is nothing to " +
-      "strip and nothing a `git pull` can overwrite. Exit 1 = a credential has a value; " +
-      "exit 2 = the gate could not run, which is NOT a pass.",
     "secrets:check": `bun run ${gate}`,
     "secrets:install-hooks": `bun run ${gate} --install-hooks`,
     "secrets:check-hooks": `bun run ${gate} --check-hooks`,
@@ -138,9 +131,8 @@ function provision(repo: string, repoRoot: string, check: boolean): Change[] {
   //
   // Inserted TEXTUALLY, immediately after `"scripts": {`, never by
   // parse-and-restringify. Several of these package.json files have hand-set
-  // indentation (tLib's and tRadio's mix two and four spaces around their
-  // `//…:control` doc entries), and a round-trip through `JSON.stringify`
-  // reformats the whole file. A one-line change that arrives as a 150-line diff
+  // indentation, and a round-trip through `JSON.stringify` reformats the whole
+  // file. A one-line change that arrives as a 150-line diff
   // does not get reviewed, and in a tree where other work is in flight it is a
   // conflict for no reason.
   const packagePath = path.join(repoRoot, "package.json");
@@ -156,7 +148,7 @@ function provision(repo: string, repoRoot: string, check: boolean): Change[] {
         const anchor = text.match(/^([ \t]*)"scripts"[ \t]*:[ \t]*\{[ \t]*\r?\n/m);
         if (!anchor || anchor.index == null) {
           throw new Error(
-            `${packagePath}: no \`"scripts": {\` block to insert into. Add the four ` +
+            `${packagePath}: no \`"scripts": {\` block to insert into. Add the three ` +
               "secrets:* scripts by hand rather than letting this reformat the file."
           );
         }
@@ -193,14 +185,24 @@ function provision(repo: string, repoRoot: string, check: boolean): Change[] {
   }
 
   // 4. The CI workflow — the layer that cannot be skipped.
-  const workflowPath = path.join(repoRoot, ".gitea", "workflows", "secrets.yml");
-  const workflow = workflowFor(repo);
-  const existing = fs.existsSync(workflowPath) ? fs.readFileSync(workflowPath, "utf8") : null;
-  if (existing !== workflow) {
-    changes.push({ repo, what: ".gitea/workflows/secrets.yml is missing or stale" });
-    if (!check) {
-      fs.mkdirSync(path.dirname(workflowPath), { recursive: true });
-      fs.writeFileSync(workflowPath, workflow, "utf8");
+  //
+  // tLib is exempt, and only tLib. It is published to GitHub, so its .gitea/
+  // workflows live on a Gitea-only branch and are absent from the branch this
+  // runs on — the directory naming the private org must not ship in a public
+  // MIT repo. Every other resource here is Gitea-only and keeps the file in
+  // its working tree, which is why the exemption is by name rather than by a
+  // "does .gitea exist" test: a sibling that simply lost the directory is a
+  // real finding and must stay one.
+  if (repo !== "tLib") {
+    const workflowPath = path.join(repoRoot, ".gitea", "workflows", "secrets.yml");
+    const workflow = workflowFor(repo);
+    const existing = fs.existsSync(workflowPath) ? fs.readFileSync(workflowPath, "utf8") : null;
+    if (existing !== workflow) {
+      changes.push({ repo, what: ".gitea/workflows/secrets.yml is missing or stale" });
+      if (!check) {
+        fs.mkdirSync(path.dirname(workflowPath), { recursive: true });
+        fs.writeFileSync(workflowPath, workflow, "utf8");
+      }
     }
   }
 
