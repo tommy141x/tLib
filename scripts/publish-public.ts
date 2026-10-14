@@ -46,9 +46,12 @@ function git(args: string[], cwd = REPO): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 }
 
+/** `git`, but a non-zero exit is an answer rather than a throw. Stderr is
+ *  swallowed: the first run asks for a ref that does not exist yet, and a
+ *  `fatal:` on a successful run reads as a failure to whoever is watching. */
 function tryGit(args: string[], cwd = REPO): string | null {
   try {
-    return git(args, cwd);
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
   } catch {
     return null;
   }
