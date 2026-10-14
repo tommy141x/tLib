@@ -1,13 +1,13 @@
-import { Tabs as ArkTabs } from "@ark-ui/solid";
+import { Tabs as ArkTabs } from "@ark-ui/solid/tabs";
+import type { JSX } from "@solidjs/web";
 import { cn } from "@tlib/shared/cn";
 import { cva } from "class-variance-authority";
-import type { JSX } from "@solidjs/web";
 import { type Component, createSignal, omit, onSettled } from "solid-js";
 
 /**
  * Tabs, promoted from `tELS/client/web/src/components/ui/tabs.tsx`.
  *
- * ── What was left behind, and why ──────────────────────────────────────────
+ * What was left behind, and why
  *
  * The tELS original is 399 lines, of which roughly 200 are a crossfade: on every
  * value change it measures each panel's height by unhiding it one at a time,
@@ -30,7 +30,7 @@ import { type Component, createSignal, omit, onSettled } from "solid-js";
  * a consumer of this file wants an enter transition, Ark sets `data-state` on the
  * Content and a CSS `transition` on opacity costs nothing.
  *
- * ── The other differences ──────────────────────────────────────────────────
+ * The other differences
  *
  * Trigger text is 12px, not `text-sm` (14px) — the body step of the scale at the
  * top of `shared/css/surface.css`. The `default` indicator lost its own

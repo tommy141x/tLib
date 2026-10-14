@@ -1,11 +1,11 @@
-import { cn } from "@tlib/shared/cn";
 import type { JSX } from "@solidjs/web";
+import { cn } from "@tlib/shared/cn";
 import { For, Show } from "solid-js";
 
 /**
  * A two-or-three-way choice between MODES, as one track of pressed buttons.
  *
- * ── Why this is not `ui/radio-group` ────────────────────────────────────────
+ * Why this is not `ui/radio-group`
  *
  * It replaces one, for two reasons.
  *

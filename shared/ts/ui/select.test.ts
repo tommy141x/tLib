@@ -1,7 +1,7 @@
 /**
  * Pins the resolved classes of `ui/select.tsx`.
  *
- * ── What this file used to test, and why it does not any more ───────────────
+ * What this file used to test, and why it does not any more
  *
  * The select this replaced was a cva component crossing three `size` tiers with
  * three `density` tiers, and these tests asserted the PRECEDENCE between them —
@@ -59,7 +59,15 @@ mock.module("~icons/lucide/chevron-down", () => ({ default: () => null }));
  * resolved class STRINGS — and `select.tsx` touches neither symbol at module
  * scope, so the stub only has to let the module graph load.
  */
-mock.module("@ark-ui/solid", () => ({
+/*
+ * The specifier must match `select.tsx`'s import exactly, subpath included:
+ * `mock.module` keys on the string, so mocking the barrel while the component
+ * imports `@ark-ui/solid/select` is not a mock at all -- the real package loads
+ * and Ark 6 then fails on `solid-js/web`, which reads as a broken dependency.
+ * The component uses the subpath because Ark's barrel re-exports image-cropper
+ * and floating-panel, whose named imports do not exist in zag 2.
+ */
+mock.module("@ark-ui/solid/select", () => ({
   Select: new Proxy({}, { get: () => () => null }),
   createListCollection: () => ({}),
 }));

@@ -1,14 +1,14 @@
-import { Select as ArkSelect, createListCollection } from "@ark-ui/solid";
+import { Select as ArkSelect, createListCollection } from "@ark-ui/solid/select";
+import { Portal } from "@solidjs/web";
 import { cn } from "@tlib/shared/cn";
 import { createMemo, For } from "solid-js";
-import { Portal } from "@solidjs/web";
 import IconCheck from "~icons/lucide/check";
 import IconChevronDown from "~icons/lucide/chevron-down";
 
 /**
  * The dropdown.
  *
- * ── This file replaced an earlier tLib select, and why ──────────────────────
+ * This file replaced an earlier tLib select, and why
  *
  * The version before this was a cva component with three `size` tiers crossed with
  * three `density` tiers, whose smallest combination was 9px text in a 20px box. It

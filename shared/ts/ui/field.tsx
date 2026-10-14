@@ -1,5 +1,5 @@
-import { cn } from "@tlib/shared/cn";
 import type { JSX } from "@solidjs/web";
+import { cn } from "@tlib/shared/cn";
 import { Show } from "solid-js";
 
 /**

@@ -1,51 +1,31 @@
 import { Popover as ArkPopover } from "@ark-ui/solid/popover";
-import { cn } from "@tlib/shared/cn";
 import type { JSX } from "@solidjs/web";
-import { createSignal, merge, Show, omit } from "solid-js";
+import { cn } from "@tlib/shared/cn";
+import { createSignal, merge, omit, Show } from "solid-js";
 import IconX from "~icons/lucide/x";
 
 /**
  * The floating panel, promoted from `tELS/client/web/src/components/ui/popover.tsx`.
  *
- * ── Two deliberate differences from the tELS original ───────────────────────
+ * Two deliberate differences from that original. NO `solid-motionone`: it wrapped
+ * the Content in a Motion div, which pulls a runtime dependency into every
+ * consumer for a 200 ms fade on a page rendering over a 3D scene. The enter
+ * transition here is a CSS transition keyed off Ark's own `data-state`; the trade
+ * is no EXIT animation, because a CSS one needs the element to stay mounted and
+ * Ark unmounts it. And NO blurred elevation, which CEF does not composite
+ * usefully -- elevation is the popover surface token one rung above the card
+ * panel it opens from, plus a border edge, which is the same recipe the select
+ * dropdown uses.
  *
- * 1. **No `solid-motionone`.** The original wrapped the Content in
- *    `<Presence><Motion.div animate={{opacity:[0,1], scale:[0.96,1]}}>`, which pulls
- *    `solid-motionone` (and through it `@motionone/dom`) into every consumer that
- *    imports this file. That is a runtime dependency for a 200ms fade, on a page
- *    rendering over a 3D scene in CEF 103. The enter transition here is a CSS
- *    transition keyed off Ark's own `data-state`, which costs nothing and no
- *    dependency; the trade is that there is no EXIT animation, because a CSS one
- *    needs the element to stay mounted and Ark unmounts it. A popover that vanishes
- *    on close is not a defect in a game overlay.
+ * Utility names are written out in words on purpose: UnoCSS scans comments, so
+ * naming a class here emits it as dead CSS in every consuming app.
  *
- *    A consumer migrating off the old copy loses the fade-out, which is the one
- *    visible difference.
- *
- * 2. **No blurred elevation.** FiveM's CEF does not composite one usefully.
- *    Elevation here is the popover surface token — one rung above the card panel
- *    this opens from, per the ladder at the bottom of theme-tokens.css — plus a
- *    border edge. That is the same recipe the select dropdown uses, so a popover
- *    and a dropdown opened from the same panel look like the same layer.
- *
- *    Utility names are written out in words on purpose: UnoCSS scans comments, so
- *    naming a class here emits it as dead CSS in every consuming app.
- *
- * Consumers need `unplugin-icons` for the `~icons/lucide/x` import on
- * `PopoverCloseTrigger`, as they already do for `ui/button`.
+ * Consumers need `unplugin-icons` for the icon import on `PopoverCloseTrigger`,
+ * as they already do for `ui/button`.
  */
 
 /**
  * State for a controlled popover.
- *
- * @example
- * const popover = createPopoverState();
- * return (
- *   <Popover open={popover.isOpen()} onOpenChange={(e) => popover.setOpen(e.open)}>
- *     <PopoverTrigger>Open</PopoverTrigger>
- *     <PopoverContent>…</PopoverContent>
- *   </Popover>
- * );
  */
 export function createPopoverState() {
   const [open, setOpen] = createSignal(false);
@@ -68,10 +48,20 @@ export const Popover = (props: PopoverProps) => {
   return <ArkPopover.Root {...merged} />;
 };
 
+/**
+ * `aria-label` is spelled out, and it is not decoration.
+ */
 export const PopoverTrigger = (props: {
   children?: JSX.Element;
   class?: string;
   title?: string;
+  "aria-label"?: string;
+  /**
+   * A semantic handle for a gallery, a browser probe or a consumer's own CSS,
+   * declared for the same reason `ButtonProps` declares it: TypeScript only
+   * exempts hyphenated attributes on INTRINSIC elements.
+   */
+  [key: `data-${string}`]: string | number | boolean | undefined;
 }) => {
   const others = omit(props, "class");
   return <ArkPopover.Trigger class={cn(props.class)} {...others} />;
@@ -94,9 +84,6 @@ export const PopoverContent = (props: {
       <ArkPopover.Content
         class={cn(
           "z-50 w-72 rounded-lg border border-border bg-popover text-popover-foreground outline-none",
-          // The enter transition, in CSS. `data-state` is Ark's own attribute, so
-          // this cannot fall out of step with the component's state the way a
-          // parallel `Presence` signal can.
           "origin-[var(--transform-origin)] transition-[opacity,transform] duration-150 ease-out",
           "data-[state=open]:opacity-100 data-[state=open]:scale-100",
           "data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.96]",

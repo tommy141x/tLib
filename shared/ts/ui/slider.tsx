@@ -1,12 +1,12 @@
 import { Slider as ArkSlider } from "@ark-ui/solid/slider";
-import { cn } from "@tlib/shared/cn";
 import type { JSX } from "@solidjs/web";
+import { cn } from "@tlib/shared/cn";
 import { type Component, Show } from "solid-js";
 
 /**
  * The range control.
  *
- * ── Four things here were learned in a consumer and promoted back ──────────
+ * Four things here were learned in a consumer and promoted back
  *
  * 1. **`thumbCount` is an accessor.** It was a plain `const` read in the component
  *    body, and a Solid body runs exactly once — so a slider that gained a second

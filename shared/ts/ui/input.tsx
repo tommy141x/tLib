@@ -1,11 +1,11 @@
-import { cn } from "@tlib/shared/cn";
 import type { JSX } from "@solidjs/web";
+import { cn } from "@tlib/shared/cn";
 import { omit } from "solid-js";
 
 /**
  * The text input.
  *
- * ── Why this is in tLib now ─────────────────────────────────────────────────
+ * Why this is in tLib now
  *
  * It had been written independently three times — tELS, tUnit, and one more — and
  * tLib shipped none, which is why. tLib exported the simple primitives (`button`,
@@ -13,7 +13,7 @@ import { omit } from "solid-js";
  * a popover in it, so every editor re-derived the same control and rediscovered the
  * same two traps on the way. This is the good version, promoted.
  *
- * ── The surface is a CLASS, not a utility chain ─────────────────────────────
+ * The surface is a CLASS, not a utility chain
  *
  * `.prop-input`, from `@tlib/shared/css/surface.css`, which the consumer must
  * import. That is deliberate and it is the fix for a reported bug: the chain this
@@ -27,7 +27,7 @@ import { omit } from "solid-js";
  * own 12px, its own disabled state, and its own focus outline — a real `outline`,
  * never a blurred elevation, because CEF does not composite one.
  *
- * ── There is no `xs` ────────────────────────────────────────────────────────
+ * There is no `xs`
  *
  * tELS declares one at 9px and then overrides every sub-10px size in its editor
  * chrome back up to 12px with `!important` from its own global.css. A size tier

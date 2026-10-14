@@ -1,0 +1,63 @@
+/*
+ * The two 11px strips in `undo-redo.tsx`, as classes rather than as arbitrary
+ * utilities.
+ *
+ * Imported by the component itself (the same arrangement `nui-kit/NuiButton.tsx`
+ * uses for `nui.css`), so a host that forgets a stylesheet import cannot end up
+ * with an unsized hint — and so that this travels with the component into tELS,
+ * tDetector, tRadar and tRadio without any of them having to be told.
+ *
+ * WHY THESE ARE NOT `text-[11px]`
+ *
+ * `unoMerge` treats an arbitrary `text-[Npx]` and `text-muted-foreground` as ONE
+ * conflict group — a bracketed value cannot be classified as a size or a colour
+ * from the namespace alone — so one of the pair is silently dropped. The class
+ * string `"text-[11px] text-muted-foreground"` therefore renders EITHER at 11px
+ * with the inherited colour OR at the inherited size in muted, and which one
+ * survives is an implementation detail of the merge.
+ *
+ * It was safe in this repo only because tLib's own `cn` lifts the `text-size`
+ * group out before calling `unoMerge` and puts it back afterwards
+ * (`shared/ts/cn.ts:197-208`, `mergeShielded`). That shield is real and is
+ * staying, but a SHARED component must not depend on it: `tWeb`, `tCinematics`
+ * and every `internal/*` project call `unoMerge` directly or vendor their own
+ * copy, so any of them mounting `UndoHint` would lose one of the two.
+ *
+ * A class has no conflict group, so there is nothing left to collide. This is
+ * the same split `prop-editor.css` already enforces for the same measured
+ * reason — "sizes live in the stylesheet, colours live in the class string" —
+ * where an arbitrary font size colliding with the text colour beside it shipped
+ * a POV button rendering at 16px next to four 9px siblings.
+ *
+ * 11px IS THE FLOOR, AND IT IS NOT A CONSUMER'S TO OVERRIDE
+ *
+ * `shared/css/surface.css` declares the type scale and its first rule is
+ * "nothing below 11px. Not in a utility, not in a variant table." Both rules
+ * here sit ON that floor. The hint is visibly smaller than the vmin-relative
+ * chrome around it above 1080p, which is a real observation and the honest
+ * answer is that the chrome is the thing that scales, not that the floor should
+ * move: a vmin-relative hint on a 1440p panel is fine and on a 768p one is
+ * below the floor. If it should scale, it should scale HERE, in one place, as a
+ * clamp with 11px as its lower bound — not by a consumer passing a size.
+ *
+ * `@layer components`, so `class="tlib-undo-hint !text-xs"` still behaves the
+ * way anyone reading it expects: UnoCSS emits its utilities UNLAYERED, and an
+ * unlayered declaration beats a layered one regardless of source order.
+ */
+
+@layer components {
+  /* The shortcut hint strip. Sans and 11px, matching `.field-hint` in
+     surface.css — it is the same kind of thing, a line of explanation under a
+     control, and it must not read as a different size beside one. */
+  .tlib-undo-hint {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  /* The dirty pill. Same floor; the weight and the colour stay in the class
+     string, because neither collides with anything. */
+  .tlib-undo-dirty {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+}

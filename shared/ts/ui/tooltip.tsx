@@ -1,13 +1,13 @@
 import { Tooltip as ArkTooltip } from "@ark-ui/solid/tooltip";
-import { cn } from "@tlib/shared/cn";
 import type { JSX } from "@solidjs/web";
-import { Show, omit } from "solid-js";
 import { Portal } from "@solidjs/web";
+import { cn } from "@tlib/shared/cn";
+import { omit, Show } from "solid-js";
 
 /**
  * The hover label, promoted from `tELS/client/web/src/components/ui/tooltip.tsx`.
  *
- * ── Read this before reaching for it in a NUI page ─────────────────────────
+ * Read this before reaching for it in a NUI page
  *
  * Inside the game the cursor is the game's and there is no OS tooltip layer, so a
  * tooltip is the ONLY thing that will show the text — which also means text that
@@ -15,7 +15,7 @@ import { Portal } from "@solidjs/web";
  * explanation under a control, use `ui/field`'s `hint` slot, which is always
  * visible. This is for naming an icon-only button, which is what it is good at.
  *
- * ── Two deliberate differences from the tELS original ──────────────────────
+ * Two deliberate differences from the tELS original
  *
  * 1. **No solid-motionone.** The original wrapped Content in a Presence/Motion pair
  *    for a 150ms fade, which makes solid-motionone a runtime dependency of every

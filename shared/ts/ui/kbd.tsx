@@ -1,11 +1,11 @@
+import type { JSX } from "@solidjs/web";
 import { cn } from "@tlib/shared/cn";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { JSX } from "@solidjs/web";
 import type { Component } from "solid-js";
 import { omit } from "solid-js";
 
 /**
- * ⚠️ The three sizes are 11/12/13px, which is the WHOLE type scale at the top of
+ * The three sizes are 11/12/13px, which is the WHOLE type scale at the top of
  * `shared/css/surface.css`, bottom to top. Nothing here may go below 11px.
  *
  * They were 9/10/12, and this file is the reason that scale needed writing down:

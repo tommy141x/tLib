@@ -1,12 +1,10 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  * WHERE A COMPONENT GOES, AND WHY THIS RULE EXISTS
- * ═══════════════════════════════════════════════════════════════════════════
  *
  * This directory is THE component library. One kit, built on Ark UI, styled with
  * `cva` + the shared tokens, shared by every resource in the stack.
  *
- * ── The rule ───────────────────────────────────────────────────────────────
+ * The rule
  *
  *   1. A COMMON component goes here and nowhere else. A button, a card, an
  *      input, a select, a checkbox, a switch, a slider, a badge, a tab bar, a
@@ -24,7 +22,7 @@
  *      layer, no re-export shim. If the shared component is wrong, fix the
  *      shared component.
  *
- * ── Why it is written down ─────────────────────────────────────────────────
+ * Why it is written down
  *
  * Because its absence is measurable. tRadio, tDetector and tRadar each
  * hand-rolled buttons, inputs and panels rather than adopt either of the two
@@ -32,7 +30,7 @@
  * said which one you were supposed to use, or when you were allowed to opt out.
  * A rule nobody wrote is a rule nobody can be shown to have broken.
  *
- * ── The one exception, and exactly how far it goes ─────────────────────────
+ * The one exception, and exactly how far it goes
  *
  * `shared/ts/nui-kit/` plus `tLib/client/web/src/components/ui/nui-controls.tsx`
  * are BARE controls: a checkbox box and a range input with theming and no
@@ -71,7 +69,7 @@
  *     collapsing it to one form is still the end state; it is their change, not
  *     this file's.
  *
- * ── What is shared between the two, and what is not ───────────────────────
+ * What is shared between the two, and what is not
  *
  * The MECHANISM, not the tokens. Focus in both kits is a border-colour shift
  * plus a real `outline` drawn inside the box -- never elevation, because CEF
@@ -79,7 +77,7 @@
  * clipped to nothing. Kit A spells the colour `--ring`; nui-kit spells it
  * `--nui-accent-raw`. Both namespaces are deliberate and stay.
  *
- * ⚠️ The two NAMES stay; the two VALUES must not diverge, and they did. Kit A
+ * The two NAMES stay; the two VALUES must not diverge, and they did. Kit A
  * painted `211 80% 55%` and nui-kit painted a neutral `0 0% 93%`, which is
  * visible to a player as the primary button changing colour when a tLib confirm
  * dialog opens over a tELS editor. Both are now `211 80% 55%`. The namespaces

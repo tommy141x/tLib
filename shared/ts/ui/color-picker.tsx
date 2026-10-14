@@ -1,9 +1,9 @@
-import { ColorPicker as ArkColorPicker, parseColor } from "@ark-ui/solid";
-import { cn } from "@tlib/shared/cn";
+import { ColorPicker as ArkColorPicker, parseColor } from "@ark-ui/solid/color-picker";
 import type { JSX } from "@solidjs/web";
-import type { Component, ComponentProps } from "solid-js";
-import { For, Show, omit } from "solid-js";
 import { Portal } from "@solidjs/web";
+import { cn } from "@tlib/shared/cn";
+import type { Component, ComponentProps } from "solid-js";
+import { For, omit, Show } from "solid-js";
 import IconPipette from "~icons/lucide/pipette";
 import type { ComponentMeta } from "./meta.ts";
 

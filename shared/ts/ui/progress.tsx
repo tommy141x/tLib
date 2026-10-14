@@ -1,7 +1,7 @@
 import { Progress as ArkProgress } from "@ark-ui/solid/progress";
+import type { JSX } from "@solidjs/web";
 import { cn } from "@tlib/shared/cn";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { JSX } from "@solidjs/web";
 import { type Component, Show } from "solid-js";
 
 const progressVariants = cva("relative flex flex-col gap-3 w-full", {

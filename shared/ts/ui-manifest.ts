@@ -9,7 +9,7 @@
 // files at build time (`scripts/sync-hud-sdk.ts`) so it can preview a layout
 // with no game running.
 //
-// ⚠️ There was a runtime registry here — `registerUiManifest`, `getUiManifest`,
+// There was a runtime registry here — `registerUiManifest`, `getUiManifest`,
 // `listUiManifests`, `unregisterUiManifest` — and three resources called the
 // setter at boot. Nothing ever called a getter, in any repo: it was write-only
 // for its whole life, kept "so a tool can iterate listUiManifests()" for a tool
@@ -17,7 +17,7 @@
 // and it cannot use a registry anyway, because it runs with no game attached.
 // Do not reintroduce one speculatively; add it when something reads it.
 //
-// ⚠️ There was also a STATIC registry here — `shared/ts/manifests.ts`, exported as
+// There was also a STATIC registry here — `shared/ts/manifests.ts`, exported as
 // `@tlib/shared/manifests`, holding hand-copied bodies of `uiRadioManifest` and
 // `uiTelsHudManifest` under a comment saying "kept in sync manually". It is gone,
 // and the two reasons it went are both reasons not to write another one:

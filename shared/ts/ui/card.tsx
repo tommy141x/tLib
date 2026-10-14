@@ -1,11 +1,11 @@
+import type { JSX } from "@solidjs/web";
 import { cn } from "@tlib/shared/cn";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { JSX } from "@solidjs/web";
 import type { Component } from "solid-js";
 import { omit } from "solid-js";
 
 /**
- * ⚠️ `elevated` no longer elevates, and `default` and `elevated` now resolve to the
+ * `elevated` no longer elevates, and `default` and `elevated` now resolve to the
  * same classes.
  *
  * Every elevation utility in `shared/ts/ui/*` was stripped, here and in badge,

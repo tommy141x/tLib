@@ -1,18 +1,18 @@
 /* Scoped HSL aliases preserve public themes and never touch menu full-color tokens.
  *
- * ── The theme comes from the HOST. There are no fallbacks here any more ─────
+ * The theme comes from the HOST. There are no fallbacks here any more
  *
  * Every `var(--x)` below is bare. The host declares the token; this file aliases
  * it into the `--nui-*` namespace and nothing more. A component should not ship a
  * copy of the theme, and as of this change it does not.
  *
- * ⚠️ DO NOT re-add a `, <triplet>` fallback. The argument for them was measured
+ * DO NOT re-add a `, <triplet>` fallback. The argument for them was measured
  * and found to be false — see below — and putting one back re-freezes a palette
  * into a component, which is the drift `shared/css/theme-tokens.css` exists to
  * stop. If a host renders an unstyled surface, that host is missing
  * `@import "@tlib/shared/css/theme-tokens.css"`; fix the host.
  *
- * ── Why the fallbacks went, and what was actually wrong with the case for them ─
+ * Why the fallbacks went, and what was actually wrong with the case for them
  *
  * They were defended on the grounds that "these controls are imported by tELS,
  * tDetector and tRadar, not just tLib", and that in tDetector and tRadar —
@@ -54,7 +54,7 @@
   --nui-text: hsl(var(--foreground));
   --nui-muted: hsl(var(--muted-foreground));
   --nui-border: hsl(var(--border));
-  /* ⚠️ NOT color-mix(). NUI is CEF 103 and color-mix() landed in Chromium 111,
+  /* NOT color-mix(). NUI is CEF 103 and color-mix() landed in Chromium 111,
      so CEF drops the declaration and every property fed by it falls back to
      inherited-or-initial — a border silently becomes currentColor, a focus ring
      simply does not paint. See the measurement in shared/ts/build/uno-preset.ts;
@@ -67,7 +67,7 @@
      `-raw` partner too, or the alpha tints below render invalid and paint
      nothing. */
   --nui-text-raw: var(--foreground);
-  /* ── The accent is the SAME blue `shared/ts/ui/*` paints ──────────────────
+  /* The accent is the SAME blue `shared/ts/ui/*` paints
    *
    * `211 80% 55%`, which is `--primary` in theme-tokens.css and `--ring` in the
    * components built on it. Only the VALUE is shared: the `--nui-*` namespace is
@@ -89,7 +89,7 @@
    * Converging on the blue ends the isolation the other way, and ends it
    * everywhere rather than in one sheet.
    *
-   * ⚠️ `--nui-accent-text` stays `#111111`, and that is the ONE thing deliberately
+   * `--nui-accent-text` stays `#111111`, and that is the ONE thing deliberately
    * not matched to `shared/ts/ui/*`, which paints `--primary-foreground` (white)
    * on this same blue.
    *
@@ -154,7 +154,7 @@
   font-family: var(--font-sans);
   font-size: 14px;
 }
-/* ── Focus is an outline, and only an outline ───────────────────────────────
+/* Focus is an outline, and only an outline
  *
  * This used to paint focus with a 3px zero-blur elevation over a transparent
  * 2px outline, and it rendered ONLY because that blur radius was zero. That is
@@ -368,7 +368,13 @@
   cursor: pointer;
   user-select: none;
 }
-.tlib-nui-select-trigger [data-part="value-text"] {
+/*
+ * `[data-select-value-text]`, not zag 1's `[data-part="value-text"]`: zag 2's
+ * createAnatomy emits one `data-<scope>-<part>` attribute. A stale selector here
+ * fails silently -- the rule just stops matching and long option names overflow
+ * instead of ellipsising -- so it was only found via the test that went red.
+ */
+.tlib-nui-select-trigger [data-select-value-text] {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -587,7 +593,7 @@
 .tlib-nui-dialog-positioner[data-state="closed"] {
   pointer-events: none !important;
 }
-/* ── The in-dialog confirmation ─────────────────────────────────────────────
+/* The in-dialog confirmation
  *
  * A `button` field's `confirm` string, rendered OVER the dialog's own body and
  * inside it — never as a second dialog. A feature reached from an open UI
@@ -662,7 +668,7 @@
   min-width: min(140px, 100%);
   flex: 1 1 140px;
 }
-/* ── Why these are PRESENCE selectors and must stay that way ──────────────
+/* Why these are PRESENCE selectors and must stay that way
    Both attributes are written from Dialog.tsx as a plain boolean. Solid 2
    serialises that differently from Solid 1:
 

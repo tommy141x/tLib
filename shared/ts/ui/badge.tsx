@@ -1,6 +1,6 @@
+import type { JSX } from "@solidjs/web";
 import { cn } from "@tlib/shared/cn";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { JSX } from "@solidjs/web";
 import type { Component } from "solid-js";
 import { omit, Show } from "solid-js";
 
