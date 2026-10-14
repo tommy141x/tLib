@@ -68,3 +68,10 @@ Thumbs.db
 # file onto Config at server start. See tLib/shared/imports/secrets/server.lua.
 config.local.lua
 config/config.local.lua
+
+# Diagnostics consent and the per-install id. Written at runtime beside the
+# resource, and per-install by construction: a copy in the repo (or in a release
+# archive) would hand every customer somebody else's id and somebody else's
+# answer about consent. See server/lib/telemetry/consent.ts.
+telemetry-consent.json
+telemetry-install-id.txt

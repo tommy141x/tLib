@@ -1,0 +1,26 @@
+[test]
+# `client/web/tests/` IS A SEPARATE SUITE AND MUST NOT BE COLLECTED HERE.
+#
+# `bun run test` is a bare `bun test` from this directory, which walks the whole
+# tree and collects every `*.test.ts(x)` it finds — `tests/unit`, `tests/integration`,
+# and the ones that live beside their module under `server/lib` and `shared/ts`.
+# The DOM suite under `client/web/tests` cannot run that way for two reasons, and
+# both are silent-ish failures rather than useful ones:
+#
+#   1. It needs `client/web/bunfig.toml`'s `[test] preload`, which bun reads from
+#      the CWD. Run from here, that file is never read: no happy-dom, no DOM
+#      globals, no Solid compiler, no dedupe.
+#   2. It needs `--conditions=browser`. Without it solid-js resolves to its SSR
+#      build, where component code throws `notSup()`.
+#
+# So it is excluded here and reached by `bun run test:dom`, which cds into
+# `client/web` (picking up that bunfig) and passes the flag. The exclusion is a
+# DIRECTORY glob, not a glob over file names, so a DOM test added to that
+# directory tomorrow is covered by construction.
+#
+# It must be `**/client/web/tests/**` and not `client/web/tests/`:
+# the bare relative form matched NOTHING on Windows, the five DOM files were
+# collected by the root run without their preload, and 20 tests failed with
+# `ReferenceError: document is not defined` -- which reads as the DOM suite being
+# broken rather than as being run from the wrong place.
+pathIgnorePatterns = ["**/client/web/tests/**"]
