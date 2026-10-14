@@ -1,0 +1,57 @@
+{
+  // Not optional: NOTHING in this repo
+  // typechecked `server/` at all. `typecheck` points at `client/web/tsconfig.json`
+  // and `typecheck:shared` at `shared/ts/tsconfig.json`, whose `include` is an
+  // explicit root list that does not name `server/`. There is no root tsconfig.
+  // So 68 TypeScript files — the HTTP router, the hub, the marketplace installer,
+  // the telemetry transport, the realtime control client — were checked by
+  // `bun test` only, which means any type error on a path without a test shipped.
+  //
+  // It had already cost something. The first run of this config found 14 errors,
+  // including a write to `this.tokenExpiresAt` in `lib/realtime/control.ts` that
+  // was never declared and never read (JS creates the property silently, so the
+  // token-refresh timer it implies had never existed) and a `Platform` type that
+  // two files imported from `lib/spawn/gate.ts`, which never exported it.
+  //
+  // This is the same failure as the note in `shared/ts/tsconfig.json`: a pass over
+  // a file set that does not include the file proves nothing about it, and reports
+  // EXIT 0 while doing so.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    // No DOM: this is the FXServer VM. A `window` or `document` reference in here
+    // is a mistake, and leaving DOM out of `lib` is what makes it a build error.
+    "lib": ["ESNext"],
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    // Dead-code gate. `strict` says nothing about a symbol nobody reads, and an
+    // audit found ~60 unreachable lines in one file (`lib/marketplace/api.ts`:
+    // a whole second HTTP client), four declared-and-never-read constants in
+    // `lib/realtime/`, and a config key nothing consulted — all while
+    // `typecheck:server` exited 0. These two flags catch that class
+    // mechanically, which is the only way it stays caught.
+    //
+    // They do NOT flag an unused EXPORT, and must not be read as doing so.
+    // tLib is a published library: "no importer in this repo" is the normal
+    // state of a public API file, and the orphan gate in `scripts/` is what
+    // judges those, against the declared surface rather than the import graph.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    // Bun, for `bun:test` in the colocated `*.test.ts` files and `Bun.*` at runtime.
+    "types": ["bun"],
+    "baseUrl": "..",
+    "paths": {
+      "@tlib/shared": ["./shared/ts/index.ts"],
+      "@tlib/shared/*": ["./shared/ts/*"]
+    }
+  },
+  // Tests are colocated with their subjects here and are included deliberately:
+  // a test that no longer typechecks against the thing it tests is a real signal.
+  "include": ["**/*.ts"]
+}

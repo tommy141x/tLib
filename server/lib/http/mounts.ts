@@ -16,7 +16,10 @@ import { REALTIME_MOUNT } from "./constants";
 import type { Log } from "./proxy";
 import { register } from "./registry";
 
-export { REALTIME_MOUNT };
+// No `export { REALTIME_MOUNT }` here. Nothing imported it -- both real
+// consumers take it from `./constants`, which exists specifically to break the
+// mounts -> realtime/index -> realtime/config -> mounts cycle. Re-exporting it
+// from this side is a standing invitation to recreate that cycle.
 
 export function registerInProcess(log: Log): void {
   const result = register({

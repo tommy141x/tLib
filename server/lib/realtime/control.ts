@@ -9,7 +9,7 @@ import http from "node:http";
 import https from "node:https";
 import { URL } from "node:url";
 import WebSocket from "ws";
-import { fEmit, fOn } from "./fivem";
+import { fEmit } from "./fivem";
 
 const EVT_RECV = "__tlib:rt:control:recv"; // wire → Lua (consumer reacts)
 const EVT_STATE = "__tlib:rt:control:state"; // connection state changes for observability
@@ -114,7 +114,17 @@ export class ControlClient {
       if (!tokenResp.ok || !tokenResp.token || !tokenResp.wsUrl) {
         throw new Error(tokenResp.error ?? "token fetch failed");
       }
-      this.tokenExpiresAt = tokenResp.expiresAt ?? Date.now() + 10 * 60 * 1000;
+      // No proactive refresh from `tokenResp.expiresAt`: expiry is handled
+      // reactively and already is. An expired token stops the stream, which
+      // trips either the ping timeout (`PING_TIMEOUT_MS`) or `onclose`, and both
+      // land in `scheduleReconnect` -> `connect()` -> a fresh `fetchToken()`.
+      //
+      // There used to be a `this.tokenExpiresAt = ...` here. It assigned to a
+      // field that was never declared and never read, so the value was computed
+      // and dropped — the timer it implies has never existed. JS creates the
+      // property silently on assignment, so nothing failed at runtime -- and at
+      // the time nothing typechecked `server/`, so nothing failed at build either.
+      // `bun run typecheck:server` exists now; see server/tsconfig.json's header.
       this.currentWsUrl = tokenResp.wsUrl;
 
       this.state = "connecting";
@@ -323,13 +333,3 @@ export function getControl(): ControlClient | null {
   return singleton;
 }
 
-/** Listen for upstream envelopes. Consumer Lua subscribes through the bridge's
- *  event bus instead; this exists to name the event. */
-export function onControlRecv(_handler: (type: string, dataJson: string, n: number) => void): void {
-  fOn(EVT_RECV, _handler as unknown as (...args: unknown[]) => void);
-}
-
-export const CONTROL_EVENTS = {
-  recv: EVT_RECV,
-  state: EVT_STATE,
-};
