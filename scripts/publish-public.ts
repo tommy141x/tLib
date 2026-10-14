@@ -83,7 +83,15 @@ for (const path of PRIVATE) {
 // sha, so this stays correct even though the published shas differ.
 const mark = tryGit(["rev-parse", "--verify", `${MARK}^{commit}`]);
 const range = mark ? `${mark}..${SOURCE}` : `${PUBLISHED}..${SOURCE}`;
-const todo = git(["rev-list", "--reverse", "--no-merges", range]).split("\n").filter(Boolean);
+// --first-parent is load-bearing. internal/ arrived by `git subtree`, and the
+// imported commits keep their ORIGINAL paths (src/, bin/) — the internal/
+// prefix is applied by the merge, not by them. They are reachable only through
+// that merge's second parent, so without --first-parent they read as commits
+// touching public paths, and cherry-picking one conflicts against a branch that
+// shares no ancestry with it.
+const todo = git(["rev-list", "--reverse", "--first-parent", "--no-merges", range])
+  .split("\n")
+  .filter(Boolean);
 
 if (todo.length === 0) {
   console.log("publish-public: nothing new to publish");
