@@ -26,8 +26,6 @@ dist/
 # git add -f on a directory containing .git records a gitlink, not the contents,
 # and git clean -xdf leaves a nested repo alone. tests/unit/private-not-tracked.test.ts
 # asserts both.
-/internal/
-
 # The obfuscator used to sit at this path, hidden only by this rule; the rule stays
 # as a tripwire so a copy that drifts back can never be committed.
 shared/ts/build/obfuscate.ts
@@ -79,4 +77,3 @@ telemetry-install-id.txt
 # Gitea CI lives on the private branch only: these workflows name the private
 # org and its shared-workflow repo, and Gitea never ran them from here anyway —
 # it only pull-mirrors this repo, and a mirror sync fires no Actions.
-/.gitea/
