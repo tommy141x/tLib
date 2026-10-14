@@ -1,6 +1,33 @@
 #!/usr/bin/env bun
-// Orphan-file gate. The reasoning is in the `//check:deadfiles` note in
-// package.json; the control is scripts/dead-file-control.ts.
+// Orphan-file gate: a .ts/.tsx file that nothing imports and no entry point
+// names. The negative control is scripts/dead-file-control.ts.
+//
+// tLib is a PUBLISHED MIT library, consumed by eleven resources here and by
+// third parties outside this repo, so "no importer" is the normal state of a
+// library file and can never be the verdict on its own. A knip/ts-prune-shaped
+// answer flags the entire public API.
+//
+// Four things keep a file alive, in this order of authority:
+//
+//   1. shared/ts/package.json's `exports` map — the DECLARED public surface.
+//      ui/card, ui/color-picker, ui/meta, ui/progress and ui/tabs are each
+//      named there and imported by nothing in this estate; a graph-only gate
+//      called all five dead.
+//   2. scripts/public-entries.json — the measured record of deep paths
+//      consumers import by relative path outside that map. 115 of them:
+//      build/*, fs/server, secrets/release, audio/wav, telemetry/*, every ui/*.
+//   3. The import graph, through relative specifiers, `@tlib/shared/*`, `@/*`.
+//   4. Paths written as STRINGS rather than imported — the ui_page html's
+//      module src, and anything a package.json script hands to `bun`. That last
+//      is the only thing keeping shared/ts/build/cef-output-contract-control.ts
+//      alive, because tRadio is what runs it.
+//
+// shared/ts/solid-compat/ is excluded: its files are reached by a `virtual:`
+// specifier that exists only inside Vite, the same reason shared/ts/tsconfig.json
+// excludes it.
+//
+// Exit 1 = an orphan. Exit 2 = fewer than 250 files or fewer than 50 entry
+// points, i.e. a set collapsed, which is NOT a pass.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, posix, resolve } from "node:path";
