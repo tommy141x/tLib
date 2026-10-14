@@ -10,7 +10,7 @@
             ...
         end)
 
-    ── Why this exists ─────────────────────────────────────────────────────────
+     Why this exists
 
     Seven byte-identical copies of the same twelve-line function were in the
     tree: tELS/server/sv_configs.lua, tRadio/server/sv_props.lua,
@@ -20,7 +20,7 @@
     `if not b then` was folded onto one line. The interval was 1000 at every
     call site but tELS's two community-config queries.
 
-    ── A floor on the interval, not a token bucket ─────────────────────────────
+     A floor on the interval, not a token bucket
 
     Every event this guards is asked once per boot or once per command press, so
     there is no legitimate burst to accommodate and the simplest thing that
@@ -28,7 +28,7 @@
     allowance while idle and then spend it all at once, which is precisely the
     shape of the request these events must not serve.
 
-    ── The sweep is the half that gets forgotten ───────────────────────────────
+     The sweep is the half that gets forgotten
 
     Without it, every bucket keeps one timestamp per player who has EVER
     connected, for the life of the server. Six of the seven copies remembered
@@ -38,7 +38,7 @@
     is a normal event and registering N handlers for it would mean N table
     walks per disconnect for no benefit.
 
-    ── Scope ───────────────────────────────────────────────────────────────────
+     Scope
 
     Bucket names are per-RESOURCE, not global: this module is loaded into each
     consumer's own server VM, so two resources both naming a bucket

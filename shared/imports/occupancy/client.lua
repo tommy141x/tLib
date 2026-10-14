@@ -9,18 +9,11 @@
 --     The CONTROLLER of a vehicle is its driver if a driver is seated, and
 --     otherwise its front passenger.
 --
--- ── Three tiers, and why the old fields did not change shape ──────────────
---
--- There are three tiers here as there are on the server: `driver`, `passenger`
--- and `rear`. A rear passenger perceives and never controls.
---
--- The state table grew rather than widened. `seat`, `vehicle`, `netId`,
--- `partner` and `isController` still mean what they have always meant — FRONT
--- seat only — because consumers read them straight off the snapshot and several
--- of them use `state.seat ~= nil` as "am I in a seat that operates this thing".
--- Making that field answer for rear seats would have silently handed rear
--- passengers the controls of every consumer at once. The rear tier is carried on
--- new fields instead: `tier`, `cabinSeat`, `cabinVehicle`, `cabinNetId`.
+-- The state table grew rather than widened: `seat`, `vehicle`, `netId`,
+-- `partner` and `isController` stay FRONT-seat only, because consumers use
+-- `state.seat ~= nil` as "am I in a seat that operates this thing" and widening
+-- it would have handed rear passengers the controls of every consumer at once.
+-- The rear tier rides on `tier`, `cabinSeat`, `cabinVehicle`, `cabinNetId`.
 
 local occupancy = {}
 
@@ -48,7 +41,7 @@ local FRONT_FIELDS = {
 local CABIN_FIELDS = { "tier", "cabinSeat", "cabinVehicle", "cabinNetId" }
 
 local state = {
-    -- ── Front seats only. Unchanged meaning; nil for a rear passenger. ──
+    -- Front seats only. Unchanged meaning; nil for a rear passenger.
     seat      = nil, -- -1 | 0 | nil
     vehicle   = nil, -- local entity handle
     netId     = nil,
@@ -56,7 +49,7 @@ local state = {
     passenger = nil,
     partner   = nil, -- the OTHER front-seat occupant, from our point of view
     isController = false,
-    -- ── Any seat, rear rows included. ──
+    -- Any seat, rear rows included.
     tier         = nil, -- "driver" | "passenger" | "rear" | nil
     cabinSeat    = nil, -- the game's seat index, whatever it is
     cabinVehicle = nil,
@@ -65,8 +58,6 @@ local state = {
 
 local listeners = {}
 
--- Resolved lazily rather than at load: a shared script can be loaded before
--- tlib's import system has finished initialising on the other side.
 local function platform()
     return tlib.platform
 end
@@ -85,9 +76,6 @@ local function copy(s)
 end
 
 --- The transitions worth announcing. `cabinSeat` and `cabinNetId` are in here so
---- that moving between two rear seats, or getting into the back of a car from
---- the pavement, is a change — without them a rear passenger would never fire a
---- listener and so would never send the server's move ping.
 local function differs(a, b)
     return a.seat ~= b.seat or a.netId ~= b.netId or a.vehicle ~= b.vehicle
         or a.driver ~= b.driver or a.passenger ~= b.passenger
@@ -95,8 +83,6 @@ local function differs(a, b)
 end
 
 --- Re-read the local player's seat and surroundings. Cheap enough to call from
---- an existing main loop, which is how consumers are expected to drive it —
---- see `startSweep` for the alternative.
 --- @return the current state table (a copy).
 function occupancy.poll()
     local p = platform()
@@ -112,9 +98,6 @@ function occupancy.poll()
     end
 
     -- Everything below is the FRONT-seat half, and a rear passenger must fall
-    -- straight past it: they keep the cabin fields above and nothing else, which
-    -- leaves `seat`, `partner` and `isController` reading exactly as they did
-    -- when a rear seat was indistinguishable from the pavement.
     if vehicle ~= nil and (tier == occupancy.TIER_DRIVER or tier == occupancy.TIER_PASSENGER) then
         local driver, passenger = p.getFrontSeatServerIds(vehicle)
         local me = p.getMyId()
@@ -124,16 +107,12 @@ function occupancy.poll()
         next_.driver    = driver
         next_.passenger = passenger
         -- Spelled out rather than `cond and passenger or driver`: that idiom
-        -- cannot yield nil, so an empty passenger seat would fall through and
-        -- report the driver as their own partner.
         if seat == occupancy.SEAT_DRIVER then
             next_.partner = passenger
         else
             next_.partner = driver
         end
         -- The election, applied to ourselves. A passenger is the controller only
-        -- while the driver seat is genuinely empty; a driver sitting down takes
-        -- it back on the very next poll.
         local controller = driver or passenger
         next_.isController = (controller ~= nil and controller == me)
     end
@@ -170,9 +149,6 @@ function occupancy.tier()
 end
 
 --- In ANY seat of any vehicle — the perception question, and the client mirror
---- of the server's `isAboard`. True for a rear passenger, where `isFrontSeat`
---- is false. Perception only: a rear passenger may be shown and told things,
---- and may never operate anything.
 function occupancy.isAboard()
     return state.tier ~= nil
 end
@@ -184,10 +160,6 @@ end
 
 --- The vehicle the local player is in, whatever seat it is.
 ---
---- Separate from `myVehicle` rather than an extension of it: `myVehicle` answers
---- "the vehicle I am operating" and several consumers pair it with an unchecked
---- action, so it stays front-only. This one answers "the vehicle I am sitting
---- in" and is what a rear passenger needs to see the thing in the cabin with them.
 --- @return vehicleHandle, netId, seat, tier — or nil when on foot.
 function occupancy.cabin()
     if state.cabinVehicle == nil then return nil end
@@ -203,8 +175,6 @@ end
 
 --- The vehicle whose controls this player may be operating.
 --- @return vehicleHandle, netId — or nil when not in a front seat. Still nil for
---- a rear passenger, deliberately; `occupancy.cabin()` is the one that answers
---- for them.
 function occupancy.myVehicle()
     if state.vehicle == nil then return nil end
     return state.vehicle, state.netId
@@ -233,18 +203,8 @@ end
 --- them before they have done anything.
 ---
 --- Needed by anything the server sends TO an occupant rather than gates them on:
---- the server learns a seat from questions asked about that player, and nobody
---- asks a question about a passenger who is just sitting there. The ping carries
---- no payload — the server re-reads the seat from the host — so it is a nudge,
---- not a claim.
 ---
---- It is the ONLY way the server ever learns about a rear passenger, who by
---- definition never trips a gate: every gate they can reach refuses them, so no
---- question is ever asked about them. Sitting down in the back is a change under
---- `differs`, so it pings like any other move.
 ---
---- Idempotent, and safe to call from several resources: the event is shared, and
---- the server's handler is rate-limited per player.
 function occupancy.startReporting()
     if occupancy._reporting then return end
     occupancy._reporting = true
@@ -254,8 +214,6 @@ function occupancy.startReporting()
 end
 
 --- Opt-in poll thread, for consumers without a main loop of their own.
---- Deliberately not started by default: a tLib import should not spawn a thread
---- in every resource that happens to load it.
 function occupancy.startSweep(intervalMs)
     if occupancy._sweeping then return end
     occupancy._sweeping = true

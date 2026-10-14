@@ -8,7 +8,7 @@
         local txd  = txds.ensure()
         local name = txds.textureName('tdet_screen', serial)
 
-    ── Why this exists ─────────────────────────────────────────────────────────
+     Why this exists
 
     CREATE_RUNTIME_TXD is not the cheap "make me a namespace" call it reads as. In
     RuntimeAssetNatives.cpp it resolves the name through FindSlotFromHashKey against
@@ -33,7 +33,7 @@
     and, in one of the two, a comment that contradicted its own code about whether
     the dictionary name was tokenised. It is one implementation now.
 
-    ── THE TXD NAME IS TOKENISED PER RESOURCE LOAD ─────────────────────────────
+     THE TXD NAME IS TOKENISED PER RESOURCE LOAD
 
     That is not the obvious call — it costs one pinned `ytd` streaming slot per
     resource load. It is still right. CreateRuntimeTxd is NOT idempotent across
@@ -46,7 +46,7 @@
     One leaked slot per restart is far cheaper than a screen that dies on every
     restart, and a customer loads a resource once per session anyway.
 
-    ── AND SO IS EVERY TEXTURE NAME ────────────────────────────────────────────
+     AND SO IS EVERY TEXTURE NAME
 
     Runtime textures are process-global and have no destructor either, so every name
     a resource took before a restart is still taken afterwards for as long as the game
@@ -60,7 +60,7 @@
     rule is "a runtime texture name must carry the per-load tag", and a name built by
     hand is a name that can forget to.
 
-    ── What is NOT owned here ──────────────────────────────────────────────────
+     What is NOT owned here
 
     Which textures go in the dictionary, what they are bound to, and when the
     replacements are issued or re-issued. Those are the consumer's; this module

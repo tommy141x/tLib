@@ -89,9 +89,6 @@ platform.MAX_SEAT_INDEX = 16
 --- ever had two candidates. `getPlayerSeat` below is the same read without the
 --- collapse, for the perception question.
 ---
---- Kept as its own two-seat scan rather than a filter over `getPlayerSeat`: it
---- is called on the refusal path of a gate, and a rear passenger being refused
---- should cost two native reads, not a full-cabin scan.
 ---
 --- The seat is derived from the host, never taken from the caller, so a client
 --- cannot assert its way into a seat it is not in.
@@ -119,18 +116,11 @@ end
 
 --- ANY seat a player occupies, rear rows included, and the vehicle it belongs to.
 ---
---- Seat indices are the game's own: -1 is the driver, 0 the front passenger, and
---- 1 upwards the rear rows in the vehicle's layout order. Nothing here assumes
---- two rows — a bus's fourteenth seat reports as 14, not as nil and not as "rear".
---- Classifying an index into a tier is `occupancy.seatTier`'s job, not this one's.
 ---
 --- The scan tries -1 and 0 first, so a front-seat occupant — the common case and
 --- the one on the hot gate path — costs exactly the two reads `getPlayerFrontSeat`
 --- costs. Only somebody actually in the back pays for the rest of the sweep.
 ---
---- The bound is `platform.MAX_SEAT_INDEX`; see the comment there for why a bound
---- is needed at all on this side. A player in a seat beyond it reads as nil, i.e.
---- as being on foot — the old two-seat behaviour, applied further back.
 ---
 --- The seat is derived from the host, never taken from the caller, so a client
 --- cannot assert its way into a seat it is not in.
@@ -177,22 +167,10 @@ function platform.getEntityCoords(entity)
     return c
 end
 
---- Whether a BOOL native said yes.
----
---- MEASURED 2026-09-26, FiveM Enhanced: every BOOL native reached from Lua here
---- returns the NUMBER 1, not `true` -- DoesEntityExist, NetworkDoesNetworkIdExist,
---- IsPedInAnyVehicle, IsEntityAVehicle and HasModelLoaded were all checked with
---- `type()` and all answered "number". So `native(...) == true` is ALWAYS FALSE, and
---- the code below used to be exactly that.
----
---- It cost a full debugging session: screentarget's `exists` provider rejected every
---- entity that existed, so no vehicle ever qualified as a screen target and the props
---- on all three devices stayed dark -- no browser, no backlight, no lamps -- while
---- every unit test passed, because the suites INJECT their own providers and so never
---- run a real native.
----
---- `not not v` is NOT the fix: 0 is truthy in Lua, so it would turn every "no" into a
---- "yes". Both shapes have to be spelled out.
+--- Whether a BOOL native said yes. Measured on FiveM Enhanced: every BOOL native
+--- reached from Lua here returns the NUMBER 1, not `true`, so `native(...) ==
+--- true` is always false. `not not v` is NOT the fix either -- 0 is truthy in
+--- Lua -- so both shapes are spelled out.
 local function nativeTruth(v)
     if v == true then return true end
     return type(v) == "number" and v ~= 0
@@ -204,8 +182,6 @@ function platform.doesEntityExist(entity)
 end
 
 --- Server-side nearby-player lookup. Uses squared distance to skip sqrt.
---- Consumers that need high-frequency queries should cache coords themselves;
---- this call iterates GetPlayers() on every invocation.
 function platform.getNearbyPlayers(coords, radius)
     if not coords or not radius then return {} end
     local radiusSq = radius * radius

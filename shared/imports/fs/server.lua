@@ -5,7 +5,7 @@
 --
 -- Server-only: it writes a resource file, which does not work from a client VM.
 --
--- ── Why this exists ─────────────────────────────────────────────────────────
+-- Why this exists
 --
 -- On Enhanced, `SaveResourceFile` returns false for some resources while Node's
 -- `fs` writes the identical path successfully. The cause is still unknown; the
@@ -13,7 +13,7 @@
 -- each one shipped its own Node bridge for it, which is why this is a tLib
 -- module rather than a fourth copy.
 --
--- ── The bridge is the CALLING resource's own export ─────────────────────────
+-- The bridge is the CALLING resource's own export
 --
 -- The Node half is `WriteResourceFile`, registered by
 -- `registerWriteResourceFile()` from tLib/shared/ts/fs/server.ts. The
@@ -37,7 +37,7 @@
 -- the write logs a cheerful "Saved". Do not drop the returned `err` on the
 -- floor; that silence is the whole bug.
 --
--- ── Legacy safety ───────────────────────────────────────────────────────────
+-- Legacy safety
 --
 -- The native is tried FIRST and the bridge is consulted only when it fails, so
 -- Legacy behaviour is byte-for-byte unchanged and the bridge is never reached

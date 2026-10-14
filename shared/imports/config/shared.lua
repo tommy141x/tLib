@@ -7,9 +7,6 @@
 --           speedUnit            = { type = 'string', default = 'kmh', oneOf = { 'kmh', 'mph' } },
 --           radarResources       = { type = 'list',   default = {} },
 --       },
---       deprecated = {
---           detectionRange = { replacement = 'detectionRangeMeters', removeIn = '2.0.0' },
---       },
 --   })
 --   if not ok then return end
 --
@@ -35,7 +32,7 @@
 
 local configMod = {}
 
--- ── Formatting helpers ──────────────────────────────────────────────────────
+-- Formatting helpers
 
 --- Renders a value for an error message: quoted if a string, so `"500"` and
 --- `500` are visibly different. That distinction IS the bug in most reports.
@@ -74,7 +71,7 @@ local function isList(value)
     return true
 end
 
--- ── Typo suggestions ────────────────────────────────────────────────────────
+-- Typo suggestions
 
 --- Levenshtein distance, capped: we only care whether two keys are CLOSE, and
 --- an unbounded distance on long keys is wasted work at startup.
@@ -151,7 +148,7 @@ local function suggest(unknown, knownKeys)
     return best
 end
 
--- ── Per-key checking ────────────────────────────────────────────────────────
+-- Per-key checking
 
 --- Validates one key. Returns an error string, or nil when the value is fine.
 --- Never mutates: the caller decides whether a default gets applied, because
@@ -235,12 +232,12 @@ local function checkValue(prefix, key, value, def)
     return nil
 end
 
--- ── Public API ──────────────────────────────────────────────────────────────
+-- Public API
 
 --- Validates `tbl` against `spec`, filling in defaults for omitted keys.
 ---
 --- @param tbl table   the config table (usually the global `Config`)
---- @param spec table  { file, resource?, keys, deprecated?, allowUnknown? }
+--- @param spec table  { file, resource?, keys, allowUnknown? }
 --- @return table report { ok, errors = {string}, warnings = {string} }
 function configMod.validate(tbl, spec)
     local file = spec.file or 'config.lua'
@@ -249,7 +246,6 @@ function configMod.validate(tbl, spec)
         or 'resource'
     local prefix = spec.prefix or 'Config'
     local keys = spec.keys or {}
-    local deprecated = spec.deprecated or {}
 
     local errors, warnings = {}, {}
 
@@ -260,31 +256,9 @@ function configMod.validate(tbl, spec)
         warnings[#warnings + 1] = ('[%s] %s: %s'):format(resource, file, message)
     end
 
-    -- Deprecated keys first, so a value carried over from an old name is in
-    -- place before the new name is validated -- otherwise an owner upgrading
-    -- would be told their new key is missing while their old one sits right
-    -- there in the file.
     local knownKeyList = {}
     for key in pairs(keys) do knownKeyList[#knownKeyList + 1] = key end
     table.sort(knownKeyList)
-
-    for oldKey, info in pairs(deprecated) do
-        if tbl[oldKey] ~= nil then
-            local replacement = info.replacement
-            local removeIn = info.removeIn or 'a future major version'
-            if replacement and tbl[replacement] == nil then
-                tbl[replacement] = tbl[oldKey]
-                warn(('%s.%s has been renamed to %s.%s. Your value is still being used.\n  Fix: rename it in %s. The old name stops working in v%s.')
-                    :format(prefix, oldKey, prefix, replacement, file, removeIn))
-            elseif replacement then
-                warn(('%s.%s has been renamed to %s.%s, and you have set both. The new one is being used; the old one is ignored.\n  Fix: delete %s.%s from %s. The old name stops working in v%s.')
-                    :format(prefix, oldKey, prefix, replacement, prefix, oldKey, file, removeIn))
-            else
-                warn(('%s.%s is no longer used and does nothing.\n  Fix: delete it from %s.')
-                    :format(prefix, oldKey, file))
-            end
-        end
-    end
 
     -- Known keys: required, type, range, enum. Defaults fill gaps only.
     for _, key in ipairs(knownKeyList) do
@@ -316,7 +290,7 @@ function configMod.validate(tbl, spec)
     if not spec.allowUnknown then
         local unknown = {}
         for key in pairs(tbl) do
-            if type(key) == 'string' and keys[key] == nil and deprecated[key] == nil then
+            if type(key) == 'string' and keys[key] == nil then
                 unknown[#unknown + 1] = key
             end
         end
@@ -337,7 +311,7 @@ function configMod.validate(tbl, spec)
     return { ok = #errors == 0, errors = errors, warnings = warnings }
 end
 
--- ── What the owner actually configured ──────────────────────────────────────
+-- What the owner actually configured
 
 -- Several resources deliberately use their `Config` table as the LIVE value,
 -- not just the configured one -- tRadar's `Config.speedUnit` is rewritten

@@ -100,43 +100,62 @@ function Permission.hasBatch(src, keys)
     if src == nil or type(keys) ~= 'table' then return {} end
     local tLibName = (type(tlib) == 'table' and tlib.name) or 'tLib'
 
+    -- FAILS CLOSED, and there is deliberately NO per-key fallback here.
+    --
+    -- There used to be one, on the premise that this file is loaded out of the
+    -- INSTALLED tLib at runtime while the export it calls lives in tLib's own VM,
+    -- so the two could disagree about whether HasPermissionBatch exists. They
+    -- cannot: this module file and that export ship in the same tLib. The pcall
+    -- stays because `has()` has one for the same reason -- tLib not answering at
+    -- all -- and both resolve that to a denial rather than to ACE, since a
+    -- resolver takes priority over ACE and falling through could grant what the
+    -- resolver denies.
     local ok, result = pcall(function()
         return exports[tLibName]:HasPermissionBatch(src, keys)
     end)
-    if ok and type(result) == 'table' then
-        local out = {}
-        for i = 1, #keys do
-            local key = keys[i]
-            if type(key) == 'string' and key ~= '' then
-                -- `== true` not truthiness: anything else crossing the resource
-                -- boundary is not a grant. Same rule as has() above.
-                out[key] = result[key] == true
-            end
-        end
-        return out
-    end
+    if not ok or type(result) ~= 'table' then return {} end
 
-    -- DELIBERATE FALLBACK, not an accident of the pcall above.
-    --
-    -- A consumer resource can be NEWER than the tLib installed next to it, and
-    -- this file is loaded out of the INSTALLED tLib at runtime -- but the export
-    -- it calls lives in tLib's own VM, which may predate HasPermissionBatch. A
-    -- missing export RAISES ("No such export HasPermissionBatch in resource
-    -- tLib"), which is what the pcall catches. So does a tLib that answers with
-    -- something other than a table.
-    --
-    -- Looping has() is the same answer by the same route (still through tLib,
-    -- still resolver-aware) at the old cost of one export call per key. Only the
-    -- speed is lost, never the correctness -- which is why this is a fallback and
-    -- not a hard error.
     local out = {}
     for i = 1, #keys do
         local key = keys[i]
-        if type(key) == 'string' and key ~= '' and out[key] == nil then
-            out[key] = Permission.has(src, key)
+        if type(key) == 'string' and key ~= '' then
+            -- `== true` not truthiness: anything else crossing the resource
+            -- boundary is not a grant. Same rule as has() above.
+            out[key] = result[key] == true
         end
     end
     return out
+end
+
+--- Does this player hold EVERY key in the list?
+---
+--- The one shape tMenu's shared/ace.lua has that this module did not.
+--- `TMenuAceAllowedAll` is a loop over a raw `IsPlayerAceAllowed`, and
+--- server/features/admin.lua had the same conjunction open-coded in four
+--- places. Over `hasBatch` rather than a loop over `has`, so a four-key gate is
+--- still one export round trip.
+---
+--- An empty list is `true`: nothing was asked, so nothing was refused. That is
+--- the same answer tMenu's loop gives, and it matters — a feature whose required
+--- key list is built at registration can legitimately end up empty, and `false`
+--- there would deny a gate nobody asked to exist.
+---
+--- This is NOT a drop-in for `TMenuAceAllowed`. That reads ACE directly; this
+--- goes through tLib, where a registered framework resolver OUTRANKS ACE. On a
+--- server with a resolver the two give different answers, and this one is the
+--- intended answer — but it is a behaviour change at the call site, not a
+--- like-for-like swap.
+---
+--- @param src number|string
+--- @param keys string[]
+--- @return boolean
+function Permission.hasAll(src, keys)
+    if src == nil or type(keys) ~= 'table' then return false end
+    local answers = Permission.hasBatch(src, keys)
+    for i = 1, #keys do
+        if answers[keys[i]] ~= true then return false end
+    end
+    return true
 end
 
 return Permission

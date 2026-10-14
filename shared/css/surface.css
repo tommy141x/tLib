@@ -1,29 +1,13 @@
-/* ═══════════════════════════════════════════════════════════════════════════
+/*
  * THE EDITOR SURFACE AND TYPE LAYER
- *
  *     @import "@tlib/shared/css/surface.css";
- *
  * after theme-tokens.css and fonts.css, both of which it reads.
- * ═══════════════════════════════════════════════════════════════════════════
  *
- * ── The type scale. Eleven pixels is the FLOOR. ─────────────────────────────
- *
- *   11px mono 600 uppercase, --muted-foreground   a caption           .section-label
- *   11px sans,              --muted-foreground    a hint under a field .field-hint
- *   12px mono,              --foreground          a value, a list row  .prop-input
- *   12px sans 500/600,      --foreground          a title, a button    .segment
- *   13px sans 600           the header identity
- *
- * Five steps and no more, and nothing below 11px anywhere.
- *
- * This is not taste. "The fonts are poor" has been reported against tELS and
- * against tUnit, both times with Inter and JetBrains Mono correctly loading, and
- * both times the cause was the same: a panel whose entire vocabulary was 8–10px
- * painted at `text-muted-foreground/50`, `/60` or `/70`. CEF 103 renders a 10px
- * webfont on a dark surface at 60% opacity with almost no stem left, and the eye
- * reads that as a bad FACE rather than as small dim text. Changing the face fixes
- * nothing; it has been tried.
- *
+ * The type scale. Eleven pixels is the FLOOR, and this is not taste: "the fonts
+ * are poor" has been reported against tELS and tUnit with both faces correctly
+ * loading, and both times the cause was a panel whose whole vocabulary was 8-10px
+ * at a fractional `--muted-foreground`. CEF 103 renders that with almost no stem
+ * left, and the eye reads it as a bad FACE rather than as small dim text.
  * So, two rules, and they are the whole reason this file is in tLib rather than
  * copied a fourth time:
  *
@@ -31,39 +15,21 @@
  *   2. Body text never uses a FRACTIONAL `--muted-foreground`. The hierarchy is
  *      caption (muted) → value (foreground) → hint (muted, sans, smaller). It gets
  *      quieter by being a different family and size, never by opacity.
- *
- * tELS arrived here from the other end and pays for it: its own global.css carries
- * two `!important` sledgehammers that force every `text-[8px]`/`[9px]`/`[10px]` in
- * the editor chrome up to 12px and every `text-muted-foreground/NN` back to full
- * strength, because it had ~30 panels of utilities already written. Those overrides
- * are what this scale looks like applied from the outside, at runtime, to a bundle
- * that disagrees with it. Declaring the scale once, here, is what stops the next
- * resource needing them.
- *
- * ── The surface recipe ─────────────────────────────────────────────────────
- *
  * `.panel` is opaque at `--card` and separated from what is behind it by a
- * `--border` edge — NOT by being lighter, and NOT by a drop shadow.
- *
- * Not lighter, because raising `--card` past `--input` inverts tLib's elevation
- * ladder and turns every `border-input` in the product into a black outline. That
- * is written up in full at the bottom of theme-tokens.css, and if the panel genuinely
- * needs more presence over a transparent overlay page, `.tlib-overlay` there moves
- * the WHOLE ladder and is the supported way to do it.
- *
+ * `--border` edge — NOT by being lighter, and NOT by a drop shadow. Not lighter,
+ * because raising `--card` past `--input` inverts tLib's elevation ladder and
+ * turns every `border-input` into a black outline; `.tlib-overlay` in
+ * theme-tokens.css moves the WHOLE ladder and is the supported way to do it.
  * Not a shadow, because FiveM's CEF does not composite blur or drop shadows
  * usefully: a 24px blur over a moving 3D scene costs a compositor pass every frame
  * and buys nothing visible. Every focus affordance below is an `outline`, which is
  * hard-edged, composites, and states what it is. There is no `box-shadow` in this
  * file at all — deliberately, so nobody has to check whether a blur radius is zero.
  *
- * ── `@layer components`, and why that is load-bearing ──────────────────────
- *
  * UnoCSS emits its utilities UNLAYERED, and an unlayered declaration beats a
  * layered one regardless of source order. Putting these in a layer is what makes
  * `class="panel !bg-secondary"` behave the way anyone reading it expects. tELS uses
  * the same layer for the same classes.
- *
  * Every `font-family` names `var(--font-mono)` or `var(--font-sans)` — the same
  * values the `font-mono`/`font-sans` UTILITIES resolve, provided the consumer points
  * `theme.fontFamily` at the tokens (see fonts.css). Naming a face directly here is
@@ -72,8 +38,6 @@
  */
 
 @layer components {
-  /* ── Surfaces ───────────────────────────────────────────────────────────── */
-
   /* A card over whatever is behind it. The border is the whole affordance. */
   .panel {
     background: hsl(var(--card));
@@ -81,15 +45,9 @@
     border-radius: calc(var(--radius) + 2px);
   }
 
-  /* ── Type ───────────────────────────────────────────────────────────────── */
-
   /* The caption above a control group. One rule instead of six utilities repeated
-     at forty call sites.
-
-     11px and `--muted-foreground` at FULL strength — which is what tELS's editor
-     chrome overrides put its declared 10px/0.6 back to at runtime anyway, just
-     with `!important` from the outside instead of at the declaration. The
-     hierarchy below only works if the caption is legible to begin with. */
+     at forty call sites, at FULL strength -- the hierarchy below only works if
+     the caption is legible to begin with. */
   .section-label {
     display: flex;
     align-items: center;
@@ -114,16 +72,11 @@
     color: hsl(var(--muted-foreground));
   }
 
-  /* ── Controls ───────────────────────────────────────────────────────────── */
-
   /* THE input surface. `shared/ts/ui/input.tsx`, the trigger in
      `shared/ts/ui/select.tsx` and any hand-rolled text field in a consumer are all
      this one class, so they cannot drift apart.
 
      `--input` (9.8%) fill on a `--card` (6.67%) panel with a `--border` (20.39%)
-     edge — the ladder, in the order it was built. The version this replaced used
-     UnoCSS's `border-input`, which is `--input`: the same token as the FILL, so the
-     border was invisible by construction and the whole affordance was a 3%
      lightness step. That is the "the text input is very dim" report. */
   .prop-input {
     width: 100%;
@@ -166,14 +119,10 @@
   /* One segment of a choice between MODES — "Literal text / Live value",
      "Move / Rotate", "Local / World". Styling for `shared/ts/ui/segmented.tsx`.
 
-     A segmented control rather than `ui/radio-group`, and that is a fix for a
-     specific symptom: `RadioGroupItem` hardcodes `text-sm` on its own `ItemText`,
-     so a caller passing `!text-[11px]` styles the wrapper and not the label, and
-     the row rendered at 14px with a 16px circle beside 11px captions — which reads
-     as an unstyled form control dropped into a dense panel.
-
-     `aria-pressed` is what the CSS selects on, so the styled state and the
-     announced state cannot disagree. */
+     A segmented control rather than `ui/radio-group`, which hardcodes `text-sm`
+     on its own `ItemText`, so a caller's size override styles the wrapper and
+     not the label. `aria-pressed` is what the CSS selects on, so the styled
+     state and the announced state cannot disagree. */
   .segment {
     flex: 1 1 0;
     display: flex;
@@ -223,11 +172,9 @@
     border: 1px solid hsl(var(--border));
   }
 
-  /* ── List rows ──────────────────────────────────────────────────────────── */
-
   /* One selectable row of a list — an LED in tELS, a text element in tUnit. Named
-     for its shape rather than its contents, because that is the only reason the
-     two resources had two classes. */
+     for its shape rather than its contents, which is the only reason the two
+     resources had two classes. */
   .list-row {
     display: flex;
     align-items: center;
@@ -257,11 +204,10 @@
     border-color: hsl(var(--primary) / 0.4);
   }
 
-  /* A row's inline action — usually the destructive one. The reason this is a class
-     and not five utilities: it shipped as a 12px glyph in a 20px box at
-     `--muted-foreground/50`, which is the "tiny, can barely even see it exists"
-     report. A 26px target with its own fill and border AT REST is findable without
-     hovering the row first.
+  /* A row's inline action — usually the destructive one. A class and not five
+     utilities because it shipped as a 12px glyph in a 20px box at a fractional
+     muted token, which is the "can barely see it exists" report. A 26px target
+     with its own fill and border AT REST is findable without hovering first.
 
      Sized constantly rather than revealed on hover: a control that appears on hover
      shifts the row's metrics under the cursor. */

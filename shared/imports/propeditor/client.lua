@@ -9,69 +9,29 @@
 
         local editor = tlib.propeditor.create({ ... descriptor ... })
 
-    ── What this module is ─────────────────────────────────────────────────────
+    Everything that IS a particular resource arrives in the descriptor. Four of
+    them are silent to get wrong: `vehicleKey` (how placements are keyed -- two
+    spellings are two namespaces and both are strings), `isRegisteredPropModel`
+    and `resolvePropModel` (the model-preservation rule, see `savedModelFor`),
+    `decor` (two resources sharing a mark adopt and delete each other's props)
+    and `prefix` (the event namespace).
 
-    Everything in tRadio's `client/cl_prop_editor.lua` that is not tRadio: the
-    orbit camera and its maths, the disabled-control set, the Escape suppression,
-    the per-frame loop with its camera-position throttle, the 18-way camera
-    command switch, the prop adoption sweep, the ownership decorator, the three
-    close branches, and all eleven NUI callbacks.
+    The prop LIFECYCLE stays in the consumer; this module borrows one prop for an
+    edit and hands it back through `takeProp`/`giveProp`.
+    Design notes: docs/internal/vehicle-prop.md
 
-    Everything that IS a particular resource arrives in the descriptor. See
-    `create` for the full list; the four that are easy to get wrong are called
-    out here because getting them wrong is silent:
-
-      * `vehicleKey`  — how placements are KEYED. tRadio, tRadar and tDetector
-        all key by `tostring(GetEntityModel(veh))` today, but that is a fact
-        about the current tree and not a law: a resource that keys by spawn name
-        (`GetDisplayNameFromVehicleModel`) is keying a different namespace, and a
-        shared editor that hardcoded either one would write every placement under
-        the wrong key for the other — with no error, because both are strings and
-        both index a table.
-
-      * `isRegisteredPropModel` / `resolvePropModel` — the model-preservation
-        rule. See `savedModelFor` below. This is the one correctness requirement
-        in this file that has already cost data in two resources.
-
-      * `decor` — the ownership mark. Two resources sharing a decorator name
-        would each adopt and delete the other's props.
-
-      * `prefix` — the event namespace. Every NUI callback, every NUI action and
-        the caller-supplied net events are `<prefix>:...`.
-
-    ── Not owned here ──────────────────────────────────────────────────────────
-
-    The prop LIFECYCLE (the pool scan that bolts a prop to every configured
-    vehicle) stays in the consumer. This module borrows one prop for the duration
-    of an edit and hands it back through `takeProp`/`giveProp`, which is the only
-    contact the two have.
 ]]
 
 local PropEditor = {}
 
--- ══════════════════════════════════════════════════════════════════════════
 --  PURE RULES — no natives, no state. tests/lua/propeditor-*.lua drive these
 --  directly.
--- ══════════════════════════════════════════════════════════════════════════
 
 --- What a placement record's `model` field must say when it is saved again.
 ---
---- ⚠️ THE ANSWER IS NEVER `resolvePropModel(record.model)`, and that is the whole
---- reason this function exists rather than being inlined.
----
---- A record written before its resource had a prop-model registry has no `model`
---- key at all, and `resolvePropModel(nil)` answers with the configured default —
---- correctly, because that IS the model such a record wears. But writing that
---- answer back turns "follow the server's default" into "pinned to ztr540
---- forever", for every legacy record, the first time someone nudged its
---- position by a centimetre. The record then stops tracking the owner's config
---- and nothing ever tells them.
----
---- The same trap has a second shape: a helper that hands callers a record with
---- `model` filled in for convenience must hand back a COPY (see `placementView`),
---- or merely READING a placement rewrites it in memory and the next save
---- persists the rewrite.
----
+--- THE ANSWER IS NEVER `resolvePropModel(record.model)`. A legacy record has no
+--- `model` key, and writing the resolved default back turns "follow the server's
+--- default" into "pinned forever" the first time somebody nudges its position.
 --- So: keep the value that was already there, or nil if there was none — and
 --- drop a value naming a model this server no longer offers, because keeping it
 --- would pin the record to something unspawnable.
@@ -90,10 +50,8 @@ end
 --- A read-only view of a placement with `model` resolved to the model that will
 --- actually be spawned, so a caller never has to know the resolution rules.
 ---
---- A SHALLOW COPY, deliberately. Returning the live record with `model` filled in
---- is the second shape of the trap documented on `savedModelFor`: the editor
---- saves whatever it finds in the record, so reading the data would quietly
---- rewrite it.
+--- A SHALLOW COPY, deliberately: the editor saves whatever it finds in the
+--- record, so returning the live one would make merely READING rewrite it.
 ---
 --- @param record table|nil
 --- @param resolve fun(name: any): string
@@ -117,15 +75,10 @@ function PropEditor.localToWorld(m, o)
         m.pos.z + m.right.z * o.x + m.fwd.z * o.y + m.up.z * o.z
 end
 
--- ══════════════════════════════════════════════════════════════════════════
 --  ORBIT CAMERA — pure maths over a plain state table
--- ══════════════════════════════════════════════════════════════════════════
 --
 --  state = { yaw = deg, pitch = deg, dist = m, focus = { x, y, z } }
 --
---  Separated from the natives so it can be asserted off-game. Nothing in here
---  touches a cam handle; `Editor` below is what calls SetCamCoord with the
---  result of `orbit.eye`.
 
 local orbit = {}
 PropEditor.orbit = orbit
@@ -184,9 +137,6 @@ function orbit.eye(s)
 end
 
 --- The inverse of `eye`: yaw/pitch/dist that would put the camera at (x, y, z)
---- looking at the current focus. Distance is clamped to [2, 15] on purpose when
---- `clampOpen` is true — that is the "inherit the gameplay camera" case, where a
---- far-away or inside-the-car gameplay camera must not become the starting orbit.
 function orbit.lookFrom(s, x, y, z, clampOpen)
     local dx, dy, dz = x - s.focus.x, y - s.focus.y, z - s.focus.z
     local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
@@ -215,7 +165,7 @@ end
 
 --- One batch of pointer movement from the page, in device pixels.
 ---
---- ── The sign of every term here is load-bearing ─────────────────────────────
+--- The sign of every term here is load-bearing
 ---
 --- All four axis/control pairs obey ONE convention: **the scene follows the
 --- cursor**. Drag right and what you are looking at moves right; drag down and it
@@ -296,9 +246,7 @@ function orbit.command(s, cmd)
     return true
 end
 
--- ══════════════════════════════════════════════════════════════════════════
 --  RUNTIME
--- ══════════════════════════════════════════════════════════════════════════
 
 --- Controls disabled for every frame the editor is open. Movement, weapons,
 --- vehicle inputs and melee: the player is sitting in a frozen car staring at a
@@ -322,7 +270,7 @@ PropEditor.DISABLED_CONTROLS = DISABLED_CONTROLS
 
 --- The GTA pause menu, disabled for every frame the editor is open.
 ---
---- ── Measured, not guessed: this is the "GTA exit sound" ─────────────────────
+--- Measured, not guessed: this is the "GTA exit sound"
 ---
 --- Reported as "when i hit save or exit etc i don't like the gta style exit
 --- sound/effect that happens". It is the PAUSE MENU opening underneath the
@@ -458,7 +406,7 @@ function PropEditor.create(descriptor)
 
     local function event(name) return ('%s:%s'):format(prefix, name) end
 
-    -- ── State ────────────────────────────────────────────────────────────
+    -- State
 
     local active = false
     local vehicle = nil
@@ -490,7 +438,7 @@ function PropEditor.create(descriptor)
         onStateChange(active, prop)
     end
 
-    -- ── Ownership mark ───────────────────────────────────────────────────
+    -- Ownership mark
     --
     -- The tracking table only lasts as long as this incarnation of the
     -- resource; a prop bolted to a car outlives it. Recovering those needs
@@ -523,7 +471,7 @@ function PropEditor.create(descriptor)
         return DecorExistOn(obj, decor) and DecorGetBool(obj, decor)
     end
 
-    -- ── Camera ───────────────────────────────────────────────────────────
+    -- Camera
 
     local function pushCam()
         if not cam or not DoesCamExist(cam) then return end
@@ -600,9 +548,9 @@ function PropEditor.create(descriptor)
         if dirty then pushCam() end
     end
 
-    -- ── Prop ─────────────────────────────────────────────────────────────
+    -- Prop
     --
-    -- ⚠️ TWO MECHANISMS, CHOSEN BY THE SCALE, AND THAT IS NOT AN OPTIMISATION
+    -- TWO MECHANISMS, CHOSEN BY THE SCALE, AND THAT IS NOT AN OPTIMISATION
     -- THAT COULD BE DROPPED.
     --
     -- `AttachEntityToEntity` cannot carry a scale. Measured: a prop attached and
@@ -745,7 +693,7 @@ function PropEditor.create(descriptor)
         giveProp(vehicle, prop)
     end
 
-    -- ── Open / close ─────────────────────────────────────────────────────
+    -- Open / close
 
     local function open()
         if active then return end
@@ -904,7 +852,7 @@ function PropEditor.create(descriptor)
         onClose()
     end
 
-    -- ── Camera commands ──────────────────────────────────────────────────
+    -- Camera commands
 
     local function propWorldPos()
         local fwd, right, up, pos = GetEntityMatrix(vehicle)
@@ -950,7 +898,7 @@ function PropEditor.create(descriptor)
         end
     end
 
-    -- ── Per-frame thread ─────────────────────────────────────────────────
+    -- Per-frame thread
 
     Citizen.CreateThread(function()
         while true do
@@ -1018,7 +966,7 @@ function PropEditor.create(descriptor)
         end
     end)
 
-    -- ── NUI callbacks (all eleven) ───────────────────────────────────────
+    -- NUI callbacks (all eleven)
 
     RegisterNUICallback(event('openPropEditor'), function(_, cb)
         cb(1)
@@ -1122,7 +1070,7 @@ function PropEditor.create(descriptor)
         cameraCommand(data.cmd)
     end)
 
-    -- ── Instance surface ─────────────────────────────────────────────────
+    -- Instance surface
 
     return {
         --- Opens the editor for the vehicle the player is in. Safe to bind to a
@@ -1152,7 +1100,7 @@ function PropEditor.create(descriptor)
         currentScale = function() return scale end,
         --- The shared `tlib.drivenprop` driver.
         ---
-        --- ⚠️ A CONSUMER'S LIFECYCLE MUST USE THIS ONE, not a driver of its own.
+        --- A CONSUMER'S LIFECYCLE MUST USE THIS ONE, not a driver of its own.
         --- One prop is handed back and forth between the editor and the
         --- lifecycle through takeProp/giveProp, and two drivers would both
         --- believe they owned its matrix — which presents as a prop that

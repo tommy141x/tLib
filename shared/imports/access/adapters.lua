@@ -1,36 +1,20 @@
 --[[
     tLib/shared/imports/access/adapters.lua
 
-    The built-in framework and inventory adapters. Loaded lazily, by server.lua,
-    with LoadResourceFile -- never by the import loader, which only understands
-    shared/client/server.lua.
 
     Two ordered lists. Order IS the priority, and it is the whole detection
-    strategy: first adapter whose resource is `started` wins.
-
-    Why not do it community_bridge's way
-    ------------------------------------
-    community_bridge detects by fxmanifest glob order plus a hand-maintained
-    matrix of pairwise "bow out if that other one exists" guards, each testing
-    `GetResourceState(x) ~= 'missing'`. Two measured consequences of that design,
-    both of which this file is shaped to avoid:
-
-      * `~= 'missing'` is TRUE for a resource that is merely stopped. A leftover
-        inventory folder the owner stopped months ago still knocks out the live
-        one. We test `== 'started'`.
-      * The matrix is asymmetric, so it only actually protects ox_inventory.
-        With qs-inventory and codem-inventory both installed, the winner is
-        whichever sorts later alphabetically. A single ordered list cannot do
-        that -- it may pick the wrong one, but it picks the same wrong one every
-        time, it is written down, and `tlib.access.use()` overrides it.
+    strategy: first adapter whose resource is `started` wins -- `started`, not
+    `~= 'missing'`, so a leftover folder the owner stopped months ago cannot
+    knock out the live one. Overridable with `tlib.access.use()`.
 
     Every function here is called inside a pcall by server.lua, so an adapter may
-    assume its resource is present and index freely. It must return the right
-    TYPE though: `jobs` a table, `count` a number. A wrong type is read as "no
-    jobs" / "none", not as an error.
+    index freely. It must return the right TYPE though: `jobs` a table, `count` a
+    number. A wrong type reads as "no jobs" / "none", not as an error.
+
+
 ]]
 
--- ── Frameworks: "what jobs does this player hold, at what grade" ─────────────
+-- Frameworks: "what jobs does this player hold, at what grade"
 --
 -- Every adapter normalises to the same shape: { [jobName] = gradeNumber }.
 -- A framework with no notion of grade reports 0, which compares true against any
@@ -39,11 +23,6 @@
 -- not one that silently ignores the number they wrote.
 
 local frameworks = {
-    -- FIRST, and this ordering is load-bearing. qbx_core declares
-    -- `provide 'qb-core'` and registers the qb-core export names, so on a QBox
-    -- server `exports['qb-core']:GetCoreObject()` SUCCEEDS and returns a
-    -- deprecated compatibility shim. Checked second, every QBox server in the
-    -- world would silently run the legacy path.
     {
         name = 'qbx_core',
         jobs = function(src)
@@ -75,11 +54,6 @@ local frameworks = {
         end,
     },
 
-    -- Ahead of es_extended deliberately. ND_Core ships an ESX compatibility
-    -- layer that registers the `es_extended`/`getSharedObject` export name via a
-    -- raw `__cfx_export_...` handler. Resource-name detection does not fall for
-    -- that on its own -- GetResourceState('es_extended') is still 'missing' --
-    -- but an owner who has both folders present should get the real ND path.
     {
         name = 'ND_Core',
         jobs = function(src)
@@ -149,7 +123,7 @@ local frameworks = {
     },
 }
 
--- ── Inventories: "how many of this item does the player have" ────────────────
+-- Inventories: "how many of this item does the player have"
 --
 -- Ordered by how widely deployed each is, ox_inventory first. Each returns a
 -- NUMBER, never a boolean -- a boolean cannot answer `count = 2`, and an adapter
@@ -210,16 +184,6 @@ local inventories = {
         end,
     },
 
-    -- The three below expose only a boolean `HasItem` in the reference corpus --
-    -- no count export exists to call. So `count` here is deliberately lossy: it
-    -- reports 1 for "has at least the required amount" and 0 otherwise, by
-    -- asking the question the inventory can actually answer.
-    --
-    -- That makes `count = 1` exact and `count = N` correct-but-coarse, and it is
-    -- why `count` is threaded through rather than resolved to a number here. It
-    -- is better than the alternative these inventories tempt you into: reading
-    -- the framework's PlayerData.items instead, which is a DIFFERENT store and
-    -- is simply wrong whenever the inventory does not sync back into it.
     {
         name = 'qb-inventory',
         count = function(src, item, required)

@@ -32,24 +32,11 @@ end
 
 --- A stable short id for the server this client is connected to.
 ---
---- Moved here from tRadio, which needed it because some settings are only
---- meaningful against one server's configuration: its Radio FX overrides are a
---- correction dialled in on top of that server's chain, and carried to the next
---- server they would correct a chain that was never wrong. That is not a tRadio
---- problem — it is true of any per-server tuning — so the scoping belongs in the
---- shared layer rather than being re-derived by each resource that notices.
----
---- ⚠️ The hash is djb2 over `GetCurrentServerEndpoint()`, reduced mod 2^32 and
+--- The hash is djb2 over `GetCurrentServerEndpoint()`, reduced mod 2^32 and
 --- formatted `%08x`. Do not "improve" it: the output IS part of stored KVP keys,
 --- so any change silently abandons every player's saved per-server settings.
 ---
---- ⚠️ An unresolved endpoint returns `""`, not the hash of the empty string.
---- djb2's seed is 5381, so hashing `""` yields the perfectly plausible-looking
---- tag `00001505` — which is what tRadio's copy did, and it meant a client that
---- had not resolved an endpoint yet wrote its per-server settings into a shared
---- bucket named after nothing. The TypeScript half already had the right rule
---- ("an absent server tag leaves a scoped key unscoped rather than dropping
---- it"); this is the Lua half agreeing with it.
+--- An unresolved endpoint returns `""`, not the hash of the empty string.
 local _serverTag = nil
 function kvp.serverTag()
     if _serverTag then return _serverTag end
@@ -66,14 +53,8 @@ end
 --- Returns the prefixed KVP key.
 ---
 --- `opts.prefix` is an extra namespace applied inside the community prefix, and
---- `opts.serverScoped` appends `_<serverTag()>`. Both are opt-in: `kvp.key(k)`
---- on its own is byte-for-byte what it always was, which matters because these
---- strings are persisted.
 ---
 --- An empty server tag leaves a scoped key unscoped rather than appending `_`.
---- A dev session or an environment that never resolved an endpoint then keeps
---- what the player tuned instead of silently reverting them — the same
---- single-store behaviour every unscoped setting already has.
 function kvp.key(key, opts)
     if opts then
         if opts.prefix then key = opts.prefix .. key end
@@ -93,29 +74,12 @@ end
 
 --- Build an accessor set whose keys all carry `opts`.
 ---
---- This is the one generalisation Item 2 needed. Two resources had forked the
---- persistence layer, and each fork existed for exactly one missing option:
----
---- - **tRadio** needed per-server scoping, and implemented it twice — once in
----   `client/cl_bridge.lua` as a `SERVER_SCOPED_SETTINGS` set plus a
----   `settingKvpKey` wrapper, and again in TypeScript as `SettingsStore`'s
----   `suffix`. Both sat on top of `tlib.kvp.key`, re-adding what they had just
----   been given.
---- - **tAFK** needed a `tafk:` namespace and reads that return `nil` rather than
----   a type zero, and wrote seven two-line wrappers in `client/cl_prefs.lua` to
----   get it.
----
---- Neither is a different idea about storage; both are the same storage with a
---- different key and a different "never set" answer. So:
----
 ---     local prefs = tlib.kvp.view({ prefix = 'tafk:', nilWhenUnset = true })
 ---     prefs.getBool('playerDisabled')          --> nil until the player sets it
 ---
 ---     local fx = tlib.kvp.view({ serverScoped = true })
 ---     fx.getJson('radio_setting_fx_overrides') --> this server's tuning only
 ---
---- `nilWhenUnset` changes only the never-written answer. An explicit `default`
---- argument still wins over it, so a caller that wants a fallback asks for one.
 local function buildAccessors(into, opts)
     local function k(key)
         return kvp.key(key, opts)
@@ -236,9 +200,6 @@ end
 --- A view onto the same store with `opts` baked into every key.
 ---
 --- `view.key(k)` is the fully resolved key, for the rare caller that has to hand
---- one to something else. It is deliberately NOT installed on the module itself:
---- `kvp.key(key, opts)` already takes the options explicitly, and overwriting it
---- with a one-argument form would silently drop every `serverScoped` request.
 function kvp.view(opts)
     local view = buildAccessors({}, opts)
     function view.key(key)
@@ -248,8 +209,6 @@ function kvp.view(opts)
 end
 
 -- The module's own accessors are a view with no options, so there is exactly one
--- implementation of each and `tlib.kvp.getBool` cannot drift from
--- `tlib.kvp.view({}).getBool`.
 buildAccessors(kvp, nil)
 
 return kvp

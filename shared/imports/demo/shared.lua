@@ -5,7 +5,7 @@
         if tlib.demo.active() then ... end
         if tlib.demo.dropWrite('data.json') then return true end   -- server
 
-    ── What demo mode is ───────────────────────────────────────────────────────
+     What demo mode is
 
     One convar, `tlib_demo`, that turns a server into a throwaway showroom:
 
@@ -22,7 +22,7 @@
     cleanup between visitors, and which doubles as the test box: the same build
     that ships is the one running, with nothing patched out of it.
 
-    ── Why it is a convar and not config ───────────────────────────────────────
+     Why it is a convar and not config
 
     Because a convar is the one piece of configuration that CANNOT travel inside
     the release. `server.cfg` is the server owner's file; it is not in the zip,
@@ -32,7 +32,7 @@
     no stripped code path and no "did we remember to turn it off" step. There is
     nothing to forget.
 
-    ── It is not a security feature, it is the absence of one ──────────────────
+     It is not a security feature, it is the absence of one
 
     Demo mode is fail-OPEN by design and it is the only thing in tLib that is.
     Everything else here -- `access`, `permission`, the marketplace admin rule --
@@ -45,7 +45,7 @@
     not. tLib says so on every start, in red, and keeps saying it -- see
     server/sv_demo.lua.
 
-    ── Reading it ──────────────────────────────────────────────────────────────
+     Reading it
 
     The convar is authoritative on the server and is read directly there. A
     client VM can only see a convar set with `setr`, so rather than make `setr`
@@ -151,7 +151,7 @@ function demo.noteDropped(what)
     print(('^3[tLib] demo mode: not writing "%s" — this server resets on restart^7'):format(key))
 end
 
--- ── Transport ───────────────────────────────────────────────────────────────
+-- Transport
 --
 -- Server VMs get the convar directly, so they only need the override broadcast.
 -- Clients need the whole answer. Both arrive on the same event.

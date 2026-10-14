@@ -8,28 +8,12 @@
             once  = 'no-config',
         })
 
-    Why this exists
-    ---------------
-    Every t* resource had grown its own hand-wrapped console banner: a row of
-    dashes, a `^1[tName] ` prefix repeated on every line, and prose broken at
-    whatever column the author's editor happened to be at. They were long, they
-    drifted apart in shape, and — worst — they lived in `config/`, which is
-    `escrow_ignore`'d. A bad upload that took out the config file also took out
-    the error message explaining it.
-
-    So the RENDERING lives here, in a module every resource already imports, and
-    a caller writes prose instead of print lines. A ten-line block becomes three
-    lines of Lua, which is the point: the blocks were not too loud, the source
-    was too long, and shortening them by hand meant saying less to the operator.
-
     Nothing here decides anything. It prints.
+    Design notes: docs/internal/diag-command.md
 ]]
 
 local Diag = {}
 
--- The dashed rule, and the column prose wraps at. 60 is what every existing
--- block in this codebase already used, so re-rendering one produces the same
--- shape rather than a diff in every console.
 local RULE_WIDTH = 60
 local WRAP_WIDTH = 60
 
@@ -40,17 +24,12 @@ local LEVELS = {
     info  = { colour = '^7', prefix = '' },
 }
 
--- Keys already printed, for `once`. Per VM, so a consumer that restarts gets its
--- diagnostics again -- which is correct: a restart is when an operator is looking.
 local _said = {}
 
 --- Greedy word wrap. Returns a list of lines, each at most `width` characters.
----
---- `indent` is prepended to every line after the first, which is what makes a
---- bulleted fix item hang under its own dash instead of resetting to column 0.
---- A single word longer than the width is left over-long rather than split: it
---- is nearly always a path, a resource name or a URL, and breaking one of those
---- turns a message an operator can copy into one they cannot.
+--- `indent` is prepended to every line after the first, so a bulleted fix hangs
+--- under its own dash. An over-long single word is left unsplit: it is nearly
+--- always a path or a URL, and breaking one makes it uncopyable.
 --- @param text string
 --- @param width number
 --- @param indent string|nil
@@ -58,9 +37,6 @@ local _said = {}
 function Diag.wrap(text, width, indent)
     indent = indent or ''
     text = tostring(text)
-    -- Leading whitespace is meaningful -- it is how a caller writes a bullet
-    -- ('  - do the thing') -- and tokenising on %S+ would silently eat it,
-    -- un-indenting every bulleted line in the block.
     local lines, line = {}, text:match('^%s*') or ''
     for word in text:gmatch('%S+') do
         local candidate = line:match('^%s*$') and (line .. word) or (line .. ' ' .. word)
@@ -76,11 +52,8 @@ function Diag.wrap(text, width, indent)
     return lines
 end
 
---- The lines a block would print, without printing them.
----
---- Split out from say() so a test can assert on the text rather than on a print
---- spy, and so a caller that wants the block somewhere other than the console --
---- a support dump, an admin panel -- can have it.
+--- The lines a block would print, without printing them. Split out so a test
+--- can assert on the text, and so a support dump or an admin panel can have it.
 --- @param level string  'fatal' | 'error' | 'warn' | 'info'
 --- @param title string  one sentence, the thing that is wrong
 --- @param opts table|nil { cause, fix, detail, scope }
@@ -103,16 +76,12 @@ function Diag.render(level, title, opts)
         for _, l in ipairs(Diag.wrap(opts.cause, WRAP_WIDTH)) do add(l) end
     end
 
-    -- A string is one fix, a table is several. Accepting both keeps the common
-    -- case -- there is one thing to do -- from needing a table literal.
     local fixes = opts.fix
     if type(fixes) == 'string' then fixes = { fixes } end
     if type(fixes) == 'table' and #fixes > 0 then
         blank()
         add(#fixes > 1 and 'Fix it one of these ways:' or 'To fix:')
         for _, fix in ipairs(fixes) do
-            -- Hanging indent of four, so a wrapped fix lines up under its own
-            -- text rather than under the dash.
             for _, l in ipairs(Diag.wrap('  - ' .. fix, WRAP_WIDTH, '    ')) do add(l) end
         end
     end
@@ -125,20 +94,15 @@ function Diag.render(level, title, opts)
     local rule  = string.rep('-', RULE_WIDTH)
     local lines = { ('%s[%s] %s^7'):format(spec.colour, scope, rule) }
     for _, l in ipairs(body) do
-        -- A blank body line still carries the prefix and a space. Without the
-        -- trailing space FiveM's console trims the line and the block loses its
-        -- left edge halfway down.
         lines[#lines + 1] = ('%s[%s] %s^7'):format(spec.colour, scope, l == '' and ' ' or l)
     end
     lines[#lines + 1] = ('%s[%s] %s^7'):format(spec.colour, scope, rule)
     return lines
 end
 
---- Print a diagnostic block.
----
---- print(), never a logger: every caller of this is explaining why something is
---- broken, and a log level is exactly the thing an operator in that situation has
---- not configured. Returns true if it printed, false if `once` suppressed it.
+--- Print a diagnostic block. print(), never a logger: every caller is
+--- explaining why something is broken, and a log level is the thing an operator
+--- in that situation has not configured.
 --- @param level string
 --- @param title string
 --- @param opts table|nil  { cause, fix, detail, scope, once }
@@ -159,125 +123,23 @@ function Diag.error(title, opts) return Diag.say('error', title, opts) end
 function Diag.warn(title, opts) return Diag.say('warn', title, opts) end
 function Diag.info(title, opts) return Diag.say('info', title, opts) end
 
---- Has this `once` key already been used? For a caller that wants to skip the
---- work of BUILDING a message it is about to have suppressed.
+--- Has this `once` key already been used? For a caller that wants to skip
+--- BUILDING a message it is about to have suppressed.
 --- @param key string
 --- @return boolean
 function Diag.said(key) return _said[tostring(key)] == true end
 
---- Forget every `once` key. Tests, and a consumer that deliberately wants a
---- block repeated after some state has changed.
 function Diag.reset() _said = {} end
 
 
---[[============================================================================
-    `<resource>_diag` — the paste-safe status command, once.
-
-        tlib.diag.command({
-            name   = 'tradar_diag',
-            title  = 'tRadar diagnostics',
-            spec   = tradarConfigSpec,
-            report = function(ctx)
-                ctx.section('config')
-                ctx.kv('band', Config.band)
-            end,
-        })
-
-    ── Why this exists ─────────────────────────────────────────────────────────
-
-    tscripts-config-standard §13 asks every resource for one console command
-    that prints a pre-redacted, paste-safe status, because the alternative is
-    what actually happens without it: an owner asked "what does your setup look
-    like" pastes their whole config file, credentials included, into a public
-    Discord.
-
-    EIGHT resources had written that command by hand — tDetector, tRadar, tUnit,
-    tAFK, tChirp, tRadio, tCAD and tELS — and tRadio and tCAD shared 54 lines of
-    literal copy-paste including byte-identical `meta()` and `convarSet()`
-    helpers. The report CONTENT differed for real reasons, and still does: it is
-    a callback. Everything else differed for no reason at all, and four of the
-    differences were safety properties that one copy had and the others had
-    simply not thought of:
-
-      * **Redaction.** tDetector keyed a redactor on the key's NAME rather than
-        on a list of known-secret keys, with the reason written down: "the
-        failure mode being guarded against is a key added later by somebody who
-        did not read §13 — and the whole value of this command is that an owner
-        can paste its output without reading it first. A redactor that has to be
-        updated to keep working is a redactor that silently stops working."
-        tRadio withheld whole validation messages that named one of its secrets.
-        tRadar, tUnit, tAFK and tChirp had NO redactor, each justified by "this
-        config holds no secrets" — which is exactly the assumption tDetector's
-        own comment says is unsafe over time.
-
-        So redaction is ON by default here, in both forms, and it is DERIVED
-        rather than hand-listed: `harvest` walks the config for values whose key
-        name looks like a credential, and no line containing one of those values
-        survives. A resource whose config gains `Config.webhookUrl` next year is
-        covered without anybody editing this file or that one.
-
-      * **The pcall guard.** Only tRadar had it, with the reason: "a diagnostic
-        that dies mid-report is worse than none: the owner pastes half a page
-        and nobody can tell it is half." tAFK and tELS copied it from there; the
-        other five would have printed a truncated report with no sign that it
-        was truncated. It is the default now, and the partial report is still
-        flushed before the failure line — a report that died at line 40 still
-        answers thirty-nine questions, and discarding those to print one error
-        is the same loss the guard exists to prevent.
-
-      * **Spec-derived key listing.** Only tDetector derived the printed key
-        list from the config spec and APPENDED anything the spec did not know
-        about; everyone else hand-listed, and a hand-listed dump silently omits
-        every key added after it was written. `ctx.configKeys()` is that
-        behaviour, available to anyone who passes a `spec`.
-
-      * **ACE gating.** `RegisterCommand(..., true)` — restricted — is applied
-        here rather than by the caller, so copy number nine cannot forget it.
-
-    ── Routing: the merge, not a pick ──────────────────────────────────────────
-
-    The eight copies had three routings: the server console only (tRadar, tAFK),
-    the console OR `chat:addMessage` depending on the source (tUnit, tRadio,
-    tCAD, tChirp), and the console AND a client event (tDetector).
-
-    The default is the union, because each copy's reasoning was right about its
-    own half and silent about the other. tDetector's: the console copy is "the
-    copy that survives the player disconnecting", so it is unconditional.
-    tRadar's report had to OPEN by saying it had printed somewhere else — a line
-    that exists only because an in-game caller got silence. So: the console
-    always, and the caller too when there was one.
-
-    `route = 'console'` remains, for a client-side command where there is no
-    `TriggerClientEvent` to reach anybody with.
-
-    ── What is NOT here ────────────────────────────────────────────────────────
-
-    Any opinion about what a report should say. Section names, ordering, which
-    fields matter and which of them are a verdict rather than a value are the
-    consumer's, and they are the half of these files that was never duplicated.
-==============================================================================]]
-
--- Keyed on the NAME, not on a list of known-secret keys. See the block above:
--- the guarded failure is a credential key added later by somebody who did not
--- read §13, and a redactor that has to be updated to keep working is a redactor
--- that silently stops working.
+-- Keyed on the key NAME, not a list of known secrets: the guarded failure is a
+-- credential key added later by somebody who did not read the standard.
 --
--- ⚠️ This list is the SINGLE SOURCE for the commit/release/CI secret gate as
--- well as for this redactor. `shared/ts/secrets/patterns.ts` PARSES the literal
--- below out of this file rather than restating it, and
--- `scripts/secret-gate.test.ts` asserts the two agree as a SET of names. So a
--- pattern added here is live in the pre-commit hook, in every resource's
--- release packager and in CI with no second edit — which is the only
--- arrangement in which the two cannot drift apart.
---
--- ⛔ Keep this a flat list of single-quoted lowercase strings on contiguous
--- lines. The TS parser is deliberately strict and will refuse (not silently
--- return a short list) on any other shape.
---
--- `accesskey`/`access_key` were added 2026-10-06. `Advanced.S3.AccessKey` in
--- tDB's config.lua is a live credential and `accesskey` is not a substring of
--- `apikey` — a one-character-off miss that the sibling `SecretKey` masked,
--- because the pair always appears together and the second of them matched.
+-- This list is the SINGLE SOURCE for the commit/release/CI secret gate too.
+-- shared/ts/secrets/patterns.ts PARSES the literal below out of this file, and
+-- scripts/secret-gate.test.ts asserts the two agree as a set. Keep it a flat
+-- list of single-quoted lowercase strings on contiguous lines -- the parser is
+-- deliberately strict and refuses any other shape.
 Diag.SECRET_PATTERNS = {
     'secret', 'token', 'password', 'passwd', 'apikey', 'api_key',
     'webhook', 'licence', 'license', 'credential', 'privatekey', 'private_key',
@@ -296,8 +158,7 @@ function Diag.isSecretName(name)
 end
 
 --- `set` / `not set`, never the value. For a credential whose PRESENCE is the
---- useful fact — "authToken not set" answers most of the tickets that ask for
---- this command — and whose value is never printable.
+--- useful fact and whose value is never printable.
 --- @param value any
 --- @return string
 function Diag.presence(value)
@@ -317,8 +178,8 @@ function Diag.convarSet(name)
 end
 
 --- A resource's metadata field, or 'unknown'. pcall'd: GetResourceMetadata
---- raises on a resource that is not installed, and asking about one that might
---- not be is the whole point of a dependency section.
+--- raises on a resource that is not installed, which is the whole point of a
+--- dependency section.
 --- @param resource string
 --- @param key string|nil  defaults to 'version'
 --- @return string
@@ -330,8 +191,6 @@ function Diag.meta(resource, key)
 end
 
 --- `started` / `stopped` / `missing`, without raising on an unknown resource.
---- The pcall is tAFK's, not tRadar's: tRadar called the native bare, so a
---- typo'd dependency name would have taken the whole report down.
 --- @param name string
 --- @return string
 function Diag.resourceState(name)
@@ -351,12 +210,8 @@ function Diag.count(tbl)
     return n
 end
 
---- A value rendered for a dump, redacted by key NAME.
----
---- Tables are summarised rather than expanded: a 25-entry coordinate list would
---- bury the four lines somebody is actually looking for. A key/value table is
---- shown one level deep, because those are the sensitivity / bandRange / lockout
---- tables and their numbers are what a range question turns on.
+--- A value rendered for a dump, redacted by key NAME. Tables are summarised
+--- rather than expanded, one level deep for a key/value table.
 --- @param name any  the key this value was found under
 --- @param value any
 --- @return string
@@ -389,22 +244,8 @@ function Diag.describe(name, value)
 end
 
 --- Every credential-looking string value in a config table, with the key it was
---- found under.
----
---- This is what makes redaction derived rather than hand-listed. Nothing names a
---- secret: a key whose NAME reads like one and whose value is a non-trivial
---- string is treated as one, so a config that gains a credential next year is
---- covered without this file or the consumer's changing.
----
---- Short values are skipped deliberately. The scan in `redactor` is a plain
---- substring match over every emitted line, and a three-character "secret" would
---- withhold half the report for no gain — a value that short is not a credential
---- anybody could use. `extraNames` adds keys the pattern list would miss
---- (tRadio's `adminPassword` and `discord.clientSecret` both match; a
---- hypothetical `Config.key` would not).
----
---- Depth-limited and cycle-safe: a config may legitimately contain a cycle, and
---- a diagnostic that hangs is a diagnostic that looks like a crashed server.
+--- found under. This is what makes redaction derived rather than hand-listed.
+--- Depth-limited and cycle-safe; short values are skipped deliberately.
 --- @param config table|nil
 --- @param extraNames table|nil  extra key names to treat as credentials
 --- @return table list of { key = string, value = string }
@@ -414,8 +255,6 @@ function Diag.harvest(config, extraNames)
     local extra = {}
     for _, name in ipairs(extraNames or {}) do
         extra[tostring(name):lower()] = true
-        -- A dotted path is registered by its leaf too, because that is the key
-        -- name the walk below actually sees.
         local leaf = tostring(name):match('[^.]+$')
         if leaf then extra[leaf:lower()] = true end
     end
@@ -438,18 +277,9 @@ function Diag.harvest(config, extraNames)
     return found
 end
 
---- The NAMES of every credential-looking key present in a config table, whatever
---- the type of the value.
----
---- `harvest` cannot supply these. It collects VALUES for the substring filter, and
---- a value only qualifies as a string of six or more characters. A credential
---- written without its quotes is a number, and a number is exactly the case the
---- name rule exists for: the validator masks it ("read as 0"), so the value
---- filter has nothing to find, and with names derived from `harvest` the name
---- rule had nothing to match either. Both layers went blind to the same input.
---- A present, non-empty, non-table value is enough to make its name count --
---- an unset key has no value to disclose, and withholding its messages would
---- hide "authToken is required" for no gain.
+--- The NAMES of every credential-looking key present in a config table,
+--- whatever the type of the value. `harvest` cannot supply these: it collects
+--- values for the substring filter, and an unquoted credential is a number.
 --- @param config table|nil
 --- @param extraNames table|nil  extra key names to treat as credentials
 --- @return table list of key names, de-duplicated
@@ -483,17 +313,9 @@ function Diag.secretKeys(config, extraNames)
     return names
 end
 
---- The line filter a report is passed through.
----
---- Returns function(line) -> line. A line carrying a harvested credential is
---- replaced wholesale rather than patched, because a line that quotes a secret
---- usually quotes it inside prose ("expected a string, got \"hunter2\"") and
---- there is no reliable way to cut the value out of that and leave a sentence an
---- operator can act on. tRadio's hand-written version of this rule said the same
---- thing and withheld the whole message.
----
---- `secrets` is what `harvest` returned. An empty list yields the identity
---- filter, which is the common case and costs nothing.
+--- The line filter a report is passed through. A line carrying a harvested
+--- credential is replaced wholesale rather than patched: a line that quotes a
+--- secret usually quotes it inside prose.
 --- @param secrets table list of { key, value }
 --- @return function
 function Diag.redactor(secrets)
@@ -511,35 +333,16 @@ function Diag.redactor(secrets)
     end
 end
 
---- The config keys to print, in presentation order, with nothing dropped.
----
---- tDetector's `orderedConfigKeys`, generalised. Three passes, and the third is
---- the one worth having: `order` first, so the dump reads like config.lua rather
---- than like a hash table; then every other key the SPEC declares; then every
---- string key in the table the spec does NOT declare. Those last are the keys
---- the startup validator warned were doing nothing, and they are the most useful
---- lines in the whole dump — "I set that and it had no effect" is the ticket and
---- this is the evidence. They are also why `describe` redacts by key name rather
---- than from a list: a key nobody declared is by definition a key nobody vetted.
----
---- `order` is presentation only. It is NOT the list of what gets printed, which
---- is what a hand-maintained list silently becomes.
---- A FUNCTION is accepted as well as a table and called, because both shapes
---- are already in the tree: tRadar's `tradarConfigSpec` is a table and
---- tDetector's `tdetConfigSpec` is a function that builds one. Making every
---- caller normalise it would be one more thing to get right in eight places --
---- and getting it wrong is SILENT: a function lands as `spec.keys == nil`, the
---- first two passes produce nothing, and the dump still looks complete because
---- the third pass lists the config's own keys. Measured, on tDetector.
+--- The config keys to print, in presentation order, with nothing dropped: the
+--- third pass lists keys the spec does NOT declare, which are the ones the
+--- validator warned were doing nothing. `order` is presentation only, never the
+--- list of what gets printed. A `spec` may be a table or a function.
 --- @param spec table|function|nil  a tlib.config spec; `spec.keys` is read
 --- @param order table|nil
 --- @param config table|nil
 --- @return table
 function Diag.configKeys(spec, order, config)
     if type(spec) == 'function' then
-        -- A spec builder that RAISES degrades to "no spec" rather than taking
-        -- the report down: a validator that throws is exactly the condition
-        -- somebody runs this command to understand.
         local ok, built = pcall(spec)
         spec = ok and built or nil
     end
@@ -579,12 +382,6 @@ end
 --- The strictest half of `command`, on its own: a restricted console command
 --- whose body cannot take the report down with it.
 ---
---- For a report produced by a renderer the consumer already owns and that PRINTS
---- rather than returning lines — tELS's `telsReportEnv`, which its startup path
---- shares — where `command`'s line pipeline has nothing to filter and would only
---- be a more expensive pcall. The uniform failure line is the point: "a
---- diagnostic that dies mid-report is worse than none, because the owner pastes
---- half a page and nobody can tell that it is half."
 --- @param name string  the command name; also named in the failure line
 --- @param body function  called with (source, args, raw)
 --- @param scope string|nil  defaults to the current resource
@@ -615,7 +412,7 @@ end
 ---   spec     table|nil   a tlib.config spec, enabling `ctx.configKeys()`.
 ---   order    table|nil   presentation order for `ctx.configKeys()`.
 ---   secrets  table|nil   extra credential key names beyond SECRET_PATTERNS.
----   redact   boolean|nil ⚠️ defaults to TRUE. `false` exists for the suite's
+--- redact boolean|nil defaults to TRUE. `false` exists for the suite's
 ---                        negative control and for nothing else.
 ---   route    string|nil  'both' (default) | 'console' | 'caller'.
 ---   event    string|nil  a client event to deliver the line list on, instead of
@@ -629,7 +426,7 @@ end
 ---                    verbose where chat would be a wall of text (tUnit's rule).
 ---   ctx.line(fmt,…)  one line, `string.format`ed when given arguments.
 ---   ctx.blank()      a blank line.
----   ctx.section(t)   a '── t ──' divider.
+--- ctx.section(t) a ' t ' divider.
 ---   ctx.kv(k,v,w)    'k   <described v>', redacted by key name.
 ---   ctx.message(m)   a validation message: indented, newline-continued, and
 ---                    WITHHELD when it names one of the harvested credentials.
@@ -650,19 +447,8 @@ function Diag.command(opts)
         local src = tonumber(source) or 0
         local out = {}
 
-        -- Harvested per invocation, not once at registration: `Config` is
-        -- mutated after boot — a spec fills its defaults, an admin panel writes
-        -- into it — and a credential that arrives afterwards must still be
-        -- covered. This runs once per human-typed command, so the walk is free.
         local config = opts.config
         if config == nil then config = rawget(_G, 'Config') end
-        -- A resource whose settings are LOADED rather than global -- tAFK reads
-        -- data.json, tELS keeps serverDefaults -- cannot hand a table in at
-        -- registration, because at that point there is nothing to hand. pcall'd
-        -- because this runs before the report does: a loader that throws must
-        -- not take the command down before it has printed the version lines
-        -- somebody asked for. It degrades to harvesting nothing, which is why
-        -- the name-keyed layer in `describe` is unconditional.
         if type(config) == 'function' then
             local ok, loaded = pcall(config)
             config = ok and loaded or nil
@@ -674,9 +460,6 @@ function Diag.command(opts)
 
         local function emit(text) out[#out + 1] = filter(text) end
 
-        -- Derived from the config's key NAMES, not from what `harvest` found: see
-        -- `secretKeys` for why a name rule fed by the value harvest misses the
-        -- unquoted-credential case it exists for.
         local secretNames = redact
             and Diag.secretKeys(type(config) == 'table' and config or nil, opts.secrets)
             or {}
@@ -711,19 +494,6 @@ function Diag.command(opts)
         function ctx.configKeys() return Diag.configKeys(opts.spec, opts.order, config) end
 
         --- A validation message, indented and newline-continued.
-        ---
-        --- Withheld when it names a credential, which is tRadio's rule and the
-        --- reason it existed: these messages quote the offending VALUE by
-        --- design, so one about a credential is a disclosure in the one command
-        --- whose whole value is that it can be pasted without being read first.
-        --- The value filter catches it too; this catches the case where the
-        --- message transformed the value — masked it, named its type — and so no
-        --- longer contains it literally.
-        ---
-        --- Newline-continued rather than flattened. tDetector collapsed these to
-        --- one line with ' / ' and tRadar with ' | '; both lose the `Cause:` and
-        --- `Fix:` paragraphs that the validators go to some trouble to write, and
-        --- those paragraphs are the half an operator can act on.
         function ctx.message(message)
             local text = tostring(message)
             for _, key in ipairs(secretNames) do

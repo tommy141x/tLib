@@ -1,72 +1,31 @@
 -- Vehicle occupancy — who is aboard a vehicle, in which tier, and which of them
--- is allowed to act on it.
---
--- Exists because three resources each answered that question separately and all
--- three answered it differently: tELS accepted any seat (so a rear passenger
--- silently stole the state-bag relay from the driver), tRadio accepted the
--- driver only, tRadar never asked because it never left the client. Consumers
--- now share one rule:
+-- is allowed to act on it. One rule, shared, because three resources answered
+-- the question three different ways and tELS let a rear passenger steal the
+-- state-bag relay from the driver:
 --
 --     The CONTROLLER of a vehicle is its driver if a driver is seated, and
 --     otherwise its front passenger.
---
--- That falls out of how the feature is meant to behave — a driver sitting down
--- takes over — and it makes the lone-passenger case ordinary rather than
--- special. THAT RULE HAS NOT CHANGED AND MUST NOT: the bug this module was
--- written to fix was a rear passenger driving the whole car's lighting from the
--- back seat, and every gate below is still shut against exactly that.
---
--- ── Three tiers, two questions ────────────────────────────────────────────
---
--- The module originally modelled two tiers and collapsed everything else into
--- "not an occupant", so a rear passenger was indistinguishable from a player on
--- foot. That was the right shape for CONTROL and the wrong shape for everything
--- a rear passenger is meant to see and hear. There are now three tiers:
 --
 --     driver     (seat -1)      perceives, controls
 --     passenger  (seat  0)      perceives, controls (when the driver seat is empty)
 --     rear       (seat 1..n)    perceives, NEVER controls
 --
--- and they answer two separate questions, which is the whole point of naming
--- them:
---
 --     may they CONTROL?    occupancy.isControllerOf  (driver-else-front-passenger)
 --     may they PERCEIVE?   occupancy.isAboard        (any seat at all)
 --
--- `isFrontSeat` sits between the two and is unchanged: it is the "may they act
--- on this vehicle" gate, and a rear passenger still fails it. A rear passenger
--- gains addressability and nothing else.
+-- Every GATE re-reads the host, so no gate can ever be stale. The CACHE
+-- (`occupantsOf`, `tierOf`, `occupantSeatOf`) is repaired by the client's move
+-- ping, rate-limited to 100 ms, so it can briefly name a seat the player has
+-- left. That can never grant control, because control is never read from it.
 --
--- ── Seats, not rows ───────────────────────────────────────────────────────
---
--- Rear seats are indices 1 upwards, in the vehicle's own layout order, and
--- nothing here caps them at one row. A van's seat 4 and a bus's seat 14 are
--- both `rear`; they are stored under their own indices so a consumer that cares
--- which seat somebody is in can still tell, and no code below counts rows.
---
--- ── Staleness ─────────────────────────────────────────────────────────────
---
--- Every GATE (`isFrontSeat`, `isControllerOf`, `isAboard`) re-reads the host, so
--- no gate can ever be stale. The CACHE (`occupantsOf`, `tierOf`,
--- `occupantSeatOf`) is repaired by the client's move ping, which is rate-limited
--- to 100 ms per player — so for up to that long after a seat change the cache
--- can name a tier the player has already left. Two consequences worth stating:
--- a player who moves rear->front twice inside 100 ms is cached at the FIRST of
--- those seats until the next ping or sweep, and a fresh rear occupant can be
--- missing from `occupantsOf` for that window. Neither can grant control,
--- because control is never read from the cache.
---
--- Loaded into each CONSUMER's VM like every tLib import, so every resource keeps
--- its own cache over the same authoritative natives. Nothing is shared between
--- resources at runtime; only the rule is.
+-- Loaded into each CONSUMER's VM, so every resource keeps its own cache over the
+-- same authoritative natives. Only the rule is shared.
 
 local occupancy = {}
 
 occupancy.SEAT_DRIVER = -1
 occupancy.SEAT_PASSENGER = 0
 
--- The tier names, as constants rather than bare strings, so a consumer compares
--- against something that fails loudly when it is misspelt.
 occupancy.TIER_DRIVER    = "driver"
 occupancy.TIER_PASSENGER = "passenger"
 occupancy.TIER_REAR      = "rear"
@@ -94,15 +53,10 @@ local byPlayer  = {} -- [src] = { seat = n, netId = n, tier = "driver"|"passenge
 local listeners = {}
 local cabinListeners = {}
 
--- Resolved lazily rather than at load: a shared script can be loaded before
--- tlib's import system has finished initialising on the other side.
 local function platform()
     return tlib.platform
 end
 
---- The two front seats, as they have always been reported. Deliberately still
---- front-only: `frontSeats` is published API and a consumer reading `.driver`
---- and `.passenger` must not start finding a third key it does not handle.
 local function snapshot(netId)
     local v = byVehicle[netId]
     if not v then return {} end
@@ -129,10 +83,6 @@ end
 
 --- Fire both listener lists for one vehicle.
 ---
---- They are separate lists on purpose. `onChange` has always meant "the front
---- seats of this vehicle changed" and consumers act on its edges; waking them
---- because somebody shuffled between two rear seats would be a behaviour change
---- dressed up as a notification. `onCabinChange` is the superset.
 local function announce(netId, prev, prevCabin)
     local nowCabin = cabinSnapshot(netId)
     if cabinDiffers(nowCabin, prevCabin) then
@@ -174,9 +124,6 @@ local function attach(src, seat, netId)
     -- Two players cannot occupy one seat. If our record says otherwise, ours is
     -- the stale half: this one was just read from the host, the other was read
     -- at some earlier tick and nothing has refreshed it since.
-    -- Spelled out rather than `key and v[key] or v.rear[seat]`: that idiom reads
-    -- the rear table whenever a front seat is merely EMPTY, which is the same
-    -- nil-can't-be-a-truthy-branch trap `otherOccupant` is spelled out to avoid.
     local displaced
     if key then displaced = v[key] else displaced = v.rear[seat] end
     if displaced and displaced ~= src then byPlayer[displaced] = nil end
@@ -185,9 +132,6 @@ local function attach(src, seat, netId)
 end
 
 --- Move a player to a seat (or out of one), announcing every vehicle the move
---- touched. Both vehicles are snapshotted before anything mutates, so a player
---- stepping from one car straight into another reports two truthful changes
---- rather than one change against an already-modified table.
 local function setSeat(src, seat, netId)
     local cur = byPlayer[src]
     local vacating = (seat == nil or netId == nil)
@@ -229,11 +173,6 @@ end
 
 --- Re-read a player's FRONT seat from the host and update the cache.
 ---
---- The cache learns their real seat either way — a rear passenger who is refused
---- here is still recorded as being in the back — but the ANSWER is front-only,
---- unchanged since this module was written. `isFrontSeat`, `isControllerOf` and
---- `partnerOf` are all built on that answer, and a rear seat reading as nil here
---- is what keeps a rear passenger out of all three.
 --- @return seat, netId — or nil when they are not in a front seat.
 function occupancy.refresh(src)
     local seat, netId, tier = readSeat(src)
@@ -250,9 +189,6 @@ end
 
 --- Cached FRONT seat for a player. Cheap; may lag the host by one refresh.
 ---
---- Still front-only: a rear passenger reads as nil here exactly as they always
---- have, so a caller that treats a non-nil answer as "may act" keeps being
---- right. `occupantSeatOf` is the same read without the collapse.
 --- @return seat, netId — or nil.
 function occupancy.seatOf(src)
     local cur = byPlayer[src]
@@ -284,12 +220,6 @@ end
 
 --- Everyone aboard a vehicle, as a copy: `{ driver, passenger, rear = { [seat] = src } }`.
 ---
---- `rear` is keyed by the game's seat index, not packed into a list, because the
---- index is the only thing that distinguishes seat 1 from seat 14 and a consumer
---- that wants to address one row of a bus has no other way to ask. It is always
---- a table, empty when nobody is in the back.
----
---- Cached, like `frontSeats`. Nothing here is a permission — see `isAboard`.
 function occupancy.occupantsOf(netId)
     return cabinSnapshot(netId)
 end
@@ -303,45 +233,18 @@ end
 
 --- THE GATE. May this player act on this vehicle?
 ---
---- Reads the host rather than the cache, because a cache is not a permission:
---- a command that arrives after the player stepped out has to be refused even
---- though nothing has swept yet. It costs one seat read, and it is called on
---- discrete actions rather than per frame. The read repairs the cache as a side
---- effect, so a refusal also re-elects the controller.
 function occupancy.isFrontSeat(src, netId)
     local _, actual = occupancy.refresh(src)
     return actual ~= nil and actual == netId
 end
 
 --- THE PERCEPTION GATE. Is this player aboard this vehicle at all?
----
---- The third question, and the loosest of the three: driver, front passenger and
---- rear passenger all pass it, and only somebody who is genuinely not in the
---- vehicle fails. Use it for what a player may SEE, HEAR or be SENT — never for
---- what they may do. A rear passenger passing this gate is the point of it; a
---- rear passenger passing `isFrontSeat` or `isControllerOf` is the bug this
---- module was written to fix.
----
---- Live, for the same reason the other two gates are live: a cache is not a
---- permission, and state addressed to a seat somebody has already left is state
---- leaving the vehicle it belongs to.
 function occupancy.isAboard(src, netId)
     local _, actual = occupancy.refreshOccupant(src)
     return actual ~= nil and actual == netId
 end
 
 --- THE OTHER GATE. Is this player the one whose inputs take effect here?
----
---- `isFrontSeat` answers "may they act"; this answers "may they act DIRECTLY".
---- A front passenger with a driver beside them is a front-seat occupant but not
---- the controller — their commands are forwarded to the controller rather than
---- refused.
----
---- Live, for the same reason `isFrontSeat` is live. A passenger's claim is only
---- as good as the driver seat being genuinely empty, so the cached driver — if
---- there is one — is re-read too before it is allowed to veto. Only that one
---- player is re-read: an empty cached driver seat cannot hide an occupant,
---- because whoever sat down there refreshed on the way in.
 function occupancy.isControllerOf(src, netId)
     local seat, actual = occupancy.refresh(src)
     if actual == nil or actual ~= netId then return false end
@@ -355,10 +258,6 @@ function occupancy.isControllerOf(src, netId)
     return (v == nil or v.driver == nil)
 end
 
---- The occupant of the seat this player is NOT in. Spelled out rather than
---- `seat == DRIVER and v.passenger or v.driver`, because that idiom cannot
---- yield nil: an empty passenger seat would fall through and report the driver
---- as their own partner.
 local function otherOccupant(netId, seat)
     local v = byVehicle[netId]
     if not v then return nil end
@@ -367,14 +266,6 @@ local function otherOccupant(netId, seat)
 end
 
 --- The OTHER front-seat occupant of this player's vehicle, or nil.
----
---- What a consumer needs to route one front seat's state to the other: a
---- partner is the delivery address, where `isFrontSeat` is the permission.
----
---- Live on both halves. The caller's seat is re-read because state sent on
---- behalf of a car they have already left is state leaving the vehicle it
---- belongs to; the partner's is re-read because a cached occupant who stepped
---- out a moment ago would otherwise keep receiving it.
 --- @return partnerSrc, netId, seat — netId and seat are nil off a front seat.
 function occupancy.partnerOf(src)
     local seat, netId = occupancy.refresh(src)
@@ -386,27 +277,12 @@ function occupancy.partnerOf(src)
 end
 
 --- Everyone ELSE aboard the caller's vehicle, in any tier.
----
---- What `partnerOf` is for two front seats, this is for a cabin: the delivery
---- address for something every occupant should receive, where `isAboard` is the
---- permission. It is NOT a control list — a rear passenger appears here and must
---- still be refused anything that acts on the vehicle.
----
---- Live on every half, like `partnerOf`: the caller's seat is re-read because
---- state sent on behalf of a car they have already left is state leaving the
---- vehicle it belongs to, and every cached occupant is re-read because one who
---- stepped out a moment ago would otherwise keep receiving it. That costs one
---- host read per occupant, so it is for discrete events — a per-frame consumer
---- should read `occupantsOf` and accept the cache.
 --- @return peers, netId, seat, tier — `peers` is an array of server IDs, empty
 --- when they are alone; the rest are nil when the caller is aboard nothing.
 function occupancy.peersOf(src)
     local seat, netId, tier = occupancy.refreshOccupant(src)
     if netId == nil then return nil end
 
-    -- Snapshot the candidate list before re-reading anybody: a refresh can drop
-    -- an occupant from the live table, and iterating that table while it is
-    -- being mutated is undefined in Lua.
     local cabin, candidates = cabinSnapshot(netId), {}
     local function consider(id) if id ~= nil and id ~= src then candidates[#candidates + 1] = id end end
     consider(cabin.driver)
@@ -484,7 +360,7 @@ AddEventHandler('playerDropped', function()
     occupancy.clear(source)
 end)
 
--- ── Discovery ───────────────────────────────────────────────────────────
+-- Discovery
 --
 -- Everything above learns a player's seat from a question somebody asked about
 -- THEM — a gate they were checked against, or a sweep over players already

@@ -1,7 +1,7 @@
 /* ---------------------------------------------------------------------------
    The editor faces — Inter and JetBrains Mono, self-hosted, shipped ONCE.
 
-   ── Why this file exists ────────────────────────────────────────────────────
+    Why this file exists
 
    These four woff2 files were on disk three times: `tELS/client/web/src/assets/
    fonts`, `tUnit/client/web/src/assets/fonts`, and now here. The two copies were
@@ -9,14 +9,14 @@
    `@font-face` blocks were the same block, one copied from the other with a
    comment saying so. Shipping them from tLib is the point of tLib.
 
-   ── Why tLib ALSO self-hosts Hanken Grotesk, and this does not replace it ───
+    Why tLib ALSO self-hosts Hanken Grotesk, and this does not replace it
 
    `client/web/src/menu/fonts/hanken-grotesk-latin.woff2` is tLib's own NUI menu
    face and is still in use there. It is a different product surface — a menu a
    player sees — from the dense editor chrome these two are for. Nothing here
    removes or supersedes it.
 
-   ── The tokens are HERE, not in theme-tokens.css ────────────────────────────
+    The tokens are HERE, not in theme-tokens.css
 
    `--font-sans` and `--font-mono` are declared below, alongside the `@font-face`
    rules that put the faces on disk, and deliberately NOT in theme-tokens.css.
@@ -32,7 +32,7 @@
    That is what stops an element styled by a `font-sans` utility and one styled by
    a hand-written `font-family` rule resolving to different stacks.
 
-   ── How to consume ─────────────────────────────────────────────────────────
+    How to consume
 
        @import "@tlib/shared/css/fonts.css";
 
@@ -47,12 +47,35 @@
    must contain four `.woff2`. An @import that fails to resolve is a WARNING in
    Vite, not an error, and the build still exits 0.
 
-   ── Not fetched from Google ────────────────────────────────────────────────
+    Not fetched from Google
 
-   A NUI page renders in CEF 103 on the resource's own origin and has no route to
-   the internet. A `fonts.gstatic.com` <link> fails SILENTLY there and the UI drops
-   to a system face — which is what every "the font looks bad" report has actually
-   been.
+   NOT because a NUI page has no network. It does — `tRadio/client/web/src/lib/
+   runtime-asset-cache.ts` fetches a timmygstudios.com zip from inside CEF and
+   reads its `arrayBuffer()`, with in-game logging at lines 133/141/144 that only
+   exists because it was debugged live. The reasons are these instead:
+
+   - Third-party reachability is not ours to assume. CEF 103 renders on the
+     resource's own origin, but whether a CUSTOMER's server or a PLAYER's network
+     reaches fonts.gstatic.com is their business, and when it does not the face
+     falls back mid-render with no error anywhere. That is what every "the font
+     looks bad" report has actually been.
+   - Offline renders have no network at all. Preview and gallery shots are taken
+     headless, so a remote face makes the screenshots disagree with the game.
+   - A NUI bundle does not make third-party requests, as policy, and on a
+     marketplace page embedding a preview an off-origin request is a property the
+     page is not allowed to have.
+   - CORS, where a remote face IS used. A `@font-face` fetch is always CORS-mode,
+     so it needs an explicit `Access-Control-Allow-Origin` from the host — the
+     browser makes the request and then refuses to hand the page the body without
+     one. See `shared/ts/marketplace/ui/browse.ts` lines 6-16 for the same
+     mechanism on an API route, and `internal/tWeb/src/routes/api/storage.$.ts`
+     lines 146-164, which sets ACAO on `public/marketplace/` precisely because a
+     rehosted font arrives from an opaque-origin sandbox iframe with `Origin:
+     null`. fonts.gstatic.com happens to send ACAO; a self-hosted face needs no
+     header at all, which is the stronger position.
+
+   The conclusion is unchanged: self-host, via `shared/ts/build/web-fonts.ts`'s
+   `selfHostWebFonts`. Only the premise above was wrong.
 
    The unicode-range values are Google's own, kept verbatim so a page still
    downloads only the subset it needs.

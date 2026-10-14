@@ -14,46 +14,16 @@
         -- when the server pushes a new sound config:
         tlib.soundfields.refresh('tdet_settings', data)
 
-    ── Why this exists ─────────────────────────────────────────────────────────
-
-    tDetector/client/cl_settings.lua and tRadar/client/cl_settings.lua each
-    carried this. The field builder was 86 lines identical in both files;
-    the open-tab refresh handler was identical in its body. Across the two
-    files 287 of 482 and 639 lines matched, and this is the single largest
-    block of it.
-
-    Normalising the three things that actually varied leaves nothing:
-
-      * the device noun in one section label ("detector events" / "radar
-        events") — a parameter;
-      * the dialog id passed to UpdateDialogField ('tdet_settings' / a local
-        DIALOG) — a parameter;
-      * one reworded sentence of comment prose.
-
-    ── The remembered key list is the whole reason this is a module ────────────
-
-    `append` records the keys it drew a field for, in the order it drew them,
-    and `refresh` patches exactly those. That ordering matters and the hazard it
-    guards is easy to miss, so it is stated once here rather than twice in prose:
+     The remembered key list is the whole reason this is a module
 
       * The live refresh keys off what was DRAWN, not off the current config, so
         a sound key added server-side after the dialog opened has no control to
         patch and simply appears the next time the dialog is opened. Refreshing
         from the config instead would address a field that does not exist.
-      * `options` are sent in the SAME patch as `defaultValue`, because
-        UpdateDialogField validates the value against the options it is given —
-        a filename installed since the dialog opened is rejected if the two go
-        separately.
       * The list must be CLEARED on submit, on cancel, and when the viewer turns
         out not to be an admin (in which case `append` never ran at all). Left
         set, a refresh patches a dialog that is not open.
 
-    ── Scope ──────────────────────────────────────────────────────────────────
-
-    One remembered list per resource, not per dialog: this module is loaded into
-    each consumer's own client VM, and no consumer here has two settings dialogs
-    with a Sounds tab. A resource that grows one needs a keyed list, and that is
-    a change to this file rather than a second copy of it.
 ]]
 
 local SoundFields = {}
@@ -74,10 +44,6 @@ local drawnKeys = {}
 
 --- The options for one sound select.
 ---
---- `sc` is passed in rather than read off a global because the refresh path
---- runs from an event handler that races the consumer's own handler for the
---- SAME event -- whichever runs first, both must use the config that arrived,
---- not whatever a global happens to hold at that instant.
 --- @param sc table  a sound config: { installedSounds = {...}, soundWavMap = {...} }
 --- @param mapped string|nil  the filename this key currently points at
 local function buildSoundOptions(sc, mapped)
@@ -133,8 +99,6 @@ function SoundFields.clear()
     drawnKeys = {}
 end
 
---- The keys the open dialog drew, as a fresh copy. Tests and diagnostics; a
---- consumer should not need to look.
 --- @return string[]
 function SoundFields.drawn()
     local out = {}
@@ -180,8 +144,6 @@ function SoundFields.append(fields, opts)
             options      = buildSoundOptions(sc, mapped),
             defaultValue = mapped,
             tab          = tab,
-            -- One heading for the whole list, so it is drawn once rather than
-            -- above every row.
             section      = index == 1
                 and ('Sound Mappings — map %s events to installed sound files. Unmapped keys play nothing.')
                     :format(noun)
@@ -193,11 +155,6 @@ end
 
 --- Keep an OPEN Sounds tab current.
 ---
---- The retired NUI panels got this for free: they read a reactive store the
---- sound-config event wrote to, so a mapping another admin changed appeared
---- immediately. Dialog fields are a schema, so the same freshness has to be
---- pushed -- otherwise the tab quietly shows a stale map and the next save
---- overwrites a change that was already made.
 ---
 --- A no-op when no dialog is open, which is what makes it safe to call from an
 --- unconditional event handler.

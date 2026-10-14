@@ -1,4 +1,7 @@
--- The studio-author rule, defined once. The startup banner uses it to decide
+-- The studio-author rule and the display-title rule, each defined once. Both
+-- read the manifest and nothing else, which is why they share a file.
+--
+-- The studio-author rule: the startup banner uses it to decide
 -- whether to print custom art (docs/content/versioncheck.mdx, "Branding"); the menu
 -- registry uses it to exempt a resource from the per-owner registration count
 -- limits. The two must agree, hence one copy.
@@ -42,6 +45,33 @@ function StudioBranding.isStudioResource(resource)
         end
     end
     return false
+end
+
+--- `resource`'s human-visible title: its manifest `name` directive, falling back
+--- to the resource name when that is absent, empty or unreadable.
+---
+--- TEXT AND ONLY TEXT. Branding policy, not an authenticity boundary:
+--- manifests are editable, so any resource can claim the studio. Nothing may use
+--- it to decide who is ALLOWED to do something -- that is what ACEs are for.
+--- Nor is it ever an identifier: not a slug, ACE object, event name, command,
+--- statebag or KVP key, filename, cache key, wire field or lookup index. Those
+--- stay the resource name. Which is also why the fallback is the resource name
+--- rather than an error -- a caller only ever gets a LABEL back, so there is no
+--- shape of failure here that can be mistaken for identity.
+---
+--- Falls back rather than throwing when the metadata natives are absent, the
+--- same way isStudioResource above lands on a safe path instead of crashing
+--- startup. `name` is declared at most once per manifest, so index 0 is all of
+--- it; repeated entries are not a thing the way they are for `author`.
+function StudioBranding.displayName(resource)
+    if type(resource) ~= 'string' or resource == '' then return '' end
+    if type(GetResourceMetadata) ~= 'function' then return resource end
+    local read, title = pcall(GetResourceMetadata, resource, 'name', 0)
+    if read and type(title) == 'string' then
+        local trimmed = title:match('^%s*(.-)%s*$')
+        if trimmed ~= '' then return trimmed end
+    end
+    return resource
 end
 
 return StudioBranding
