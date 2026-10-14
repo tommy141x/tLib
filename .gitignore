@@ -77,3 +77,10 @@ telemetry-install-id.txt
 # Gitea CI lives on the private branch only: these workflows name the private
 # org and its shared-workflow repo, and Gitea never ran them from here anyway —
 # it only pull-mirrors this repo, and a mirror sync fires no Actions.
+
+# `bun run gallery` captures and the `bun run thumb` composite built from them.
+# Regenerated on demand and consumed by the store page in tWeb, not by anything
+# here. banner.jpg is the exception and IS tracked: README.md shows it.
+assets/gallery/
+assets/gallery-hero/
+docs/public/thumb.jpg

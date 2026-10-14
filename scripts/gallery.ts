@@ -83,8 +83,18 @@ for (const s of only) {
   if (!SURFACES.includes(s)) throw new Error(`--only must be from ${SURFACES.join(",")}, got ${s}`);
 }
 /** The NUI is transparent over the game. On a white page half of it is invisible; this is a
- *  neutral mid-grey so both the light and the dark parts of every surface can be judged. */
+ *  neutral mid-grey so both the light and the dark parts of every surface can be judged.
+ *
+ *  `--transparent` shoots on transparency instead, the way tAFK's and tUnit's galleries do by
+ *  default. That is what a composite wants: the surfaces are small panels on a large empty page,
+ *  so any fill at all — even one matching the destination — lands as a rectangle around the
+ *  component rather than as the component. Needs BOTH halves: the page must not paint a
+ *  background AND the screenshot must not composite one in.
+ *
+ *  A flag rather than `--background ""`, because `cliArg` rejects an empty value on purpose —
+ *  it reads one as a typo rather than as an instruction. */
 const background = cliArg("background", "#3a3f47");
+const transparent = process.argv.includes("--transparent");
 
 const want = (s: Surface) => only.includes(s);
 
@@ -186,7 +196,9 @@ const send = (name: string, data?: unknown) =>
   });
 
 await page.goto(`http://127.0.0.1:${server.port}`);
-await page.addStyleTag({ content: `html,body{background:${background} !important}` });
+if (!transparent) {
+  await page.addStyleTag({ content: `html,body{background:${background} !important}` });
+}
 await page.waitForTimeout(500);
 
 mkdirSync(outDir, { recursive: true });
@@ -295,7 +307,7 @@ async function shoot(name: string, selector: string): Promise<void> {
   }
 
   const file = join(outDir, `${name}.png`);
-  await page.screenshot({ path: file });
+  await page.screenshot({ path: file, omitBackground: transparent });
   written.push(file);
   if (grown) {
     await page.setViewportSize({ width: vpW, height: vpH });

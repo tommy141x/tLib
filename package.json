@@ -21,6 +21,7 @@
     "prod": "bun run scripts/prod.ts",
     "publish:public": "bun run scripts/publish-public.ts",
     "gallery": "bun run scripts/gallery.ts",
+    "thumb": "bun scripts/thumb.ts",
     "setup": "bun run secrets:install-hooks && bun install && cd client/web && bun install",
     "docs:check": "bun scripts/check-docs.mjs",
     "lint": "biome lint .",
