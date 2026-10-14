@@ -27,9 +27,21 @@ export interface OpenData {
   type?: string;
   /** Marketplace site base URL (no /api/v1 suffix). */
   baseUrl: string;
-  /** Slugs already installed on this server — shown with a delete button at open time. */
+  /**
+   * MARKETPLACE SLUGS already installed on this server — shown with a delete
+   * button at open time.
+   *
+   * SLUGS, not local names, and the distinction is the reported bug.
+   * `shared/imports/marketplace/client.lua` used to put layout FOLDER NAMES in
+   * here as well; a folder is `QRX-720` and the slug is `tradio-qrx-720`, so the
+   * seed built from this list could only miss and every shipped layout offered
+   * an Install for something already on disk. Layouts are answered from
+   * `installedLayouts` instead, through `../local-name`, and this field now
+   * carries sounds only — whose records we write ourselves from the catalogue
+   * slug, so there is no second naming to reconcile.
+   */
   installedSlugs?: string[];
-  /** All installed layout names (including built-ins), for the Installed tab. */
+  /** All installed layout DIRECTORY NAMES (including built-ins), for the Installed tab. */
   installedLayouts?: string[];
   /** All installed sounds (including built-ins), for the Installed tab. */
   installedSounds?: InstalledSound[];

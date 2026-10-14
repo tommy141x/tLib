@@ -1,19 +1,27 @@
 // Demo mode's start-time sweep: put an install path back to the tree the
 // resource shipped with.
 //
-// ── Why this is safe, and why it needs no allow-list ────────────────────────
+// Why this is safe, and why it needs no allow-list
 //
 // It deletes only what a `.marketplace-<slug>.json` receipt claims. A receipt is
 // written by installFromData and names every file that install created, by hash.
-// Content that SHIPPED with the resource is covered by the embedded
-// ProtectedBuiltinInventory instead and is never receipt-owned — the installer
-// refuses to write over it in the first place — so preinstalled marketplace
-// content, the kind that appears in the catalogue but comes in the zip, is
-// invisible to this function and survives untouched. That is a property of the
-// receipt model, not a special case coded here, which is why there is no list of
+// Content that SHIPPED with the resource has no receipt, so it is invisible to
+// this function and survives untouched — and `owned()` in ./core.ts is what makes
+// that a guarantee rather than a coincidence: it THROWS
+// "existing target has no marketplace ownership receipt" for any path on disk
+// that no receipt claims, on install and on uninstall alike. So preinstalled
+// marketplace content, the kind that appears in the catalogue but comes in the
+// zip, cannot be written over or removed. That is a property of the receipt
+// model, not a special case coded here, which is why there is no list of
 // exceptions to keep in sync with the release.
 //
-// ── Why one bad slug must not stop the sweep ────────────────────────────────
+// It is NOT the `ProtectedBuiltinInventory`, whatever the note here used to
+// say. That type gates LEGACY ADOPTION and an inspection status label only; it is
+// not consulted by install.ts at all, and nothing in the estate passes one today
+// (`protectedLegacyDestination` returns false on its first line). Measured
+// 2026-10-08. Do not cite it as the thing protecting shipped files.
+//
+// Why one bad slug must not stop the sweep
 //
 // `owned()` throws rather than returns on a modified or unreceipted target —
 // correct for an install, where the only safe move is to refuse. Here it would

@@ -5,6 +5,7 @@ import * as path from "node:path";
 import {
   type Context,
   context,
+  DESTINATIONS,
   hash,
   type InstallFailure,
   type InstallTarget,
@@ -182,7 +183,13 @@ export function inspectInstallation(
       inspection.status = "missing";
       return { ok: true, inspection };
     }
-    const candidates = [c.name, `${c.name}.wav`, `${c.name}.ogg`, `${c.name}.mp3`];
+    // The module directory named after the slug, and the three flat audio names
+    // a sound can take — one shared list with core.ts and legacy.ts, so an
+    // inspector cannot disagree with the installer about what a target is.
+    //
+    // The `matches.length > 1` and lowercase checks below stay live: on a
+    // case-sensitive filesystem two entries can still match one candidate.
+    const candidates = DESTINATIONS(c);
     const baseBefore = stat(c.base)!;
     const names = inspectionNames(c.base, MAX_ENTRIES);
     const matches = names.filter((name) => candidates.includes(name.toLowerCase()));

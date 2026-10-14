@@ -1,4 +1,14 @@
-import { createMemo, createSignal, For, Match, onCleanup, onSettled, Show, Switch } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  onSettled,
+  Show,
+  Switch,
+} from "solid-js";
 import IconChevronLeft from "~icons/lucide/chevron-left";
 import IconDownload from "~icons/lucide/download";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
@@ -8,10 +18,13 @@ import IconTrash2 from "~icons/lucide/trash-2";
 import { buildHudPreviewScript } from "../../hud-preview-script";
 import { NuiButton } from "../../nui-kit/NuiButton";
 import {
+  BUILTIN_EXPLANATION,
+  canInstall,
+  canUninstall,
   INSTALL_ACTION_LABEL,
   installAction,
+  isBuiltin,
   isInstallBusy,
-  isInstalled,
 } from "../install-machine";
 import { previewMarketplaceHtml } from "./browse";
 import { InstallError } from "./InstallError";
@@ -40,7 +53,12 @@ export function PreviewOverlay(props: {
   // `ItemCard.tsx` — the same union answered the same three questions twice,
   // which is exactly the shape that drifts.
   const busy = () => isInstallBusy(s());
-  const installed = () => isInstalled(s());
+  // `canUninstall`/`canInstall` from `../install-machine` for the same reason the
+  // three booleans above moved there: this block was a VERBATIM copy of
+  // `ItemCard.tsx`'s, so a built-in excluded in one file and not the other is
+  // exactly the drift that put a Delete on a shipped layout in the first place.
+  const removable = () => canUninstall(s());
+  const builtin = () => isBuiltin(s());
   const installLabel = () => INSTALL_ACTION_LABEL[installAction(s())];
 
   return (
@@ -57,7 +75,7 @@ export function PreviewOverlay(props: {
         </Show>
         <div class="flex-1" />
         <div class="flex items-center gap-1 shrink-0">
-          <Show when={installed() || s().state === "uninstalling"}>
+          <Show when={removable()}>
             <NuiButton
               class="mp-action mp-delete"
               aria-label="Delete from server"
@@ -71,14 +89,26 @@ export function PreviewOverlay(props: {
               <Show when={s().state === "uninstalling"}>Deleting…</Show>
             </NuiButton>
           </Show>
+          {/* See the long note on the same button in `ItemCard.tsx`: a built-in
+              keeps a disabled "Built in" rather than disappearing, because the
+              preview of a shipped radio with no control and no sentence is the
+              same confusion one step quieter. */}
           <NuiButton
             class="mp-action"
-            tone={s().state === "installed" ? "default" : "primary"}
-            disabled={busy()}
+            tone={s().state === "installed" || builtin() ? "default" : "primary"}
+            disabled={!canInstall(s())}
             aria-busy={busy() ? "true" : "false"}
-            onClick={props.onInstall}
+            onClick={builtin() ? undefined : props.onInstall}
+            title={builtin() ? BUILTIN_EXPLANATION : undefined}
           >
-            <Show when={s().state === "installing"} fallback={<IconDownload class="w-3 h-3" />}>
+            <Show
+              when={s().state === "installing"}
+              fallback={
+                <Show when={!builtin()}>
+                  <IconDownload class="w-3 h-3" />
+                </Show>
+              }
+            >
               <IconLoaderCircle class="w-3 h-3 animate-spin" />
             </Show>
             {installLabel()}
@@ -141,7 +171,7 @@ type AudioPlayerState = "idle" | "loading" | "ready" | "error";
  * the AudioBuffer supplied were `duration` and a playback clock, both of which
  * the element exposes directly.
  *
- * ⚠️ Do NOT set `crossOrigin` on the element. That opts the load back in to
+ * Do NOT set `crossOrigin` on the element. That opts the load back in to
  * the CORS check this is deliberately outside of, and the preview breaks again.
  */
 function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
@@ -414,6 +444,37 @@ function UiPreviewFrame(props: {
   const [html, setHtml] = createSignal<string | null>(null);
   const [loadError, setLoadError] = createSignal(false);
 
+  /**
+   * Has the FRAME finished, as opposed to has the string arrived?
+   *
+   * These are not the same moment, and the gap between them is the lag players
+   * actually report. `html()` being set only means the document crossed the NUI
+   * boundary; the iframe then has to parse it and decode its images, which is
+   * measured at 44–97 ms for tRadio's heads and 440 ms for tels-wcc in the
+   * pinned Chromium 103 that CEF is — longer on a low-end machine, and that
+   * figure is 85–95% image decode. Gating the indicator on `html()` alone
+   * therefore swapped "Loading…" for an EMPTY BLACK BOX for the entire
+   * expensive part, which reads as a freeze rather than as progress.
+   *
+   * The `load` event is the right signal because it fires after subresource
+   * decode, not merely after parse.
+   */
+  const [frameReady, setFrameReady] = createSignal(false);
+
+  /**
+   * A new document means we are waiting again.
+   *
+   * The braces are load-bearing. `createEffect(compute, apply)` treats
+   * `apply`'s RETURN VALUE as a cleanup function, and a Solid setter returns
+   * the value it just set — so `() => setFrameReady(false)` hands the effect
+   * `false` and dies with `TypeError: r is not a function`, taking the whole
+   * reactive graph down with it. Only `compute` tracks, which is why the read
+   * of `html()` is up there and not in the body.
+   */
+  createEffect(html, () => {
+    setFrameReady(false);
+  });
+
   let containerRef!: HTMLDivElement;
   const [containerW, setContainerW] = createSignal(700);
   const [containerH, setContainerH] = createSignal(400);
@@ -462,7 +523,7 @@ function UiPreviewFrame(props: {
         // inside the frame, so the preview shows a working device rather than
         // every state stacked on top of each other.
         /**
-         * ⚠️ `resolvePreviewState` and NOT `if (state)`, which is the fix for the
+         * `resolvePreviewState` and NOT `if (state)`, which is the fix for the
          * reported blank previews.
          *
          * `previewState` is optional all the way down and the binder used to be
@@ -512,10 +573,16 @@ function UiPreviewFrame(props: {
   return (
     <div
       ref={containerRef!}
-      class="w-full h-full flex items-center justify-center bg-black rounded overflow-hidden"
+      class="relative w-full h-full flex items-center justify-center bg-black rounded overflow-hidden"
     >
-      <Show when={!html() && !loadError()}>
-        <span class="text-sm mp-muted">Loading…</span>
+      {/* Shown until the FRAME is ready, not until the string arrives — see
+          `frameReady`. It sits as a sibling of the frame rather than replacing
+          it, because the frame has to be in the document to load at all. */}
+      <Show when={!frameReady() && !loadError()}>
+        <span class="absolute inline-flex items-center gap-2 text-sm mp-muted">
+          <IconLoaderCircle class="w-4 h-4 animate-spin" />
+          Loading preview…
+        </span>
       </Show>
       <Show when={loadError()}>
         <span class="text-sm mp-muted">Preview unavailable</span>
@@ -529,6 +596,7 @@ function UiPreviewFrame(props: {
           <iframe
             title={`${props.item.name} preview`}
             srcdoc={html()!}
+            onLoad={() => setFrameReady(true)}
             {...PREVIEW_FRAME_ATTRS}
             style={PREVIEW_FRAME_STYLE}
           />

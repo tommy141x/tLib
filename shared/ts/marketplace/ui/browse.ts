@@ -1,29 +1,17 @@
 /**
  * Request/reply wrapper around the server-side marketplace browse.
  *
- * ── Why this is not a `fetch` ───────────────────────────────────────────────
+ * NOT a `fetch`: CEF's origin here is `cfx-nui-tLib` and the marketplace host
+ * sends no `Access-Control-Allow-Origin` on that route, so the browser made the
+ * request and then refused to hand this page the body. Being public is not what
+ * makes a response readable cross-origin -- the header is. The request goes
+ * NUI -> Lua -> tLib's Node bundle, which is where the resource secret can
+ * legitimately live.
  *
- * The panel used to fetch `{baseUrl}/api/v1/items` directly, on the grounds
- * that the endpoint is public and read-only. Both of those are true and
- * neither is the point: CEF's origin here is `cfx-nui-tLib`, and the
- * marketplace host sends no `Access-Control-Allow-Origin` on that route, so
- * the browser made the request and then refused to hand this page the body.
- * Being public is not what makes a response readable cross-origin — the header
- * is. Browse failed for every resource whose only marketplace UI is this panel.
- *
- * The request now goes NUI → Lua → tLib's Node bundle, which is where the
- * resource secret can legitimately live, which is in turn what makes the v2
- * catalogue reachable. See `server/lib/marketplace/browse.ts`.
- *
- * ── Why a request id and not a `fetchNui` return value ──────────────────────
- *
- * A NUI callback must answer within a frame or the promise is abandoned — the
- * shared helper's own deadline is 10s and exists because a slow handler hangs
- * the caller forever. A marketplace round trip is an outbound HTTP request from
- * the game server and does not fit in that budget. So `fetchNui` is used purely
- * as fire-and-forget, and the answer arrives as an event, correlated by id.
- * This is the convention `server/lib/community-configs/bridge.ts` already
- * states for the same reason.
+ * Correlated by request ID rather than by a `fetchNui` return value, because a
+ * NUI callback must answer within a frame and a marketplace round trip is an
+ * outbound HTTP request from the game server. So `fetchNui` is fire-and-forget
+ * and the answer arrives as an event.
  */
 
 import { fetchNui, onNuiEvent } from "../../nui";
@@ -69,10 +57,6 @@ interface Pending {
   /**
    * Turns a loose wire payload into the shape this caller asked for, and
    * throws if the reply claims success but is not usable.
-   *
-   * Held per request rather than per event on purpose: a reader captured by
-   * whichever call happened to register the listener first would silently
-   * apply to every later call on that event.
    */
   read: (reply: never) => unknown;
   timer: number;
@@ -85,9 +69,6 @@ let sequence = 0;
 function ensureListener(event: string): void {
   if (listening.has(event)) return;
   listening.add(event);
-  // Never torn down: this module is a singleton for the lifetime of the NUI
-  // frame, and a listener that unregistered on the last settled request would
-  // race the next one.
   onNuiEvent<{ requestId?: string; ok?: boolean; error?: string }>(event, (reply) => {
     const id = typeof reply?.requestId === "string" ? reply.requestId : "";
     const entry = pending.get(id);
@@ -108,10 +89,6 @@ function ensureListener(event: string): void {
 
 /**
  * One request, one correlated reply.
- *
- * Shared by browse and preview because the plumbing is the whole thing: an
- * outbound HTTP call from the game server cannot fit in a NUI callback's
- * budget, so every one of these is fire-and-forget plus an event.
  */
 function nuiRequest<T>(
   callback: string,
@@ -141,9 +118,6 @@ function nuiRequest<T>(
       timer,
     });
 
-    // An abort only stops this caller waiting; the server request is already
-    // out and will settle on its own. That is the same contract the panel had
-    // with `fetch` + AbortController.
     signal?.addEventListener(
       "abort",
       () => finish(() => reject(new Error("Marketplace request cancelled"))),
@@ -151,9 +125,6 @@ function nuiRequest<T>(
     );
 
     void fetchNui(callback, { ...payload, requestId }).then((ack) => {
-      // A null ack means the callback never answered — the Lua handler is
-      // missing or the resource is mid-restart. Nothing will ever arrive, so
-      // fail now rather than spin for 25 seconds.
       if (ack === null) finish(() => reject(new Error("Marketplace bridge unavailable")));
     });
   });
@@ -180,9 +151,7 @@ export function browseMarketplace(params: BrowseParams, signal?: AbortSignal): P
 /**
  * Like, or un-like, one item — for the player at this NUI frame.
  *
- * ═══════════════════════════════════════════════════════════════════════════
- * ⚠️ NOTICE WHAT IS *NOT* IN THE PAYLOAD: ANY IDENTITY.
- * ═══════════════════════════════════════════════════════════════════════════
+ * NOTICE WHAT IS *NOT* IN THE PAYLOAD: ANY IDENTITY.
  *
  * This sends a slug and a desired state and nothing else. The player's FiveM
  * license is resolved SERVER-SIDE, from the `source` of the net event, by
@@ -190,13 +159,6 @@ export function browseMarketplace(params: BrowseParams, signal?: AbortSignal): P
  * resistant to an ordinary player at all: a value the NUI sent would be a value
  * the player chose, and any player could then like as a thousand different
  * people.
- *
- * ⚠️ So do not "optimise" this by passing a license, a server id, or any other
- * caller-supplied identifier, however convenient. The whole guarantee lives in
- * the fact that this function cannot say who it is.
- *
- * `next` is the STATE being asked for rather than a toggle, so the retry a
- * timeout invites is free — see `setCatalogueLike` on the server side.
  */
 export function likeMarketplaceItem(
   slug: string,
@@ -208,10 +170,6 @@ export function likeMarketplaceItem(
     "marketplaceLikeResult",
     { slug, next },
     (reply: { likes?: unknown; liked?: unknown }) => {
-      // ⚠️ `typeof` on BOTH. A reply that claims success but carries no numbers
-      // is a bug on the Lua side, and accepting it would paint `0 likes` over a
-      // count that was correct a moment ago — which looks like the like having
-      // DELETED every other like on the item.
       if (typeof reply.likes !== "number" || typeof reply.liked !== "boolean") {
         throw new Error("Invalid like response");
       }
@@ -234,18 +192,96 @@ export interface LikeState {
  * `data-hud-*` preview script and derives the canvas size from a comment
  * inside the markup, neither of which is possible against a cross-origin
  * frame. See `server/lib/marketplace/browse.ts`.
- *
- * ⚠️ Addressed by SLUG. The v1 route this replaces took an item id.
  */
-export function previewMarketplaceHtml(slug: string, signal?: AbortSignal): Promise<string> {
-  return nuiRequest<string>(
+export function previewMarketplaceHtml(slug: string): Promise<string> {
+  const hit = previewCache.get(slug);
+  if (hit) {
+    previewCache.delete(slug);
+    previewCache.set(slug, hit); // LRU: a hit is a use, so re-insert at the tail.
+    return hit.doc;
+  }
+
+  const doc = nuiRequest<string>(
     "marketplacePreview",
     "marketplacePreviewResult",
     { slug },
     (reply: { html?: unknown }) => {
       if (typeof reply.html !== "string" || !reply.html) throw new Error("Preview unavailable");
       return reply.html;
-    },
-    signal
+    }
   );
+
+  const entry: PreviewCacheEntry = { doc, bytes: 0 };
+  previewCache.set(slug, entry);
+  void doc.then(
+    (text) => {
+      entry.bytes = text.length;
+      evict();
+    },
+    () => {
+      if (previewCache.get(slug) === entry) previewCache.delete(slug);
+    }
+  );
+  return doc;
+}
+
+interface PreviewCacheEntry {
+  doc: Promise<string>;
+  /** Charged to the budget once the document has arrived; 0 while in flight. */
+  bytes: number;
+}
+
+/**
+ * Preview documents already fetched, newest use last.
+ *
+ * `MAX_PREVIEW_BYTES` on the server (`server/lib/marketplace/browse.ts`) refuses
+ * any single document over 2 MB, so the budget below holds at least four of the
+ * largest documents that can reach here at all.
+ */
+const previewCache = new Map<string, PreviewCacheEntry>();
+
+/** 8 MB — four of the largest documents the server will pass, at 2 MB each. */
+const PREVIEW_CACHE_BUDGET_BYTES = 8 * 1024 * 1024;
+
+function evict(): void {
+  let total = 0;
+  for (const entry of previewCache.values()) total += entry.bytes;
+  // Map iteration is insertion order and a hit re-inserts, so the first key is
+  // the least recently used.
+  for (const [slug, entry] of previewCache) {
+    if (total <= PREVIEW_CACHE_BUDGET_BYTES) return;
+    // An in-flight entry is 0 bytes and evicting it would abandon a request
+    // another surface may already be awaiting, for no memory back.
+    if (entry.bytes === 0) continue;
+    previewCache.delete(slug);
+    total -= entry.bytes;
+  }
+}
+
+/**
+ * Reset the cache. ITS CONSUMER IS THE TEST SUITE, not a surface.
+ *
+ * Stated plainly so this does not read as a production API waiting for a
+ * caller. `previewCache` is module state, so `tests/unit/
+ * marketplace-preview-cache.test.ts` has no other way to start each case from
+ * empty, and a cache whose eviction order cannot be asserted is a cache nobody
+ * can show is an LRU.
+ *
+ * NO SURFACE CALLS THIS AND NONE SHOULD, which is a decision rather than an
+ * omission. The obvious caller is `MarketplaceBrowser.applyOpenData` — clear on
+ * every open of the panel, in case an item was republished under the same slug —
+ * and it is wrong: closing the panel and reopening it is the commonest thing a
+ * player does, and clearing there would throw the cache away in exactly the
+ * case it was built for. Restaging a document under one slug is rare; paying
+ * 1.75 MB again on every reopen is not.
+ */
+export function clearPreviewCache(): void {
+  previewCache.clear();
+}
+
+/** The cache's current contents. Same consumer as above: the test suite. */
+export function previewCacheStats(): { entries: number; bytes: number } {
+  let bytes = 0;
+  for (const entry of previewCache.values()) bytes += entry.bytes;
+  return { entries: previewCache.size, bytes };
 }

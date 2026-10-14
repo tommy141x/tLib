@@ -2,7 +2,7 @@
 // commit it and its receipt with renames under the target lock.
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { prepareBundle } from "./bundle";
+import { type ItemMetadata, prepareBundle } from "./bundle";
 import {
   context,
   failure,
@@ -40,14 +40,16 @@ export function installFromData(
   slug: string,
   zipBytes: Buffer,
   expectedHash: string,
-  expectedSize: number
+  expectedSize: number,
+  /** Catalogue name and version, for the `module.json` a raw audio bundle is given. */
+  item?: ItemMetadata
 ): InstallOutcome {
   const { resourceName, type } = target;
   let stage: string | undefined;
   let unlock: (() => void) | undefined;
   try {
     const c = context(target, slug);
-    const prepared = prepareBundle(target, c, zipBytes, expectedHash, expectedSize);
+    const prepared = prepareBundle(target, c, zipBytes, expectedHash, expectedSize, item);
     // The consumer's own content contract, before anything touches disk. prepareBundle has
     // established the bundle is safe to extract; only the consumer can establish that it is a
     // valid instance of its own item type. Placed here, ahead of mkdir/lock/stage, so a
@@ -58,6 +60,7 @@ export function installFromData(
       slug: c.name,
       zip: prepared.zip,
       files: prepared.files,
+      manifest: prepared.manifest,
     });
     const { destination, bytesWritten } = prepared;
     const fileCount = prepared.files.size;
@@ -67,7 +70,11 @@ export function installFromData(
     const old = owned(c);
     stage = fs.mkdtempSync(path.join(c.base, ".marketplace-transaction-"));
     const payload = path.join(stage, "payload");
-    if (prepared.zip) fs.mkdirSync(payload);
+    // `directory`, NOT `zip`. A sound installs as a flat file — the payload IS
+    // the audio, under the empty-string key — and everything else installs as a
+    // module directory. A zipped sound module is an archive that installs flat,
+    // which is exactly the case a `zip` test gets wrong.
+    if (prepared.directory) fs.mkdirSync(payload);
     for (const [name, data] of prepared.files) {
       const dest = name ? path.join(payload, name) : payload;
       fs.mkdirSync(path.dirname(dest), { recursive: true });

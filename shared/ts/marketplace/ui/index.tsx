@@ -1,6 +1,6 @@
 // The marketplace browser, as parts a host composes into its OWN editor chrome.
 //
-// ── Why these are parts and not a panel ─────────────────────────────────────
+// Why these are parts and not a panel
 //
 // tLib also ships a whole marketplace dialog (`MarketplacePanel` in its own
 // app), and tDetector and tRadar currently open it over their HUD editors. That
@@ -13,20 +13,20 @@
 // and `InstallError` into it, keeping its own filter over what it browses: tELS
 // sees patterns and tELS HUDs, tDetector sees tDetector HUDs, and so on.
 //
-// ── The theming contract ────────────────────────────────────────────────────
+// The theming contract
 //
 // Every colour resolves through the `--nui-*` layer in `../../nui-kit/nui.css`,
 // never through a host token directly. A host retheming these overrides that
 // set — `--nui-surface`, `-inset`, `-text`, `-muted`, `-border`, `-hover`,
 // `-danger`, `-accent`, `-radius`, `-control-border` — and nothing else.
 //
-// ⚠️ If you override a colour that has a `-raw` partner (`--nui-text-raw`,
+// If you override a colour that has a `-raw` partner (`--nui-text-raw`,
 // `--nui-accent-raw`) you must override the partner too. The partner holds the
 // bare HSL triplet the alpha tints are built on, because a resolved colour
 // cannot have alpha taken back out of it in CSS that CEF 103 can parse. Miss it
 // and the tints paint nothing rather than erroring.
 //
-// ⚠️ No `color-mix()` and no `oklch()` in any CSS reached from here. NUI is CEF
+// No `color-mix()` and no `oklch()` in any CSS reached from here. NUI is CEF
 // 103 and both landed in Chromium 111; CEF drops the declaration silently.
 
 import "./marketplace.css";

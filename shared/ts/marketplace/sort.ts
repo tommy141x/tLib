@@ -2,7 +2,7 @@
  * Ordering a catalogue that is already in memory — and, above all, knowing when
  * NOT to.
  *
- * ── The rule three files restated ───────────────────────────────────────────
+ * The rule three files restated
  *
  * The server ranks the catalogue before it sends it. tRadio asks for that
  * ranking explicitly (`sort=downloads` in `server/lib/http.ts`, which the
@@ -20,7 +20,7 @@
  * `SERVER_ORDER` is that rule, named once. `applySort` honours it, and honours
  * it for an unrecognised key too — see below.
  *
- * ── Generic over the item, by comparator table ──────────────────────────────
+ * Generic over the item, by comparator table
  *
  * The two surfaces sort different shapes by different fields and offer
  * different key sets (tRadio six, tELS four). What is identical is the
@@ -34,7 +34,7 @@
 /**
  * The sort key that means "the server already ordered this".
  *
- * ⚠️ Spelled the same way both surfaces already spelled it, because it is a
+ * Spelled the same way both surfaces already spelled it, because it is a
  * value a person selects and in tRadio's case a value persisted in a select.
  */
 export const SERVER_ORDER = "recommended";
@@ -45,14 +45,14 @@ export type Comparator<T> = (a: T, b: T) => number;
 /**
  * Order a list by one of a surface's own comparators.
  *
- * ⚠️ Returns the input UNCHANGED for `SERVER_ORDER`, and for any key with no
+ * Returns the input UNCHANGED for `SERVER_ORDER`, and for any key with no
  * comparator. The second half is deliberate and is not defensive padding: a key
  * that arrives from a URL, a saved preference or a locale file can outlive the
  * comparator it was added for, and the useful failure mode there is "the
  * catalogue is in the server's order" rather than a thrown error that blanks
  * the grid or an arbitrary order nobody chose.
  *
- * ⚠️ Never mutates. Both call sites previously copied by hand before sorting;
+ * Never mutates. Both call sites previously copied by hand before sorting;
  * one of them documented that it must, because the array it is handed is a
  * reactive store's own and sorting in place would mutate state outside a
  * setter. Copying here means no caller has to remember.
@@ -71,7 +71,7 @@ export function applySort<T>(
 /**
  * Highest number first, treating a missing value as 0.
  *
- * ⚠️ The zero is the point, and tRadio's comment says why: `downloads` is
+ * The zero is the point, and tRadio's comment says why: `downloads` is
  * optional on the wire, and an item the API has no count for must sort as 0
  * rather than poisoning the comparison. `undefined - number` is `NaN`, a
  * comparator returning `NaN` is treated as "equal", and the result is an order
@@ -144,13 +144,14 @@ export function byRank<T>(
   rankOf: (item: T) => string,
   ranks: Readonly<Record<string, number>>
 ): Comparator<T> {
-  return (a, b) => (ranks[rankOf(a)] ?? Number.MAX_SAFE_INTEGER) - (ranks[rankOf(b)] ?? Number.MAX_SAFE_INTEGER);
+  return (a, b) =>
+    (ranks[rankOf(a)] ?? Number.MAX_SAFE_INTEGER) - (ranks[rankOf(b)] ?? Number.MAX_SAFE_INTEGER);
 }
 
 /**
  * Run comparators in order until one of them discriminates.
  *
- * ⚠️ This is what makes a sort STABLE ACROSS REFRESHES, which is a different
+ * This is what makes a sort STABLE ACROSS REFRESHES, which is a different
  * property from `Array.prototype.sort` being stable. tRadio's comment records
  * the case: ties on `downloads` fall back to name, so two items with the same
  * count keep the same relative order every time the catalogue is re-fetched

@@ -4,6 +4,7 @@ import AdmZip from "adm-zip";
 import { zipEntryCount } from "./bundle";
 import {
   type Context,
+  DESTINATIONS,
   hash,
   type InstallTarget,
   MAX_ENTRIES,
@@ -125,11 +126,10 @@ export function protectedInventoryFromRelease(
 export function protectedLegacyDestination(target: InstallTarget, c: Context): boolean {
   if (!target.protectedInventory) return false;
   const policy = snapshotProtectedInventory(target.protectedInventory, c.resourceName);
-  // Protect the whole destination subtree and all raw-format variants, including
-  // shipped paths that an operator has since removed from the mutable disk.
-  const candidates = [c.name, `${c.name}.wav`, `${c.name}.ogg`, `${c.name}.mp3`].map((name) =>
-    `${target.installPath}/${name}`.toLowerCase()
-  );
+  // Protect the whole destination subtree and every flat audio variant,
+  // including shipped paths that an operator has since removed from the mutable
+  // disk. The same list the installer and the inspector use.
+  const candidates = DESTINATIONS(c).map((name) => `${target.installPath}/${name}`.toLowerCase());
   return policy.files.some((file) => {
     const lower = file.toLowerCase();
     return candidates.some(

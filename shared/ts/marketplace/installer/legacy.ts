@@ -38,7 +38,13 @@ function expectedLegacyTree(
   prepared: ReturnType<typeof prepareBundle>
 ): Map<string, Buffer | null> {
   const expected = new Map<string, Buffer | null>();
-  if (prepared.zip) expected.set("", null);
+  // The destination directory itself, when the destination IS a directory. A
+  // sound adopts as a flat file, so its expected tree is the single empty-key
+  // entry the payload already carries and there is no directory to expect.
+  //
+  // `directory`, not `zip`: a zipped sound module is an archive that installs
+  // flat, and comparing it against a folder would fail every adoption.
+  if (prepared.directory) expected.set("", null);
   for (const [name, data] of prepared.files) {
     expected.set(name, data);
     const parts = name.split("/");
@@ -121,6 +127,14 @@ function verifyLegacyTree(dest: string, prepared: ReturnType<typeof prepareBundl
 }
 
 function checkLegacyDestination(c: Context, destination: string, receiptAllowed = false): void {
+  // The module directory named after the slug, AND the three flat audio names a
+  // sound can take. Both, unconditionally, because a target is a target: a
+  // directory called `demo` must block a sound install just as `demo.wav` must
+  // block a layout install, and refusing more is the safe direction.
+  //
+  // The "ambiguous legacy destinations" branch below also catches two entries
+  // that match case-insensitively, which is what a case-sensitive filesystem
+  // makes possible and what must never be adopted.
   const candidates = new Set([c.name, `${c.name}.wav`, `${c.name}.ogg`, `${c.name}.mp3`]);
   checkAncestors(c.base);
   if (!stat(c.base)) throw new Error("legacy installation is missing");

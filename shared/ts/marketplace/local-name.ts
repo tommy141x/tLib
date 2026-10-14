@@ -1,90 +1,40 @@
 /**
- * "Is the thing on disk the same thing as this catalogue item?" — one answer.
+ * "Is the thing on disk the same thing as this catalogue item?" — one answer, for
+ * every surface that draws an "Installed" badge. See ../README.md.
  *
- * ── The defect this exists to end ───────────────────────────────────────────
- *
- * A marketplace slug is NAMESPACED BY PRODUCT and a local install name is not,
- * and nothing reconciled the two. Measured on this estate, 2026-10-07:
- *
- *   catalogue slug        on-disk directory
- *   ────────────────      ─────────────────
- *   tradio-qrx-720        layouts/QRX-720
- *   tradio-swx-250        layouts/SWX-250
- *   tels-wcc2             …
- *   tdetector-rdx-4000    …
- *
- * tRadio's admin panel asked `new Set(adminStore.models).has(item.slug)`, where
- * `models` is literally `readdir(layouts/)`. `"QRX-720" !== "tradio-qrx-720"`,
- * so the answer was `false` for **all eleven shipped radio heads** and every one
- * of them offered an Install button for something already installed. Nothing
- * failed; the panel was simply confident and wrong.
- *
- * Pressing that button is not harmless either: the install route hands the RAW
- * SLUG to `installFromData`, so it would have written a second copy of the same
- * radio to `layouts/tradio-qrx-720/` beside the `layouts/QRX-720/` that was
- * already there. Fixing the match therefore also removes the only route to that
- * duplication, which is why the install target is deliberately left alone here —
- * see the warning on `installedNameCandidates`.
- *
- * ── Why it is shared and headless ───────────────────────────────────────────
- *
- * Every surface that draws an "Installed" badge has to answer this, and the
- * namespacing is a property of the CATALOGUE, not of any one panel: tELS's
- * `tels-wcc2` and tDetector's `tdetector-rdx-4000` are the identical shape. A
- * second copy of this reasoning in the next panel would be the same bug again
- * with a different spelling.
- *
- * Pure string functions — no DOM, no Solid, no fs — so the NUI graph (CEF 103),
- * tRadio's Node server bundle and a Workers build can all call it.
+ * A catalogue slug is namespaced by product (`tradio-qrx-720`) and a local install
+ * name is not (`layouts/QRX-720`); nothing reconciled the two, so every shipped
+ * radio head was offered an Install for something already installed.
  */
 
 import type { MarketplaceItem } from "./item";
 
 /**
- * Drop a leading `<resource>-` from a slug, if it carries one.
+ * Drop a leading `<resource>-` from a slug, if it carries one. Safe to apply
+ * unconditionally: the hyphen is part of the prefix, so `tradiology-foo` does not
+ * match `tradio-`, and an un-namespaced slug is returned untouched.
  *
- * ⚠️ The hyphen is part of the prefix and is REQUIRED, which is what keeps this
- * from over-matching: a hypothetical `tradiology-foo` does not start with
- * `tradio-` and is returned untouched. A slug that was never namespaced is also
- * returned untouched, so this is safe to apply unconditionally.
- *
- * Case-insensitive on both sides. The catalogue lowercases slugs and the
- * resource name is CamelCase (`tRadio`), so a case-sensitive compare would
- * never strip anything at all.
+ * Case-insensitive because the resource name is CamelCase (`tRadio`) and the
+ * catalogue lowercases slugs, so a case-sensitive compare strips nothing at all.
  */
 export function stripResourcePrefix(slug: string, resource: string | undefined): string {
   if (!resource) return slug;
   const prefix = `${resource.toLowerCase()}-`;
   const lower = slug.toLowerCase();
-  // `length > prefix.length`, not `>=`: a slug that IS the bare prefix would
-  // otherwise strip to the empty string, which matches nothing useful and would
-  // compare equal to any other empty candidate.
+  // `>` and not `>=`: a slug that IS the bare prefix would strip to the empty
+  // string, which then compares equal to any other empty candidate.
   if (lower.startsWith(prefix) && lower.length > prefix.length) return slug.slice(prefix.length);
   return slug;
 }
 
 /**
- * Every local name this item could legitimately be installed under, most
- * specific first.
+ * Every local name this item could legitimately be installed under, most specific
+ * first. Both spellings, because both genuinely occur: the raw slug for anything
+ * installed through the panel, the stripped slug for anything that shipped with
+ * the resource. Matching only one trades one set of false negatives for another.
  *
- * ⚠️ BOTH SPELLINGS, and that is not hedging — both genuinely occur:
- *
- *  · the RAW SLUG, because the install route passes `slug` straight to
- *    `installFromData`, so anything installed through the panel today really is
- *    sitting in a directory named `tradio-<model>`;
- *  · the PREFIX-STRIPPED slug, because everything that SHIPPED with the
- *    resource is named by its model (`QRX-720`) and always was.
- *
- * Matching only the stripped form would have broken detection for genuinely
- * marketplace-installed items — trading eleven false negatives for a different
- * set of them. Matching only the raw slug is the bug.
- *
- * ⛔ This is NOT a function for choosing an install TARGET. Do not reach for
- * `candidates[1]` to rename the destination: `layouts/qrx-720` and
- * `layouts/QRX-720` are one directory on Windows and two on Linux, every t*
- * resource ships to Linux containers, and a receipt written against one name
- * cannot uninstall the other. Deciding the on-disk name is a migration, not a
- * string transform.
+ * Not a function for choosing an install TARGET — do not reach for
+ * `candidates[1]` to rename a destination. See ../README.md.
  */
 export function installedNameCandidates(item: {
   slug: string;
@@ -95,31 +45,60 @@ export function installedNameCandidates(item: {
 }
 
 /**
- * Whether any of `installedNames` is this item.
- *
- * Case-insensitive, because the two sides are produced by different things: the
- * catalogue slugifies to lower case and a directory name is whatever the author
- * typed (`QRX-720`, `HLX-120G`). A case-sensitive compare here is just the
- * original bug with one extra step.
- *
- * `Iterable` rather than `Set`, so a caller can pass the array it already has
- * without building a set the function then rebuilds internally anyway.
+ * HOW a local name matched, which is the difference between two wrong buttons.
+ * `"managed"` matched the raw slug, the only name the marketplace writes and so
+ * the only one the uninstaller can address; `"builtin"` matched only the stripped
+ * spelling, so the files shipped with the consumer. See ../README.md, including
+ * the one case a string compare cannot separate.
  */
+export type LocalInstallKind = "managed" | "builtin";
+
+/**
+ * Which kind of local install, if any, `installedNames` holds for this item.
+ * `"managed"` wins when both spellings are on disk, leaving a Delete that can
+ * succeed. Case-insensitive; `Iterable` so a caller passes the array it has.
+ */
+export function localInstallKind(
+  item: { slug: string; resource?: string },
+  installedNames: Iterable<string>
+): LocalInstallKind | null {
+  const raw = item.slug.toLowerCase();
+  const stripped = stripResourcePrefix(item.slug, item.resource).toLowerCase();
+  let builtin = false;
+  for (const name of installedNames) {
+    const lower = name.toLowerCase();
+    if (lower === raw) return "managed";
+    if (lower === stripped) builtin = true;
+  }
+  return builtin ? "builtin" : null;
+}
+
+/** Whether any of `installedNames` is this item. Delegates, so the two cannot drift. */
 export function isItemInstalledLocally(
   item: { slug: string; resource?: string },
   installedNames: Iterable<string>
 ): boolean {
-  const wanted = new Set(installedNameCandidates(item).map((n) => n.toLowerCase()));
-  for (const name of installedNames) {
-    if (wanted.has(name.toLowerCase())) return true;
-  }
-  return false;
+  return localInstallKind(item, installedNames) !== null;
 }
 
 /**
- * The same question for a full catalogue item, kept as a separate named export
- * so a call site reads as what it is rather than as a structural coincidence.
+ * The other direction, for the Installed tab, which walks `readdir()` output
+ * rather than the catalogue: the same namespacing rule read backwards.
  */
+export function matchLocalName<T extends { slug: string; resource?: string }>(
+  name: string,
+  items: Iterable<T>
+): { item: T; kind: LocalInstallKind } | null {
+  let fallback: { item: T; kind: LocalInstallKind } | null = null;
+  for (const item of items) {
+    const kind = localInstallKind(item, [name]);
+    if (kind === "managed") return { item, kind };
+    if (kind === "builtin" && !fallback) fallback = { item, kind };
+  }
+  return fallback;
+}
+
+/** The same question for a full catalogue item, named so a call site reads as one. */
 export function isInstalledItem(item: MarketplaceItem, installedNames: Iterable<string>): boolean {
   return isItemInstalledLocally(item, installedNames);
 }

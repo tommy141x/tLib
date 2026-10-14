@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ModuleManifest } from "../../modules/manifest";
 
 /** Consumer-owned, embedded release inventory; never derive this from runtime disk scans. */
 export interface ProtectedBuiltinInventory {
@@ -18,37 +19,39 @@ export interface ProtectedBuiltinInventory {
 /**
  * The prepared, fully-validated payload a {@link ContentValidator} is handed.
  *
- * `files` is keyed by the entry's path within the bundle, exactly as it will be written
- * relative to the install destination. A raw (non-ZIP) sound bundle is a single entry under
- * the empty-string key — the same convention `prepareBundle` and `installFromData` use, so a
- * validator sees precisely the bytes that are about to be committed.
+ * `files` is keyed by the entry's path within the bundle, exactly as it will be
+ * written relative to the destination. A SOUND installs as a flat audio file, so
+ * its payload is the single entry under the empty-string key -- the destination is
+ * the file, not a directory containing it.
+ *
+ * `manifest` is the sound module's `module.json`, passed in memory because a flat
+ * audio file has nowhere on disk to keep it: on a FiveM resource a sound is just
+ * the `.wav`, and its name, licence, duration and peaks live in the studio.
  */
 export interface PreparedPayload {
   type: string;
   slug: string;
-  /** True for a ZIP bundle, false for a single raw file. */
+  /** True for a ZIP bundle, false for a single raw file. Says nothing about the destination. */
   zip: boolean;
   files: ReadonlyMap<string, Buffer>;
+  /** A sound module's manifest, when the item is a sound. Never written to a resource. */
+  manifest?: ModuleManifest;
 }
 
 /**
- * A consumer's own content contract for one item type, run immediately before the commit.
+ * A consumer's own content contract for one item type, run immediately before the
+ * commit. REJECT BY THROWING -- the message is surfaced verbatim as
+ * `InstallFailure.error`, so write it for the server owner who will read it.
  *
- * ⚠️ REJECT BY THROWING. The thrown message is surfaced verbatim as `InstallFailure.error`,
- * so write it for the server owner who will read it, not for a log grep.
+ * The structural guarantees in this module establish that a bundle is SAFE TO
+ * EXTRACT and nothing more; they cannot establish that it is a valid instance of
+ * whatever the consumer expects. Without a hook here, the only place left to find
+ * out is at render time on a player's machine.
  *
- * This exists because the structural guarantees in this module — zip-slip, case aliasing,
- * entry counts, declared-vs-actual sizes, compression methods, digests — establish that a
- * bundle is *safe to extract*, and nothing more. They cannot establish that it is a valid
- * instance of whatever the consuming resource expects, because only the consumer knows that.
- * Without a hook here, the only place left to find out is at render time on a player's
- * machine, which is how a malformed item installs cleanly and then silently misbehaves.
- *
- * Deliberately called BEFORE the staging directory is created, so a rejected bundle touches
- * no disk at all and leaves nothing to roll back.
- *
- * Deliberately NOT given the resource root or any filesystem handle: a validator inspects
- * the payload it is passed and nothing else. Keep it pure — it runs inside the install lock.
+ * Called BEFORE the staging directory exists, so a rejected bundle touches no disk
+ * and leaves nothing to roll back. Deliberately NOT given the resource root or any
+ * filesystem handle: it inspects the payload it is passed and nothing else, and it
+ * runs inside the install lock.
  */
 export type ContentValidator = (payload: PreparedPayload) => void;
 
@@ -60,11 +63,6 @@ export interface InstallTarget {
   maxBundleBytes: number;
   /** Optional for compatibility. Absence never authorizes legacy adoption. */
   protectedInventory?: ProtectedBuiltinInventory;
-  /**
-   * Optional content contract for this type. Absence means "no contract declared", which is
-   * the pre-hook behaviour and stays the default — adding this field changed no existing
-   * consumer's outcome.
-   */
   validate?: ContentValidator;
 }
 
@@ -147,6 +145,23 @@ export function context(target: InstallTarget, slug: string) {
   return { base, name, resourceName, type, receipt: path.join(base, `.marketplace-${name}.json`) };
 }
 export type Context = ReturnType<typeof context>;
+
+/**
+ * Every path under `base` that a slug could legitimately occupy: the module
+ * directory, and the three flat audio names a SOUND installs as -- a sound on a
+ * FiveM resource is just the `.wav`, chosen so an operator can drag one in.
+ *
+ * Deliberately NOT narrowed by `c.type`. A target is a target: a directory named
+ * `airhorn` must block a sound install and `airhorn.wav` must block a layout
+ * install. Narrowing it would mean an unreceipted file of the "wrong" shape
+ * stopped being protected.
+ */
+export const DESTINATIONS = (c: Context): string[] => [
+  c.name,
+  `${c.name}.wav`,
+  `${c.name}.ogg`,
+  `${c.name}.mp3`,
+];
 export interface Receipt {
   version: 1;
   resourceName: string;
@@ -188,9 +203,7 @@ export function owned(c: Context): Receipt | null {
       receipt.resourceName !== c.resourceName ||
       receipt.type !== c.type ||
       receipt.slug !== c.name ||
-      ![c.name, ...[".wav", ".ogg", ".mp3"].map((ext) => c.name + ext)].includes(
-        receipt.destination
-      ) ||
+      !DESTINATIONS(c).includes(receipt.destination) ||
       !receipt.files ||
       typeof receipt.files !== "object"
     )
@@ -202,9 +215,58 @@ export function owned(c: Context): Receipt | null {
     )
       throw new Error("installed content changed; refusing overwrite/delete");
   }
-  for (const candidate of [c.name, `${c.name}.wav`, `${c.name}.ogg`, `${c.name}.mp3`]) {
+  // THE PROTECTION PROPERTY. Read this before changing the line below.
+  //
+  // Content that SHIPPED with a resource has no receipt. This throw is therefore
+  // the entire reason shipped content cannot be overwritten or uninstalled: on
+  // install and on uninstall alike, a target that exists and that no receipt
+  // claims is refused. It is NOT `ProtectedBuiltinInventory`, which is measurably
+  // inert — nothing in the estate passes one and `protectedLegacyDestination`
+  // returns false on its first line. Demo mode's reset sweep (./reset.ts) rests
+  // on the same property: it can only delete what a receipt names, so shipped
+  // modules are invisible to it.
+  for (const candidate of DESTINATIONS(c)) {
     if (stat(path.join(c.base, candidate)) && candidate !== receipt?.destination)
       throw new Error("existing target has no marketplace ownership receipt");
   }
+
+  // The same refusal on a case-sensitive filesystem.
+  //
+  // `c.name` is the slug lowercased, but shipped module folders are not: tRadio
+  // ships `bgDog`, `transEnd1`, `QRX-720`. On Windows the `stat` above already
+  // finds `bgDog` when asked for `bgdog` and refuses. On Linux — which is a
+  // first-class target for these resources — it does not, so without this an
+  // install of slug `bgdog` would quietly create a second module beside the
+  // shipped `bgDog` and the two would differ only by case. That is not a
+  // destructive outcome, but it is an unexplainable one, and "protected
+  // everywhere except in the container the customer actually runs" is not a
+  // property worth claiming.
+  const sibling = caseVariantOf(c.base, c.name);
+  if (sibling && sibling !== receipt?.destination)
+    throw new Error(
+      `existing target "${sibling}" differs from "${c.name}" only by case; refusing to install beside it`
+    );
+
   return receipt;
+}
+
+/**
+ * An entry in `base` whose name matches `name` case-insensitively but not exactly.
+ *
+ * Returns null when the directory is absent or unreadable: this backs a refusal,
+ * and a refusal that cannot read the directory has nothing to refuse on. The
+ * `stat` check above is what covers "the target is simply there".
+ */
+function caseVariantOf(base: string, name: string): string | null {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(base);
+  } catch {
+    return null;
+  }
+  const lower = name.toLowerCase();
+  for (const entry of entries) {
+    if (entry !== name && entry.toLowerCase() === lower) return entry;
+  }
+  return null;
 }

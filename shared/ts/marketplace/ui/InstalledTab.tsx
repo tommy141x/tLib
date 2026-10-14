@@ -4,7 +4,8 @@ import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconSearch from "~icons/lucide/search";
 import IconTrash2 from "~icons/lucide/trash-2";
 import { NuiButton } from "../../nui-kit/NuiButton";
-import { isInstallBusy } from "../install-machine";
+import { BUILTIN_EXPLANATION, isBuiltin, isInstallBusy } from "../install-machine";
+import { matchLocalName } from "../local-name";
 import { InstallError } from "./InstallError";
 import { inspectableIdentity } from "./inspection";
 import {
@@ -37,21 +38,44 @@ export function InstalledTab(props: {
 }) {
   const mpBySlug = () => new Map(props.marketplaceItems.map((i) => [i.slug, i]));
 
+  /**
+   * This list is `readdir(layouts/)`, not catalogue slugs
+   *
+   * Which is the whole defect. It used to resolve a row three ways off the bare
+   * folder name — `bySlug.get(name)` for the catalogue entry, `name in states`
+   * for whether a Delete was offered, `states[name]` for the install state — and
+   * all three missed for every layout the resource shipped, because a shipped
+   * layout is named by its model (`QRX-720`) and a marketplace slug is
+   * product-namespaced and lowercased (`tradio-qrx-720`).
+   *
+   * `name in states` was the dangerous one, and not for the reason it looks: the
+   * seed in `MarketplaceBrowser.applyOpenData` put EVERY discovered layout name
+   * into `installStates`, so that test was true for all of them and every
+   * shipped layout got a Delete button — against a path the uninstaller cannot
+   * address. `matchLocalName` answers both questions at once instead, and `slug`
+   * is now non-null only for a `"managed"` match, i.e. only where the on-disk
+   * name IS the install target.
+   */
   const uiEntries = (): InstalledEntry[] => {
-    const bySlug = mpBySlug();
     const states = props.installStates;
     return props.installedLayouts
-      .filter((name) => {
-        const s = states[name];
-        return !s || s.state !== "idle";
+      .map((name) => {
+        const match = matchLocalName(name, props.marketplaceItems);
+        // Non-null only for a name the uninstaller can address. A built-in and a
+        // layout with no catalogue entry at all both get `null`, and both
+        // therefore get no Delete — the second was previously offered one too.
+        const slug = match?.kind === "managed" ? match.item.slug : null;
+        const base: InstallState =
+          match?.kind === "builtin" ? { state: "builtin" } : { state: "installed" };
+        return {
+          key: name,
+          displayName: match?.item.name ?? name,
+          item: match?.item ?? null,
+          slug,
+          installState: (slug ? states[slug] : null) ?? base,
+        };
       })
-      .map((name) => ({
-        key: name,
-        displayName: bySlug.get(name)?.name ?? name,
-        item: bySlug.get(name) ?? null,
-        slug: name in states ? name : null,
-        installState: states[name] ?? { state: "installed" },
-      }));
+      .filter((entry) => entry.installState.state !== "idle");
   };
 
   const soundEntries = (): InstalledEntry[] => {
@@ -105,7 +129,20 @@ export function InstalledTab(props: {
                         name={e.displayName}
                         item={mpItem}
                         installState={e.installState}
-                        onInstall={mpItem ? () => props.onInstall(mpItem) : undefined}
+                        /*
+                           A built-in gets NO Reinstall either, even though we
+                          have its catalogue entry and so could offer one. The
+                          install target is the raw slug, so "Reinstall QRX-720"
+                          would write `layouts/tradio-qrx-720/` BESIDE the
+                          shipped `layouts/QRX-720/` rather than replace it —
+                          two copies of one radio, which is the duplication this
+                          fix exists to make unreachable.
+                        */
+                        onInstall={
+                          mpItem && !isBuiltin(e.installState)
+                            ? () => props.onInstall(mpItem)
+                            : undefined
+                        }
                         onDelete={
                           e.slug ? () => props.onUninstallBySlug("ui", e.slug as string) : undefined
                         }
@@ -211,6 +248,18 @@ function InstalledItemCard(props: {
 
       <Show when={props.item?.description}>
         {(desc) => <p class="text-sm mp-muted line-clamp-2">{desc()}</p>}
+      </Show>
+
+      {/*
+         A SENTENCE, because this row is the one that would otherwise be
+        silent. A built-in now draws neither Reinstall nor Delete, so without
+        this the card is a name, a size and an Inspect button — and "the
+        marketplace shows my radio but offers nothing" is a bug report waiting.
+        Shared copy from `../install-machine`, so this and the two grid surfaces
+        cannot word it three ways.
+      */}
+      <Show when={isBuiltin(s())}>
+        <p class="mp-inspection-note">{BUILTIN_EXPLANATION}</p>
       </Show>
 
       <Show

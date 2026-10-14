@@ -81,8 +81,9 @@ export interface MarketplaceAgent {
    * Uninstall every marketplace item this resource owns, across all types.
    *
    * Demo mode's start-time reset. Only receipt-owned content is removed, so what
-   * the resource shipped with — including preinstalled catalogue items, which are
-   * covered by the protected inventory rather than by a receipt — is untouched.
+   * the resource shipped with — including preinstalled catalogue items — is
+   * untouched: it has no receipt, and `owned()` refuses any unreceipted path
+   * outright. That, and not the protected inventory, is what keeps it safe.
    */
   resetToShipped(): { removed: string[]; failed: { slug: string; error: string }[] };
   /** Local-only API for a future authorized operator workflow; no adoption event is registered. */

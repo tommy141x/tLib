@@ -2,7 +2,7 @@
  * Narrowing a catalogue that is already in memory: a search term, a facet, and
  * the counts the facet chips show.
  *
- * ── Why this is shared ──────────────────────────────────────────────────────
+ * Why this is shared
  *
  * Two surfaces browse the same catalogue by filtering a list they already hold,
  * and both had written this by hand:
@@ -18,7 +18,7 @@
  * is the seam, so a surface decides which of its own fields are searchable
  * without reimplementing the matching.
  *
- * ── Generic over the item, by accessor ──────────────────────────────────────
+ * Generic over the item, by accessor
  *
  * The two surfaces do not share an item type — tELS holds a `CardView` keyed by
  * `kind`, tRadio holds a `MarketplaceItem` keyed by `type` — and they never
@@ -56,7 +56,7 @@ export function normaliseSearchTerm(raw: string): string {
 /**
  * Whether any of an item's searchable fields contains the term.
  *
- * ⚠️ An empty term matches EVERYTHING, rather than nothing. That is the
+ * An empty term matches EVERYTHING, rather than nothing. That is the
  * difference between a search box at rest and a search box that has hidden the
  * whole catalogue, and getting it the wrong way round empties the grid on first
  * paint.
@@ -100,12 +100,12 @@ export type FacetCounts<F extends string> = Record<FacetSelection<F>, number>;
 /**
  * Count the items in each facet.
  *
- * ⚠️ Every facet in `facets` gets a key, including the ones with no items. A
+ * Every facet in `facets` gets a key, including the ones with no items. A
  * chip whose count is absent renders as blank or `undefined` rather than as
  * `(0)`, and "no themes" is information the reader wants — it is the difference
  * between "there are none" and "the chip is broken".
  *
- * ⚠️ Count the list you are about to SHOW, not the raw catalogue. tRadio's
+ * Count the list you are about to SHOW, not the raw catalogue. tRadio's
  * panel takes the counts after the search and before the facet narrowing, so a
  * chip cannot claim "Themes (7)" over a grid showing none of them — the count
  * would be the one number on screen the search did not apply to. Pass the

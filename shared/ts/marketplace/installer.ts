@@ -2,6 +2,8 @@
 // equivalence only, never marketplace ownership or permission to mutate built-ins.
 //
 // This file is the public surface; the modules behind it are internal.
+
+export type { ItemMetadata } from "./installer/bundle";
 export type {
   ContentValidator,
   InstallFailure,

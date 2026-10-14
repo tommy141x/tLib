@@ -172,7 +172,7 @@
 /*
  * The footer's LEFT group — installs, and the like count beside it.
  *
- * ⚠️ THIS RULE EXISTS TO CANCEL `.mp-card-footer > div` ABOVE, which sets
+ * THIS RULE EXISTS TO CANCEL `.mp-card-footer > div` ABOVE, which sets
  * `margin-left: auto` on every direct div child. That was written when the
  * footer held a bare `<span>` and one `<div>` of buttons; the like count needed
  * the stats wrapped in a div of their own, and without this both groups push to
@@ -185,7 +185,7 @@
 /*
  * The like toggle.
  *
- * ⚠️ NO `backdrop-filter`, no `color-mix()`, no `oklch()` and no blurred shadow
+ * NO `backdrop-filter`, no `color-mix()`, no `oklch()` and no blurred shadow
  * anywhere in this file — NUI is CEF 103 and every one of those is dropped
  * silently rather than erroring. The pressed state is carried by the icon's
  * `fill` (set in the component, through `currentColor`) plus this colour, which
@@ -199,7 +199,7 @@
   background: transparent;
 }
 /*
- * ⚠️ THIS SELECTOR ONLY WORKS BECAUSE THE COMPONENT PASSES A STRING.
+ * THIS SELECTOR ONLY WORKS BECAUSE THE COMPONENT PASSES A STRING.
  *
  * Solid 2 writes a boolean attribute as the EMPTY STRING — `aria-pressed={true}`
  * produces `aria-pressed=""`, not `"true"` — which silently killed a whole set
@@ -287,7 +287,7 @@
 .mp-preview-header > .truncate {
   max-width: 40%;
 }
-/* ── Colour that used to live inline in the TSX ───────────────────────────
+/* Colour that used to live inline in the TSX
    These components are meant to be mounted inside a host resource's own
    editor chrome, so they must not name a host token. They used to: the TSX
    carried `text-[hsl(var(--muted-foreground))]` and friends, which renders

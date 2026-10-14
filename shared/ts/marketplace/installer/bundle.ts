@@ -1,9 +1,34 @@
 // Archive validation and bounded extraction. Read-only and shared: install and
 // legacy verification must agree byte for byte on what a bundle contains.
 
+import * as path from "node:path";
 import { inflateRawSync } from "node:zlib";
 import AdmZip from "adm-zip";
+import { MODULE_MANIFEST, type ModuleManifest, parseModuleManifest } from "../../modules/manifest";
 import { type Context, hash, type InstallTarget, MAX_ENTRIES, safeName } from "./core";
+
+/**
+ * What the catalogue knows about the item being installed, for the `module.json`
+ * a raw audio bundle has to be given.
+ *
+ * Optional because a caller that cannot supply it must still be able to install:
+ * the alternative is refusing every sound item in the catalogue until each is
+ * re-published, and the round trip has to keep working.
+ */
+export interface ItemMetadata {
+  name?: string;
+  version?: string;
+}
+
+/**
+ * The version written when the caller did not supply one.
+ *
+ * Not a guess dressed up as a fact. `0.0.0` reads as "nobody told us", which is
+ * the truth for a raw audio item: the marketplace ships the bytes and keeps the
+ * version in its own database, so there is nothing in the bundle to read. A
+ * sound published as a ZIP carries its own `module.json` and never reaches this.
+ */
+export const UNKNOWN_ITEM_VERSION = "0.0.0";
 
 export function zipEntryCount(buf: Buffer): number {
   // Bound entry allocation before AdmZip parses the central directory. ZIP64
@@ -59,7 +84,8 @@ export function prepareBundle(
   c: Context,
   zipBytes: Buffer,
   expectedHash: string,
-  expectedSize: number
+  expectedSize: number,
+  item?: ItemMetadata
 ) {
   const { type } = target;
   const max = target.maxBundleBytes;
@@ -77,12 +103,33 @@ export function prepareBundle(
   if (expectedHash && hash(zipBytes) !== expectedHash.toLowerCase().replace(/^sha256:/, ""))
     throw new Error("hash mismatch — bundle corrupted or tampered");
   const zip = zipBytes.length >= 4 && zipBytes.readUInt32LE(0) === 0x04034b50;
-  let destination = c.name;
+  const sound = type === "sound" || type === "tone";
+  /** The sound module's manifest, generated or read from the bundle. */
+  let manifest: ModuleManifest | undefined;
+
+  // A sound installs as a FLAT FILE; everything else as a module directory
+  //
+  // `layouts/sounds/airhorn.wav`, not `layouts/sounds/airhorn/airhorn.wav`.
+  //
+  // That is not a leftover from before modules existed — it is the shape, chosen
+  // so that an operator can drag a `.wav` into `layouts/sounds/` and have it
+  // work. No folder to create, no `module.json` to author, nothing to get wrong.
+  // A sound is still a MODULE in the studio and in the marketplace, with a folder
+  // and a manifest carrying its name, author, licence, duration and waveform
+  // peaks; this is the boundary where that becomes a plain file.
+  //
+  // `directory` is returned rather than inferred, and nothing may go back to
+  // branching on `zip` for it: a zipped sound module is an archive AND installs
+  // flat, which is precisely the case a `zip` test gets wrong.
+  const directory = !sound;
+  let audioName: string | null = null;
   let entries: ReturnType<AdmZip["getEntries"]> = [];
   if (!zip) {
-    if (type !== "sound" && type !== "tone")
-      throw new Error("raw bundles are only supported for sound/tone types");
-    destination += soundExtension(zipBytes);
+    if (!sound) throw new Error("raw bundles are only supported for sound/tone types");
+    // The marketplace ships most sounds as the audio file itself, with the name,
+    // licence and peaks in its own database. Nothing to unpack: the format comes
+    // from the magic bytes and the bytes are the payload.
+    audioName = c.name + soundExtension(zipBytes);
   } else {
     const count = zipEntryCount(zipBytes);
     entries = new AdmZip(zipBytes).getEntries();
@@ -131,8 +178,21 @@ export function prepareBundle(
   }
   const files = new Map<string, Buffer>();
   let bytesWritten = 0;
-  if (!zip) {
+  if (audioName) {
+    // The flat-destination convention: ONE entry under the empty-string key, so
+    // the destination IS the file rather than a directory containing it. The
+    // manifest a validator wants rides on `manifest` instead, because there is
+    // nowhere on disk for it to go.
     files.set("", zipBytes);
+    manifest = {
+      schema: 1,
+      kind: "sound",
+      id: c.name,
+      name: item?.name?.trim() || c.name,
+      version: item?.version?.trim() || UNKNOWN_ITEM_VERSION,
+      slug: c.name,
+      sound: { file: audioName },
+    };
     bytesWritten = zipBytes.length;
   } else {
     for (const entry of entries) {
@@ -164,5 +224,50 @@ export function prepareBundle(
       files.set(entry.entryName, data);
     }
   }
-  return { destination, zip, files, bytesWritten };
+  // A zipped SOUND module is reduced to its audio, here
+  //
+  // tWeb exports a sound as a folder: `module.json`, the audio, and possibly
+  // artwork or an alternate encoding. On a FiveM resource only the audio exists,
+  // so the manifest is read, parsed and kept in memory for the validator, the
+  // declared audio becomes the flat payload, and ANYTHING ELSE IN THE BUNDLE IS
+  // DROPPED. That last part is said out loud rather than discovered: a publisher
+  // who ships a cover image will not find it on disk, and the alternative —
+  // refusing the bundle — would reject a module that is perfectly valid in the
+  // studio.
+  if (sound && zip) {
+    const manifestBytes = files.get(MODULE_MANIFEST);
+    if (!manifestBytes) throw new Error(`zipped sound "${c.name}" has no ${MODULE_MANIFEST}`);
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(manifestBytes.toString("utf8"));
+    } catch (err) {
+      throw new Error(
+        `zipped sound "${c.name}" has a malformed ${MODULE_MANIFEST}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+    // Parsed against the slug AND the kind, so a manifest for a different item,
+    // or a layout manifest in a sound bundle, is refused before anything is
+    // staged. The `id === audio stem` rule is enforced in here too, which is what
+    // makes `<slug>.<ext>` below the same filename the module declared.
+    manifest = parseModuleManifest(decoded, c.name, "sound");
+    audioName = manifest.sound?.file ?? null;
+    if (!audioName) throw new Error(`zipped sound "${c.name}" declares no audio file`);
+    const audio = files.get(audioName);
+    if (!audio)
+      throw new Error(
+        `zipped sound "${c.name}" declares "${audioName}" but the bundle does not contain it`
+      );
+    files.clear();
+    files.set("", audio);
+    bytesWritten = audio.length;
+  }
+
+  // `zip` says whether the publisher shipped an archive or a bare file, which is
+  // a fact about the ITEM that a ContentValidator may legitimately care about.
+  // `directory` says whether the DESTINATION is a folder. They are not the same
+  // question and a zipped sound module is exactly where they differ.
+  const destination = directory ? c.name : c.name + path.extname(audioName ?? "");
+  return { destination, directory, zip, files, bytesWritten, manifest };
 }

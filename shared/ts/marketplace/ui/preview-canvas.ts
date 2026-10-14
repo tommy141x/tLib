@@ -2,7 +2,7 @@
  * "How big is this preview document meant to be?" — one answer, for every surface
  * that scales a marketplace layout into a box.
  *
- * ── Why it is its own module ────────────────────────────────────────────────
+ * Why it is its own module
  *
  * This logic was inline in `PreviewOverlay.tsx`'s `canvasSize` memo, which made it
  * unreachable from anywhere that is not a Solid component in this tree. tRadio's
@@ -17,7 +17,7 @@
  * non-Solid consumer can call it, and so it can be imported by a tree that aliases
  * `@tlib/shared` without dragging the component graph in behind it.
  *
- * ── The tiers, in descending order of trust ─────────────────────────────────
+ * The tiers, in descending order of trust
  *
  * 1. `<!-- studio-design:<base64 json> -->`. The authoring tool's own record of the
  *    canvas it was drawn on. It is the only tier that is a STATEMENT of intent
@@ -63,7 +63,7 @@ export function parsePreviewCanvasSize(
   }
 
   /**
-   * ⚠️ FRACTIONAL, and this was a real silent defect until 2026-10-07.
+   * FRACTIONAL, and this was a real silent defect until 2026-10-07.
    *
    * These were `(\d+)` with `parseInt`, so a half-pixel canvas did not match
    * the regex AT ALL — tier 2 reported nothing and the value fell through to
@@ -83,7 +83,7 @@ export function parsePreviewCanvasSize(
    * emits.
    */
   /**
-   * ⚠️ TWO ATTRIBUTE FAMILIES, because two products declare a canvas.
+   * TWO ATTRIBUTE FAMILIES, because two products declare a canvas.
    *
    * `data-radar-*` was missing here while tWeb's own reader
    * (`src/lib/studio/codec.ts`'s `CANVAS_SIZE_ATTRS`) has carried both all
