@@ -11,12 +11,20 @@ import { attachCameraDrag } from "../camera-drag";
 import { GizmoScene } from "../gizmo/GizmoScene";
 import { fivemWorldToLocal } from "../gizmo/vehicle-math";
 import { fetchNui, onNuiEvent } from "../nui";
+import type { UndoHistory } from "../undo";
 import { getGizmoScene, setGizmoScene } from "./scene";
 import { mergePropEditorPropData, propEditorState } from "./store";
+import { GIZMO_UNDO_LABEL, PROP_TRANSFORM_TAG } from "./undo";
 
 export interface PropEditorViewportProps {
   /** Event namespace, without the colon. `"radio"` → `radio:propMoved`. */
   prefix: string;
+  /**
+   * The editor's history, so a whole gizmo drag is ONE undo entry. Passed down
+   * rather than reached for: `PropEditor` owns the instance, because a module
+   * singleton here would re-create the nesting bug `shared/ts/undo.ts` removed.
+   */
+  history: UndoHistory;
 }
 
 export function PropEditorViewport(props: PropEditorViewportProps) {
@@ -56,35 +64,38 @@ export function PropEditorViewport(props: PropEditorViewportProps) {
     };
 
     // Already absolute and already clamped to [0.1, 10] by the scene, so there
-    // is nothing to normalise here — which is the point of the scene owning the
-    // clamp: the Lua half can never be sent a 0 or a negative from this path.
     scene.onUniformScaleChange = (scale) => {
       mergePropEditorPropData({ scale });
       nui("propScaled", { scale });
     };
 
+    /*
+     * THE DRAG IS ONE UNDO ENTRY. The batch opens at gesture START, so the
+     * "before" is the transform the drag began from; every frame writes without
+     * touching the history, and `onDragEnd` closes it. The label comes off the
+     * current MODE and is deliberately not any numeric field's, because a
+     * matching label would EXTEND an open batch rather than start a new one.
+     * There is no `abort()` and nothing to call it from: a drag that ends where
+     * it started is discarded by `commit()` finding before and after equal.
+     */
     scene.onDragStart = () => {
       isDragging = true;
+      props.history.push(GIZMO_UNDO_LABEL[propEditorState.mode], [PROP_TRANSFORM_TAG]);
     };
     scene.onDragEnd = () => {
       isDragging = false;
+      props.history.commit();
     };
 
     scene.startLoop();
 
-    // Camera input comes from the BROWSER, not from the pad.
+    // Camera input comes from the BROWSER, not from the pad: the editor holds
+    // SetNuiFocus(true, true), so CEF owns pointer movement and the game's look
+    // axes report one frame and then zero. The WHEEL is the same story and was
+    // missed the first time -- the Lua half's disabled-control checks never fired
+    // once. It is not throttled the way the drag is, because a wheel event is
+    // already one notch rather than a stream of samples.
     //
-    // The editor holds SetNuiFocus(true, true), so CEF owns pointer movement and
-    // the game's look axes report one frame and then zero — which is why holding
-    // MMB nudged the camera a pixel and then stopped. The page still gets every
-    // pointermove, so it sends the delta and the Lua half applies the orbit
-    // maths. See ../camera-drag.ts.
-    //
-    // The WHEEL is the same story and was missed the first time: CEF owns it
-    // outright under that focus, so the Lua half's
-    // `IsDisabledControlJustPressed(0, 241/242)` never fired once and the wheel
-    // did nothing. It is not throttled the way the drag is — a wheel event is
-    // already one notch, not a stream of pointer samples.
     detachCameraDrag = attachCameraDrag(canvasRef, {
       onDrag: (d) => {
         if (d.mode === "none") return;
@@ -109,8 +120,6 @@ export function PropEditorViewport(props: PropEditorViewportProps) {
 
   // Camera sync from Lua. Not namespaced: the Lua half sends this action bare,
   // because it is the one message on the hot path and it predates the prefix.
-  // `onCleanup(off)` was called inside the old `onMount` body; Solid 2 forbids
-  // that in an `onSettled` scope and wants the unsubscribe returned instead.
   onSettled(() => {
     const off = onNuiEvent<{
       position: { x: number; y: number; z: number };
@@ -122,19 +131,11 @@ export function PropEditorViewport(props: PropEditorViewportProps) {
   });
 
   /*
-   * ── `on()` IS GONE; ITS JOB IS NOW `createEffect`'s FIRST ARGUMENT ─────────
-   *
-   * Solid 2's `createEffect(compute, apply)` splits the two phases `on()` used
-   * to emulate: `compute` tracks and IS the dependency list, `apply` runs
-   * untracked. So `createEffect(on(src, fn))` folds to `createEffect(src, fn)`
-   * one-for-one, with no change in which reads are tracked.
-   *
-   * ⚠️ NO `{ defer: true }` ANYWHERE HERE, DELIBERATELY. Solid 1's `on()` also
-   * defaulted to running immediately, so these four already fired on their first
-   * value and still must — the gizmo has to be given the initial mode, space and
-   * matrix. `defer` would skip exactly that run. (It is also the option
-   * portfolio-next measured dropping subsequent runs when `apply` reads `prev`;
-   * none of these read `prev`, but there is no reason to reach for it.)
+   * `on()` IS GONE; ITS JOB IS NOW `createEffect`'s FIRST ARGUMENT. `compute`
+   * tracks and IS the dependency list, `apply` runs untracked, so
+   * `createEffect(on(src, fn))` folds one-for-one. NO `{ defer: true }` anywhere
+   * here, deliberately: Solid 1's `on()` also ran immediately, and these four
+   * must, because the gizmo has to be given the initial mode, space and matrix.
    */
 
   // External edits (the numeric fields) move the handle; a live drag must not,

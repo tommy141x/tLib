@@ -15,8 +15,6 @@
  * are bare HSL triplets (`--border: 217 19% 27%`) consumed as `hsl(var(--border))`.
  */
 
-export { PropEditor, type PropEditorProps } from "./PropEditor";
-export { PropEditorViewport, type PropEditorViewportProps } from "./PropEditorViewport";
 export {
   type CameraCommand,
   cameraCommandFor,
@@ -25,20 +23,23 @@ export {
   NUMPAD_COMMANDS,
   NUMPAD_CTRL_COMMANDS,
 } from "./numpad";
+export { PropEditor, type PropEditorProps } from "./PropEditor";
+export { PropEditorViewport, type PropEditorViewportProps } from "./PropEditorViewport";
 export { PanelHover, type PanelHoverProps, PropField, type PropFieldProps } from "./parts";
 export { getGizmoScene } from "./scene";
-export { DEFAULT_PROP_EDITOR_STRINGS, makePropEditorTranslator } from "./strings";
 export {
   closePropEditor,
+  mergePropEditorPropData,
   openPropEditor,
   propEditorState,
-  mergePropEditorPropData,
+  propEditorTransform,
   setPropEditorMode,
   setPropEditorPropData,
   setPropEditorSpace,
   setPropEditorState,
   togglePropEditorSpace,
 } from "./store";
+export { DEFAULT_PROP_EDITOR_STRINGS, makePropEditorTranslator } from "./strings";
 export type {
   PropData,
   PropEditorFeatures,
@@ -51,3 +52,13 @@ export type {
   PropEditorTranslate,
   VehicleMatrix,
 } from "./types";
+export {
+  fieldUndoLabel,
+  GIZMO_UNDO_LABEL,
+  PROP_TRANSFORM_TAG,
+  type PropTransformMessage,
+  type PropTransformUndoableOptions,
+  propTransformUndoable,
+  sameTransform,
+  transformMessages,
+} from "./undo";

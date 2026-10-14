@@ -1,62 +1,59 @@
 /**
  * PropEditor — the full-screen 3D gizmo overlay for positioning a vehicle prop.
  *
- * Layout:
- *   - Left toolbar:  Move / Rotate / Scale / Space / Driver POV / WASD camera
- *   - Top-centre:    vehicle badge
- *   - Top-right:     optional host slot + Save + Cancel
- *   - Right panel:   X/Y/Z/RX/RY/RZ + a single uniform Scale + Remove
- *   - Bottom:        keyboard hint bar
+ * A host supplies `prefix` and nothing else, at minimum: everything sent and
+ * listened for is `<prefix>:…`, matching `tlib.propeditor.create{ prefix = … }`.
+ * The two prefixes ARE the contract between the halves, and a mismatch is
+ * silent -- the page renders and no button does anything.
  *
- * ── What a host supplies ────────────────────────────────────────────────────
- *
- * `prefix` and nothing else, at minimum. Everything the editor sends and
- * listens for is `<prefix>:…`, matching `tlib.propeditor.create{ prefix = … }`
- * on the Lua side; the two prefixes ARE the contract between the halves, and a
- * mismatch is silent — the page renders and no button does anything.
- *
- * ── What this does not know ─────────────────────────────────────────────────
- *
- * Which prop model is being edited, how placements are keyed, what a vehicle is
- * called in any particular data file, and anything at all about Discovery or
- * config export. The last of those is `slots.toolbar`.
+ * Design notes: docs/internal/prop-editor-ui.md
  */
 
+import { FocusTrap } from "@ark-ui/solid/focus-trap";
 import { createEscapeLayer } from "@tlib/shared/escape-layer";
 import { Button } from "@tlib/shared/ui/button";
+import { ConfirmDelete } from "@tlib/shared/ui/confirm-delete";
+import { UndoHint, UndoRedo } from "@tlib/shared/ui/undo-redo";
+import { UndoHistory } from "@tlib/shared/undo";
+import { createUndoScope } from "@tlib/shared/undo-keys";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import { clampUniformScale } from "../gizmo/types";
 import { fetchNui, onNuiEvent } from "../nui";
 import { Separator } from "../ui/separator";
 import "./prop-editor.css";
 import { cameraCommandFor, getNumpadKey, KEY_COMMANDS } from "./numpad";
-import { PanelHover, PropField } from "./parts";
 import { PropEditorViewport } from "./PropEditorViewport";
+import { PanelHover, PropField } from "./parts";
 import { getGizmoScene } from "./scene";
-import { makePropEditorTranslator } from "./strings";
 import {
   closePropEditor,
   openPropEditor,
   propEditorState,
+  propEditorTransform,
   setPropEditorMode,
   setPropEditorPropData,
   togglePropEditorSpace,
 } from "./store";
+import { makePropEditorTranslator } from "./strings";
 import type {
+  PropData,
   PropEditorFeatures,
   PropEditorInitMessage,
   PropEditorSlots,
   PropEditorTranslate,
 } from "./types";
+import {
+  fieldUndoLabel,
+  PROP_TRANSFORM_TAG,
+  propTransformUndoable,
+  transformMessages,
+} from "./undo";
 
 export interface PropEditorProps {
   /** Event namespace, without the colon. Must match the Lua descriptor. */
   prefix: string;
-  /**
-   * A class wrapping the whole overlay, for a host that scopes its CSS custom
-   * properties to a root (`.radio-settings-root`). Omit it and the editor
-   * inherits whatever tokens are in scope at the mount point.
-   */
+  /** A class wrapping the whole overlay, for a host that scopes its tokens to a
+   *  root. Omit it and the editor inherits whatever is in scope at the mount. */
   scopeClass?: string;
   /** Falls back to the English defaults in `strings.ts` for anything unhandled. */
   t?: PropEditorTranslate;
@@ -68,48 +65,19 @@ export interface PropEditorProps {
 }
 
 /**
- * The card surface every panel of this editor sits on.
- *
- * ── Why this is a constant, and why it is opaque and flat ───────────────
- *
- * Each panel used to spell out its own fill, its own fractional border and its
- * own corner, and they drifted: a 40%-alpha border over `--card` is a 4-point
- * step in luminance on tRadio's palette (rgba(69,73,84,.4) composited on
- * rgb(38,39,44) is rgb(50,53,60)), so the "border" was invisible and the panels
- * read as flat rectangles floating on the game. One constant fixes that drift.
- *
- * What it is NOT, any more, is translucent with an elevation under it. That
- * spelling contradicted the policy written at `shared/css/surface.css:54-58`,
- * the one this editor's own `.panel` class already obeys: an opaque `--card`
- * fill, a full-strength `--border` edge, and no compositor effect of any kind,
- * because CEF does not composite one usefully over a moving 3D scene. And it was
- * not merely inert — because this is a SHARED component, the arbitrary elevation
- * value it named was measured in tDetector's shipped stylesheet: a consumer that
- * never asked for it, paying for a rule CEF then declines to paint.
- *
- * Depth comes from the ladder instead: `--card` (6.67%) inside a `--border`
- * (20.39%) edge is a 14-point step and is visible without any of that. The
- * fractional fill went with the elevation for the same reason — an alpha fill
- * over the game is what made the border need help in the first place.
+ * The card surface every panel of this editor sits on. Opaque fill, full-strength
+ * border, no compositor effect: CEF does not composite one usefully over a moving
+ * 3D scene, and a 40%-alpha border over `--card` is a 4-point luminance step --
+ * invisible, which is why the panels read as flat rectangles before this.
  */
 const PANEL_SURFACE = "bg-card border border-border";
 
 /**
- * Sizes live in `prop-editor.css`, colours live here.
- *
- * Every panel and control below pairs a token-utility string (this file) with a
- * geometry class (the stylesheet). The split is not cosmetic: the arbitrary font
- * sizes that used to be in these constants collided with the text COLOUR beside
- * them inside `cn`, which drops one of the pair silently — that shipped a POV
- * button rendering at the page's 16px next to four 9px siblings. There is now no
- * arbitrary font size anywhere in this file, so the collision has no way to
- * recur, and the sizes it used to hard-code scale with the viewport instead.
- *
- * The contrast decisions those constants carried are unchanged and deliberate:
- * a panel keeps an opaque fill and a full-strength border so it reads as a
- * surface over the game rather than a tinted rectangle, and no label is faded
- * with an opacity modifier — `text-muted-foreground/50` measured 2.2:1 and
- * photographed as a blank strip.
+ * Sizes live in `prop-editor.css`, colours live here. The split is not cosmetic:
+ * an arbitrary font size collides with the text COLOUR beside it inside `cn`,
+ * which drops one of the pair silently -- that shipped a POV button at 16px next
+ * to four 9px siblings. No label is faded with an opacity modifier either;
+ * `text-muted-foreground/50` measured 2.2:1 and photographed as a blank strip.
  */
 /** A hint pair. No size of its own — it inherits the hint bar's. */
 const HINT = "font-mono text-muted-foreground";
@@ -117,67 +85,86 @@ const HINT = "font-mono text-muted-foreground";
 const SECTION_LABEL = "font-mono text-muted-foreground uppercase tracking-wide tlib-pe-label";
 
 /**
- * The idle and lit variants of every toggle in the left toolbar.
- *
- * The toolbar used to hand-roll both states as class strings. They are now the
- * shared button kit's own variants, which is what the save/cancel pair in tELS
- * uses and what this editor was asked to look like: a real hover step, a
- * `data-[pressed]` state and a `focus-visible` outline, none of which the
- * hand-rolled versions had.
- *
- * Idle is `secondary` and NOT `ghost`. Ghost is transparent, and an unlit
- * toolbar button with no fill at all does not read as a button against the
- * toolbar's own card fill — that was the finding behind the filled idle state
- * these replace, and it still holds.
+ * The idle and lit variants of every toggle in the left toolbar. Idle is
+ * `secondary` and NOT `ghost`: a transparent control over the toolbar's own card
+ * fill does not read as a button.
  */
 const toolVariant = (active: boolean) => (active ? "default" : "secondary");
 
 export function PropEditor(props: PropEditorProps) {
   const [wasdCamMode, setWasdCamMode] = createSignal(false);
+  /**
+   * Whether the discard question is up. See `requestCancel`.
+   */
+  const [discarding, setDiscarding] = createSignal(false);
   const T = makePropEditorTranslator(props.t);
 
   const nui = (name: string, data: unknown = {}) => fetchNui(`${props.prefix}:${name}`, data);
   const cam = (cmd: string) => nui("propEditorCameraCmd", { cmd });
   const hover = (hovered: boolean) => nui("propEditorPanelHover", { hovered });
 
+  /**
+   * ONE INSTANCE, OWNED BY THIS COMPONENT, not a module singleton. tRadio's
+   * settings app hosts this editor inside itself, and a shared stack would let
+   * one Ctrl+Z walk the outer app's history and restore state the player cannot
+   * see. Nesting is expressed by nesting the objects; arbitration is `depth`.
+   */
+  const history = new UndoHistory({ label: "prop-editor" });
+
+  /**
+   * Put a whole transform back — the store, the game and the gizmo handle. All
+   * three channels rather than only what changed: `scale` moves the prop between
+   * the attached path and the per-frame `tlib.drivenprop` path, so a partial
+   * restore can leave the Lua half re-attaching at the old scale.
+   */
+  function applyTransform(pd: PropData) {
+    setPropEditorPropData(pd);
+    for (const [action, data] of transformMessages(pd)) nui(action, data);
+    getGizmoScene()?.updatePropGizmo(pd);
+  }
+
   // The Lua half drives open/close; the host wires nothing.
   //
   // `onSettled` is Solid 2's `onMount`, and the cleanup is RETURNED — it refuses
   // a nested `onCleanup` outright ([CLEANUP_IN_FORBIDDEN_SCOPE]). An effect can
-  // only return one cleanup, so the two unsubscribes are composed into it.
+  // only return one cleanup, so the unsubscribes are composed into it.
   onSettled(() => {
+    // One tag, registered for the component's whole life. Nothing can withdraw a
+    // prop's transform mid-session, so unlike the layout editor's per-component
+    // tags this is registered once and never re-registered.
+    const disposeUndoable = history.register<PropData>(
+      PROP_TRANSFORM_TAG,
+      propTransformUndoable({ read: propEditorTransform, write: applyTransform })
+    );
     const offInit = onNuiEvent<PropEditorInitMessage>(`${props.prefix}:propEditorInit`, (data) => {
       openPropEditor(data);
+      // Cleared on OPEN, so a session can never inherit the previous placement's
+      // history — an undo that reached back past the open would restore one
+      // vehicle's transform onto another's prop, and `isDirty()` would report a
+      // brand-new session as already dirty and prompt on a Cancel with nothing
+      // to lose.
+      history.clear();
+      setDiscarding(false);
       props.onOpen?.(data);
     });
     const offClose = onNuiEvent(`${props.prefix}:propEditorClose`, () => {
       closePropEditor();
+      history.clear();
+      setDiscarding(false);
       props.onClose?.();
     });
     return () => {
       offInit();
       offClose();
+      disposeUndoable();
     };
   });
 
   /*
    * Escape is NOT in here. It is a registered layer -- see `createEscapeLayer`
-   * in the `onSettled` below.
-   *
-   * Two things were wrong with it as a branch of this raw `window` listener, and
-   * they compound. There was no `defaultPrevented` check, so a press another
-   * layer had already consumed still cancelled the edit -- and cancelling this
-   * editor throws a placement away, which is the most expensive thing Escape can
-   * do anywhere in the stack. And there was no `repeat` check, so a HELD Escape
-   * fired `propEditorCancel` once per key-repeat tick.
-   *
-   * It is also why `tRadio/client/web/src/App.tsx` carries an
-   * `escapeOwnedElsewhere` opt-out keyed on `propEditorState.open`: a host had to
-   * stand down manually because this editor could not be arbitrated with. With
-   * the editor on the registry at a depth, that opt-out is removable.
-   *
-   * The `defaultPrevented` guard below covers anything that prevents in the
-   * capture phase before this listener is reached.
+   * in the `onSettled` below. As a branch of this raw listener it had no
+   * `defaultPrevented` check and no `repeat` check, and all three consumers
+   * discarded a placement on one unprompted Escape.
    */
   function handleKeyDown(e: KeyboardEvent) {
     if (!propEditorState.open || e.defaultPrevented) return;
@@ -213,28 +200,70 @@ export function PropEditor(props: PropEditorProps) {
     }
   }
 
+  /**
+   * What Cancel and Escape both go through, so neither can discard silently.
+   *
+   * `history.isDirty()` IS the dirty flag, and it is the one that was missing: the
+   * history is cleared on every init and records every drag and numeric edit, and
+   * `canUndo()` includes an OPEN batch, so a drag in progress counts. Gated on
+   * dirty, because asking every time is how a prompt gets dismissed unread.
+   */
+  function requestCancel() {
+    if (!propEditorState.open) return;
+    if (history.isDirty()) {
+      setDiscarding(true);
+      return;
+    }
+    nui("propEditorCancel");
+  }
+
+  function discard() {
+    setDiscarding(false);
+    nui("propEditorCancel");
+  }
+
   onSettled(() => {
     window.addEventListener("keydown", handleKeyDown);
     /*
      * Depth 1, because this editor is mounted OVER a host -- tRadio's settings
      * app, tRadar's, tDetector's -- and while it is open it is the innermost
-     * thing on screen. `active` is the host's own `open` flag, so the closed
-     * mount cannot shadow the host it is mounted in. `repeat` is handled by the
-     * registry: a held key arrives as a stream of keydowns sharing one sample,
-     * and only the first of them acts.
+     * thing on screen. `active` is the host's own open flag, so the closed mount
+     * cannot shadow the host it is mounted in.
      *
-     * No `onInternal`: nothing inside this editor is dismissed by Escape short
-     * of the editor itself.
+     * `onInternal` first: while the discard question is up, Escape answers THAT
+     * and nothing else, so it can never throw a placement away however many
+     * times it is pressed.
      */
     const disposeEscape = createEscapeLayer({
       label: "prop-editor",
       depth: 1,
       active: () => propEditorState.open,
-      onEscape: () => nui("propEditorCancel"),
+      onInternal: () => {
+        if (!discarding()) return false;
+        setDiscarding(false);
+        return true;
+      },
+      onEscape: requestCancel,
+    });
+    /*
+     * Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, through the shared registry.
+     *
+     * `depth: 1` IS THE NESTING FIX, against the same host as the Escape layer.
+     * `active` stands the scope down while the discard question is up: that
+     * dialog is a decision, not an edit surface. `ignoreWhenTyping` stays at its
+     * default -- the panel is six number fields, and taking Ctrl+Z from a focused
+     * field would leave no way to take back a typo.
+     */
+    const disposeUndoKeys = createUndoScope({
+      label: "prop-editor",
+      depth: 1,
+      history,
+      active: () => propEditorState.open && !discarding(),
     });
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       disposeEscape();
+      disposeUndoKeys();
     };
   });
 
@@ -254,17 +283,30 @@ export function PropEditor(props: PropEditorProps) {
 
   /**
    * One scalar, clamped before it is stored or sent.
-   *
-   * The clamp is `clampUniformScale`, the same function the gizmo's drag path
-   * uses, so a typed 0 and a dragged 0 cannot disagree — and a typed `0` or `-2`
-   * resolves to 1 rather than to 0.1, because typing it is the same mistake as
-   * an older record carrying it.
    */
   function updateScale(v: number) {
     const pd = { ...propEditorState.propData, scale: clampUniformScale(v) };
     setPropEditorPropData(pd);
     nui("propScaled", { scale: pd.scale });
     getGizmoScene()?.updatePropGizmo(pd);
+  }
+
+  /*
+   * BATCHING THE NUMERIC FIELDS
+   */
+  function editPosition(axis: "x" | "y" | "z", label: string, v: number) {
+    history.push(fieldUndoLabel(label), [PROP_TRANSFORM_TAG]);
+    updatePosition(axis, v);
+  }
+
+  function editRotation(axis: "rx" | "ry" | "rz", label: string, v: number) {
+    history.push(fieldUndoLabel(label), [PROP_TRANSFORM_TAG]);
+    updateRotation(axis, v);
+  }
+
+  function editScale(v: number) {
+    history.push(fieldUndoLabel("S"), [PROP_TRANSFORM_TAG]);
+    updateScale(v);
   }
 
   const positionAxes = [
@@ -281,17 +323,14 @@ export function PropEditor(props: PropEditorProps) {
   return (
     <Show when={propEditorState.open}>
       {/* `data-prop-editor` is the editor's only host-independent anchor. The
-          wrapper's CLASS is the host's (`.radio-settings-root` in tRadio, nothing
-          at all in tRadar and tDetector, whose tokens are on `:root`), so a tool
-          that has to find this editor in a page — the shared gallery does, and so
           would any browser test — cannot key on it. */}
       <div class={props.scopeClass} data-prop-editor="">
-        <PropEditorViewport prefix={props.prefix} />
+        <PropEditorViewport prefix={props.prefix} history={history} />
 
         {/* Overlay. pointer-events-none so the canvas below still receives the
             drags that orbit the camera; each panel opts back in. */}
         <div class="fixed inset-0 z-10 pointer-events-none">
-          {/* ── Top-centre: vehicle badge ── */}
+          {/* Top-centre: vehicle badge */}
           <PanelHover
             onHoverChange={hover}
             class={`absolute tlib-pe-badge ${PANEL_SURFACE} border-t-0 pointer-events-auto`}
@@ -306,15 +345,16 @@ export function PropEditor(props: PropEditorProps) {
             </span>
           </PanelHover>
 
-          {/* ── Top-right: host slot + Save + Cancel ── */}
+          {/* Top-right: host slot + Save + Cancel */}
           {/* The two actions are the shared button kit at its `default` and
-              `secondary` variants — primary fill for the affirmative one, a muted
-              fill for the one that throws the edit away. That is the pairing tELS
               ships and the one this editor was asked to match. */}
           <PanelHover
             onHoverChange={hover}
             class="absolute tlib-pe-actions z-30 flex items-start pointer-events-auto"
           >
+            {/* The shared pair, mounted rather than re-implemented. It supplies
+                rest of the chrome instead of pinning at the kit's 32px. */}
+            <UndoRedo history={history} variant="secondary" class="tlib-pe-history" />
             <Show when={props.features?.toolbarSlot && props.slots?.toolbar}>
               {props.slots?.toolbar}
             </Show>
@@ -329,23 +369,18 @@ export function PropEditor(props: PropEditorProps) {
               data-prop-editor-cancel=""
               variant="secondary"
               class="tlib-pe-btn font-mono font-semibold"
-              onClick={() => nui("propEditorCancel")}
+              onClick={requestCancel}
             >
               {T("btn_cancel")}
             </Button>
           </PanelHover>
 
-          {/* ── Left toolbar ── */}
+          {/* Left toolbar */}
           <PanelHover
             onHoverChange={hover}
             class={`absolute tlib-pe-toolbar ${PANEL_SURFACE} flex flex-col pointer-events-auto`}
           >
             {/* `data-tool` / `data-active` on every button in this toolbar: the
-                captions are locale strings in one host and English defaults in
-                the others, so glyph-matching finds nothing under a translation.
-                These are the semantic handle, and they are passed explicitly
-                rather than left to Ark's own `data-pressed` — a gallery and a
-                browser test key on `data-active`, which is this editor's
                 vocabulary and not the toggle primitive's. */}
             <Button
               toggle
@@ -403,8 +438,6 @@ export function PropEditor(props: PropEditorProps) {
             <Separator class="bg-border/60 tlib-pe-sep" />
 
             {/* POV is a momentary action, not a state — it snaps the camera once
-                — so it is the one control here that is not a toggle. It takes the
-                idle variant permanently, which is also what keeps it looking like
                 the four toggles beside it when none of them is lit. */}
             <Button
               data-tool="pov"
@@ -434,7 +467,7 @@ export function PropEditor(props: PropEditorProps) {
             </Button>
           </PanelHover>
 
-          {/* ── Right: properties ── */}
+          {/* Right: properties */}
           <PanelHover
             onHoverChange={hover}
             class="absolute tlib-pe-props flex flex-col pointer-events-auto overflow-y-auto"
@@ -446,7 +479,8 @@ export function PropEditor(props: PropEditorProps) {
                   <PropField
                     label={axis.label}
                     value={propEditorState.propData[axis.key]}
-                    onChange={(v) => updatePosition(axis.key, v)}
+                    onChange={(v) => editPosition(axis.key, axis.label, v)}
+                    onCommit={() => history.commit()}
                   />
                 )}
               </For>
@@ -459,7 +493,8 @@ export function PropEditor(props: PropEditorProps) {
                   <PropField
                     label={axis.label}
                     value={propEditorState.propData[axis.key]}
-                    onChange={(v) => updateRotation(axis.key, v)}
+                    onChange={(v) => editRotation(axis.key, axis.label, v)}
+                    onCommit={() => history.commit()}
                   />
                 )}
               </For>
@@ -467,31 +502,31 @@ export function PropEditor(props: PropEditorProps) {
               <Separator class="bg-border/60 tlib-pe-sep" />
 
               {/* ONE field, not three. The attachment matrix would carry a
-                  per-axis scale and this editor deliberately does not offer it:
-                  a prop is scaled, never stretched. So there is no `For` here
                   and no axis label — `S` is the whole vocabulary. */}
               <span class={SECTION_LABEL}>{T("section_scale")}</span>
-              <PropField label="S" value={propEditorState.propData.scale} onChange={updateScale} />
+              <PropField
+                label="S"
+                value={propEditorState.propData.scale}
+                onChange={editScale}
+                onCommit={() => history.commit()}
+              />
             </div>
 
             {/* The kit's `destructive` variant rather than the hand-mixed
-                `bg-destructive/20` wash this used to carry: that wash composited
-                to a barely-tinted panel over the game, and it had neither a
-                perceptible hover step nor a visible focus state. It floats free
-                of any panel, and the variant's own opaque fill is what separates
-                it from the game — there is no compositor effect under it, here or
-                anywhere else in the shared kit. */}
-            <Button
+                In-place arming is the whole reason this shape suits it. */}
+            <ConfirmDelete
               data-prop-editor-remove=""
-              variant="destructive"
               class="tlib-pe-remove font-mono font-semibold"
-              onClick={() => nui("propEditorRemove")}
+              title={T("btn_remove_prop_title")}
+              armedTitle={T("btn_remove_prop_armed")}
+              armedChildren={T("btn_remove_prop_armed")}
+              onConfirm={() => nui("propEditorRemove")}
             >
               {T("btn_remove_prop")}
-            </Button>
+            </ConfirmDelete>
           </PanelHover>
 
-          {/* ── Bottom hint bar ── */}
+          {/* Bottom hint bar */}
           <PanelHover
             onHoverChange={hover}
             class={`absolute tlib-pe-hints ${PANEL_SURFACE} flex items-center pointer-events-auto`}
@@ -534,8 +569,61 @@ export function PropEditor(props: PropEditorProps) {
             <span class={HINT}>
               <span class="text-foreground">{T("hint_esc_key")}</span> {T("hint_esc_label")}
             </span>
+            <Separator orientation="vertical" class="tlib-pe-sep-v bg-border/60" />
+            {/* The shared hint strip, untranslated and unrestyled on purpose.
+                thing in the bar because it is the only hint that is a chord. */}
+            <UndoHint />
           </PanelHover>
         </div>
+
+        {/* THE DISCARD GUARD. Reached only through `requestCancel`. An INLINE
+            alertdialog, because a feature reached from an open UI renders inside
+            it. NO SCRIM: what is behind it is the live prop being decided about.
+            The lossy answer is on the RIGHT -- the opposite hand from Save/Cancel
+            above, and both are correct, because this is a destructive
+            confirmation and "Keep editing" is its affirmative answer.
+            See docs/internal/prop-editor-ui.md. */}
+        <Show when={discarding()}>
+          <div class="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto">
+            <FocusTrap
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="tlib-pe-discard-title"
+              aria-describedby="tlib-pe-discard-body"
+              class="tlib-pe-discard bg-popover border border-border flex flex-col"
+            >
+              <span
+                id="tlib-pe-discard-title"
+                class="font-mono font-semibold text-foreground tlib-pe-discard-title"
+              >
+                {T("discard_title")}
+              </span>
+              <p id="tlib-pe-discard-body" class="text-muted-foreground tlib-pe-discard-body">
+                {T("discard_body")}
+              </p>
+              <div class="flex justify-end tlib-pe-discard-actions">
+                {/* Focused imperatively rather than with `autofocus`: Ark's trap
+                    measured working inside CEF. */}
+                <Button
+                  data-prop-editor-keep=""
+                  class="tlib-pe-btn font-mono font-semibold"
+                  ref={(el: HTMLButtonElement) => queueMicrotask(() => el.focus())}
+                  onClick={() => setDiscarding(false)}
+                >
+                  {T("discard_keep")}
+                </Button>
+                <Button
+                  data-prop-editor-discard=""
+                  variant="destructive"
+                  class="tlib-pe-btn font-mono font-semibold"
+                  onClick={discard}
+                >
+                  {T("discard_confirm")}
+                </Button>
+              </div>
+            </FocusTrap>
+          </div>
+        </Show>
       </div>
     </Show>
   );

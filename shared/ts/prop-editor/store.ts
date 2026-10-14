@@ -15,6 +15,7 @@
 import { createStore } from "solid-js";
 import { clampUniformScale } from "../gizmo/types";
 import type {
+  PropData,
   PropEditorInitMessage,
   PropEditorMode,
   PropEditorSpace,
@@ -36,13 +37,44 @@ const [propEditorState, setPropEditorState] = createStore<PropEditorState>({
 export { propEditorState, setPropEditorState };
 
 /*
- * ── SOLID 2 STORE SETTERS: ONE DRAFT-MUTATION FUNCTION ──────────────────────
+ * THE SYNCHRONOUS TRANSFORM MIRROR, AND WHY IT HAS TO EXIST
+ *
+ * `propEditorTransform()` answers "what are the seven numbers RIGHT NOW" without
+ * going through the store proxy. Two measured Solid 2 behaviours make that a
+ * requirement rather than an optimisation, and both of them are silent:
+ *
+ *  1. **A write is not synchronously readable.** The undo history snapshots the
+ *     transform at `push()` and again at `commit()`; a `commit()` in the same
+ *     tick as the last write would re-read the value from BEFORE that write,
+ *     compare it equal to the `before` snapshot and discard the entry. The edit
+ *     would be un-undoable, with nothing logged. The two warnings further down
+ *     this file are the same hazard in its other two shapes.
+ *  2. **A read of the proxy inside a tracking scope SUBSCRIBES.** `capture()` is
+ *     called from `push`/`commit`, which an editor may well invoke from inside
+ *     an effect or an event handler that is itself reactive. Subscribing a
+ *     history's snapshot function to the store it snapshots is a loop waiting
+ *     for a reason to run.
+ *
+ * It is a plain object, replaced (never mutated in place) by the same three
+ * functions that write `propData`, so there is exactly one place it can go stale
+ * and it is the same place the store is written. It is NOT reactive — nothing may
+ * render from it.
+ */
+let liveTransform: PropData = { ...propEditorState.propData };
+
+/** The current transform, readable in the same tick it was written. Not reactive. */
+export function propEditorTransform(): PropData {
+  return liveTransform;
+}
+
+/*
+ * SOLID 2 STORE SETTERS: ONE DRAFT-MUTATION FUNCTION
  *
  * The path form (`setState("open", false)`) and the top-level merge form
  * (`setState({ ... })`) are both gone. The setter now takes a callback handed a
  * mutable draft, and every write below is a plain assignment on that draft.
  *
- * ⚠️ `togglePropEditorSpace` reads the CURRENT value off the draft rather than
+ * `togglePropEditorSpace` reads the CURRENT value off the draft rather than
  * off `propEditorState`. In Solid 2 a write is not synchronously readable — a
  * read after a set returns the last committed value until the microtask flushes
  * — so reading the proxy here would make two toggles inside one tick both see
@@ -60,7 +92,15 @@ export function openPropEditor(data: PropEditorInitMessage): void {
     // an older record has to resolve to 1 too — hence the clamp here rather than
     // a `?? 1`, which would accept both. The spread keeps the assignment a plain
     // write on the draft and leaves the incoming object untouched.
-    s.propData = { ...data.propData, scale: clampUniformScale(data.propData.scale) };
+    const resolved: PropData = {
+      ...data.propData,
+      scale: clampUniformScale(data.propData.scale),
+    };
+    // Two separate objects on purpose: the store takes ownership of what it is
+    // handed and `mergePropEditorPropData` mutates it in place, so sharing one
+    // would make the mirror an alias of the draft rather than a copy of it.
+    liveTransform = { ...resolved };
+    s.propData = resolved;
     s.vehicleMatrix = data.vehicleMatrix;
     s.hasExisting = data.hasExisting;
     s.mode = "translate";
@@ -103,6 +143,7 @@ export function togglePropEditorSpace(): void {
  * they share lives here.
  */
 export function setPropEditorPropData(propData: PropEditorState["propData"]): void {
+  liveTransform = { ...propData };
   setPropEditorState((s) => {
     s.propData = propData;
   });
@@ -111,7 +152,7 @@ export function setPropEditorPropData(propData: PropEditorState["propData"]): vo
 /**
  * Merges a partial transform into the prop's current one.
  *
- * ⚠️ THE MERGE HAPPENS ON THE DRAFT, AND THAT IS THE WHOLE POINT. The gizmo
+ * THE MERGE HAPPENS ON THE DRAFT, AND THAT IS THE WHOLE POINT. The gizmo
  * callbacks used to spell this `set("propData", { ...propEditorState.propData,
  * ...partial })` — read the proxy, merge, write back. Under Solid 2 a write is
  * not synchronously readable, so a second callback firing before the microtask
@@ -124,6 +165,7 @@ export function setPropEditorPropData(propData: PropEditorState["propData"]): vo
  * is needed.
  */
 export function mergePropEditorPropData(partial: Partial<PropEditorState["propData"]>): void {
+  liveTransform = { ...liveTransform, ...partial };
   setPropEditorState((s) => {
     Object.assign(s.propData, partial);
   });

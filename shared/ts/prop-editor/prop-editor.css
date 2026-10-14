@@ -1,103 +1,38 @@
 /**
  * Every SIZE in the prop editor's chrome, derived from one viewport-relative unit.
  *
- * ── Why a stylesheet and not utilities ──────────────────────────────────────
- *
- * Co-located CSS imported by its component is the existing convention in this
- * folder's siblings (`nui-kit/nui.css`, `marketplace/ui/marketplace.css`), and
- * here it also sidesteps three measured UnoCSS behaviours at once:
- *
- *   - a cva or class table in a plain `.ts` emits no CSS at all, silently;
- *   - `cn()` treats an arbitrary font size and a text colour as ONE conflict
- *     group and drops one of them, which has already shipped a bug in this
- *     editor (the POV button inheriting the page's 16px);
- *   - UnoCSS scans comments, so describing a class name in prose is the only
- *     way to mention one without emitting dead CSS.
- *
- * None of those can bite a hand-written rule. The split is therefore: COLOUR
- * stays in the component as shared token utilities (`bg-card`, `text-muted-
- * foreground`, `border-border`) so a host's own token values still theme the
- * editor; SIZE lives here. After this change the component contains no
- * arbitrary font size at all, which makes the `cn()` collision structurally
- * impossible rather than merely avoided.
- *
- * ── The scale ───────────────────────────────────────────────────────────────
- *
- * One custom property, no JS. `--tlib-pe-u` is the editor's spacing quantum and
- * every other length is a multiple of it, so the chrome grows as a unit instead
- * of drifting apart the way independently-bumped pixel values do.
- *
  * The scale is a FRACTION of the viewport's short side, not a pixel size at some
  * reference resolution. The tool button is 5% of the short side on every display:
  * 54px tall at 1080p, 72px at 1440p, 108px at 2160p, and it keeps scaling past
- * both ends rather than pinning.
+ * both ends rather than pinning. `vmin` rather than `vw`, because the editor is a
+ * ring of panels around the edges of a full-screen 3D view and must follow the
+ * SHORT side -- on a 3440x1440 ultrawide `vw` would inflate it by 2.4x.
  *
- * `vmin` rather than `vw`: the editor is a ring of panels around the edges of a
- * full-screen 3D view, so its size should follow the SHORT side. On a 3440x1440
- * ultrawide `vw` would inflate it by 2.4x for a display that is no taller than
- * 1440p. 0.3704vmin is 4px at a 1080px short side by construction (4/1080*100).
+ * A stylesheet rather than utilities because `cn()` treats an arbitrary font size
+ * and a text colour as ONE conflict group and drops one of them, which has
+ * already shipped a bug here. COLOUR stays in the component as token utilities so
+ * a host's palette still themes the editor; SIZE lives here.
  *
- * The clamp ceiling is the 2x the 4K case wants; the floor keeps the editor
- * usable on a 720p window rather than letting it collapse toward zero. CEF 103
- * (the game client's Chromium) supports `clamp()`, `vmin` and custom properties
- * — all three predate it comfortably.
- *
- * ⚠️ The WebGL viewport and the gizmo are deliberately NOT scaled. The gizmo is
+ * The WebGL viewport and the gizmo are deliberately NOT scaled. The gizmo is
  * picked in screen space by `GizmoScene`; scaling its canvas or its host would
  * move the hit targets away from the pixels they are drawn at.
  */
 
 [data-prop-editor] {
-  /* The quantum. Everything below is a multiple of it.
-   *
-   * Purely proportional: no clamp, no pixel anchor. The chrome occupies the same
-   * FRACTION of the viewport on every display, which is the whole point — a
-   * `clamp(3px, …, 8px)` here reintroduced exactly the pixel-relative behaviour
-   * this is meant to avoid, going fixed above a 2160px short side and below an
-   * 810px one, so only a narrow band of resolutions actually scaled.
-   *
-   * `vmin` rather than `vw`: the editor is a ring of panels around the edges of a
-   * full-screen 3D view, so it must follow the SHORT side. On a 3440x1440
-   * ultrawide `vw` would inflate it by 2.4x against a screen no taller than
-   * 1440p, which is an aspect-ratio bug rather than a scale one.
-   *
-   * The coefficient is expressed as "the tool button is 5% of the short side"
-   * (`--tlib-pe-tool` is 9u, so u = 5vmin / 9). Size decisions belong in that
-   * sentence, not in a pixel value: to make the editor bigger or smaller, change
-   * the percentage and nothing else.
-   */
+  /* The quantum. Everything below is a multiple of it. Purely proportional: no
+   * clamp, no pixel anchor -- a `clamp(3px, ..., 8px)` here reintroduced exactly
+   * the pixel-relative behaviour this avoids, leaving only a narrow band of
+   * resolutions actually scaling. The coefficient is expressed as "the tool
+   * button is 5% of the short side", which is where a size decision belongs. */
   --tlib-pe-u: calc(5vmin / 9);
 
-  /* ── Type ──────────────────────────────────────────────────────────────
-   *
-   * ⚠️ The comment here said "the three steps the editor had as 9/10/12px at
-   * 1080p" and the multipliers do not produce that. Measured: at a 1080px short
-   * side `vmin` is 10.8px, so `u` is exactly 6px, and 2.25/2.5/3 render
-   * **13.5 / 15 / 18px**. 9/10/12 is what these same multipliers give at a
-   * 720px short side, so what the comment had wrong was the reference
-   * resolution, not the numbers.
-   *
-   * The MULTIPLIERS are what stay, and the comment is what was corrected,
-   * because 9/10/12 is precisely what the type floor at the top of
-   * `shared/css/surface.css` forbids — a 10px webfont on a dark surface in CEF
-   * 103 has almost no stem left, and "the fonts are poor" has been reported
-   * twice against exactly that. Restoring the documented sizes would have been
-   * re-introducing the bug the scale exists to prevent.
-   *
-   * ── Why this surface is not ON the five-step scale ──
-   *
-   * That scale is five fixed pixel steps. This editor is a ring of panels around
-   * a full-screen 3D view and is deliberately RESOLUTION-RELATIVE — the whole
-   * point of `--tlib-pe-u` above — so it cannot hold fixed values without
-   * breaking the thing it was built to do. What it owes the scale is the RULE,
-   * not the steps: nothing below 11px.
-   *
-   * `max(11px, …)` is what makes that true at every resolution rather than only
-   * above 1080p. Unclamped, a 1366x768 client renders `xs` at 9.5px and a 720p
-   * one at 9px. It is a floor on TYPE only — note the objection above to
-   * `clamp()` on the quantum, which flattened the geometry's scaling across most
-   * real resolutions. `min()`/`max()` are Chrome 79, so CEF 103 parses them;
-   * this is not the `color-mix()` class of hazard. */
+  /* Type. The multipliers are resolution-relative, so this surface cannot hold
+   * the five fixed steps `shared/css/surface.css` declares -- what it owes that
+   * scale is the RULE, not the steps: nothing below 11px. `max(11px, ...)` is
+   * what makes that true at every resolution; unclamped, a 1366x768 client
+   * renders `xs` at 9.5px. A floor on TYPE only -- see the objection to
+   * `clamp()` on the quantum above. `min()`/`max()` are Chrome 79, so CEF 103
+   * parses them. */
   --tlib-pe-fs-xs: max(11px, calc(var(--tlib-pe-u) * 2.25));
   --tlib-pe-fs-sm: max(11px, calc(var(--tlib-pe-u) * 2.5));
   --tlib-pe-fs-md: max(12px, calc(var(--tlib-pe-u) * 3));
@@ -109,12 +44,8 @@
   --tlib-pe-panel-w: calc(var(--tlib-pe-u) * 44);
 }
 
-/* ── Panels ────────────────────────────────────────────────────────────────
- *
- * Position and size only. The card surface itself — fill, border, shadow —
- * stays on the component as the token utilities an approved contrast pass put
- * there, so a host's palette still drives it.
- */
+/* Panels: position and size only. The card surface itself stays on the component
+ * as token utilities, so a host's palette still drives it. */
 
 [data-prop-editor] .tlib-pe-badge {
   top: var(--tlib-pe-edge);
@@ -185,18 +116,11 @@
   height: calc(var(--tlib-pe-u) * 3);
 }
 
-/* ── Controls ──────────────────────────────────────────────────────────────
- *
- * These ride on top of the shared `ui/button` kit, which supplies the fill,
- * the hover step, the pressed state and the focus ring. Only the metrics are
- * here, and they beat the kit's own utilities on specificity (an attribute
- * selector plus a class outranks a single class) without needing `!important`.
- *
- * `cursor: pointer` is on the element selector rather than on each class: the
- * host-supplied toolbar slot renders inside this tree too, and none of the
- * controls in this editor had a pointer cursor before — the whole chrome read
- * as inert.
- */
+/* Controls: metrics only. These ride on top of the shared `ui/button` kit, which
+ * supplies the fill, the hover step, the pressed state and the focus ring, and
+ * they outrank its own utilities on specificity without an `!important`.
+ * `cursor: pointer` is on the element selector rather than each class, because
+ * the host-supplied toolbar slot renders inside this tree too. */
 
 [data-prop-editor] button,
 [data-prop-editor] [role="button"] {
@@ -232,9 +156,47 @@
   font-size: var(--tlib-pe-fs-sm);
 }
 
-/* ── The numeric axis fields ───────────────────────────────────────────────
+/* The undo/redo pair, from `shared/ts/ui/undo-redo.tsx`.
+ * That component's `size="icon"` is a fixed 32px square, which is the layout
+ * editor's metric and is wrong here -- this chrome is resolution-relative, so a
+ * fixed pair would sit visibly small beside Save and Cancel at 1440p. The
+ * selector outranks the kit's single-class `size-8` without an `!important`. */
+[data-prop-editor] .tlib-pe-history button {
+  width: calc(var(--tlib-pe-u) * 7);
+  height: calc(var(--tlib-pe-u) * 7);
+  padding: 0;
+  border-radius: var(--tlib-pe-radius);
+}
+
+/* The discard guard. Geometry only, like every other panel here.
  *
- * The inputs are the one control the button kit does not cover, so their hover
+ * The width is `min(…)` rather than a bare multiple of the quantum because this
+ * is the one surface in the editor that holds a SENTENCE. At 9% of the viewport's
+ * short side the body text would wrap to two words a line on a 1366x768 client;
+ * the 92vw term is what keeps it on screen at the other end. Both functions are
+ * Chrome 79, so CEF 103 parses them. */
+[data-prop-editor] .tlib-pe-discard {
+  width: min(92vw, calc(var(--tlib-pe-u) * 70));
+  padding: calc(var(--tlib-pe-u) * 3);
+  gap: calc(var(--tlib-pe-u) * 2);
+  border-radius: var(--tlib-pe-radius);
+}
+
+[data-prop-editor] .tlib-pe-discard-title {
+  font-size: var(--tlib-pe-fs-md);
+}
+
+[data-prop-editor] .tlib-pe-discard-body {
+  font-size: var(--tlib-pe-fs-sm);
+  line-height: 1.5;
+}
+
+[data-prop-editor] .tlib-pe-discard-actions {
+  gap: calc(var(--tlib-pe-u) * 1.5);
+}
+
+/* The numeric axis fields. The one control the button kit does not cover, so
+ * their hover
  * and focus affordances are spelled out to match it: the same ring token, the
  * same 2px width and 2px offset the kit's `focus-visible` ring uses.
  *

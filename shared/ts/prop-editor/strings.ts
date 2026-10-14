@@ -31,10 +31,28 @@ export const DEFAULT_PROP_EDITOR_STRINGS: Record<PropEditorStringKey, string> = 
   wasd_cam_on: "WASD camera ON",
   wasd_cam_off: "WASD camera OFF",
 
+  // The discard guard. Four keys, because a prompt a host cannot translate is a
+  // prompt that appears in English over a translated editor at the exact moment
+  // the player is being asked to lose work.
+  discard_title: "Discard unsaved changes?",
+  discard_body:
+    "Everything you have moved, rotated or scaled since opening the editor will be lost. This cannot be undone.",
+  discard_keep: "Keep editing",
+  discard_confirm: "Discard changes",
+
   section_position: "Position",
   section_rotation: "Rotation",
   section_scale: "Scale",
   btn_remove_prop: "Remove Prop",
+  // The arm-confirm on Remove. Two keys, and both are translatable for the same
+  // reason the discard guard's four are: this is the one control in the editor
+  // whose second click reaches the server, and a player cannot be asked to
+  // confirm an irreversible delete in a language they are not being shown.
+  // `btn_remove_prop_armed` is BOTH the armed label and the armed tooltip — the
+  // armed state has no other channel to announce itself through, since
+  // `ConfirmDelete` is not a toggle and claims no pressed state.
+  btn_remove_prop_title: "Deletes this prop on the server — this cannot be undone",
+  btn_remove_prop_armed: "Click again to remove",
 
   hint_mmb_orbit: "MMB",
   hint_orbit_label: "Orbit",

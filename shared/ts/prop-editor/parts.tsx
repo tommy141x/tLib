@@ -14,6 +14,22 @@ export interface PropFieldProps {
   label: string;
   value: number;
   onChange: (v: number) => void;
+  /**
+   * The field is finished with — close whatever undo batch `onChange` opened.
+   *
+   * THIS IS WHY A STEPPER BURST IS ONE UNDO ENTRY AND NOT TWENTY. The spinner
+   * arrows are hidden by `prop-editor.css`, but a number input still steps on
+   * ArrowUp/ArrowDown, and Chrome fires `change` on EVERY step — so a held arrow
+   * key is a stream of `onChange` calls, each one a complete edit as far as this
+   * component is concerned. The editor opens one batch under a per-axis label on
+   * the first of them, every later one extends it, and this closes it.
+   *
+   * `blur`, not a timer: focus leaving the field is the one unambiguous signal
+   * that the player has stopped adjusting this number, and `change` always fires
+   * before `blur` on a field that was typed into, so the last value is always in
+   * the batch.
+   */
+  onCommit?: () => void;
 }
 
 /**
@@ -42,6 +58,7 @@ export function PropField(props: PropFieldProps) {
           const v = Number.parseFloat(e.currentTarget.value);
           if (!Number.isNaN(v)) props.onChange(v);
         }}
+        onBlur={() => props.onCommit?.()}
       />
     </div>
   );
