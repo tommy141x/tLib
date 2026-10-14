@@ -2,9 +2,19 @@
 /**
  * The one secret gate, run by every resource.
  *
+ * Layer 3 of three, and the only layer that cannot be skipped: every
+ * credential-shaped key in every tracked config file must be BLANK at HEAD.
+ * Layer 1 is each resource's `.githooks/pre-commit`, which refuses the commit;
+ * layer 2 blanks the staged copy of a release. A developer can get past either:
+ * `--no-verify` bypasses the hook, and the packager only ever sees a release.
+ *
+ * The key set is derived from `Diag.SECRET_PATTERNS` — parsed out of the same
+ * Lua the runtime redactor uses — rather than listed again here. A hand-listed
+ * array of names is how `Advanced.S3.AccessKey` went uncovered.
+ *
  * THIS FILE LIVES IN tLib AND IS RUN BY ALL OF THEM. The per-resource part
- * is a `.githooks/pre-commit` shim, two `package.json` scripts and a CI
- * workflow — nothing that can drift. The precedent is tUnit's `scan:solid2`,
+ * is a `.githooks/pre-commit` shim, the `secrets:*` `package.json` scripts and
+ * a CI workflow — nothing that can drift. The precedent is tUnit's `scan:solid2`,
  * which already runs `../tLib/scripts/solid2-scan.ts` for exactly this reason:
  * "a rule that has drifted reports zero, and zero reads exactly like a finished
  * migration".

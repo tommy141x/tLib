@@ -26,6 +26,16 @@
  * must match, because A SUBSTITUTION THAT MATCHES NOTHING HANDS THE SUITE THE
  * UNMODIFIED MODULE and the control then asserts that correct code is correct.
  *
+ * Two traps for whoever adds a defect to that table
+ *
+ * A multi-line `find` has to match its target's own line endings: PropEditor.tsx
+ * is CRLF and LayoutEditor.tsx is LF, and two anchors matched nothing because of
+ * it. And a defect's blast radius can far exceed the file it was planted in —
+ * `spread-arity-verbatim` reddens most of the suite, because the Solid 1
+ * `spread` arity bug throws inside a render effect and Solid 2 halts the
+ * reactive graph for the whole PROCESS, so files that never import lucide-solid
+ * go red too. Declare the radius you measured, not the one you expect.
+ *
  * Exit codes
  *
  *   0  every defect reddened exactly what it declared, the drill fired, and the

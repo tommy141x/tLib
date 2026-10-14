@@ -13,6 +13,21 @@
  * Every defect fixture is built from a `clean()` tree that already clears both
  * floors — it is over the file count and it carries an `fxmanifest.lua` — so the
  * one difference between a fixture and a passing release is the defect itself.
+ * Both floors are also asserted directly: an empty tree and a directory with
+ * files but no `fxmanifest.lua` must each refuse the run.
+ *
+ * A LOOKALIKES fixture — `config.json`, `mydata.json`, `data.json5`,
+ * `data.jsonc`, `data-json.bak` — is required to stay GREEN. A gate that fails a
+ * release over `config.json` is a gate that acquires a skip flag.
+ *
+ * ## What the `tlib_modules` half plants
+ *
+ * A typo'd name; a `shared/imports` directory with no loadable file in it; a
+ * declaration referenced ONLY inside a Lua comment (real: every `tlib.diag` in
+ * tELS's `cl_env.lua` is commented out); a commented-out declaration, which must
+ * NOT be read as one; and a wrong tLib path, which makes every declared name a
+ * ghost and must therefore trip the floor rather than report a screen of
+ * confident lies.
  *
  * ## The broken-gate drill
  *

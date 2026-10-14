@@ -6,6 +6,11 @@
  * is deliberately called HERE rather than inside that module: the check has to
  * answer for the preset and the `unocss` version THIS bundle ships, which is
  * the whole point of it.
+ *
+ * tLib's root `check:classes` is `cd client/web && bun run check:classes`, which
+ * dispatches here, because this directory owns that `uno.config.ts`.
+ * `runDeadClassCheck` also carries the two CSS-contract gates — surface.css
+ * collisions and blurred box-shadows — that every consumer inherits.
  */
 import { createGenerator } from "unocss";
 import { runDeadClassCheck } from "../../../shared/ts/build/index.ts";

@@ -1,6 +1,29 @@
 #!/usr/bin/env bun
-// Negative control for scripts/dead-file-gate.ts. See the
-// `//check:deadfiles:control` note in package.json for what it is for.
+// Negative control for scripts/dead-file-gate.ts, over REAL git repositories
+// created in the OS temp dir — a real `git init`, because the gate gets its file
+// set from `git ls-files` and a fixture that is not a repo exercises a different
+// path from the one that runs in anger.
+//
+// It plants one orphan and requires it to be REPORTED BY NAME, then requires
+// that same orphan to go GREEN through each of the gate's four readers in turn:
+// the exports map, the recorded baseline, an import from a reachable file, and a
+// package.json script string. Those four are the four ways a library file
+// legitimately has no importer, and getting any one of them wrong is how an audit
+// comes to recommend deleting a published API.
+//
+// A fixture of CORRECT shapes must stay green: a `.d.ts` and a `.test.ts` have no
+// importer by their nature, and a gate that reports either is a gate that gets
+// switched off. Both vacuity floors are asserted in the direction that matters —
+// a collapsed file set and a collapsed root set each exit 2, not 0.
+//
+// Then FIVE broken-gate drills, one per reader: each reader is removed in turn and
+// the fixture that was green BECAUSE of it must go red. Without those, "the
+// exports map kept it alive" is a claim about an exit code and nothing more.
+//
+// A passing run proves the readers still FIRE. It does not prove the entry-point
+// set is complete, and it cannot judge whether a file with no importer anywhere is
+// dead or an unused public API — that belongs to whoever owns the published
+// surface.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

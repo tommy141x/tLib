@@ -2,6 +2,16 @@
 /**
  * Comment-style gate: no emoji, no box-drawing dividers, and a ceiling on how
  * much of a file may be comment. The rules are in `docs/CODE-STYLE.md`.
+ *
+ * The one piece of judgement in it is that the scanners are string- and
+ * regex-aware in all three languages. `server/sv_demo.lua` prints a box-drawing
+ * banner and client strings carry warning glyphs; a line-grep reports every one
+ * of those as a violation, and a gate that fires on correct code gets switched
+ * off. A trailing `// why` beside code does not count towards the ratio either —
+ * only whole-line comments do.
+ *
+ * Exit 1 = a finding. Exit 2 = fewer files than `MIN_FILES`, i.e. the file set
+ * collapsed, which is NOT a pass.
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";

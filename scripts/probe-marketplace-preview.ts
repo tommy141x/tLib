@@ -19,7 +19,13 @@
  * nui-chromium.ts`), because the thing under suspicion is `srcdoc` parse and
  * image decode and neither of those happens in bun. Every number in stage B is
  * taken in-page with `performance.now()` around a real `load` event, so the CDP
- * round trip is outside the measured window.
+ * round trip is outside the measured window. Every frame REPORTS ITSELF back by
+ * postMessage — image count, decoded count, whether the injected script ran, body
+ * width — because a sandboxed opaque-origin frame cannot be read from outside and
+ * a mode that rendered nothing would otherwise time as fast.
+ *
+ * Stage C times the JSON encode and parse the document pays crossing into the NUI
+ * as a message field.
  *
  * The corpus is the REAL one: `backups/marketplace-import/manifest.json`, the
  * 18 UI heads that were actually imported into the marketplace, plus

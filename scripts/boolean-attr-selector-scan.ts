@@ -32,7 +32,9 @@
  * a file written to be wrong on purpose. If a rule stops matching there the whole
  * run exits 2 — even when the real tree reports clean.
  *
- * The control is always read from THIS repo, so `--root` cannot weaken it.
+ * The control is always read from THIS repo, so `--root` cannot weaken it, and
+ * BOTH readers (CSS selector, UnoCSS variant) must still find its attribute —
+ * deleting the variant reader left an earlier control fully green.
  *
  * WHAT IS AND IS NOT A FINDING
  *

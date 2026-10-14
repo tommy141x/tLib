@@ -41,6 +41,16 @@
  *   `outward` the shipped spelling with `outline-offset` forced positive.
  *             REQUIRED to paint 0. This is what isolates the negative offset as
  *             the load-bearing part, rather than "an outline" in general.
+ *
+ * Every consumer of the kit must be listed in the case table. tUnit was the one
+ * that was not, which is how two live `focus-visible:outline-ring` deletions
+ * shipped in it unnoticed.
+ *
+ * NOT in `verify`, for two reasons: it needs tELS, tAFK, tCAD, tUnit and
+ * tRadio/server BUILT first and `verify` does not build them, and
+ * `shared/ts/build/nui-chromium.ts` is Windows-only (a `Win_x64` snapshot,
+ * `chrome-win/chrome.exe`, `powershell Expand-Archive`) while `verify` must run
+ * on Linux. `probe:preview` is out for that second reason too.
  */
 
 import { existsSync, readFileSync } from "node:fs";

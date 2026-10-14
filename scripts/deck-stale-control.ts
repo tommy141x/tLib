@@ -11,9 +11,8 @@
  * identical. `deck-stale` prints a file count and two hashes; a copy of the
  * plugin tree that silently came out empty, a skip list that widened to swallow
  * `src/`, or a stamp comparison wired so both sides read the same value would
- * all print a tick. This repo has shipped that shape repeatedly — see the
- * `//controls` note in tRadio/package.json for the roll-call — so the gate does
- * not get to be trusted on its own say-so.
+ * all print a tick. This estate has shipped that shape repeatedly, so the gate
+ * does not get to be trusted on its own say-so.
  *
  * How it works, and why it needs no Elgato CLI and no network
  *

@@ -3,7 +3,10 @@
 //
 // Plus imports.lua's AUTOLOAD list, which is not a primitive but is patched by the
 // same machinery for free, because tests/lua/imports-autoload.lua loads imports.lua
-// by name the way the others `dofile` a module.
+// by name the way the others `dofile` a module. The failure it guards raises no
+// error at all: a consumer that declares nothing and never calls tlib.telemetry
+// from Lua simply never loads the module, so the NUI's flush lands on an
+// unregistered callback and nothing transmits.
 //
 // It covers six suites — tests/lua/{net-guards,opengate,
 // permission-onchange,permission-consumer,imports-autoload,imports-has}.lua — from ONE file, because every defect is planted
@@ -36,6 +39,24 @@
 // run is also required to exit NON-ZERO (fengari can print an unhandled error
 // and still exit zero; scripts/run-lua-suite.lua is what converts it) and NOT to
 // print the suite's success line.
+//
+// There are TWO broken-gate drills, one per anchor kind: an unmatchable module
+// anchor, and a module the target suite does not load. Both must REFUSE the run.
+// Without them, "every defect reddened something" is not evidence the patcher
+// fired at all.
+//
+// Two limits of this control
+//
+// The client source guard is asserted by ONE suite line covering six spoof
+// values, so three separate defects there are distinguishable only by which
+// value's message appears — the 0-is-truthy case is never the first failure on
+// its own. And `broken-routed-to-denied` has to be planted as `do return ... end`:
+// a bare `return` mid-block is a Lua syntax error, and a defect that cannot parse
+// proves nothing about any assertion.
+//
+// A passing run proves the assertions still FIRE. It does not prove the rule set
+// is complete, nor that an assertion covers the path where the defect would
+// really occur.
 //
 //   bun run test:lua:control
 

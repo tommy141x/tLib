@@ -33,6 +33,10 @@
  * Every value planted here is obviously synthetic. Nothing in this file is a
  * credential for anything.
  *
+ * This is only half of `secrets:control`. The other half is the Lua overlay
+ * suite under `SECRETS_CONTROL=1`, which deletes the gitignored sidecar and
+ * requires every apply-assertion in `tests/lua/secrets-overlay.lua` to flip.
+ *
  * Usage:  bun run scripts/secret-gate-control.ts
  */
 

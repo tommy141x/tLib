@@ -22,6 +22,19 @@
  * Plus a broken-gate drill per rule: each rule is removed through the real
  * `skip` plumbing and the fixture that was red must go green.
  *
+ * Four things here are easy to get subtly wrong, so each has its own case:
+ *
+ *   - The character classes are asserted against the glyphs they must catch AND
+ *     against the typographic arrows, dashes and ellipsis they must allow.
+ *   - Both sides of both ratio thresholds, including that a file exactly AT the
+ *     ceiling and a file one line under `RATIO_MIN_LINES` are green. That caught
+ *     a real off-by-one: `split("\n").length` counts the trailing terminator.
+ *   - The licence exemption is proven not to be mere silence, by requiring an
+ *     identical file minus the licence header to go red.
+ *   - All four directions of the baseline ratchet, including the two that demand
+ *     an entry be DELETED. No ratchet case hard-codes a count; each asks the gate
+ *     for the fixture's own, so the control cannot go stale against the baseline.
+ *
  * It proves the rules discriminate. It does not prove the rule set is complete,
  * and it says nothing about whether a comment is worth keeping -- that is a
  * judgement in `docs/CODE-STYLE.md`, not something a regex can hold.

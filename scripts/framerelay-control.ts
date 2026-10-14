@@ -21,6 +21,10 @@
 // line rather than with an unrelated crash — a planted defect that makes the suite
 // die on a syntax error or a nil call proves nothing about the assertions.
 //
+// `test:lua:control` is a chain of three runners: this one, runtimetxd-control.ts
+// and primitives-control.ts. Each requires its suite GREEN at baseline before
+// planting anything, without which no red result is attributable.
+//
 //   bun run test:lua:control
 
 import { resolve } from "node:path";

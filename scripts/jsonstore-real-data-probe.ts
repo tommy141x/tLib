@@ -45,6 +45,9 @@
  * in-memory file table and the generated probe goes to the OS temp dir.
  *
  * Exit 0 pass, 1 a probe failed, 2 the probe could not run (NOT a pass).
+ *
+ * NOT in `check:regression`: `data.json` is gitignored in every resource, so a
+ * fresh clone has none and this correctly exits 2 rather than passing on nothing.
  */
 
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
