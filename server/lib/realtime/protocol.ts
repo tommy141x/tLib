@@ -108,6 +108,16 @@ export function encodeFanout(roomId: string, senderId: number, payload: Buffer):
 }
 
 export function decodeBinary(buf: Buffer): BinaryFrame {
+  // The binary cap, which the header above has always claimed the codec
+  // enforces and which it did not. Room id and text frame were both checked;
+  // this one was declared and never read. That matters more here than an
+  // ordinary unused constant: this file calls itself the source of truth for
+  // the wire format and is mirrored by tTest's shell and the Worker iframe SDK,
+  // so a mirror that implemented the documented cap would have disagreed with
+  // the server about which frames are legal.
+  if (buf.length > MAX_BINARY_FRAME_BYTES) {
+    throw new ProtocolError("binary_too_large", `binary frame exceeds ${MAX_BINARY_FRAME_BYTES}B`);
+  }
   if (buf.length < 2) throw new ProtocolError("bad_binary", "too short");
   const op = buf[0];
   const roomLen = buf[1];
