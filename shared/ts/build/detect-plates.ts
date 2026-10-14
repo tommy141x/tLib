@@ -1,49 +1,21 @@
 /**
  * Derive key geometry from the Stream Deck plate photographs into `plates.json`.
  *
- * The alternative was hand-measuring 29 rectangles in an image editor and typing
- * them in. That is wrong the moment a plate is re-exported at a different size or
- * crop, and wrong silently — keys land slightly off their wells and the composite
- * still looks plausible at a glance.
- *
  * Detection leans on the one thing that is reliably true of these renders: a key
  * face is much darker than the body it sits in, and the body is much darker than
  * the chrome bezel ringing each key. So: threshold to "very dark", take connected
- * components, and keep the ones whose bounding box is key-shaped.
+ * components, and keep the ones whose bounding box is key-shaped. The alternative
+ * was hand-measuring 29 rectangles in an image editor, which is wrong the moment a
+ * plate is re-exported at a different size -- and wrong silently.
  *
- * ── Why this is in tLib ─────────────────────────────────────────────────────
+ * In tLib because it describes ELGATO HARDWARE, not any one product, and two
+ * resources each had a byte-identical copy kept in step by a README. In `build/`
+ * and not `deck/` because `deck/` is managed vendoring into each plugin's own
+ * bundle, and this is a build-time tool that imports `node:fs`.
  *
- * It describes ELGATO HARDWARE, not any one product: the Mini has the same six
- * wells in the same places whatever is drawn in them. tELS and tRadio each had a
- * byte-identical 264-line copy, kept in step by a README asking the next person
- * to copy it across again. That is exactly the drift this file now cannot have:
- * one implementation, so a tuning fix reaches both galleries.
- *
- * ── Why the decoder is injected ─────────────────────────────────────────────
- *
- * `decode` turns the file's bytes into RGBA pixels, and it is a PARAMETER rather
- * than an `import sharp` here. sharp is a native-binary dependency that tLib has
- * no other use for, and only one of the two consumers depends on it: tRadio does,
- * tELS deliberately does not and only ever needs the TYPES below so its `run.ts`
- * can read `plates.json`. Importing sharp at this level would put a native build
- * in tLib's dependency tree to serve a gallery tool, and would stop tELS
- * type-checking its own scripts.
- *
- * ── Why `build/` and NOT `deck/` ────────────────────────────────────────────
- *
- * `shared/ts/deck` is MANAGED VENDORING: `deck-render-sync.ts` copies every `.ts`
- * directly under it into each Stream Deck plugin's `src/lib/deck/`, because a
- * separate rollup cannot resolve `@tlib/shared`. Its contract is therefore "code the
- * PLUGIN bundles need", and this is not that: it is a build-time tool run from a
- * resource's `scripts/`, it imports `node:fs` and `node:crypto`, and no plugin
- * bundles a line of it. Vendoring it would ship a filesystem tool into a program a
- * customer installs on their own machine.
- *
- * `build/` is where the rest of the gallery tooling already lives — `hud-gallery.ts`,
- * `prop-editor-gallery.ts`, `nui-chromium.ts` — and the sync glob does not reach it.
- *
- * It is a tool, not part of a gallery run — a gallery reads the JSON and verifies
- * it still matches the plate it was measured from.
+ * `decode` is a PARAMETER rather than an `import sharp`: sharp is a native-binary
+ * dependency tLib has no other use for, only one consumer has it, and importing it
+ * here would stop the other type-checking its own scripts.
  */
 
 import { createHash } from "node:crypto";
@@ -101,10 +73,10 @@ export interface RgbaImage {
 export type DecodeRgba = (bytes: Uint8Array) => Promise<RgbaImage>;
 
 /**
- * Connected components of a boolean mask, via an explicit stack.
- *
- * Recursion blows the stack on a 1448x1086 plate — the body of the device is one
- * component of well over a million pixels.
+ * Connected components of a boolean mask, via an explicit stack: recursion blows
+ * the stack on a 1448x1086 plate, where the device body is one component of well
+ * over a million pixels. 4-connectivity, which keeps diagonal chrome speckle from
+ * welding two neighbouring keys into one blob.
  */
 export function components(mask: Uint8Array, w: number, h: number, minArea: number): Rect[] {
   const seen = new Uint8Array(w * h);
@@ -131,8 +103,6 @@ export function components(mask: Uint8Array, w: number, h: number, minArea: numb
       if (x > x1) x1 = x;
       if (y > y1) y1 = y;
 
-      // 4-connectivity is enough and keeps diagonal chrome speckle from
-      // welding two neighbouring keys into one blob.
       const push = (q: number) => {
         if (!mask[q] || seen[q]) return;
         seen[q] = 1;
@@ -152,12 +122,9 @@ export function components(mask: Uint8Array, w: number, h: number, minArea: numb
 /**
  * Every key yields two concentric blobs — the dark well the key sits in, and the
  * key face inside it, separated by the glossy highlight around the face's edge.
- * Keep the outer one and drop anything nested inside it.
- *
- * The outer well is the stable measurement: across the Mini's six keys it varies
- * by 3px (265-268 wide), while the inner faces range 215-238 because the gloss
- * bites into each one differently. Measuring the face directly would make one key
- * in six visibly larger than its neighbours in the composite.
+ * Keep the outer one and drop anything nested inside it: the well is the stable
+ * measurement, varying by 3px across the Mini's six keys where the inner faces
+ * range over 23px because the gloss bites into each one differently.
  */
 export function dropNested(rects: Rect[]): Rect[] {
   const contains = (a: Rect, b: Rect) =>
@@ -166,11 +133,9 @@ export function dropNested(rects: Rect[]): Rect[] {
 }
 
 /**
- * The illuminated face inside a key well, as a fraction of the well.
- *
- * Measured, not chosen: the inner blobs above average 82% of their well's width
- * across all three plates. This is where a rendered key image actually goes — a
- * Stream Deck key image fills the lit face, not the moulding around it.
+ * The illuminated face inside a key well, as a fraction of the well. Measured,
+ * not chosen: the inner blobs average 82% of their well's width across all three
+ * plates, and a key image fills the lit face rather than the moulding.
  */
 export const FACE_RATIO = 0.82;
 
@@ -191,7 +156,6 @@ export function readingOrder(rects: Rect[]): Rect[] {
   for (const r of [...rects].sort((a, b) => a.y - b.y)) {
     const row = rows.find((candidate) => {
       const ref = candidate[0];
-      // Same row if their vertical spans overlap by more than half a key.
       const overlap = Math.min(ref.y + ref.h, r.y + r.h) - Math.max(ref.y, r.y);
       return overlap > Math.min(ref.h, r.h) * 0.5;
     });
@@ -213,9 +177,6 @@ export async function measurePlate(
   const h = img.height;
   const data = img.data;
 
-  // "Dark and actually part of the device" — the plates are cutouts, so fully
-  // transparent surround is near-black too and would otherwise be one huge
-  // component touching every key.
   const dark = new Uint8Array(w * h);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
     if (data[i + 3] < 200) continue;
@@ -223,8 +184,6 @@ export async function measurePlate(
     if (lum < 26) dark[p] = 1;
   }
 
-  // A key is a good fraction of the plate; anything tiny is bezel speckle or the
-  // gap between the Elgato logo's glyphs.
   const blobs = dropNested(components(dark, w, h, (w * h) / 900));
 
   const square = blobs.filter((r) => {
@@ -253,9 +212,6 @@ export async function measurePlate(
 
   // Below the keys the Plus has three wide dark regions, top to bottom: the LCD
   // touch strip, the recess the dials sit in, and the shadow under the device.
-  // Order them by y and take them positionally — picking the strip by area chose
-  // the dial recess instead (225k px vs the strip's 165k), which put the touch
-  // strip's overlay around the dials.
   const below = wide
     .filter((r) => r.y > Math.max(...keys.map((k) => k.y + k.h)))
     .sort((a, b) => a.y - b.y);

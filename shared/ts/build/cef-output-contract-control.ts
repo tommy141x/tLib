@@ -2,7 +2,7 @@
 /**
  * The control for `cef-output-contract.ts`. Run it before trusting that gate.
  *
- * ⛔ WHY A CONTROL AT ALL, AND WHY THIS SHAPE. A sibling gate's first control
+ * WHY A CONTROL AT ALL, AND WHY THIS SHAPE. A sibling gate's first control
  * passed GREEN while a whole reader had been deleted, because every fixture was
  * reachable by a second path — so "the gate failed" was satisfied by the wrong
  * rule. This control therefore asserts the EXACT rule id each fixture trips, and
@@ -20,7 +20,7 @@
  * actually looks like, and which must trip R-MQ4-RANGE *and* R-MEDIA-FLOOR.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { checkCefOutput } from "./cef-output-contract.ts";
@@ -144,7 +144,9 @@ for (const fixture of FIXTURES) {
   const ok = got.length === want.length && got.every((r, i) => r === want[i]);
 
   if (ok) {
-    console.log(`  PASS  ${fixture.name.padEnd(22)} ${want.length ? `red: ${want.join(", ")}` : "green"}`);
+    console.log(
+      `  PASS  ${fixture.name.padEnd(22)} ${want.length ? `red: ${want.join(", ")}` : "green"}`
+    );
   } else {
     failures++;
     console.error(

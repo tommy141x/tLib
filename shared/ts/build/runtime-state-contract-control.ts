@@ -2,7 +2,7 @@
 /**
  * The control for `runtime-state-contract.ts`. Run it before trusting that gate.
  *
- * ⛔ WHY A CONTROL, AND WHY THIS SHAPE. A sibling gate's first control passed
+ * WHY A CONTROL, AND WHY THIS SHAPE. A sibling gate's first control passed
  * GREEN while a whole reader had been deleted, because every fixture was
  * reachable by a second path — so "the gate failed" was satisfied by the wrong
  * rule. This control therefore asserts the EXACT rule id each fixture trips and
@@ -16,7 +16,7 @@
  *
  * ## The broken-gate drill
  *
- * ⚠️ A red verdict is not evidence that the RULE caused it. So the last phase
+ * A red verdict is not evidence that the RULE caused it. So the last phase
  * narrows the matcher so it cannot match, and requires the fixture that was red
  * to go GREEN. Without that, a gate whose regex had rotted into matching
  * everything would pass this control on every fixture.
@@ -56,7 +56,7 @@ function report(name: string, want: string[], got: string[], why: string) {
   return false;
 }
 
-// ── Part 1: the staged tree ──────────────────────────────────────────────────
+// Part 1: the staged tree
 
 /**
  * A staged tree that must pass every rule: an fxmanifest at the root, and
@@ -138,6 +138,28 @@ const STAGED: StagedFixture[] = [
     why: "tAFK parks an unparseable file under this name. It is the owner's repair evidence.",
   },
   {
+    name: "telemetry consent",
+    plant: ["telemetry-consent.json"],
+    expect: ["R-TELEMETRY-CONSENT"],
+    why:
+      "the operator's own answer about diagnostics. The default is OFF, so a stored `true` " +
+      "in an archive silently opts every customer in — the one direction that is not " +
+      "merely untidy.",
+  },
+  {
+    // The successor to the deleted `R-TELEMETRY-INSTALL-ID` fixture. The id
+    // moved inside `data.json`, so this is the evidence that removing that rule
+    // left no gap: the id's new home is caught by `R-DATA-FILE` at the root and
+    // at depth, and the old standalone file is now just another lookalike.
+    name: "the retired install-id file is no longer special",
+    plant: ["telemetry-install-id.txt"],
+    expect: [],
+    why:
+      "the id lives in data.json now, which R-DATA-FILE already refuses by basename at any " +
+      "depth and for a stronger reason. A rule still matching this name would be a rule no " +
+      "release can trip.",
+  },
+  {
     name: "two at once",
     plant: ["data.json", "data.json.bak"],
     expect: ["R-DATA-FILE", "R-DATA-BAK"],
@@ -190,12 +212,17 @@ for (const fixture of STAGED) {
   }
 
   const result = checkStagedTree({ dist });
-  report(fixture.name, fixture.expect, result.findings.map((f) => f.rule), fixture.why);
+  report(
+    fixture.name,
+    fixture.expect,
+    result.findings.map((f) => f.rule),
+    fixture.why
+  );
 }
 
-// ── Part 1b: the broken-gate drill ───────────────────────────────────────────
+// Part 1b: the broken-gate drill
 //
-// ⚠️ Every red above could also be produced by a matcher that had rotted into
+// Every red above could also be produced by a matcher that had rotted into
 // matching everything — `lookalikes stay green` is one guard against that, and
 // this is the other, from the opposite side: take the rule away and the fixture
 // that was red MUST go green. Without both, a red verdict is not evidence that
@@ -209,6 +236,7 @@ const DRILL: Array<{ file: string; rule: string }> = [
   { file: "data.json.v2.bak", rule: "R-DATA-MIGRATION-BAK" },
   { file: "data.json.tmp-12345", rule: "R-DATA-TMP" },
   { file: "data.json.corrupt.1760000000", rule: "R-DATA-CORRUPT" },
+  { file: "telemetry-consent.json", rule: "R-TELEMETRY-CONSENT" },
 ];
 
 for (const { file, rule } of DRILL) {
@@ -240,7 +268,7 @@ for (const { file, rule } of DRILL) {
   console.log(`  PASS  drill ${rule.padEnd(24)} red armed, green disarmed`);
 }
 
-// ── Part 2: declared modules ─────────────────────────────────────────────────
+// Part 2: declared modules
 
 console.log("\n  tlib_modules fixtures");
 
@@ -272,7 +300,9 @@ const MODULES: ModuleFixture[] = [
   {
     name: "clean",
     manifest: "fx_version 'cerulean'\ntlib_modules { 'logger', 'jsonstore' }\n",
-    lua: { "server/sv_data.lua": "local s = tlib.jsonstore.open({ log = tlib.logger.create('x') })" },
+    lua: {
+      "server/sv_data.lua": "local s = tlib.jsonstore.open({ log = tlib.logger.create('x') })",
+    },
     expect: [],
     why: "the baseline. Both declared, both present, both referenced.",
   },
@@ -334,8 +364,7 @@ const MODULES: ModuleFixture[] = [
   },
   {
     name: "declaration inside a comment is not one",
-    manifest:
-      "fx_version 'cerulean'\n-- tlib_modules { 'jsonstoer' }\ntlib_modules { 'logger' }\n",
+    manifest: "fx_version 'cerulean'\n-- tlib_modules { 'jsonstoer' }\ntlib_modules { 'logger' }\n",
     lua: { "server/sv_x.lua": "tlib.logger.create('x')" },
     expect: [],
     why:
@@ -365,7 +394,12 @@ for (const fixture of MODULES) {
 
   const tlib = fixture.name === "floor: wrong tLib path" ? join(root, "no-such-tlib") : fakeTlib;
   const result = checkDeclaredModules({ root: dir, tlib });
-  report(fixture.name, fixture.expect, result.findings.map((f) => f.rule), fixture.why);
+  report(
+    fixture.name,
+    fixture.expect,
+    result.findings.map((f) => f.rule),
+    fixture.why
+  );
 }
 
 // A reader-level assertion, not a rule-level one: the manifest parser must find
@@ -413,7 +447,9 @@ for (const fixture of MODULES) {
         "under --strict; a hard one must fail either way"
     );
   } else {
-    console.log("  PASS  failing()                    soft passes, --strict fails, hard always fails");
+    console.log(
+      "  PASS  failing()                    soft passes, --strict fails, hard always fails"
+    );
   }
 }
 

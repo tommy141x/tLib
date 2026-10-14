@@ -32,6 +32,23 @@ export interface MarketplaceReleaseMetadata {
  * The canonical manifest digest avoids self-referencing the final ZIP hash. The
  * pipeline must distribute/attest this metadata and embed its policy in the agent;
  * merely finding this file on mutable runtime disk must never authorize adoption.
+ *
+ * NOTHING CALLS THIS TODAY, and nothing reads the `.marketplace-release.json`
+ * it writes. Measured 2026-10-08: the only importer is
+ * `tests/unit/marketplace-release.test.ts`. It is the PRODUCER half of the
+ * protected-built-in boundary, and the consumer half is unwired too — no
+ * `createMarketplaceAgent` call in the estate passes `protectedInventory`, so
+ * `protectedLegacyDestination` returns false on its first line and
+ * `adoptLegacyFromData` answers `builtin-boundary-unavailable`.
+ *
+ * It is kept rather than deleted because the gate it feeds is FAIL-CLOSED: unwired,
+ * legacy adoption is refused outright, which is the safe answer. Do not cite
+ * this boundary as the thing that protects shipped files from install or uninstall
+ * — that is the receipt model (`owned()` in installer/core.ts), which IS live.
+ * Wiring this is: call it as a post-staging hook per consumer, embed the result in
+ * the shipped bundle, and pass `protectedInventory` at the one
+ * `createMarketplaceAgent` call site each of tRadio, tELS, tDetector and tRadar
+ * has. `agent.ts` already forwards it into every `InstallTarget`.
  */
 export function writeMarketplaceReleaseMetadata(
   options: MarketplaceReleaseMetadataOptions

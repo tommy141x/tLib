@@ -2,7 +2,7 @@
  * The repository-facing half of the secret gate: which tracked files are config,
  * what they look like at HEAD or in the index, and whether that is acceptable.
  *
- * ── The three layers, and why there are three ──────────────────────────────
+ * The three layers, and why there are three
  *
  * 1. `pre-commit` (this module, `source: "staged"`). Convenience. Catches the
  *    value before it is a commit, with a message naming the key and the fix.
@@ -23,7 +23,7 @@
  * Layer 1 was missing and layer 3 only inspected the zip. That is the whole
  * reason `adminPassword` was committed twice.
  *
- * ── Which files are read ───────────────────────────────────────────────────
+ * Which files are read
  *
  * A RULE, not a list. A tracked file is config when its basename contains
  * `config`, or it sits under a `config/` directory, or it is a dotenv file.
@@ -51,7 +51,7 @@ export type GatePolicy = {
    * Why this repo has no config file at all. Set it and "zero files" becomes a
    * pass instead of a refusal.
    *
-   * ⚠️ This exists because the alternative is worse. tAFK genuinely tracks no
+   * This exists because the alternative is worse. tAFK genuinely tracks no
    * config file, so without an opt-out the gate fails forever there and gets
    * removed from `verify` — at which point the repo has no gate. With the
    * opt-out the "zero files" state has to be ASSERTED by a human with a reason,

@@ -2,19 +2,19 @@
  * The one `pre-commit` hook body, and the writer that puts a copy in every
  * resource.
  *
- * ── Why a tracked `.githooks/` and not `.git/hooks` ────────────────────────
+ * Why a tracked `.githooks/` and not `.git/hooks`
  *
  * `.git/hooks` is not tracked and cannot ship: a hook put there exists on
  * exactly one clone and is gone the next time the repo is cloned. The standard
  * fix is a tracked directory plus `core.hooksPath`, which is what this is.
  *
- * ⚠️ `core.hooksPath` is still PER-CLONE config. A developer who never runs
+ * `core.hooksPath` is still PER-CLONE config. A developer who never runs
  * `bun run setup` has no hook, and nothing on their machine says so. That is
  * why this layer is explicitly the convenience and not the guarantee — the CI
  * assertion on HEAD is the layer that cannot be skipped, and `secrets:check`
  * in `verify` plus `--check-hooks` are how a missing hook becomes visible.
  *
- * ── Why it REFUSES instead of stripping ───────────────────────────────────
+ * Why it REFUSES instead of stripping
  *
  * A hook that silently rewrote the staged blob would leave the developer's
  * `git show HEAD:config.lua` disagreeing with their own working tree, and the
@@ -27,7 +27,7 @@
  * somebody types a credential into the tracked file anyway. A refusal with the
  * key name and the fix in it does that; a silent strip hides it.
  *
- * ⛔ Written as the SAME BYTES into every repo, and `secret-gate-control.ts`
+ * Written as the SAME BYTES into every repo, and `secret-gate-control.ts`
  * asserts that. Eleven hand-edited copies of a shell script is eleven chances
  * for one of them to be the stale one, and the stale one is silent.
  */

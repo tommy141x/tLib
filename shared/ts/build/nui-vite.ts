@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
@@ -11,7 +12,7 @@ import { resolve } from "node:path";
  * The notes are here rather than in each config because this is now the one
  * place they describe.
  *
- * ── What is NOT here, and why ──
+ * What is NOT here, and why
  *
  * `plugins` stays in the consumer's config, and that is deliberate rather than
  * unfinished. A plugin array means importing `@solidjs/vite-plugin`,
@@ -42,6 +43,35 @@ export interface NuiBundleOptions {
   vendorPackages: readonly string[];
   /** Extra path aliases, merged after the two every bundle has. */
   alias?: Record<string, string>;
+}
+
+/**
+ * The resource's own version, for the `resourceVersion` dimension that every
+ * diagnostics event carries (`shared/ts/telemetry/collect.ts`).
+ *
+ * Read off the resource's `package.json` — which `fxmanifest.lua`'s `version`
+ * tracks — rather than retyped into each bundle, because a hand-maintained third
+ * copy goes stale and the only symptom is a dashboard attributing a fault to the
+ * wrong release.
+ *
+ * `readFileSync` and NOT a JSON `import`: an import would be resolved and
+ * inlined by the bundler, and the only field wanted is `version`. This runs in
+ * the Vite config, which is Node, so there is no bundle to pollute.
+ *
+ * Never throws. A build must not fail because a version string could not be
+ * read, and "unknown" is a printable answer — `versionSlug` accepts it.
+ *
+ * @param root the bundle's own `__dirname` (i.e. `<resource>/client/web`)
+ */
+export function resourceVersion(root: string): string {
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(root, "../../package.json"), "utf8")) as {
+      version?: unknown;
+    };
+    return typeof pkg.version === "string" ? pkg.version : "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 export function nuiBundleOptions(options: NuiBundleOptions) {
@@ -119,7 +149,7 @@ export function nuiBundleOptions(options: NuiBundleOptions) {
 
     optimizeDeps: {
       /**
-       * ⚠️ `solid-js` and `@solidjs/web` are deliberately NOT on this list.
+       * `solid-js` and `@solidjs/web` are deliberately NOT on this list.
        * web-next excludes them in its SSR environment and warns explicitly
        * against copying that to the client: `@solidjs/vite-plugin` puts them in
        * the CLIENT `optimizeDeps.include`, and on the client that pre-bundling
@@ -135,6 +165,22 @@ export function nuiBundleOptions(options: NuiBundleOptions) {
 
     server: {
       port,
+    },
+
+    /**
+     * A CONSUMER THAT SETS ITS OWN `define` REPLACES THIS ONE, because these
+     * options are spread. If a bundle needs more defines it must spread this key
+     * too — `define: { ...nuiBundleOptions(...).define, __MINE__: ... }` — or
+     * `__RESOURCE_VERSION__` silently disappears and every diagnostics event
+     * from that bundle is attributed to version "unknown".
+     *
+     * Read with a `typeof` guard at the point of use (see each resource's
+     * `src/lib/diagnostics.ts`): a bare reference to an absent `define` is a
+     * ReferenceError at module scope, which would take the bundle down to report
+     * a version string.
+     */
+    define: {
+      __RESOURCE_VERSION__: JSON.stringify(resourceVersion(root)),
     },
   };
 }

@@ -1,45 +1,21 @@
 /**
- * One Escape owner for the whole page.
+ * One Escape owner for the whole page: a registry (so depth is explicit and a
+ * layer need not be an element), capture-sample-then-bubble-decide (so one press
+ * dismisses one thing), and an internal-first/`active` contract. Five resources
+ * had arrived at three different mechanisms and each knew something the others
+ * did not; this is all three at once.
  *
- * Five resources had independently arrived at three different mechanisms for
- * the same question — "this key press: is it mine, or does something on top of
- * me own it?" — and each mechanism knew something the others did not:
+ * The capture sample is the non-obvious half: a panel that closes itself on
+ * keydown would otherwise leave the keyup looking at a page with nothing open and
+ * dismiss a second thing underneath.
  *
- * - **tELS** marked its modals with `data-editor-modal` and had the editor
- *   probe the DOM (`editorShortcutBlocked`) for anything modal-shaped before
- *   acting. The marker works, but it is a *global* query: every modal is
- *   equally blocking, so two stacked modals cannot tell which of them is on
- *   top, and a layer that is not an element at all cannot participate.
- * - **tRadio** sampled ownership on `keydown` *capture*, before any handler
- *   ran, and consulted the sample on `keyup`. That is the one insight neither
- *   of the others had, and it is not stylistic: tRadio releases focus on keyup,
- *   so a panel that closes itself on keydown would otherwise leave the keyup
- *   looking at a page with nothing open and hide the radio underneath as well.
- *   One key press, two dismissals.
- * - **tLib's** marketplace browser dismissed its own inner layer (an open
- *   preview) first and only then handed the key to its host, and gated the
- *   whole thing on an `active` prop because the component has two mounts and
- *   only the visible one may react.
+ * There is no `stopPropagation`: with one registry there are no sibling handlers
+ * left to stop, and what other code tests is `defaultPrevented`. Overlays that
+ * cannot register -- Ark's popovers and listboxes -- are handled from the other
+ * direction by `registerEscapeGuard`.
  *
- * This module is all three at once: a registry (so depth is explicit and a
- * layer need not be an element), capture-sample-then-bubble-decide (so one
- * press dismisses one thing), and an internal-first/`active` contract.
- *
- * ## Why there is no `stopPropagation` here
- *
- * Three of the copies called it. With one registry there are no sibling
- * handlers left to stop — the decision happens once, in a bubble-phase
- * listener on the target, which is already the last stop. What other code
- * actually tests is `defaultPrevented`, and that is what this sets. Anything
- * still listening for Escape outside the registry (Ark UI's popovers and
- * listboxes, which cannot register) is handled from the other direction, by
- * `registerEscapeGuard`.
- *
- * ## It is `.ts`, deliberately
- *
- * UnoCSS never scans plain `.ts`, so the class-name-shaped strings in these
- * comments cannot leak into a bundle as generated CSS. There is no markup here
- * and there must not be.
+ * It is `.ts` deliberately: UnoCSS never scans plain `.ts`, so the class-shaped
+ * strings in this prose cannot leak into a bundle as generated CSS.
  */
 
 export type EscapePhase = "keydown" | "keyup";
@@ -79,9 +55,9 @@ export interface EscapeLayerOptions {
    * editor declines Escape while focus is on any interactive control, not just
    * a text field, because its Escape throws a draft away.
    *
-   * Evaluated once per press, in the capture phase. A blocked layer is skipped
-   * during resolution, so the layer *below* it can own the key instead — which
-   * is the difference between "not mine" and "mine, do nothing".
+   * Evaluated once per press, in the capture phase. A blocked layer is SKIPPED
+   * during resolution, so the layer below it can own the key instead -- the
+   * difference between "not mine" and "mine, do nothing".
    */
   blocked?: (event: EscapeKeyEvent) => boolean;
   /** Shown in `escapeLayerDiagnostics()`. Not used for behaviour. */
@@ -103,14 +79,10 @@ export interface EscapeTarget {
 }
 
 /**
- * The subset of `KeyboardEvent` this registry reads, plus what it HANDS ON.
- *
- * The modifiers are not read here — nothing in resolution cares about them. They
- * are declared because `blocked` is given this event, and a layer that declines
- * `Ctrl`/`Alt`-modified presses (the menu, whose own raw handler did exactly
- * that before it was registered) should be able to say so without casting the
- * argument back to `KeyboardEvent`. Optional, so a test can keep passing a
- * three-field literal.
+ * The subset of `KeyboardEvent` this registry reads, plus what it HANDS ON. The
+ * modifiers are not read here; they are declared because `blocked` is given this
+ * event and a layer that declines Ctrl/Alt-modified presses should be able to say
+ * so without casting back to `KeyboardEvent`.
  */
 export interface EscapeKeyEvent {
   readonly key: string;
@@ -176,21 +148,13 @@ export class EscapeLayerRegistry {
   }
 
   /**
-   * Declare that something outside the registry owns Escape right now.
+   * Declare that something outside the registry owns Escape right now, for a
+   * third-party overlay that will never call `add`. A guard that returns true
+   * makes the whole registry stand down for that press, in both phases.
    *
-   * This exists for third-party overlays that will never call `add` — Ark UI
-   * popovers, listboxes and menus handle Escape themselves. A guard that
-   * returns true makes the whole registry stand down for that press, in both
-   * phases, which is what tELS's DOM probe was really expressing.
-   *
-   * The guard receives the keydown event, because "is this press mine" can
-   * legitimately depend on where it landed and tELS's probe reads the target.
    * It is called once, in the capture phase, so a DOM probe sees the page as it
-   * was before anything reacted.
-   *
-   * ⚠️ A guard must not match an overlay that registers a layer of its own, or
-   * the registry stands down and that layer never fires. Guards are for the
-   * overlays that cannot register.
+   * was before anything reacted. A guard must not match an overlay that registers
+   * a layer of its own, or the registry stands down and that layer never fires.
    */
   addGuard(guard: EscapeGuard): () => void {
     this.guards.add(guard);
@@ -206,11 +170,9 @@ export class EscapeLayerRegistry {
 
   /**
    * The layer that would own Escape for `event`. Called once per press, from the
-   * capture handler.
-   *
-   * With no event the event-dependent predicates (`blocked`,
-   * `ignoreWhenTyping`) cannot be evaluated and are treated as not blocking;
-   * that path is for diagnostics, never for a decision.
+   * capture handler. With no event the event-dependent predicates cannot be
+   * evaluated and are treated as not blocking; that path is for diagnostics,
+   * never for a decision.
    */
   resolve(event?: EscapeKeyEvent): Layer | null {
     let best: Layer | null = null;
@@ -281,7 +243,7 @@ export class EscapeLayerRegistry {
     this.sample = null;
   }
 
-  // ── The three listeners ───────────────────────────────────────────────────
+  // The three listeners
 
   /**
    * Capture phase, so this runs before any layer's own handler and before
@@ -333,7 +295,7 @@ export class EscapeLayerRegistry {
   };
 }
 
-// ── The page-wide singleton ─────────────────────────────────────────────────
+// The page-wide singleton
 
 let singleton: EscapeLayerRegistry | null = null;
 

@@ -25,7 +25,7 @@
  * operator the command they typed is not the command that ran, which for a tool
  * whose whole job is to write files somewhere is the difference that matters.
  *
- * ── Scope ──
+ * Scope
  *
  * Deliberately not an argument parser: no short flags, no `=` form, no
  * `--no-x`, no repeats. Every caller wants "a named value or a default", and a

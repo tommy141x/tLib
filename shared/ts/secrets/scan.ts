@@ -1,7 +1,7 @@
 /**
  * Find and blank credential-shaped assignments in a config file.
  *
- * ── What counts as a finding ────────────────────────────────────────────────
+ * What counts as a finding
  *
  * An assignment whose KEY NAME reads like a credential (see `patterns.ts`) and
  * whose value is a non-empty string literal. Nothing names a secret; a key is
@@ -11,7 +11,7 @@
  * `clientSecret`, `botToken`) and that array is precisely the shape that would
  * have missed `Advanced.S3.AccessKey`.
  *
- * ── What is deliberately NOT a finding ─────────────────────────────────────
+ * What is deliberately NOT a finding
  *
  * - A blank value. There is nothing to disclose and nothing to strip.
  * - A commented-out line. It is not config; and a template's instructions
@@ -20,7 +20,7 @@
  *   and a credential typed without quotes is caught by `Diag.secretKeys` at
  *   runtime, not here, because there is no value to blank into `""`.
  *
- * ── What it refuses rather than skips ──────────────────────────────────────
+ * What it refuses rather than skips
  *
  * A credential-named key assigned a Lua LONG STRING (`key = [[...]]`). The
  * value may span lines, this cannot blank it in place, and skipping it would be
@@ -60,7 +60,7 @@ function isLuaComment(line: string): boolean {
  * One pass over a line, matching either an assignment head, a `{` or a `}`, in
  * source order.
  *
- * ⚠️ MEASURED 2026-10-06. The first version of this anchored on `^[ \t]*key =`
+ * MEASURED 2026-10-06. The first version of this anchored on `^[ \t]*key =`
  * — one assignment per line — and so did not see `AccessKey` in
  *
  *     S3 = { AccessKey = "", SecretKey = "" },

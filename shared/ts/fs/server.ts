@@ -1,7 +1,7 @@
 // The Node half of `tlib.fs.writeResourceFile` — shared as CODE, not as a
 // runtime export.
 //
-// ── Why this is a shared module and not one export on tLib ───────────────────
+// Why this is a shared module and not one export on tLib
 //
 // It used to be one export: tLib registered `WriteResourceFile(resource, ...)`
 // and every consumer's Lua called `exports.tLib:WriteResourceFile(...)`. That
@@ -26,7 +26,7 @@
 // too, for its own files. Every write then originates inside the resource it
 // lands in, and the sandbox has nothing to object to.
 //
-// ── Why the native is not enough ─────────────────────────────────────────────
+// Why the native is not enough
 //
 // On FiveM for GTAV Enhanced, `SaveResourceFile` returns false for some
 // resources while Node's `fs` writes the identical path successfully. The cause

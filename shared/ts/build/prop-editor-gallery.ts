@@ -2,7 +2,7 @@
  * Every state of the shared 3D prop editor, photographed, into one flat folder —
  * out of whichever consumer's real NUI bundle you point it at.
  *
- * ── Why this is shared ──────────────────────────────────────────────────────
+ * Why this is shared
  *
  * `@tlib/shared/prop-editor` is one component mounted by three resources, and its
  * chrome is drawn entirely from token NAMES (`bg-card`, `text-muted-foreground`,
@@ -16,7 +16,7 @@
  * The driver lived in `tRadio/scripts/propeditor-gallery/gallery.ts` while tRadio
  * was the only host. Three copies of it was never the alternative; this is.
  *
- * ── What is faked, and what is not ──────────────────────────────────────────
+ * What is faked, and what is not
  *
  * Nothing here patches application code. Every input is a message FiveM itself
  * sends: `locale:init`, `<prefix>:propEditorInit` (the shared module's `open`),
@@ -24,7 +24,7 @@
  * views add. Two of those have no producer without a game and so are synthesised:
  *
  *   - `vehicleMatrix`, which in game is `GetEntityMatrix(vehicle)`. The fixture
- *     below is a real GTA basis for a vehicle parked at a 35° heading. ⚠️ NOT an
+ * below is a real GTA basis for a vehicle parked at a 35° heading. NOT an
  *     identity matrix on purpose: the local and world captures are the same
  *     picture except for the gizmo's orientation, so an axis-aligned vehicle
  *     would make those two files byte-identical and the distinction they exist
@@ -34,7 +34,7 @@
  *     behind it — a page of chrome around an empty canvas, which is exactly the
  *     failure this must not ship.
  *
- * ── Why it can run at all, given tRadio's perf harness refuses to ───────────
+ * Why it can run at all, given tRadio's perf harness refuses to
  *
  * `tRadio/scripts/nui-harness/scenarios/misc.ts` deliberately does NOT drive
  * `propEditorInit`. That rationale is about a *perf* harness repeating the open
@@ -48,7 +48,7 @@
  * `gizmoPixels` is what keeps that an observation rather than a hope: a run whose
  * canvas drew nothing fails instead of shipping blank art.
  *
- * ── Zero npm dependencies ───────────────────────────────────────────────────
+ * Zero npm dependencies
  *
  * Like `hud-gallery.ts` beside it. The static server is `Bun.serve`, the browser
  * is the cached Chromium 103 from `nui-chromium.ts`, and the blank-canvas check
@@ -61,7 +61,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { type LaunchedBrowser, launch } from "./nui-chromium.ts";
 
-// ── The vehicle the editor is opened from ───────────────────────────────────
+// The vehicle the editor is opened from
 
 /** A GTA basis for a heading of 35°: right = (cos h, sin h, 0), fwd = (-sin h, cos h, 0), up = +Z. */
 const HEADING_DEG = 35;
@@ -96,11 +96,7 @@ function localToWorld(lx: number, ly: number, lz: number) {
   };
 }
 
-const PROP_WORLD = localToWorld(
-  GALLERY_PROP_DATA.x,
-  GALLERY_PROP_DATA.y,
-  GALLERY_PROP_DATA.z
-);
+const PROP_WORLD = localToWorld(GALLERY_PROP_DATA.x, GALLERY_PROP_DATA.y, GALLERY_PROP_DATA.z);
 /**
  * A three-quarter view from the passenger side, framed ON the prop so the gizmo lands dead
  * centre — which is what lets `gizmoPixels` sample the middle of the frame and know what it
@@ -115,7 +111,7 @@ const CAMERA = {
   focus: PROP_WORLD,
 };
 
-// ── In-page selectors ───────────────────────────────────────────────────────
+// In-page selectors
 
 /**
  * The editor's host-independent anchor.
@@ -146,7 +142,7 @@ export const clickTool = (tool: string) =>
  */
 export const EDITOR_UP = `Boolean(document.querySelector('${toolSelector("move")}')) && Boolean(document.querySelector('${PROP_EDITOR_ROOT} canvas'))`;
 
-// ── Views ───────────────────────────────────────────────────────────────────
+// Views
 
 export interface PropEditorGalleryStep {
   /** In-page predicate that must hold before `action` fires. */
@@ -171,7 +167,7 @@ export interface PropEditorGalleryView {
 /**
  * The states every host has.
  *
- * ⚠️ `hasExisting` is stored (`prop-editor/store.ts`) and read by NOTHING — the
+ * `hasExisting` is stored (`prop-editor/store.ts`) and read by NOTHING — the
  * Remove button renders unconditionally. The last two shots are therefore
  * expected to be identical to the first, and the run SAYS so at the end rather
  * than implying three looks. They are here because this gallery was the
@@ -215,7 +211,7 @@ export const SHARED_PROP_EDITOR_VIEWS: PropEditorGalleryView[] = [
   },
 ];
 
-// ── Options and results ─────────────────────────────────────────────────────
+// Options and results
 
 export interface PropEditorGalleryOptions {
   /** FiveM resource name, as `GetParentResourceName()` must answer. */
@@ -266,7 +262,7 @@ export interface PropEditorGalleryResult {
   webgl: string;
 }
 
-// ── The FiveM host, reduced to what this page needs ─────────────────────────
+// The FiveM host, reduced to what this page needs
 
 /**
  * `GetParentResourceName` and the `fetchNui` rewrite, and nothing else.
@@ -336,7 +332,7 @@ function hostShim(resource: string): string {
 })();`;
 }
 
-// ── The static server ───────────────────────────────────────────────────────
+// The static server
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -368,11 +364,7 @@ interface BundleServer {
  * `nui://<resource>/layouts/...` in game, i.e. to the RESOURCE, not to the bundle.
  * Serving only the bundle 404s every one of them.
  */
-function startBundleServer(
-  bundleDir: string,
-  resourceRoot: string,
-  shotDir: string
-): BundleServer {
+function startBundleServer(bundleDir: string, resourceRoot: string, shotDir: string): BundleServer {
   const nuiCalls: string[] = [];
   const missing: string[] = [];
   const roots = [path.resolve(bundleDir), path.resolve(resourceRoot)];
@@ -425,7 +417,7 @@ function startBundleServer(
   };
 }
 
-// ── The run ─────────────────────────────────────────────────────────────────
+// The run
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -533,7 +525,9 @@ export async function renderPropEditorGallery(
          return g ? { ok: true, renderer: g.getParameter(g.RENDERER), version: g.getParameter(g.VERSION) } : { ok: false }; })()`
     );
     if (!gl?.ok)
-      throw new Error("this Chromium has no WebGL context — the editor cannot be photographed here");
+      throw new Error(
+        "this Chromium has no WebGL context — the editor cannot be photographed here"
+      );
     webgl = `${gl.version} (${gl.renderer})`;
     log(`[prop-editor gallery] webgl: ${webgl}`);
 
@@ -576,10 +570,7 @@ interface CaptureContext {
   log: (m: string) => void;
 }
 
-async function capture(
-  b: LaunchedBrowser,
-  ctx: CaptureContext
-): Promise<PropEditorGalleryShot> {
+async function capture(b: LaunchedBrowser, ctx: CaptureContext): Promise<PropEditorGalleryShot> {
   const { view, init, prefix, outDir, viewport, dpr, opaque, log } = ctx;
   const flags: string[] = [];
 
@@ -627,7 +618,9 @@ async function capture(
   await b.page.evaluate(`document.fonts.ready`).catch(() => {});
   // Two rendered frames, so the gizmo's first paint is definitely on screen.
   await b.page
-    .evaluate(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`)
+    .evaluate(
+      `new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`
+    )
     .catch(() => {});
   await sleep(400);
 
@@ -681,10 +674,19 @@ async function capture(
       flags.length ? `  [${flags.join("; ")}]` : ""
     }`
   );
-  return { view: view.id, file, width, height, bytes: png.length, digest, gizmoPixels: drawn, flags };
+  return {
+    view: view.id,
+    file,
+    width,
+    height,
+    bytes: png.length,
+    digest,
+    gizmoPixels: drawn,
+    flags,
+  };
 }
 
-// ── CLI ─────────────────────────────────────────────────────────────────────
+// CLI
 
 export interface PropEditorGalleryCli {
   out: string | null;
@@ -724,7 +726,12 @@ export function parsePropEditorGalleryCli(argv: string[]): PropEditorGalleryCli 
     out: value("out"),
     bundle: value("bundle"),
     views:
-      !views || views === "all" ? undefined : views.split(",").map((s) => s.trim()).filter(Boolean),
+      !views || views === "all"
+        ? undefined
+        : views
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
     viewport: { width, height },
     dpr,
     opaque: argv.includes("--opaque"),

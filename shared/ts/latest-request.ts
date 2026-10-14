@@ -8,7 +8,7 @@
  * was nothing resource-specific to preserve — only three places to fix the next
  * time the fence turns out to be wrong.
  *
- * ── Why a generation counter and not just AbortController ──
+ * Why a generation counter and not just AbortController
  *
  * `AbortController` is the obvious tool and it is not sufficient. Abort is
  * best-effort and it races: `fetch` can already have resolved, or be between
@@ -21,7 +21,7 @@
  * transfer and frees the socket — it is an optimisation layered on the fence,
  * not the fence.
  *
- * ── Why `pending` is cleared only by the winner ──
+ * Why `pending` is cleared only by the winner
  *
  * A superseded request settling must not report "idle": its `finally` runs
  * while the request that replaced it is still loading. Guarding the clear with
@@ -31,7 +31,7 @@
  * off and on again on every supersede, and — worse — reads as idle while work
  * is outstanding.
  *
- * ── Why A→B→A needs request identity ──
+ * Why A→B→A needs request identity
  *
  * The callers are skin/layout loaders, and a user can go back to the skin they
  * started on. Keying the fence on a *name* would let the stale A response pass
@@ -52,7 +52,7 @@ export interface LatestRequest {
   run<T>(
     load: (signal: AbortSignal) => Promise<T>,
     apply: (value: T) => void,
-    fail: () => void,
+    fail: () => void
   ): Promise<void>;
   /**
    * Retire the instance: nothing in flight may commit, and no later `run` may
@@ -76,7 +76,7 @@ export function createLatestRequest(): LatestRequest {
     async run<T>(
       load: (signal: AbortSignal) => Promise<T>,
       apply: (value: T) => void,
-      fail: () => void,
+      fail: () => void
     ) {
       if (disposed) return;
       const request = ++generation;

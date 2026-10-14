@@ -1,75 +1,33 @@
 /**
  * Stream Deck plugin packing, and the staleness gate that keeps it honest.
  *
- * Three resources ship an Elgato Stream Deck plugin — tRadio, tELS and tRadar —
- * and each one publishes the packed `.streamDeckPlugin` as a download from its
- * own docs. Until this file existed, nothing built it: `scripts/prod.ts` had
- * zero deck steps in all three, so the published artifact was whatever someone
- * last packed by hand and copied.
+ * Three resources publish a packed `.streamDeckPlugin` from their own docs, and
+ * until this existed nothing built it. Measured: one committed artifact held 29
+ * files where a pack of the same tree produced 38 -- whole actions a customer
+ * could not use -- and nothing reported it, because there was nothing to report.
  *
- * ⚠️ MEASURED 2026-10-06, and this is why it is a build step rather than a note.
- * tRadio's committed `docs/public/com.timmyg-studios.tradio.streamDeckPlugin`
- * was packed on Oct 1 and held **29** files; a pack of the same working tree
- * produced **38**. The published download was missing `ui/function.html`,
- * `ui/softkey.html` and the softkey action icons — whole actions a customer
- * could not use — and carried `imgs/plugin/marketplace@2x.png` at 155,618 bytes
- * where the source tree has a 15,068-byte re-export. Nothing reported it,
- * because there was nothing to report it.
+ * Output goes into the resource's own `docs/public/`. NEVER `.build/dist/`: the
+ * plugin is a Node program the customer installs into their Stream Deck app, not
+ * resource runtime, and staging it would route it through `createZip`'s
+ * credential sanitizer. And never into tWeb's tree -- the site mirror is the
+ * website's own sync step.
  *
- * ── Where the output goes, and where it must NOT go ─────────────────────────
+ * THE GATE STAMPS CONTENT, NOT TIMESTAMPS, because git does not record mtimes: a
+ * fresh clone writes every file at checkout time, so an mtime gate is green on
+ * genuinely stale bytes and intermittently red on fresh ones. The recorded fact
+ * is a HASH of the source set, written beside the plugin and recomputed by the
+ * gate. It also records the artifact's own sha256, so a stale artifact needs a
+ * forgery of two hashes rather than one edit. mtimes are still REPORTED, never
+ * asserted on. (Re-packing and comparing is not an option either: a zip carries
+ * per-entry timestamps, so two packs of an unchanged tree differ.)
  *
- * Into the resource's own `docs/public/`. NEVER into `.build/dist/`: the plugin
- * is a Node program the customer installs into their own Stream Deck app, not
- * resource runtime, and `client/stream-deck/` is deliberately excluded from the
- * release ZIP — see the comment saying so in tELS/scripts/prod.ts's allowlist.
- * Staging it would also route it through `createZip`'s credential sanitizer,
- * which has no business rewriting a zip-of-a-zip.
- *
- * And never into `internal/tWeb/public/assets/<resource>/`. The site mirror is
- * the website's own sync step (`tWeb/scripts/sync-docs-assets.ts`); a resource
- * build writing into tWeb's tree would make a private repo a build output of
- * five public ones.
- *
- * ── Why the gate stamps content instead of comparing timestamps ─────────────
- *
- * The brief asked for "fails when the committed `.streamDeckPlugin` is older
- * than any file under its `.sdPlugin` source tree", and an mtime comparison is
- * the obvious reading. It cannot be the mechanism: **git does not record
- * mtimes**. A fresh clone — every CI run, every new worktree — writes every
- * file at checkout time, so the artifact and its sources come out the same age
- * to within the time it takes to write them. On that tree an mtime gate is
- * green on genuinely stale bytes, and intermittently red on fresh ones
- * depending on the order the checkout happened to write files in. A gate that
- * is green for the wrong reason on every runner is the failure mode this
- * codebase keeps hitting.
- *
- * So the recorded fact is a HASH of the source set, written beside the plugin
- * as `<id>.streamDeckPlugin.stamp.json` when the pack runs, and the gate
- * recomputes it. That answers exactly the question the brief asked — has
- * anything the artifact is built from changed since it was packed — and it
- * survives a clone. mtimes are still *reported*, because on a developer's own
- * machine they are the human-readable version of the same fact; they are not
- * asserted on.
- *
- * The stamp also records the artifact's own sha256 and size. That is what stops
- * the one tamper the sibling `gen:deck-icons:check` gate documents as still
- * open on itself: a sidecar hand-written (or merge-resolved) to agree with a
- * stale artifact. Here the stamp has to agree with BOTH sides, so a stale
- * artifact needs a deliberate forgery of two hashes rather than one edit.
- *
- * A `.streamDeckPlugin` is a zip, and a zip carries per-entry timestamps, so
- * two packs of an unchanged tree are not byte-identical. That is why the gate
- * cannot simply re-pack and compare — the comparison would always report drift.
- *
- * ── Fail loudly on nothing measured ─────────────────────────────────────────
- *
- * `scanDeckSources` THROWS on an empty source set rather than returning `[]`.
- * A renamed `src/`, a moved `.sdPlugin` or a widened skip list would otherwise
- * make the gate hash the empty string, agree with itself forever, and print a
- * tick. `tLib/scripts/deck-stale-control.ts` plants that defect among others and
- * requires each one to go red.
+ * `scanDeckSources` THROWS on an empty source set rather than returning `[]` -- a
+ * renamed directory would otherwise make the gate hash the empty string, agree
+ * with itself forever and print a tick. `scripts/deck-stale-control.ts` plants
+ * that defect among others and requires each one to go red.
  */
 
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -79,7 +37,6 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { createHash } from "node:crypto";
 import { dirname, join, relative } from "node:path";
 import { installDeps, run, step } from "./core.ts";
 
@@ -152,13 +109,6 @@ const DEFAULT_PUBLIC_DIR = "docs/public";
 
 /**
  * Build output and host logs, not source.
- *
- * `bin/` holds the rollup bundle and `logs/` whatever the Stream Deck app wrote;
- * both are gitignored in all three resources, and both are regenerated by the
- * pack itself. Hashing them would make the stamp disagree with itself after
- * every build — a structurally always-red gate, which is a gate someone
- * eventually deletes. `src/` is what `bin/` is built FROM and it IS hashed, so
- * nothing is lost: a bundle cannot change without its source changing.
  */
 const SKIP_DIRS = new Set(["bin", "logs", "node_modules"]);
 
@@ -200,12 +150,6 @@ function walkFiles(dir: string, base: string, acc: DeckSourceFile[]): void {
 
 /**
  * Every file the packed artifact is built from.
- *
- * The `.sdPlugin` tree is the plugin as installed (manifest, property
- * inspectors, images, layouts); `src/` is the TypeScript rollup turns into
- * `bin/plugin.js`; and `rollup.config.mjs`, `tsconfig.json` and `package.json`
- * decide what that bundle comes out as — a dependency bump changes the shipped
- * bytes with no change under `src/`.
  *
  * Throws on an empty result. See the header: a zero-file scan here would hash
  * the empty string and agree with itself forever.
@@ -268,18 +212,12 @@ export function readDeckStamp(cfg: DeckPluginConfig): DeckStamp | null {
   try {
     return JSON.parse(readFileSync(path, "utf8")) as DeckStamp;
   } catch (e) {
-    // A corrupt stamp is a failure, not an absence: returning null here would
-    // read as "never packed" and the caller's message would send someone to the
-    // wrong problem.
     throw new Error(`Stream Deck stamp is not readable JSON (${path}): ${String(e)}`);
   }
 }
 
 /**
  * Does the published artifact still match the sources it was packed from?
- *
- * Returns rather than throws, so the CLI can print every problem at once and a
- * caller can treat "never packed" differently from "stale".
  */
 export function checkDeckArtifact(cfg: DeckPluginConfig): DeckCheckResult {
   const paths = deckPaths(cfg);
@@ -354,17 +292,6 @@ export function checkDeckArtifact(cfg: DeckPluginConfig): DeckCheckResult {
 
 /**
  * Build, validate, pack, publish — and write the stamp the gate reads.
- *
- * The three sub-steps go through the plugin's OWN package scripts (`build`,
- * `validate`, `pack`) rather than invoking `bunx streamdeck` here, so the
- * Elgato CLI's arguments live in one place per plugin and `bun run deck:pack`
- * by hand does exactly what the release does. tRadar already had those scripts;
- * tRadio and tELS had only `build`/`watch` and now match it.
- *
- * `streamdeck pack` writes beside the `.sdPlugin` directory, which is gitignored
- * in tELS and tRadar (`*.streamDeckPlugin`) and untracked in tRadio. The copy
- * under `docs/public/` is the tracked one, and it is tracked on purpose: the
- * docs site deploys from a plain checkout with no build step.
  */
 export function packDeckPlugin(
   cfg: DeckPluginConfig & { install?: boolean },
@@ -397,22 +324,8 @@ export function packDeckPlugin(
   mkdirSync(dirname(paths.published), { recursive: true });
   copyFileSync(paths.packed, paths.published);
 
-  // ⚠️ HASHED AFTER THE PACK, NOT BEFORE, AND THAT IS A MEASUREMENT RATHER THAN
-  // A PREFERENCE. This read the sources first, on the reasoning that the stamp
-  // should describe them as committed. It cannot: `streamdeck validate`/`pack`
-  // REWRITES `<id>.sdPlugin/manifest.json` as a side effect. Measured on tELS
-  // 2026-10-06 — 54 changed lines, every one of them `"Controllers":
-  // ["Keypad"]` re-wrapped onto three lines, and `JSON.parse` of both sides
-  // compares equal, so it is purely the CLI's own formatting. But the file is
-  // TRACKED and it IS in the source set, so hashing before the pack recorded a
-  // hash of a tree that no longer existed by the time the pack finished: the
-  // gate went red immediately after a successful pack, on a clean checkout,
-  // every time. That is a structurally always-red gate, which is a gate
-  // somebody eventually deletes.
+  // HASHED AFTER THE PACK, NOT BEFORE, AND THAT IS A MEASUREMENT RATHER THAN
   //
-  // The rewrite is idempotent, so the post-pack tree is also the one that gets
-  // committed and the one the gate will read. Hashing it is both correct and
-  // the only option that is stable.
   const scan = scanDeckSources(cfg);
 
   const sha256 = sha256File(paths.published);

@@ -1,3 +1,5 @@
+import { timeNuiAsync } from "./telemetry/ambient";
+
 declare global {
   interface Window {
     GetParentResourceName?: () => string;
@@ -70,9 +72,40 @@ function createDeadline(ms: number): { signal?: AbortSignal; release: () => void
   return { signal: controller.signal, release: () => clearTimeout(handle) };
 }
 
+/**
+ * Budget for one NUI -> Lua round trip, for the diagnostics timer below.
+ *
+ * NOT `NUI_TIMEOUT_MS`. Ten seconds is the deadline at which a callback is
+ * declared NEVER COMING — a Lua handler that returned without calling its `cb`,
+ * which is a bug in the handler and is already reported as a warning. This is
+ * the much lower bar at which a round trip that DID answer was unacceptably
+ * slow: every callback in every consuming resource answers inside the same
+ * frame, so one second is ~60 frames of slack and still an order of magnitude
+ * under the deadline.
+ */
+const NUI_ROUND_TRIP_BUDGET_MS = 1000;
+
 // Shared transport for both public wrappers. Throws NuiError; the caller decides
 // whether that surfaces as a rejection or as null.
 async function requestNui<T>(
+  event: string,
+  data: unknown,
+  options: FetchNuiOptions
+): Promise<T | null> {
+  // INSTRUMENTED HERE AND NOT IN `fetchNui`, deliberately: `fetchNui`
+  // returns early when `isNUI()` is false, so timing it would record a dev-mode
+  // no-op as a fast round trip and dilute the p95 with samples that measured
+  // nothing. This function only runs when a real request is made.
+  //
+  // `timeNuiAsync` is a straight call-through until a page installs
+  // diagnostics, so the admin panel, the gallery and the harness pay two
+  // `performance.now()` calls and nothing else.
+  return timeNuiAsync(`nui:${event}`, NUI_ROUND_TRIP_BUDGET_MS, () =>
+    requestNuiInner<T>(event, data, options)
+  );
+}
+
+async function requestNuiInner<T>(
   event: string,
   data: unknown,
   options: FetchNuiOptions

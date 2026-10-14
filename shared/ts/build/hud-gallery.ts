@@ -2,34 +2,20 @@
  * Render every shipped layout of a resource, in every state worth looking at, as a
  * high-resolution PNG over a transparent backdrop.
  *
- * ── What this is for ────────────────────────────────────────────────────────
+ * Product photography: a folder of cut-out device shots that can go straight onto
+ * the website or a store listing with no screenshot tool, running game, or
+ * designer erasing a background by hand.
  *
- * Product photography. The output is a folder of cut-out device shots that can be
- * dropped straight onto the website, a store listing or a Discord post without a
- * screenshot tool, a running game, or a designer erasing a background by hand.
+ * Shared because four resources paint their HUD through the same `data-hud-*`
+ * grammar, so the only things that differ are the declaration prefix, the layouts
+ * folder and which states are interesting. The states come from the resource's
+ * own `UiManifest` presets by default: those are already the curated situations
+ * the Studio offers a creator, so a preset added for the editor shows up here
+ * without anybody remembering to.
  *
- * ── Why it is shared ────────────────────────────────────────────────────────
- *
- * Four resources paint their HUD through the SAME `data-hud-*` grammar — it is
- * HudBinder's, and `hud-preview-script.ts` is the string form of it that the
- * marketplace preview and this renderer both use. So the only things that differ
- * between resources are the declaration prefix (`data-radar-width` vs
- * `data-radio-width`), the layouts folder, and which states are interesting. All
- * three are parameters. tDetector had the only copy of this and it was a bespoke
- * script with hard-coded 520x240 pages; every other resource had nothing.
- *
- * ⚠️ The states come from the resource's own `UiManifest` presets by default (see
- * `statesFromManifest`). That is deliberate: the presets are already the curated
- * "situations" the Studio offers a creator, they are already covered by each
- * resource's manifest test, and deriving the gallery from them means a preset
- * added for the editor shows up here without anybody remembering to.
- *
- * ── Zero npm dependencies ───────────────────────────────────────────────────
- *
- * Chromium is the one from the Playwright browser cache, driven through its
- * command line rather than a protocol client, so no resource takes a dependency
- * to render its own marketing art. If it is not installed the pages are still
- * written and can be opened in any browser.
+ * Zero npm dependencies: Chromium is the one from the Playwright browser cache,
+ * driven through its command line rather than a protocol client. If it is not
+ * installed the pages are still written and can be opened in any browser.
  */
 
 import { spawnSync } from "node:child_process";
@@ -70,30 +56,16 @@ export interface HudGalleryOptions {
   /**
    * Global update function a layout installs for itself, e.g. `"__telsLayoutUpdate"` — the same
    * value the marketplace panel is given as `previewFn`.
-   *
-   * Leave it unset for layouts that are purely declarative. Set it and the preview calls that
-   * function INSTEAD of the declarative pass, exactly as the in-game preview does.
-   *
-   * This defaulted to null and had no way to be set, which made the gallery quietly wrong for
-   * every layout that draws anything imperatively: tELS's WCC and WCC2 build their siren-tone
-   * keys, LED bar and stage slider in script, so the shots came out with blank keys, a dead bar
-   * and the slider pinned at zero in EVERY state. Nothing failed — the declarative attributes
-   * on the same page painted correctly, so the pictures looked like a finished device with dead
-   * controls rather than like a half-rendered one.
    */
   previewFn?: string;
   deviceClasses?: readonly string[];
   defaultDeviceClass?: string;
   /**
    * Device pixel ratio of the capture. 3 gives a 520x157 device a 1560x471 PNG,
-   * which survives being placed at any size a web page or a store listing wants.
    */
   scale?: number;
   /**
    * Page background. `null` — the default — captures real alpha, so the device is
-   * a cut-out. A CSS colour instead when the point is to LOOK at the layout rather
-   * than to publish it: a transparent shot of a dark device is unreadable in an
-   * image viewer that checkerboards.
    */
   background?: string | null;
   /** CSS px of empty space around the device, so a glow or shadow is not clipped. */
@@ -127,10 +99,6 @@ export interface GalleryResult {
 
 /**
  * The manifest's presets, as gallery states, with its declared defaults first.
- *
- * Each preset is applied ON TOP of the full default state rather than used raw:
- * a preset only names the keys it changes, and a layout bound to a key no preset
- * mentions would otherwise render blank in every shot.
  */
 export function statesFromManifest(manifest: UiManifest): GalleryState[] {
   const base = defaultStateFromManifest(manifest);
@@ -156,16 +124,6 @@ export interface GalleryCli {
 /**
  * The flags every resource's `gallery` script accepts, parsed once here rather than
  * three times slightly differently.
- *
- *   --out <dir>       destination                    (default: the caller's `defaultOut`)
- *   --scale N         device pixel ratio, 1-6        (default 3)
- *   --background CSS  opaque backdrop instead of alpha; `transparent` restores the default
- *   --layouts a,b     render only these
- *
- * `defaultOut` is the caller's rather than a constant here, because each resource keeps its own
- * gallery beside its own art — `<resource>/assets/gallery`. `assets/` is git-ignored and is not in
- * the production stager's allow-list, so a gallery can be regenerated freely without ever reaching
- * a commit or a customer's package.
  */
 export function parseGalleryCli(argv: readonly string[], defaultOut: string): GalleryCli {
   const cli: GalleryCli = {
@@ -212,10 +170,6 @@ export function parseGalleryCli(argv: readonly string[], defaultOut: string): Ga
 
 /**
  * Chromium from the Playwright browser cache, newest build first.
- *
- * Playwright is a dev-machine tool here, not a dependency of any resource — nothing
- * in this file is needed to build or run one. A missing browser is not an error;
- * the caller still gets the HTML pages.
  */
 export function findChromium(): string | null {
   const base = join(homedir(), "AppData", "Local", "ms-playwright");
@@ -236,9 +190,7 @@ export function findChromium(): string | null {
 /**
  * A `file://` URL Chromium will actually open.
  *
- * ⚠️ Every one of these resources lives under a `[tScripts]` directory, and an
- * unescaped `[` makes Chromium drop the path and render `about:blank` — which
- * screenshots as a blank image with exit code 0, so it looks like it worked.
+ * Every one of these resources lives under a `[tScripts]` directory, and an
  */
 export function fileUrl(absolutePath: string): string {
   return `file:///${absolutePath.replace(/\\/g, "/").replace(/\[/g, "%5B").replace(/\]/g, "%5D")}`;
@@ -285,8 +237,6 @@ export function renderHudGallery(opts: HudGalleryOptions): GalleryResult {
   if (layouts.length === 0) throw new Error(`no layouts with a ui.html under ${opts.layoutsDir}`);
   if (opts.states.length === 0) throw new Error("no states to render");
 
-  // The staging HTML lives outside the gallery: `outDir` is a folder of pictures to look through,
-  // and a `.pages` directory of scaffolding sitting in it is noise in every file browser.
   const pagesDir = mkdtempSync(join(tmpdir(), "hud-gallery-"));
   mkdirSync(opts.outDir, { recursive: true });
 
@@ -304,23 +254,24 @@ export function renderHudGallery(opts: HudGalleryOptions): GalleryResult {
     const width = Math.ceil((scan.width ?? fallback.width) * scan.defaultScale) + padding * 2;
     const height = Math.ceil((scan.height ?? fallback.height) * scan.defaultScale) + padding * 2;
 
-    // Replace this layout's previous shots rather than the whole output folder: `outDir`
-    // comes from the command line and wiping an arbitrary directory is not this script's job.
-    // Flat output means the sweep is by filename prefix rather than by removing a subfolder —
-    // without it a renamed state would leave its old PNG sitting there looking current.
     for (const name of readdirSync(opts.outDir)) {
       if (name.startsWith(`${layout}--`) && name.endsWith(".png")) {
         unlinkSync(join(opts.outDir, name));
       }
     }
-    // This gallery used to write `<layout>/<state>.png` under an index.html contact sheet. A
-    // folder left from that layout still holds a full set of plausible-looking shots, and the
-    // sheet still opens and still renders them, so both outlive the format that made them.
     rmSync(join(opts.outDir, layout), { recursive: true, force: true });
     rmSync(join(opts.outDir, "index.html"), { force: true });
 
     for (const state of opts.states) {
-      const html = page({ ui, layoutDir, state: state.state, width, height, background, previewFn: opts.previewFn });
+      const html = page({
+        ui,
+        layoutDir,
+        state: state.state,
+        width,
+        height,
+        background,
+        previewFn: opts.previewFn,
+      });
       writeFileSync(join(pagesDir, `${layout}.${state.id}.html`), html);
       shots.push({
         layout,
@@ -351,9 +302,6 @@ export function renderHudGallery(opts: HudGalleryOptions): GalleryResult {
           "--disable-gpu",
           // Grayscale antialiasing. With LCD subpixel text these shots put a blue fringe on
           // narrow glyphs — "DIM" reads as blue text on a white-lettered key — which is a
-          // screenshot artifact and not something the layout does. It has already been mistaken
-          // for a real defect once. It is worse on a transparent capture, where the fringe has
-          // no background to blend into and survives into whatever the art is placed on.
           "--disable-lcd-text",
           "--hide-scrollbars",
           // ARGB. `00` alpha is what makes the PNG a cut-out rather than a white plate;
@@ -361,8 +309,6 @@ export function renderHudGallery(opts: HudGalleryOptions): GalleryResult {
           `--default-background-color=${background === null ? "00000000" : "ffffffff"}`,
           `--force-device-scale-factor=${scale}`,
           `--window-size=${shot.width},${shot.height}`,
-          // A layout's own update function is installed and invoked on a timer (the preview
-          // script waits 50ms and then retries, because the layout may register late). Plain
           // `--screenshot` captures at load and would race it — sometimes catching the page
           // before it has painted, which is indistinguishable from a layout that drew nothing.
           // Virtual time runs those timers to completion first, deterministically.

@@ -3,6 +3,11 @@
     "target": "ESNext",
     "module": "ESNext",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    // `secrets/patterns.ts` reads the Lua pattern list off disk via
+    // `import.meta.dir`, which is a Bun extension and not on the standard
+    // `ImportMeta`. Without this, including `secrets/` is the one thing in the
+    // widened set that does not compile.
+    "types": ["bun"],
     "moduleResolution": "bundler",
     "jsx": "preserve",
     // Solid 2: solid-js no longer ships `solid-js/jsx-runtime`. The renderer
@@ -34,14 +39,35 @@
     "solid-1-compat-jsx.d.ts",
     "admin-ui/**/*.ts",
     "admin-ui/**/*.tsx",
-    "marketplace/ui/**/*.ts",
-    "marketplace/ui/**/*.tsx",
+    "marketplace/**/*.ts",
+    "marketplace/**/*.tsx",
     "nui-kit/**/*.ts",
     "nui-kit/**/*.tsx",
     "prop-editor/**/*.ts",
     "prop-editor/**/*.tsx",
     "ui/**/*.ts",
     "ui/**/*.tsx",
+    // Not optional. `telemetry/` was reachable
+    // from this config only through `nui.ts -> telemetry/ambient.ts`, so tsc
+    // followed that ONE leaf and checked nothing else in the directory —
+    // `collect.ts`, `payload.ts`, `session.ts` and the rest were never looked
+    // at, and `typecheck:shared` reported EXIT 0 while a barrel in there still
+    // exported five symbols that no longer existed. A pass over a file set that
+    // does not contain the code is worse than no pass: it is a green light.
+    "telemetry/**/*.ts",
+    // Added for the same reason the telemetry note above describes. These nine
+    // directories were covered by nothing: a comment pass broke block
+    // delimiters in deck/card.ts, deck/strip.ts and build/deck-pack.ts and this
+    // config reported EXIT 0 on all three. Only biome's parse stage found them.
+    "assets/**/*.ts",
+    "audio/**/*.ts",
+    "build/**/*.ts",
+    "audio3d/**/*.ts",
+    "deck/**/*.ts",
+    "fs/**/*.ts",
+    "gizmo/**/*.ts",
+    "modules/**/*.ts",
+    "secrets/**/*.ts",
     "cn.ts"
   ],
   // `*.test.ts` is excluded: those run under `bun test`, which supplies `bun:test`

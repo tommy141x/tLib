@@ -3,10 +3,18 @@
  * Zero npm dependencies — AdmZip is passed by the caller.
  */
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
-import { assertManifestStaged } from "./manifest-coverage.ts";
 import { describeSanitize, sanitizeStagedSecrets } from "../secrets/release.ts";
+import { assertManifestStaged } from "./manifest-coverage.ts";
 
 export function step(label: string) {
   console.log(`\n→ ${label}`);
@@ -82,7 +90,7 @@ export function addDirToZip(zip: ZipLike, dir: string, zipPrefix: string) {
  * Layer 2 of the credential gate, applied at the one chokepoint every release
  * passes through.
  *
- * ⚠️ Done HERE, inside `createZip`, on purpose. Before 2026-10-06 exactly one
+ * Done HERE, inside `createZip`, on purpose. Before 2026-10-06 exactly one
  * resource sanitized its staged config (tRadio, with a four-name hand-written
  * array) and the other eight did not — including tCAD, whose `.env.example`
  * declares 23 credential keys. A per-resource call is a per-resource chance to

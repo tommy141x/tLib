@@ -7,7 +7,7 @@
  * instead of shipping. tCAD states the same rationale at
  * `assertNothingForbiddenStaged`.
  *
- * ── What changed, and why ──────────────────────────────────────────────────
+ * What changed, and why
  *
  * tRadio had the only implementation of this and it carried
  *
@@ -25,7 +25,7 @@
  * so a credential added to any config next year is blanked with no edit here
  * and no edit in any resource.
  *
- * ── Three things it refuses rather than skips ──────────────────────────────
+ * Three things it refuses rather than skips
  *
  * 1. A stage with no config file in it. Every resource here ships at least one;
  *    zero means staging stopped including it, and a sanitizer that sanitized

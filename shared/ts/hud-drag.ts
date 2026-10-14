@@ -4,8 +4,8 @@ import {
   type Layout,
   layoutRect,
   placeRect,
-  reanchor,
   type Rect,
+  reanchor,
   type Viewport,
 } from "./hud-geometry";
 
@@ -20,7 +20,7 @@ import {
  * a position produced by a background drag is exactly as recoverable as one set
  * in the editor.
  *
- * ⚠️ NOT `./camera-drag.ts`, its sibling here, and not a copy of it. A camera has nothing
+ * NOT `./camera-drag.ts`, its sibling here, and not a copy of it. A camera has nothing
  * under the cursor, so it must accumulate `movementX`. This is direct
  * manipulation: the widget has to stay under the pointer, and
  * `clientX - downX` against a fixed start rect IS the 1:1 guarantee.

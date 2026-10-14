@@ -2,7 +2,7 @@
 // data-hud-* element in the tree — text, html, led, show, hide, led-color, eq,
 // attr and btn.
 //
-// ── Why the node lists are cached ───────────────────────────────────────────
+// Why the node lists are cached
 //
 // update() used to run one querySelectorAll per attribute — eight full-subtree
 // walks on every state push, against a DOM that only changes when new layout
@@ -16,7 +16,7 @@
 // has run, and a cache with no way to notice would bind the old set forever.
 // The observer costs nothing while the DOM is static, which is the normal case.
 //
-// ── Why writes are compared against the DOM, not a shadow copy ──────────────
+// Why writes are compared against the DOM, not a shadow copy
 //
 // Skipping an unchanged write is the other half of the saving, but the value to
 // compare against has to be read back from the element rather than remembered
@@ -99,7 +99,7 @@ export class HudBinder {
 
   /** Call after injecting new layout HTML into the root element. */
   scan(): void {
-    // ⚠️ Before anything else. Consumers normally replace innerHTML first, which
+    // Before anything else. Consumers normally replace innerHTML first, which
     // takes the old listeners away with the old nodes — but that is a convention,
     // not a guarantee, and a scan() over a tree that still holds its previous
     // listeners used to leave every button firing twice with nothing to show for
@@ -227,7 +227,7 @@ export class HudBinder {
       for (const b of list) keys.add(top(b));
     }
 
-    // ⚠️ led-color alone also reports the REST of the path. tELS's Lua builds `leds` as a table of
+    // led-color alone also reports the REST of the path. tELS's Lua builds `leds` as a table of
     // colours and needs the sub-names to know which entries to fill; the other attributes only ever
     // need the top-level key.
     for (const b of this.cache.ledColor) {

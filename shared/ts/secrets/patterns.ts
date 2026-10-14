@@ -1,7 +1,7 @@
 /**
  * The credential-name pattern list, read from the Lua that already owns it.
  *
- * ── Why this parses Lua instead of declaring an array ───────────────────────
+ * Why this parses Lua instead of declaring an array
  *
  * `shared/imports/diag/shared.lua` has owned `Diag.SECRET_PATTERNS` since the
  * diagnostics module was unified, and its own header states the governing rule:
@@ -17,7 +17,7 @@
  * in scope at load time, and the redactor has to work before anything else has
  * initialised. Parsing one table literal from one file is the cheaper half.
  *
- * ⛔ The parser is strict on purpose. Every failure mode of a loose parser here
+ * The parser is strict on purpose. Every failure mode of a loose parser here
  * is "returns a SHORTER list than Lua has", which reads as a clean gate. It
  * throws instead, and `scripts/secret-gate.test.ts` asserts the parsed set
  * equals the set a real Lua VM reports from the same file.

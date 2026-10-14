@@ -1,7 +1,7 @@
 // The binder, as a self-contained script string, for a preview document that
 // cannot import anything.
 //
-// ── Why this exists at all, given HudBinder is right next door ──────────────
+// Why this exists at all, given HudBinder is right next door
 //
 // The in-game marketplace preview renders a fetched layout in
 // `<iframe srcdoc sandbox="allow-scripts">`. Without `allow-same-origin` that
@@ -11,7 +11,7 @@
 // to arrive as text, inside the document. That constraint is real and this file
 // does not argue with it.
 //
-// ── What this file fixes ────────────────────────────────────────────────────
+// What this file fixes
 //
 // It used to live inline in `PreviewOverlay.tsx` as a second, smaller binder
 // that handled five of the nine attributes and looked every key up FLAT —
@@ -25,7 +25,7 @@
 // `HudBinder` and compares the resulting DOM, so a grammar added to one and not
 // the other is a failing test rather than a silent divergence.
 //
-// ⚠️ `data-hud-btn` is deliberately NOT implemented. A preview is a still: there
+// `data-hud-btn` is deliberately NOT implemented. A preview is a still: there
 // is no engine behind it to act on a press, and wiring a click that does nothing
 // is worse than a button that plainly is not live.
 
@@ -46,7 +46,7 @@ export const HUD_PREVIEW_ATTRS = HUD_BINDING_ATTRS.filter((a) => a !== "data-hud
  *             before the binder ship one; it may register asynchronously, hence
  *             the retry.
  *
- *             ⚠️ It runs IN ADDITION to `bind()`, not instead of it, because that is
+ * It runs IN ADDITION to `bind()`, not instead of it, because that is
  *             what the runtime does: `HudPanel.tsx` calls `binder.update(state)` and
  *             then `window.__telsLayoutUpdate?.(state, root)` on the same tick, and
  *             a layout that ships an update function still carries `data-hud-*` on

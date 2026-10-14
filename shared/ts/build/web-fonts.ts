@@ -95,24 +95,33 @@ function buildHeader(opts: SelfHostWebFontsOptions): string {
     "   face rather than showing an error.",
     "",
     "   The unicode-range values are Google's own, kept verbatim so the browser still",
-    "   downloads only the subset a page needs rather than every face.",
+    "   downloads only the subset a page needs rather than every face."
   );
   if (opts.license) {
     lines.push(
       "",
       `   Fonts are ${opts.license}. Redistribution is permitted; the license file`,
-      "   must travel with the woff2 files — see the license alongside them.",
+      "   must travel with the woff2 files — see the license alongside them."
     );
   }
   if (opts.note) {
-    lines.push("", ...opts.note.trimEnd().split("\n").map((l) => `   ${l}`.trimEnd()));
+    lines.push(
+      "",
+      ...opts.note
+        .trimEnd()
+        .split("\n")
+        .map((l) => `   ${l}`.trimEnd())
+    );
   }
-  lines.push("   --------------------------------------------------------------------------- */", "");
+  lines.push(
+    "   --------------------------------------------------------------------------- */",
+    ""
+  );
   return `${lines.join("\n")}\n`;
 }
 
 export async function selfHostWebFonts(
-  opts: SelfHostWebFontsOptions,
+  opts: SelfHostWebFontsOptions
 ): Promise<SelfHostWebFontsResult> {
   const log = opts.log ?? ((m: string) => console.log(m));
   const want = new Set(opts.subsets ?? ["latin", "latin-ext"]);
@@ -120,7 +129,7 @@ export async function selfHostWebFonts(
   // Windows path.relative hands back backslashes that a browser reads as escapes.
   const href = (opts.hrefPrefix ?? path.relative(path.dirname(opts.outCss), opts.outFonts)).replace(
     /\\/g,
-    "/",
+    "/"
   );
 
   fs.mkdirSync(opts.outFonts, { recursive: true });
@@ -130,10 +139,9 @@ export async function selfHostWebFonts(
   let bytes = 0;
 
   for (const { family, query, slug } of opts.families) {
-    const res = await fetch(
-      `https://fonts.googleapis.com/css2?family=${query}&display=swap`,
-      { headers: { "User-Agent": UA } },
-    );
+    const res = await fetch(`https://fonts.googleapis.com/css2?family=${query}&display=swap`, {
+      headers: { "User-Agent": UA },
+    });
     if (!res.ok) throw new Error(`${family}: Google returned ${res.status} for "${query}"`);
     const css = await res.text();
 
@@ -167,7 +175,7 @@ export async function selfHostWebFonts(
           `  src: url("${href}/${name}") format("woff2");`,
           `  unicode-range: ${range};`,
           "}",
-        ].join("\n"),
+        ].join("\n")
       );
       kept++;
     }

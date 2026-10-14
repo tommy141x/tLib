@@ -2,46 +2,28 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 
 /**
- * Two build-time gates over a bundle's HAND-WRITTEN CSS.
+ * Two build-time gates over a bundle's HAND-WRITTEN CSS, which `check:classes`
+ * already walks but reads only for which names exist:
  *
- * `check:classes` already walks every `.css` file a bundle ships -- that is how
- * a `.tlib-nui-*` or `lcd-*` class avoids needing an allowlist entry. It reads
- * those files only to learn which names EXIST, though, and throws the rest
- * away. Both gates here are things that were measured in those same bytes and
- * that nothing could see:
+ *   1. A consumer re-declaring a class `shared/css/surface.css` already defines.
+ *      A local `.panel` or `.prop-input` in the same layer, further down the
+ *      sheet, silently wins -- so the shared recipe is present, inert, and
+ *      indistinguishable from absent.
+ *   2. A `box-shadow` with a nonzero BLUR. `NUI_BLOCKLIST` keeps `shadow-*`
+ *      UTILITIES out of every nui bundle and provably works, but it is an UnoCSS
+ *      blocklist and cannot see hand-written CSS -- which is exactly where the
+ *      blurred shadows survived.
  *
- *   1. A consumer re-declaring a class that `shared/css/surface.css` already
- *      defines. `surface.css` IS the surface recipe and the type scale, and
- *      from the commit that re-exported it out of `theme-tokens.css` every
- *      consumer gets it. A local `.panel` or `.prop-input` in the same layer,
- *      further down the sheet, silently wins -- so the shared recipe is present,
- *      inert, and indistinguishable from absent. Before the re-export the same
- *      names simply meant the two sheets had forked; after it they mean a
- *      shadowed rule. Either way the collision is the thing to see.
- *
- *   2. A `box-shadow` with a nonzero BLUR. `NUI_BLOCKLIST` in `uno-preset.ts`
- *      keeps `shadow-*` UTILITIES out of every nui bundle and provably works --
- *      there is not one `.shadow-` rule in any of the seven built sheets. It is
- *      an UnoCSS blocklist, though, so it cannot see a line of hand-written CSS,
- *      and hand-written CSS is exactly where the blurred shadows survived.
- *
- * Both are deliberately part of `runDeadClassCheck` rather than a new script:
- * that is the one gate every resource already runs in its own `verify`, built
- * from the consumer's own config, and it already has the file walk. A separate
- * script would have to be wired into seven `package.json` files by seven
- * different hands to reach the same bundles.
+ * Both are part of `runDeadClassCheck` rather than a new script because that is
+ * the one gate every resource already runs, and it already has the file walk.
  */
 
 /** `shared/css/surface.css`, located from this module rather than from a cwd. */
 export const SURFACE_CSS = resolve(import.meta.dir, "../../css/surface.css");
 
 /**
- * tLib's own `shared/css` directory.
- *
- * Every CSS file under it is skipped on the CONSUMER side of gate 1, because it
- * is the definition side: `surface.css` declaring `.panel` is not a collision
- * with itself, and tLib's `client/web` passes `../../shared/ts` as a `cssRoot`
- * so that the stylesheets declaring its `mp-*` hooks are in scope.
+ * tLib's own `shared/css` directory. Every CSS file under it is skipped on the
+ * CONSUMER side of gate 1, because it is the definition side.
  */
 const TLIB_SHARED_CSS = resolve(import.meta.dir, "../../css");
 
@@ -57,13 +39,6 @@ export interface CssRule {
 
 /**
  * Every style rule in a stylesheet, with at-rules descended into.
- *
- * A regex cannot do this: the rules that matter here are nested inside
- * `@layer components { ... }` (which is the whole point of surface.css), and
- * `.segment:hover:not([aria-pressed="true"]):not([aria-disabled="true"])`
- * carries both brackets and parentheses with a quoted `"true"` inside them. A
- * brace-counting walk that also tracks strings and comments is shorter than the
- * regex that would get those two right.
  */
 export function cssRules(css: string, file = "<string>"): CssRule[] {
   const rules: CssRule[] = [];
@@ -165,18 +140,11 @@ export function cssRules(css: string, file = "<string>"): CssRule[] {
 
 /**
  * The class names a selector list actually STYLES -- the rightmost compound of
- * each comma-separated selector, and nothing else.
- *
- * This distinction is the whole accuracy of gate 1. `.panel { … }` redefines
- * tLib's panel; `.panel .toolbar { … }` styles something INSIDE a panel and is
- * the normal, correct way for a consumer to use the shared recipe. Reading
- * every class in the selector would report the second as a collision, and a
- * gate that fires on correct code gets switched off.
- *
- * Pseudo-classes, pseudo-elements and attribute selectors are stripped from the
- * compound first, so `.prop-input:focus-visible` and
- * `.list-row[data-state="open"]` both resolve to the class they qualify -- a
- * consumer overriding only the focus state of `.prop-input` has still forked it.
+ * each comma-separated selector, and nothing else. This distinction is the whole
+ * accuracy of gate 1: `.panel { }` redefines tLib's panel, while
+ * `.panel .toolbar { }` styles something INSIDE a panel and is the correct way
+ * to use the shared recipe. Pseudo-classes and attribute selectors are stripped
+ * from the compound first.
  */
 export function subjectClasses(selectorList: string): string[] {
   const out = new Set<string>();
@@ -224,27 +192,19 @@ function lastCompound(selector: string): string {
   return selector;
 }
 
+/**
+ * The classes `shared/css/surface.css` declares -- read from the file rather
+ * than listed here, because a list is the failure mode this module is about. A
+ * subject of two classes contributes NEITHER name: harvesting both put bare
+ * `selected` into the guarded set, which then reported an unrelated consumer
+ * class. A state modifier only has meaning compounded onto what it modifies.
+ */
+
+/** Memoised, because every consumer file re-asks and the answer cannot change mid-run. */
 let surfaceNames: Set<string> | undefined;
 
 /**
  * The classes `shared/css/surface.css` declares.
- *
- * Read from the file rather than listed here, because a list is the failure
- * mode this whole module is about: the seven names in the audit that found this
- * (`.panel`, `.prop-input`, `.section-label`, `.list-row`, `.segment`,
- * `.field-hint`, `.row-action`) are already eight -- `.segment-track` was in
- * surface.css and not in the list. A name added to surface.css tomorrow is
- * guarded with no edit here.
- *
- * ── Only a LONE class counts ──
- *
- * A subject of two classes contributes neither. The one case in surface.css is
- * `.list-row.selected`, and harvesting both put bare `selected` into the
- * guarded set -- which then reported tELS's own unrelated `.selected`, a
- * generic state word that surface.css never styles on its own. A state modifier
- * only has meaning compounded onto the thing it modifies, so a consumer
- * declaring `.selected` has not forked anything. Measured on the first sweep of
- * all nine bundles: it was the only false positive in the whole corpus.
  */
 export function surfaceClassNames(): Set<string> {
   if (surfaceNames) return surfaceNames;
@@ -279,15 +239,6 @@ export interface CssContractOptions {
   /** Directories to walk for `.css`, relative to cwd or absolute. */
   cssRoots: string[];
   /**
-   * Surface class names this bundle is allowed to re-declare BARE. Each entry
-   * needs a reason at the call site, and the gate is meant to be satisfied by
-   * deleting the local rule rather than by listing it.
-   *
-   * It should be empty almost everywhere: a scoped override
-   * (`.my-sidebar .prop-input`) and a compounded variant (`.panel.compact`) are
-   * not collisions and need no entry — see `redeclaredSurfaceClass`. If a
-   * consumer is accumulating entries here, the rule being guarded is wrong, not
-   * the consumer.
    */
   allowSurfaceCollisions?: string[];
   /** Selectors whose blurred shadow is intentional. Same rule: none today. */
@@ -331,35 +282,6 @@ const rel = (file: string): string => {
  * Exactly one name, and only when the selector is a single compound built on a
  * single class. `.panel`, `.panel:hover` and `.prop-input[data-state="open"]`
  * qualify; everything else returns nothing.
- *
- * ── Why an ancestor disqualifies it ──
- *
- * `.workspace-content > .panel { min-height: … }` is not a fork of `.panel`. It
- * is a local constraint on where one particular panel sits, under a selector
- * scoped to one resource's own markup, and it is how shared CSS is SUPPOSED to be
- * adjusted. The first version of this gate took the rightmost compound whatever
- * preceded it, and the first consumer to meet it had two such rules
- * (`.workspace-content > .panel` and `.workspace-light-sidebar .prop-input`,
- * both a lone `min-height`) and had to allowlist them. That is the failure mode
- * to design out rather than document: a gate that fires on correct CSS gets an
- * allowlist per consumer, and an allowlist per consumer is a gate nobody obeys.
- *
- * Nothing the audit actually measured is lost. tELS's real forks were all bare —
- * `.panel`, `.prop-input`, `.prop-input:hover`, `.prop-input:focus`,
- * `.section-label` — and a bare redeclaration is the only form that silently
- * replaces the shared rule wholesale for every element that carries the class.
- *
- * ── Why a second class also disqualifies it ──
- *
- * `.panel.compact { … }` adds a variant to the shared class; it does not replace
- * it. This is the same rule `surfaceClassNames()` applies on the other side,
- * where `.list-row.selected` contributes neither name, and the two sides have to
- * agree or the gate means different things at each end.
- *
- * A scoped or compounded rule CAN still re-skin the whole recipe, and this gate
- * will not catch that. It is the price of not firing on the normal case, and it
- * is a smaller problem: a scope is visible in the selector, so a reader can see
- * what it applies to. A bare redeclaration is invisible.
  */
 function redeclaredSurfaceClass(selector: string, surface: Set<string>): string | undefined {
   // One selector only -- a list is handled by the caller, since each entry in it
@@ -395,27 +317,6 @@ export function findSurfaceCollisions(options: CssContractOptions): SurfaceColli
 /**
  * A `box-shadow` whose OFFSET and SPREAD may be anything but whose BLUR must be
  * zero.
- *
- * Blur is the part CEF cannot composite: a blurred shadow over a moving 3D scene
- * costs a compositor pass every frame, which is the measurement written up at
- * `shared/css/surface.css:52-58`. A zero-blur shadow is hard-edged, composites
- * like a border, and is load-bearing in four places in tLib that this gate must
- * not fire on:
- *
- *   menu.css:905       `inset 3px 0 currentColor`        a left edge bar
- *   menu.css:941       `inset 0 0 0 999px #8882`         a flat tint overlay
- *   nui.css:221,224    `inset 0 0 0 999px rgb(…)`        the same, hover/active
- *   global.css:127,136 `0 0 0 2px hsl(var(--background))` a slider-thumb halo
- *
- * The audit this gate came from proposed `box-shadow:[^;]*[1-9][0-9]*px [1-9]`.
- * Checked against the corpus, that regex is sound on everything tLib ships --
- * all four pass it -- but it UNDER-fires on the one that matters most: tELS's
- * `inset 0 0 8px rgba(255,255,255,.2)` is a real blur and the regex needs a
- * digit after `8px `, where a letter stands. It also over-fires in principle,
- * on any hard-edged two-offset shadow (`inset 2px 4px #000` matches `4px` after
- * `2px `), which nothing in the corpus happens to use. Parsing the length list
- * and testing the third value gets both right; both divergences are asserted in
- * `scripts/css-contract-control.ts` so this paragraph cannot quietly go stale.
  */
 const LENGTH = /^[+-]?(?:\d*\.)?\d+(?:px|r?em|v[wh]|%|pt|ch|ex|q|cm|mm|in|pc)?$/i;
 

@@ -149,7 +149,14 @@ function applyListener(ctx: AudioContext, pose: ListenerPose): void {
   }
   const legacy = l as unknown as {
     setPosition?: (x: number, y: number, z: number) => void;
-    setOrientation?: (fx: number, fy: number, fz: number, ux: number, uy: number, uz: number) => void;
+    setOrientation?: (
+      fx: number,
+      fy: number,
+      fz: number,
+      ux: number,
+      uy: number,
+      uz: number
+    ) => void;
   };
   legacy.setPosition?.(pose.position.x, pose.position.y, pose.position.z);
   legacy.setOrientation?.(pose.forward.x, pose.forward.y, pose.forward.z, up.x, up.y, up.z);
@@ -255,7 +262,8 @@ export class PositionalAudioField {
     const ctx = this.ctx;
     if (ctx === null) return;
     for (const e of this.emitters.values()) {
-      if (e.tone) e.tone.gain.gain.setTargetAtTime(e.tone.volume * this.volume, ctx.currentTime, 0.05);
+      if (e.tone)
+        e.tone.gain.gain.setTargetAtTime(e.tone.volume * this.volume, ctx.currentTime, 0.05);
     }
   }
 
@@ -359,7 +367,8 @@ export class PositionalAudioField {
       return;
     }
     const intervalMs = Math.max(MIN_CADENCE_MS, finite(cadence.intervalMs, MIN_CADENCE_MS));
-    const changed = e.cadence === null || e.cadence.url !== cadence.url || e.cadence.intervalMs !== intervalMs;
+    const changed =
+      e.cadence === null || e.cadence.url !== cadence.url || e.cadence.intervalMs !== intervalMs;
     e.cadence = { url: cadence.url, intervalMs, volume: finite(cadence.volume, 1) };
     // Fire the first blip immediately on a change rather than after one whole
     // interval: a detector that has just alarmed should be heard now, and at one
@@ -386,7 +395,8 @@ export class PositionalAudioField {
       return;
     }
     if (this.outOfRange(e)) {
-      if (e.tone !== null && ctx !== null) e.tone.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      if (e.tone !== null && ctx !== null)
+        e.tone.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
       return;
     }
     const live = this.ensureContext();
@@ -477,7 +487,7 @@ export class PositionalAudioField {
     void ctx?.close().catch(() => {});
   }
 
-  // ── internals ──
+  // internals
 
   /**
    * The context, created on first real need.

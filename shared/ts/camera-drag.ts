@@ -1,7 +1,7 @@
 /**
  * Pointer-driven camera drag for NUI editors.
  *
- * ── Why this exists ─────────────────────────────────────────────────────────
+ * Why this exists
  *
  * An in-game editor that shows the NUI cursor holds `SetNuiFocus(true, true)`.
  * In that state **CEF owns pointer movement**. `SetNuiFocusKeepInput(true)` keeps
@@ -20,7 +20,7 @@
  * only correct source of the delta, and this module is the one implementation of
  * that — tVDJ's editor proved the approach in CEF 103 before it was lifted here.
  *
- * ── Contract ────────────────────────────────────────────────────────────────
+ * Contract
  *
  * - `movementX/Y`, not `clientX/Y` deltas: a client-coordinate delta stalls the
  *   instant the cursor reaches a screen edge, mid-drag.

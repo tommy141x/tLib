@@ -1,6 +1,6 @@
 // Reading what a layout declares and what it binds, out of its `ui.html` SOURCE.
 //
-// ── Why a text scanner exists next to HudBinder ─────────────────────────────
+// Why a text scanner exists next to HudBinder
 //
 // `HudBinder` answers the same question against a live DOM, which means a
 // browser. This one is regex over the source text, so it runs under `bun test`
@@ -11,7 +11,7 @@
 // error anywhere. Comparing what a layout binds against what the engine
 // produces turns that into a build failure instead of a window that never lights.
 //
-// ── Why it is here rather than in each resource ─────────────────────────────
+// Why it is here rather than in each resource
 //
 // Three copies existed: tRadar's (complete), tDetector's layout lint (comments
 // only) and tDetector's screenshot tool. Only tRadar's stripped `<style>`, and
@@ -69,7 +69,7 @@ export interface LayoutScan {
 /**
  * Drop everything that is not live markup.
  *
- * ⚠️ All three removals are load-bearing, and dropping any one of them makes the
+ * All three removals are load-bearing, and dropping any one of them makes the
  * lint pass on bindings that do not exist:
  *
  * - **Comments.** Every layout opens with a block listing the keys it consumes,
@@ -149,7 +149,7 @@ export function scanLayout(html: string, opts: LayoutScanOptions): LayoutScan {
 
     for (const name of PREFIXED_ATTRS) {
       const value = attrs.get(name);
-      // ⚠️ A colon-less `eq`/`attr` is malformed and HudBinder skips it outright.
+      // A colon-less `eq`/`attr` is malformed and HudBinder skips it outright.
       // Reporting the whole string as a key here would make the lint fail with a
       // confusing "unknown key" rather than the real complaint.
       if (value?.includes(":")) bindings.add(beforeColon(value));

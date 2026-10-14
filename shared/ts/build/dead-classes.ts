@@ -11,30 +11,20 @@ import {
 /**
  * Finds utility class names that generate no CSS at all.
  *
- * This exists because UnoCSS has no failure mode for a class it does not
- * recognise -- it simply emits nothing, so a typo, a preset-only utility or a
- * Tailwind-v4 spelling used under the wrong preset looks completely normal in
- * source and silently does nothing in the browser. Measured: `bg-linear-to-r`
- * (Wind4-only) left tLib's colour-picker hue track with no gradient, and 271
- * Tailwind-v4 spellings across the four Wind4 web projects meant none of their
- * form primitives had any invalid-state styling.
+ * UnoCSS has no failure mode for a class it does not recognise — it emits
+ * nothing, so a typo or a wrong-preset spelling looks normal in source and does
+ * nothing in the browser. Measured: `bg-linear-to-r` (Wind4-only) left tLib's
+ * colour-picker hue track with no gradient, and 271 Tailwind-v4 spellings across
+ * the four Wind4 projects meant no form primitive had invalid-state styling.
  *
- * The harvesting here is tWeb's `check-uno-classes.ts`, which predates this
- * module and was the better implementation of the same idea -- `classList`
- * keys, `${...}` interpolations, cva variant keys and the unambiguous/composed
- * split are all its work, each with a bug behind it. This module generalises it
- * so the nine other bundles stop going unchecked, and adds one thing it wanted:
- * class names are read out of the project's own CSS rather than listed by hand.
- * Its allowlist had two blocks its own comments admit had gone stale, which is
- * the failure mode a hand-kept list always has.
+ * Class names are read out of the project's own CSS rather than from a hand-kept
+ * allowlist, which is the part that always goes stale.
  */
 export interface DeadClassOptions {
   /**
-   * The consuming project's own generator, already built from its own
-   * uno.config.ts. It is passed in rather than constructed here so the check
-   * runs against the exact preset and version that project ships -- the whole
-   * point is to catch preset-specific spellings, which a generator built from
-   * some other config would get wrong.
+   * The consuming project's own generator. Passed in rather than built here so
+   * the check runs against the exact preset and version that project ships —
+   * catching preset-specific spellings is the whole point.
    */
   uno: { parseToken(token: string): Promise<unknown> };
   /** Directories to scan for .ts/.tsx sources, relative to cwd or absolute. */
@@ -69,22 +59,17 @@ export interface DeadClass {
 }
 
 /**
- * `group` and `peer` are markers, not utilities: they exist so `group-hover:`
- * and `peer-checked:` have something to bind to, and they correctly generate no
- * CSS of their own. The named form `group/drawer` is the same marker, scoped so
- * a nested group can be addressed unambiguously -- listing each name by hand
- * would be a checker that punishes the pattern it should be neutral about.
+ * Markers, not utilities: they exist so `group-hover:` and `peer-checked:` have
+ * something to bind to, and correctly generate no CSS of their own. `group/drawer`
+ * is the same marker, scoped for nesting.
  */
 const MARKER_CLASSES = new Set(["group", "peer", "dark"]);
 const NAMED_MARKER = /^(?:group|peer)\/[\w-]+$/;
 
 /**
- * Looks like a utility rather than an ordinary word.
- *
- * Applied only to tokens from a COMPOSED region, where not every string is a
- * class: `cn(buttonVariants({ size: "lg" }), "px-0")` contributes both. A real
- * typo always carries one of these marks; `lg`, `solid` and `base` do not.
- * Tokens from a plain `class="..."` are unambiguous and skip this filter, so a
+ * Looks like a utility rather than an ordinary word. Applied only to tokens from a
+ * COMPOSED region, where not every string is a class — a real typo carries one of
+ * these marks; `lg` and `base` do not. Plain `class="…"` skips this filter, so a
  * misspelt bare word there is still caught.
  */
 const REPORTABLE = /[-:[/.]/;
@@ -100,14 +85,10 @@ const CSS_CLASS_SELECTOR = /\.(-?[_a-zA-Z][\w-]*)/g;
 const CLASS_ATTR_OPEN = /class\s*[:=]\s*\{?\s*(["'`])/g;
 
 /**
- * The value of every `class=` attribute, scanned to its real terminator.
- *
- * A template literal cannot be matched with `` `([^`]*)` ``: its `${...}` may
- * contain a template of its own, and the inner one's backtick closes the match
- * early. Measured on tRadio's DisplayLine --
- * ``class={`display-container${props.class ? ` ${props.class}` : ""}`}`` -- the
- * capture ended mid-expression and the report named
- * `display-container${props.class`, which is not a class anywhere in the source.
+ * The value of every `class=` attribute, scanned to its real terminator. A
+ * template literal cannot be matched with `` `([^`]*)` ``: a nested `${…}` may
+ * contain a template of its own whose backtick closes the match early, and the
+ * report then names a token that is nowhere in the source.
  */
 function classAttrValues(code: string): string[] {
   const values: string[] = [];
@@ -159,10 +140,9 @@ function classAttrValues(code: string): string[] {
 const NESTED_STRING = /["']([^"']*)["']/g;
 
 /**
- * Solid's other way of setting classes: `classList={{ "bg-accent": cond }}`.
- * The keys are class names and are invisible to CLASS_ATTR -- which is exactly
- * the blind spot a conditional style hides in, since the branch not taken in
- * the reviewed screenshot is the one whose typo nobody sees.
+ * Solid's other way of setting classes: `classList={{ "bg-accent": cond }}`. The
+ * keys are class names and are invisible to CLASS_ATTR — the blind spot a
+ * conditional style hides in, since the untaken branch is the one nobody sees.
  */
 const CLASS_LIST_KEY = /["'`]([^"'`]+)["'`]\s*:/g;
 
@@ -173,54 +153,36 @@ const CLASS_LIST_KEY = /["'`]([^"'`]+)["'`]\s*:/g;
  * reused classes live and a silent typo costs the most.
  */
 const REGIONS: { opener: RegExp; open: string; close: string; nestedObjects?: "arguments" }[] = [
-  // In a `class={...}` the only nested object literal is an argument: either a
-  // recipe's variant selection, `buttonVariants({ size: "icon-sm" })`, or the
-  // clsx conditional form, `cn({ "is-open": open() })` -- whose values are
-  // booleans and whose keys `STRING_OR_KEY` already skips. Neither holds a class
-  // name, so the whole literal is blanked before harvesting. Without this,
-  // `cn(buttonVariants({ variant: "ghost", size: "icon-md" }), "px-0")` reported
-  // `icon-md`, a variant name that is correct as written and generates no CSS by
-  // design. Measured: six such findings across solid-starter and tg-new.
+  // In a `class={...}` a nested object is always an argument — a variant selection
+  // or the clsx conditional form — and holds no class names, so it is blanked
+  // first. Without it, a variant name like `icon-md` is reported as dead.
   { opener: /class\s*=\s*\{/g, open: "{", close: "}", nestedObjects: "arguments" },
   // NOT applied to `cva(...)`: there the nested objects ARE the recipe, and
-  // `variants: { size: { sm: "h-6" } }` is where most of a component's class
-  // names live.
+  // `variants: { size: { sm: "h-6" } }` is where most class names live.
   { opener: /\bcva\s*\(/g, open: "(", close: ")" },
 ];
 
 /**
  * A string immediately followed by `:` is a cva variant KEY, not a class.
  *
- * The body admits the other two quote characters. Restricting it to
- * `[^"'\`\\]` meant a string containing a different quote could never be matched
- * whole, so the scan resynchronised on the INNER quote and handed over its
- * contents: `"[&_svg:not([class*='size-'])]:size-4"` -- the shadcn idiom for
- * "unless the caller already sized the icon" -- reported a bare `size-`, and the
- * same shape produced `h-`, `w-`, `flex-` and `text-`. The apostrophe case the
- * old class was written for (`label: "don't"`) is handled better by matching the
- * whole string too: `don't` carries no utility punctuation and is dropped, and
- * the tokens after it are no longer swallowed.
+ * The body deliberately admits the other quote characters: restricting it meant a
+ * string containing a different quote never matched whole, so the scan
+ * resynchronised on the inner quote and handed over its contents — which is how
+ * `[&_svg:not([class*='size-'])]:size-4` came to report a bare `size-`.
  */
 const STRING_OR_KEY = /(["'`])((?:[^\\]|\\.)*?)\1(\s*:)?/g;
 
 /**
- * Stands in for a removed `${...}`. Not whitespace, so it stays fused to
- * whatever it touched: `home-page-indicator-${props.direction}` collapses to one
- * token carrying the marker rather than to the prefix `home-page-indicator-`,
- * and `isClassShaped` then drops it. A partially-known class name is not a
- * finding -- the class the browser sees is decided at runtime and this check
- * cannot know it.
+ * Stands in for a removed `${...}`. Not whitespace, so it stays fused to whatever
+ * it touched and `isClassShaped` then drops the whole token: a partially-known
+ * class name is not a finding, because the rendered class is decided at runtime.
  */
 const INTERPOLATION = "\u0000";
 
 /**
  * Replaces every `${...}` with INTERPOLATION, handing each expression to `onExpr`.
- *
- * Brace-matched rather than `[^}]*`, because an expression regularly contains
- * braces of its own. Measured: ``class={`display-container${props.class ? `
- * ${props.class}` : ""}`}`` ends its match at the INNER `}`, so the remaining
- * `` ` : ""}`` fused onto the prefix and the report named a token that is not in
- * the source. That is the shape of finding that gets a check switched off.
+ * Brace-matched rather than `[^}]*`, since an expression regularly contains braces
+ * of its own and stopping at the inner `}` reports tokens absent from the source.
  */
 function replaceInterpolations(value: string, onExpr: (expr: string) => void): string {
   let out = "";
@@ -248,15 +210,10 @@ function replaceInterpolations(value: string, onExpr: (expr: string) => void): s
 }
 
 /**
- * Blanks every object literal nested inside a `class={...}` region.
- *
- * The region's own outermost `{` is the JSX expression container and is kept;
- * anything braced inside it is an argument object -- a recipe's variant
- * selection or clsx's conditional form -- and holds no class names. Blanked
- * with spaces rather than removed so nothing fuses across the hole.
- *
- * Strings are skipped while scanning, so a `${...}` inside a template literal
- * is not mistaken for an object and blanked out from under `classAttrValues`.
+ * Blanks every object literal nested inside a `class={...}` region. The outermost
+ * `{` is the JSX expression container and is kept. Blanked with spaces rather than
+ * removed, so nothing fuses across the hole; strings are skipped while scanning so
+ * a template's `${…}` is not mistaken for an object.
  */
 function blankNestedObjects(region: string): string {
   const out = region.split("");
@@ -293,14 +250,10 @@ function blankNestedObjects(region: string): string {
 }
 
 /**
- * Blanks the body of a `cva(...)` recipe's `defaultVariants` object.
- *
- * Every other object in a recipe holds class names; this one holds variant
- * NAMES, and the shadcn convention hyphenates them -- `align: "inline-start"`,
- * `placement: "top-end"` -- which makes them indistinguishable from a utility by
- * shape. Both were reported against solid-starter and tg-new, and both are
- * correct as written. Matched by its reserved key rather than by position
- * because it is the only object in the recipe with that meaning.
+ * Blanks the body of a `cva(...)` recipe's `defaultVariants` object. Every other
+ * object in a recipe holds class names; this one holds variant NAMES, which the
+ * shadcn convention hyphenates (`placement: "top-end"`), making them
+ * indistinguishable from a utility by shape.
  */
 function blankDefaultVariants(region: string): string {
   const out = region.split("");
@@ -320,15 +273,10 @@ function blankDefaultVariants(region: string): string {
 }
 
 /**
- * Blanks a string literal that is an operand of a comparison.
- *
- * `cn("transition-shadow", phase() === "typing-email" && activeRing)` puts a
- * state-machine member inside a class region, and `"typing-email"` is
- * kebab-case, so it is reported as a class that generates no CSS. It is a union
- * member declared as `type Phase = "typing-email" | ...` a few lines up. Two of
- * them in solid-starter, the same two in tg-new. The comparison is what proves
- * the literal is a value rather than a class name, so the operator is matched
- * rather than the literal's shape.
+ * Blanks a string literal that is an operand of a comparison. A kebab-case union
+ * member compared inside a class region — `phase() === "typing-email"` — is
+ * otherwise reported as a dead class. The comparison is what proves the literal is
+ * a value, so the operator is matched rather than the literal's shape.
  */
 function blankComparisonOperands(region: string): string {
   const out = region.split("");
@@ -339,10 +287,9 @@ function blankComparisonOperands(region: string): string {
       i++;
       continue;
     }
-    // Walk the literal rather than matching it: a regex body that admits the
-    // other quote characters -- which this module's string matcher has to, so
-    // that `"don't"` matches whole -- backtracks across neighbouring literals
-    // to reach an operator, and blanks every class between them.
+    // Walked rather than regex-matched: a body admitting the other quote
+    // characters backtracks across neighbouring literals to reach an operator, and
+    // blanks every class between them.
     const start = i;
     i++;
     while (i < region.length && region[i] !== quote) i += region[i] === "\\" ? 2 : 1;
@@ -394,10 +341,9 @@ function splitTopLevel(value: string): string[] {
   let current = "";
   for (const ch of value) {
     if (ch === "[" || ch === "(") depth++;
-    // Clamped at zero. Harvesting can hand this an unbalanced fragment, and an
-    // unclamped `]` drove depth negative so every later space counted as
-    // "inside brackets" -- the rest of the fragment then fused into one giant
-    // pseudo-token like `],\n        destructive: [`.
+    // Clamped: harvesting can hand this an unbalanced fragment, and negative depth
+    // makes every later space read as "inside brackets", fusing the rest into one
+    // giant pseudo-token.
     else if (ch === "]" || ch === ")") depth = Math.max(0, depth - 1);
     if (depth === 0 && /\s/.test(ch)) {
       if (current) parts.push(current);
@@ -411,20 +357,14 @@ function splitTopLevel(value: string): string[] {
 }
 
 /**
- * Expands `hover:(bg-x text-y)` into `hover:bg-x hover:text-y`.
+ * Expands `hover:(bg-x text-y)` into `hover:bg-x hover:text-y`. Every project runs
+ * transformerVariantGroup, so the syntax is valid in source but is never handed to
+ * the generator; splitting on whitespace yields fragments that are dead by
+ * construction, which was the largest source of noise in this report.
  *
- * Every project here runs transformerVariantGroup, so this syntax is valid in
- * source but is not a class name the generator is ever handed. Splitting on
- * whitespace instead produces fragments like `hover:(bg-x` and `text-y)`, dead
- * by construction, which was the single largest source of noise in this report.
- *
- * UnoCSS exports `expandVariantGroup` and this deliberately does not use it.
- * Measured against it on seven cases, the two agree on six; on the seventh it
- * rewrites `min-w-(--reference-width)` -- a Tailwind-v4 spelling that is one of
- * the exact bugs this module is for -- into `min-w---reference-width`. That is
- * faithful to what the transformer does at build time, but it is the wrong
- * thing to REPORT: the token the author has to find and fix is the one they
- * typed, not a mangling of it that appears nowhere in their source.
+ * Deliberately not UnoCSS's own `expandVariantGroup`: it rewrites
+ * `min-w-(--reference-width)` into `min-w---reference-width`, which is faithful to
+ * the build but reports a token that appears nowhere in the author's source.
  */
 export function expandVariantGroups(value: string): string {
   let out = "";
@@ -437,9 +377,8 @@ export function expandVariantGroups(value: string): string {
     // Walk back over the variant prefix, e.g. the `lg:` of `lg:(...)`.
     let start = i - 1;
     while (start > 0 && GROUP_PREFIX_CHAR.test(value[start - 1] ?? "")) start--;
-    // A balanced scan, not `[^()]*` -- the group body regularly contains
-    // parens, and `lg:(grid-cols-[minmax(0,13rem)_...] justify-center)` was
-    // being cut at the first `)` inside minmax, reporting both halves as dead.
+    // Balanced, not `[^()]*`: a group body regularly contains parens, and cutting
+    // at the first `)` inside a `minmax(...)` reports both halves as dead.
     let depth = 0;
     let end = i;
     for (; end < value.length; end++) {
@@ -462,25 +401,19 @@ export function expandVariantGroups(value: string): string {
 }
 
 /**
- * Rejects fragments that cannot be a class name.
- *
- * Harvesting is regex-based and will occasionally pair a closing quote with the
- * next opening one, handing over the source in between -- `],\n destructive: [`
- * and bare `[` both reached the report that way. A class name has balanced
- * brackets, no whitespace, and starts with a letter, a `!` or the `[` of an
- * arbitrary variant like `[&_svg]:h-lh`.
+ * Rejects fragments that cannot be a class name. Harvesting is regex-based and
+ * will occasionally pair a closing quote with the next opening one, handing over
+ * the source in between. A class name has balanced brackets, no whitespace, and
+ * starts with a letter, a `!` or the `[` of a variant like `[&_svg]:h-lh`.
  */
 function isClassShaped(token: string): boolean {
   if (!token || /\s/.test(token)) return false;
   // Part of the name is computed, so the rendered class is unknowable here.
   if (token.includes(INTERPOLATION)) return false;
-  // A surviving `${` means the fragment was cut mid-expression by whichever
-  // matcher produced it -- the region scan reads template literals with a
-  // non-greedy regex and stops at a nested backtick. Source, not a class.
+  // A surviving `${` means the fragment was cut mid-expression: source, not a class.
   if (token.includes("${")) return false;
-  // A bare variant with nothing to apply it to. An apostrophe inside a string
-  // (`label: "don't"`) makes the quote matcher pair across it and hand over the
-  // source in between, which arrives as fragments like `more:` and `y:`.
+  // A bare variant with nothing to apply it to — the residue of a quote matcher
+  // pairing across an apostrophe inside a string.
   if (token.endsWith(":")) return false;
   let depth = 0;
   for (const ch of token) {
@@ -491,11 +424,9 @@ function isClassShaped(token: string): boolean {
     }
   }
   if (depth !== 0) return false;
-  // The leading `*:` / `**:` of Tailwind's child and descendant variants is the
-  // one class-legal opener that is not a letter, a `!`, a `[` or an `@`. Without
-  // it `**:[svg]:text-destructive!` was dropped before it could be checked --
-  // and it IS dead under presetWind4, while its `dark:`-prefixed twin on the
-  // next line was reported, so the file read as half-broken for no reason.
+  // The leading `*:` / `**:` of Tailwind's child and descendant variants is the one
+  // class-legal opener that is not a letter, `!`, `[` or `@`. Without it such a
+  // token is dropped before it can be checked, while its `dark:` twin is reported.
   return /^!?(?:\*{1,2}:)?[a-zA-Z[@]/.test(token);
 }
 
@@ -553,15 +484,10 @@ export async function findDeadClasses(options: DeadClassOptions): Promise<DeadCl
       const loose = new Set<string>();
 
       for (const raw of classAttrValues(code)) {
-        // `${...}` holds an expression, not a class -- but a string literal
-        // inside it (a fallback like `props.class ?? "bg-accent"`) is a class,
-        // so harvest those before dropping the interpolation.
-        //
-        // They go to `loose`, not `tokens`: an interpolation is just as likely
-        // to compare against a non-class string, and
-        // `${configIssue() === "channel_invalid_coverage_required" ...}` in
-        // tRadio's PageZones put exactly that in the report. Requiring utility
-        // punctuation costs only a bare-word fallback like `?? "flex"`.
+        // A string literal inside a `${...}` can be a real class (`?? "bg-accent"`),
+        // so harvest those before dropping the interpolation. They go to `loose`
+        // because an interpolation is just as likely to compare against a non-class
+        // string; the cost is only a bare-word fallback like `?? "flex"`.
         const stripped = replaceInterpolations(raw, (expr) => {
           for (const s of expr.matchAll(NESTED_STRING)) {
             for (const t of tokenise(s[1] ?? "")) loose.add(t);
@@ -622,44 +548,13 @@ export async function findDeadClasses(options: DeadClassOptions): Promise<DeadCl
 }
 
 /**
- * The whole `check:classes` script: find, report, set the exit status.
+ * The whole `check:classes` script: find, report, set the exit status. Shared so
+ * that adding a count or a machine-readable mode is one edit rather than seven.
  *
- * ── Why this is here and not copied into each bundle ──
- *
- * UnoCSS has no failure mode for a class it does not recognise — it emits
- * nothing, so a typo, or a spelling from the *other* preset, reads as perfectly
- * normal source and silently does nothing in the browser. That is what the
- * check exists for, and the three lines that turn `findDeadClasses` into a
- * usable gate (print, then exit non-zero on a finding) were copied verbatim
- * into seven bundles — five of them byte-identical files. Adding anything to
- * the protocol, a count or a machine-readable mode, meant seven edits.
- *
- * ── Why the caller constructs the generator ──
- *
- * `uno` is taken as an argument rather than built from a config here, and that
- * is load-bearing rather than tidiness. The point of the check is that it
- * reflects *the preset this bundle actually ships*: a generator built against
- * tLib's own `unocss` would answer for tLib's resolved version and tLib's
- * presets, not the consumer's. So `createGenerator` stays in the consumer,
- * beside the `uno.config.ts` it reads, and only the protocol is shared.
- *
- * `roots` defaults to `["src"]` because every caller passes exactly that; the
- * bundles that need more — tLib reaches into `shared/ts` for the stylesheets
- * that define its `mp-*` hooks, tRadio's dispatch panel excludes the theme
- * SDK's uncompiled starter template — pass their own options and explain why
- * at the call site, which is where that reasoning belongs.
- *
- * ── The two CSS-contract gates that ride along ──
- *
- * This is also where `findSurfaceCollisions` and `findBlurredShadows` run, and
- * the reason is reach rather than tidiness: `check:classes` is the ONE gate
- * every resource already has in its own `verify`, and it already walks exactly
- * the files those two read. Adding them here gates seven bundles with no edit
- * in any of them. See the header of `css-contract.ts` for what each catches and
- * why neither was visible before.
- *
- * All three run before anything exits, so one run reports everything rather
- * than making a consumer fix the first class of problem to discover the second.
+ * `findSurfaceCollisions` and `findBlurredShadows` ride along because this is the
+ * one gate every resource already has in its `verify`, and it already walks the
+ * files they read. All three run before anything exits, so one run reports
+ * everything instead of hiding the second problem behind the first.
  */
 export async function runDeadClassCheck(
   options: Omit<DeadClassOptions, "roots"> &

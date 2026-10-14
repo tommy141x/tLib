@@ -25,7 +25,7 @@
  * EXTRA_FILES entry, a post-staging step, a hand-copied file) sails past them.
  * This asserts the artifact.
  *
- * ⚠️ Matched by BASENAME at any depth, not just at the staged root. tCAD's
+ * Matched by BASENAME at any depth, not just at the staged root. tCAD's
  * `.gitignore` already found the sharp edge: the temp file is
  * `data.json.tmp-<pid>`, so the bare `data.json.tmp` that preceded it matched
  * nothing that is ever created — MEASURED with `git check-ignore -v`. Depth
@@ -46,7 +46,7 @@
  * `tlib_modules` is therefore completely silent — it is not a failed load, it is
  * not a load at all.
  *
- * ### ⛔ What this does NOT check, and why — read before adding it
+ * ### What this does NOT check, and why — read before adding it
  *
  * **The undeclared direction.** `tlib.<name>` used without declaring it is NOT a
  * bug: lazy loading is legal and is what most consumers rely on. It is only a
@@ -58,7 +58,7 @@
  * one. Stated, not silently omitted.
  *
  * Exit codes for both CLIs: 0 pass, 1 a finding, 2 the gate could not run.
- * ⚠️ Exit 2 is NOT a pass.
+ * Exit 2 is NOT a pass.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -74,7 +74,7 @@ export interface RuntimeStateFinding {
   /**
    * Reported, but does not fail the gate unless `--strict`.
    *
-   * ⚠️ Exactly one rule is soft — `R-MODULE-UNUSED` — and it is soft because it
+   * Exactly one rule is soft — `R-MODULE-UNUSED` — and it is soft because it
    * cannot distinguish a stale declaration from a legitimate one. A consumer may
    * declare a module it never names itself, because a tLib module it DOES use
    * needs that one loaded eagerly: tDetector declares `assets` and never calls
@@ -94,7 +94,7 @@ export function failing(findings: RuntimeStateFinding[], strict = false): Runtim
   return findings.filter((f) => strict || !f.soft);
 }
 
-// ── 1. The staged tree ───────────────────────────────────────────────────────
+// 1. The staged tree
 
 /**
  * Basenames a release may never contain, with the reason travelling with the
@@ -133,12 +133,30 @@ export const FORBIDDEN_RUNTIME_STATE: Array<{ rule: string; match: RegExp; why: 
   },
   {
     rule: "R-DATA-TMP",
-    // ⚠️ The suffix is load-bearing: the real name is `data.json.tmp-<pid>`.
+    // The suffix is load-bearing: the real name is `data.json.tmp-<pid>`.
     match: /^data\.json\.tmp(-.*)?$/,
     why:
       "a half-written document. tCAD's writer is tmp + fsync + rename, so a crash between " +
       "openSync and renameSync leaves one behind holding a FULL COPY of the data.",
   },
+  {
+    rule: "R-TELEMETRY-CONSENT",
+    match: /^telemetry-consent\.json$/,
+    why:
+      "the operator's own answer about diagnostics. Shipping one hands every " +
+      "customer somebody else's decision — and in the direction that matters, since the " +
+      "default is off and a stored `true` would silently opt an install in. It is written " +
+      "beside the resource at runtime; a new install correctly has none.",
+  },
+  // `R-TELEMETRY-INSTALL-ID` (`/^telemetry-install-id\.txt$/`) WAS HERE AND IS
+  // DELETED, not disabled. The per-install id moved inside tLib's own
+  // `data.json` (see `shared/ts/install-id.ts`), so `R-DATA-FILE` above already
+  // covers it — by BASENAME AT ANY DEPTH, which
+  // `runtime-state-contract-control.ts` asserts with a `server/storage/data.json`
+  // fixture — and for a strictly stronger reason: that rule exists because the
+  // document has shipped a real admin password. There is no location the id can
+  // now reach that `R-DATA-FILE` does not match, so a second rule would have
+  // been a rule with no fixture that could ever go red.
   {
     rule: "R-DATA-CORRUPT",
     match: /^data\.json\.corrupt\..*$/,
@@ -209,7 +227,7 @@ export function checkStagedTree(options: StagedTreeOptions): StagedTreeResult {
     }
   }
 
-  // ── The floors. ⛔ Without these the gate passes PERFECTLY on an empty
+  // The floors. Without these the gate passes PERFECTLY on an empty
   // directory, and "no data.json in the staged tree" and "no staged tree" are
   // otherwise the same green. This is not hypothetical for this check: it is
   // pointed at a build output directory, and a build that failed early, a
@@ -242,7 +260,7 @@ export function checkStagedTree(options: StagedTreeOptions): StagedTreeResult {
   return { findings, fileCount: files.length, totalBytes, sawManifest };
 }
 
-// ── 2. Declared tLib modules ─────────────────────────────────────────────────
+// 2. Declared tLib modules
 
 export interface DeclaredModulesResult {
   findings: RuntimeStateFinding[];
@@ -286,9 +304,7 @@ export function availableModules(tlib: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .filter((entry) =>
-      ["server.lua", "client.lua", "shared.lua"].some((f) =>
-        existsSync(join(dir, entry.name, f))
-      )
+      ["server.lua", "client.lua", "shared.lua"].some((f) => existsSync(join(dir, entry.name, f)))
     )
     .map((entry) => entry.name)
     .sort();
@@ -324,7 +340,7 @@ export function checkDeclaredModules(options: DeclaredModulesOptions): DeclaredM
   const declared = declaredModules(readFileSync(manifestPath, "utf8"));
   const available = availableModules(tlib);
 
-  // ⛔ A floor, for the same reason as above. `availableModules` returns [] for
+  // A floor, for the same reason as above. `availableModules` returns [] for
   // a tLib path that does not exist, and every `R-MODULE-GHOST` below is then
   // green-by-emptiness — no, worse: every declared name becomes a ghost. Both
   // directions are wrong, so refuse rather than report either.
@@ -357,7 +373,7 @@ export function checkDeclaredModules(options: DeclaredModulesOptions): DeclaredM
           "a load at all — and the first `tlib." +
           name +
           "` is then an export proxy that throws " +
-          "\"attempt to index a function value\" wherever it happens to be used.",
+          '"attempt to index a function value" wherever it happens to be used.',
       });
       continue;
     }
@@ -366,9 +382,9 @@ export function checkDeclaredModules(options: DeclaredModulesOptions): DeclaredM
     // goal themselves -- "the manifest is an honest inventory of what this
     // resource uses" -- and a stale entry costs an eager load of a module
     // nobody calls, in a chain where load order is already load-bearing.
-    const used = new RegExp(`\\btlib\\s*[.:]\\s*${name}\\b|tlib\\.has\\s*\\(\\s*['"]${name}['"]`).test(
-      source
-    );
+    const used = new RegExp(
+      `\\btlib\\s*[.:]\\s*${name}\\b|tlib\\.has\\s*\\(\\s*['"]${name}['"]`
+    ).test(source);
     if (!used && !skip.includes("R-MODULE-UNUSED")) {
       findings.push({
         rule: "R-MODULE-UNUSED",
@@ -395,7 +411,7 @@ export function checkDeclaredModules(options: DeclaredModulesOptions): DeclaredM
   return { findings, declared, available, serverOnly };
 }
 
-// ── Reporting ────────────────────────────────────────────────────────────────
+// Reporting
 
 export function formatFindings(
   label: string,
@@ -422,7 +438,7 @@ export function formatFindings(
   return lines.join("\n");
 }
 
-// ── CLI ──────────────────────────────────────────────────────────────────────
+// CLI
 //
 //   bun runtime-state-contract.ts --dist <staged tree>
 //   bun runtime-state-contract.ts --root <resource> --tlib <tLib root>
@@ -465,7 +481,9 @@ if (import.meta.main) {
 
   if (root) {
     if (!tlib) {
-      console.error("runtime-state-contract: --root needs --tlib, or neither direction can be judged");
+      console.error(
+        "runtime-state-contract: --root needs --tlib, or neither direction can be judged"
+      );
       process.exit(2);
     }
     const result = checkDeclaredModules({ root, tlib, skip });

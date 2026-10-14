@@ -6,7 +6,7 @@ import { type ParentProps, Show } from "solid-js";
 /**
  * The palette these controls draw with — the HOST's theme tokens, not a copy.
  *
- * ── What these used to be ───────────────────────────────────────────────────
+ * What these used to be
  *
  * Thirteen hard-coded literals: `hsl(225 8% 12%)`, `hsl(225 8% 16%)`,
  * `hsl(225 10% 30% / 0.6)` and so on. Those are not arbitrary — they are tELS's
@@ -22,7 +22,7 @@ import { type ParentProps, Show } from "solid-js";
  * a shared component cannot be right in more than one host, which is the whole
  * argument for reading the token.
  *
- * ── Why each one keeps its old value as a fallback ──────────────────────────
+ * Why each one keeps its old value as a fallback
  *
  * `var(--x, <literal>)` is not defensive padding. These controls are exported to
  * any resource that wants a settings panel, and a host that has not defined the
@@ -31,12 +31,12 @@ import { type ParentProps, Show } from "solid-js";
  * borders. The fallback is exactly what that host renders today, so adopting
  * this change can only be a no-op or an improvement for them.
  *
- * ⚠️ No `color-mix()` and no `oklch()` anywhere in here, however tempting for
+ * No `color-mix()` and no `oklch()` anywhere in here, however tempting for
  * the hover shades: these render in the game's NUI, which is CEF 103, and both
  * landed in Chromium 111. CEF drops the declaration rather than erroring, so the
  * failure would be a silently uncoloured control.
  *
- * ── 2026-09-22: converged onto the --nui-* layer ────────────────────────────
+ * 2026-09-22: converged onto the --nui-* layer
  *
  * Each entry now reads its `--nui-*` equivalent first and keeps the old chain as
  * the fallback, so there is ONE set of names a host overrides to retheme both
@@ -45,7 +45,7 @@ import { type ParentProps, Show } from "solid-js";
  * — tDetector and tRadar declare no tokens at all — renders exactly what it
  * rendered before.
  *
- * ⚠️ Two colours DID change on purpose, and this is the repaint that was signed
+ * Two colours DID change on purpose, and this is the repaint that was signed
  * off rather than an accident:
  *
  *   accent       --primary (blue 211 80% 55%) → --nui-accent (neutral #eeeeee)
@@ -58,7 +58,7 @@ import { type ParentProps, Show } from "solid-js";
  * intends for every other control — and it resolves the complaint at the top of
  * this comment, where these were "the only blue things left on a grey screen".
  *
- * ── The accent half of that was undone, and why that is not a flip-flop ─────
+ * The accent half of that was undone, and why that is not a flip-flop
  *
  * `--nui-accent` is the blue again. The complaint above was never about the hue,
  * it was about an ISOLATED one, and neutralising this sheet was only one of the

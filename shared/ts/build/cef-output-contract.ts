@@ -2,8 +2,6 @@
 /**
  * A gate over a bundle's BUILT output, asserting it is parseable by CEF 103.
  *
- * ## Why this exists, and why it is not a visual check
- *
  * FiveM's NUI is CEF `103.0.0-cfx-m103.2605+g1316dae+chromium-103.0.5060.141`,
  * i.e. **Chromium 103** (June 2022). Four things this estate relies on landed
  * AFTER it, and every one of them fails SILENTLY — no error, no warning, no
@@ -14,66 +12,34 @@
  *   - Media Queries Level 4 range syntax Chromium 104
  *     (`@media (width>=1024px)` for `@media (min-width: 1024px)`)
  *
- * Both of those have already cost this estate real damage, and both were
- * invisible in a browser:
+ * Two of those have already cost real damage and both were invisible in a
+ * browser. `presetWind4` compiles every colour utility to `color-mix(in oklab,…)`
+ * and ships its palette as `oklch()`: measured on a sibling bundle, 348
+ * colour-mixes and 211 oklch values dropped in game and the panel rendered
+ * geometry-correct and COLOURLESS. And `target: "esnext"` lets the bundler UPGRADE
+ * syntax, rewriting `min-width` queries to the Level 4 range form, which CEF
+ * serialises to `@media not all` -- so every responsive utility was dead and the
+ * marketplace grid computed to one 1290px column instead of three.
  *
- *   1. `presetWind4` compiles every colour utility to
- *      `color-mix(in oklab, <colour> var(--un-*-opacity), transparent)` and ships
- *      its palette as `oklch()` literals. MEASURED on a sibling bundle: 348
- *      colour-mixes and 211 oklch values dropped in game — the panel rendered
- *      geometry-correct and COLOURLESS. Both FiveM frontends are pinned to
- *      `presetWind3` (via `tPreset({ target: "nui" })`) for exactly this reason.
- *   2. `target: "esnext"` tells esbuild/oxc every feature is available, so it is
- *      free to UPGRADE syntax on the way out. It does, and CSS is where it bites:
- *      `@media (min-width: 1024px)` is rewritten to the Level 4 range form, which
- *      CEF cannot parse, so it serialises the whole query to `@media not all` — a
- *      condition that never matches. MEASURED on tRadio's dispatch panel: every
- *      `sm:`/`md:`/`lg:`/`xl:` utility in both panels was dead, which is why the
- *      marketplace grid computed to a single 1290px column instead of three.
+ * A GREEN RESULT IN A MODERN HEADLESS CHROME SAYS NOTHING ABOUT ANY OF THIS, which
+ * is the whole problem: a visual A/B, a screenshot diff and a Lighthouse run are
+ * all blind to it. tLib does ship a real Chromium 103 harness and a visual check
+ * there is better EVIDENCE -- it is not better as a GATE, because it costs a
+ * browser launch per run and can only see the rules the one page it loads uses.
  *
- * ⛔ A GREEN RESULT IN A MODERN HEADLESS CHROME SAYS NOTHING ABOUT ANY OF THIS.
- * That is the whole problem: current Chrome renders all four correctly, so a
- * visual A/B, a screenshot diff and a Lighthouse run are all blind to it. This
- * gate reads the shipped bytes instead, which is deterministic, needs no browser,
- * and is immune to machine load.
+ * THE TWO FLOORS ARE WHAT MAKE THE GATE MEAN ANYTHING. "No Level 4 media queries"
+ * and "no media queries at all" are indistinguishable from the outside, so a gate
+ * that only looks for bad strings passes perfectly on an empty file -- which is
+ * the exact failure that matters, because an UnoCSS scan that silently stops
+ * matching produces a tiny stylesheet and no error. `R-MEDIA-FLOOR` requires a
+ * legacy query to be present and `R-SIZE-FLOOR` a byte floor.
  *
- * tLib DOES ship a real Chromium 103 harness (`nui-chromium.ts`), and a visual
- * check there is strictly better EVIDENCE. It is not better as a GATE: it costs a
- * 190 MB download, a browser launch and a render per run, and it can only see the
- * rules the one page it loads happens to use. A text contract over the whole
- * stylesheet sees every rule in it, including the ones belonging to a route
- * nobody screenshotted.
- *
- * ## The two floors, and why the gate is useless without them
- *
- * ⛔ "No Level 4 media queries" and "no media queries at all" are
- * indistinguishable from the outside, and so are "no oklch" and "no CSS". A gate
- * that only ever looks for bad strings passes PERFECTLY on an empty file — which
- * is the exact shape of failure that matters here, because an UnoCSS scan that
- * silently stops matching produces a tiny stylesheet and no error.
- *
- * So `R-MEDIA-FLOOR` requires at least one LEGACY `min-width`/`max-width` query
- * to be present, and `R-SIZE-FLOOR` requires the sheet to clear a byte floor.
- * Both are witnesses in the sense of the web-perf playbook §1.5: they can only be
- * produced by the thing under test actually having run.
- *
- * ## Scope: what this does NOT check, deliberately
- *
- * - **JS syntax.** Every syntactic feature a bundler would emit at `esnext` is
- *   older than Chromium 103 (private fields 84, logical assignment 85, top-level
- *   await 89, class static blocks 94). The post-103 additions are LIBRARY methods
- *   (`Array.prototype.toSorted` 110, `Object.groupBy` 117), which a target change
- *   does not introduce — they can only arrive from source, where a type-checker
- *   sees them. Asserting on JS here would be a check with no measured failure
- *   behind it, so there is none.
- * - **Blurred shadows and `backdrop-filter`.** CEF composites neither usefully,
- *   and `NUI_BLOCKLIST` in `uno-preset.ts` already bans the utility families;
- *   `findBlurredShadows` in `css-contract.ts` already gates the hand-written half.
- *   tRadio's dispatch panel is the estate's one dual home and sets
- *   `nuiElevationException: true` with the argument written out, so these are
- *   EXPECTED in its output. They are reported as an informational count here and
- *   never fail the gate — a second rule answering the same question a different
- *   way is how a legitimate carve-out turns into a gate everyone learns to skip.
+ * It deliberately does NOT check JS syntax (every feature a bundler emits at
+ * `esnext` predates Chromium 103; the post-103 additions are library methods a
+ * type-checker sees), and it reports blurred shadows and `backdrop-filter` as an
+ * informational count without failing -- `NUI_BLOCKLIST` and `css-contract.ts`
+ * already gate those, and a second rule answering the same question a different
+ * way is how a legitimate carve-out turns into a gate everyone skips.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -210,7 +176,7 @@ export function checkCefOutput(options: CefContractOptions): CefContractResult {
     }
   }
 
-  // ── The floors. See the module docstring: without these the gate passes on an
+  // The floors. See the module docstring: without these the gate passes on an
   // empty directory, which is the failure shape that actually happens here.
   if (files.length === 0 && !skip.includes("R-SIZE-FLOOR")) {
     findings.push({
@@ -271,7 +237,7 @@ export function formatCefResult(r: CefContractResult, dist: string): string {
   return lines.join("\n");
 }
 
-// ── CLI ──────────────────────────────────────────────────────────────────────
+// CLI
 // Run by path so this needs no `package.json` entry to be usable:
 //   bun <this file> --dist <build output dir> [--min-css-bytes N] [--skip RULE,RULE]
 

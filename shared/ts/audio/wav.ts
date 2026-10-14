@@ -1,85 +1,31 @@
 import fs from "node:fs";
 
 /**
- * 16-bit PCM WAV decoding for the offline audio tools.
+ * 16-bit PCM WAV decoding and encoding for the offline audio tools.
  *
- * tELS had this as `loadWav` (`scripts/audio/wav.ts`), tRadio had it twice —
- * `loadWav` in `scripts/audio-analyze.ts` and `loadWavMono` in
- * `scripts/audio-render.ts`. All three walked the chunk list identically. The
- * three differences were not requirements, they were a safety ladder, and this
- * is the top of it:
+ * `dataLen` is CLAMPED to the bytes actually present: a file truncated mid-write
+ * -- which is what a recording tool hands you if you look at it while it is
+ * running -- declares more data than it has, and the sample loop then throws
+ * `ERR_OUT_OF_RANGE`, naming an offset and not the file.
  *
- *   1. ⚠️ `dataLen` is CLAMPED to the bytes that are actually present. Both
- *      tRadio copies trusted the `data` chunk's declared size, and a file
- *      truncated mid-write — which is exactly what a recording tool hands you
- *      if you look at it while it is running — declares more data than it has.
- *      The sample loop then reads past the end of the buffer and Node throws
- *      `ERR_OUT_OF_RANGE` from `readInt16LE`, which names an offset and not the
- *      file. With the clamp the same file decodes to the audio it does contain.
- *      tELS already had this, with the note that is now the paragraph above.
+ * Deliberately narrow: 16-bit PCM only, throwing rather than guessing. A silently
+ * mis-decoded file produces a spectrum that looks plausible and is wrong, which is
+ * worse than no answer. Add a format deliberately if a corpus needs it.
  *
- *   2. The diagnostics are the specific ones. `audio-render.ts` folded "no data
- *      chunk" and "not 16-bit" into a single `need 16-bit PCM`, which sends you
- *      looking at the bit depth of a file whose real problem is that the
- *      chunk walk never found `data` at all.
+ * THE WRITER SCALES ASYMMETRICALLY -- `v < 0 ? v * 32768 : v * 32767` -- and that
+ * is correct rather than a quirk. int16 runs -32768..32767, so `-1.0 * 32767` is
+ * one LSB short of the floor the format has, and the error is DC-shaped rather
+ * than noise: every negative sample biased up by the same fraction of an LSB, so
+ * it survives averaging and lands in exactly the measurements these tools exist
+ * to take. Peak round-trip error -90.3 dBFS. `tests/unit/wav-encode.test.ts` pins
+ * it and runs the retired symmetric body as its negative control.
  *
- *   3. `channels` is reported. tELS returned it, both tRadio copies dropped it,
- *      and a caller that wants to know whether it just downmixed a stereo file
- *      had no way to ask.
- *
- * ── Deliberately narrow ──
- *
- * 16-bit PCM only, and it throws rather than guessing on anything else: every
- * file these tools read is either a reference recording or one of their own
- * renders. A silently mis-decoded file produces a spectrum that looks plausible
- * and is wrong, which is worse than no answer. No 24-bit, no float, no
- * `WAVE_FORMAT_EXTENSIBLE`, no ADPCM — add one deliberately if a corpus ever
- * needs it, rather than widening this to "probably fine".
- *
- * ── The writer, and the bit that was being lost ──
- *
- * `encodeWav`/`writeWav` below are the writer. There were FOUR copies: tELS's
- * `scripts/audio/wav.ts` and tRadio's `scripts/fix-ambient-assets.ts` took
- * interleaved multi-channel, tRadio's `scripts/audio-render.ts` and
- * `scripts/audio-listen.ts` took mono. That split was not the interesting
- * difference. The two mono copies scaled SYMMETRICALLY — `v * 32767` — and the
- * two multi-channel ones asymmetrically — `v < 0 ? v * 32768 : v * 32767`.
- *
- * The asymmetric one is simply correct and the symmetric one simply loses a
- * bit. int16 runs -32768..32767, so full scale is not the same distance either
- * side of zero: `-1.0 * 32767` is -32767, one LSB short of the floor the format
- * has. A rendered chain that hard-clips — which both mono copies do on purpose,
- * one line above the scale, "exactly as a sound card would" — therefore wrote
- * an asymmetric waveform for a symmetric input. It is small (-90.3 dBFS) and it
- * is a DC-shaped error, not noise: every negative sample is biased up by the
- * same fraction of an LSB, so it survives averaging and lands in exactly the
- * measurements these tools exist to take.
- *
- * Unifying them changes emitted bytes, which is why the earlier reader
- * consolidation deliberately left them alone. They are unified now because
- * "byte-identical" was the wrong test to hold a wrong mapping to: the delta IS
- * the bug. Measured against the retired symmetric body, 48 kHz mono, 48,000
- * frames — the 44-byte header identical in every case, only samples moving:
- *
- *   | input                   | samples differing | file bytes differing |
- *   |-------------------------|-------------------|----------------------|
- *   | full-scale -1..+1 ramp  | 11,978  (24.95%)  | 12,022 / 96,044      |
- *   | 440 Hz full-scale sine  | 15,880  (33.08%)  | 15,880 / 96,044      |
- *   | 440 Hz sine at -20 dB   |     880   (1.83%) |    880 / 96,044      |
- *
- * In all three: max delta exactly 1 LSB, zero non-negative samples affected,
- * and the old body always the less-negative of the two. Peak round-trip error
- * 3.052e-5, i.e. -90.3 dBFS. tests/unit/wav-encode.test.ts pins the ramp row
- * and runs the retired body as its negative control.
- *
- * Mono callers pass `[samples]`. There is no mono overload: an overload that
- * accepts both a `Float32Array` and a `Float32Array[]` is one typo away from
- * silently writing a one-sample file, and the brackets at four call sites are
- * cheaper than that.
+ * Mono callers pass `[samples]`. There is no mono overload: one that accepted both
+ * a `Float32Array` and a `Float32Array[]` is one typo away from silently writing a
+ * one-sample file.
  */
 export interface Wav {
-  /** Mono downmix, -1..1. */
-  samples: Float32Array;
+  samples: Float32Array<ArrayBuffer>;
   /** Sample rate from the `fmt ` chunk; 48000 if the file declared none. */
   rate: number;
   /** Channel count the file declared, before the downmix. */
@@ -88,20 +34,14 @@ export interface Wav {
 
 /** De-interleaved decode: one Float32Array per channel, no downmix. */
 export interface WavChannels {
-  /** One array per channel, -1..1, all the same length. */
-  data: Float32Array[];
+  /** One array per channel, -1..1, all the same length. See `Wav.samples` for why the buffer type is named. */
+  data: Float32Array<ArrayBuffer>[];
   rate: number;
   channels: number;
 }
 
 /**
  * Decode a 16-bit PCM WAV to SEPARATE channels.
- *
- * `decodeWav` downmixes, which is what every analysis caller wants and is
- * destructive for an editing one: tRadio's `fix-ambient-assets.ts` repairs a
- * loop seam per channel and writes the file back, so a downmix would turn a
- * stereo asset mono. That was a real requirement and is why it had its own
- * fifth copy of the chunk walk; it is a parameter now rather than a copy.
  */
 export function decodeWavChannels(bytes: Buffer, label = "<buffer>"): WavChannels {
   if (bytes.toString("ascii", 0, 4) !== "RIFF" || bytes.toString("ascii", 8, 12) !== "WAVE") {
@@ -126,7 +66,7 @@ export function decodeWavChannels(bytes: Buffer, label = "<buffer>"): WavChannel
       bits = bytes.readUInt16LE(at + 22);
     } else if (id === "data") {
       dataStart = at + 8;
-      // ⚠️ The clamp. See point 1 in the header: a file truncated mid-write
+      // The clamp. See point 1 in the header: a file truncated mid-write
       // declares more data than it has, so trust the bytes that are there.
       dataLen = Math.min(size, bytes.length - dataStart);
     }
@@ -185,7 +125,7 @@ export function encodeWav(channelData: Float32Array[], rate: number): Buffer {
   for (let c = 1; c < channels; c++) {
     if (channelData[c].length !== frames) {
       throw new Error(
-        `encodeWav: channel ${c} has ${channelData[c].length} frames, channel 0 has ${frames}`,
+        `encodeWav: channel ${c} has ${channelData[c].length} frames, channel 0 has ${frames}`
       );
     }
   }
@@ -211,7 +151,7 @@ export function encodeWav(channelData: Float32Array[], rate: number): Buffer {
   for (let f = 0; f < frames; f++) {
     for (let c = 0; c < channels; c++) {
       const s = Math.max(-1, Math.min(1, channelData[c][f]));
-      // ⚠️ ASYMMETRIC, and the whole point of this being one function. int16 is
+      // ASYMMETRIC, and the whole point of this being one function. int16 is
       // -32768..32767: -1.0 maps to -32768 and +1.0 to 32767. Scaling both by
       // 32767 loses one LSB on every negative sample; scaling both by 32768
       // wraps +1.0 to -32768. See the header.

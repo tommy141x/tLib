@@ -8,6 +8,22 @@ export {
   minifyHtmlFile,
   viteBuild,
 } from "./bun-builder.ts";
+/**
+ * The CEF 103 output contract — what a NUI bundle may not contain.
+ *
+ * Deliberately separate from `css-contract.ts`: that one owns the blurred
+ * `box-shadow` length parser and the surface-collision rules, and this one reads
+ * only the BUILT stylesheet for constructs the engine silently drops. Two gates,
+ * no overlap, so neither has to know the other's job.
+ *
+ * It carries two floors — `R-MEDIA-FLOOR` and `R-SIZE-FLOOR` — because "no
+ * `oklch` found" and "no CSS was read" are otherwise the same green. That earned
+ * itself immediately: pointed at a Vite staging directory emptied after assets
+ * are hoisted, it went red on both floors instead of passing confidently on
+ * nothing.
+ */
+export type { CefContractOptions, CefContractResult, CefFinding } from "./cef-output-contract.ts";
+export { checkCefOutput, formatCefResult } from "./cef-output-contract.ts";
 export type { ProdConfig } from "./core.ts";
 export {
   addDirToZip,
@@ -20,21 +36,6 @@ export {
   stageFiles,
   step,
 } from "./core.ts";
-export type {
-  DeckCheckResult,
-  DeckPaths,
-  DeckPluginConfig,
-  DeckSourceFile,
-  DeckSourceScan,
-  DeckStamp,
-} from "./deck-pack.ts";
-export {
-  checkDeckArtifact,
-  deckPaths,
-  packDeckPlugin,
-  readDeckStamp,
-  scanDeckSources,
-} from "./deck-pack.ts";
 export type {
   CssContractOptions,
   CssRule,
@@ -52,24 +53,23 @@ export {
   subjectClasses,
   surfaceClassNames,
 } from "./css-contract.ts";
-/**
- * The CEF 103 output contract — what a NUI bundle may not contain.
- *
- * Deliberately separate from `css-contract.ts`: that one owns the blurred
- * `box-shadow` length parser and the surface-collision rules, and this one reads
- * only the BUILT stylesheet for constructs the engine silently drops. Two gates,
- * no overlap, so neither has to know the other's job.
- *
- * It carries two floors — `R-MEDIA-FLOOR` and `R-SIZE-FLOOR` — because "no
- * `oklch` found" and "no CSS was read" are otherwise the same green. That earned
- * itself immediately: pointed at a Vite staging directory emptied after assets
- * are hoisted, it went red on both floors instead of passing confidently on
- * nothing.
- */
-export type { CefContractOptions, CefContractResult, CefFinding } from "./cef-output-contract.ts";
-export { checkCefOutput, formatCefResult } from "./cef-output-contract.ts";
 export type { DeadClass, DeadClassOptions } from "./dead-classes.ts";
 export { findDeadClasses, formatDeadClasses, runDeadClassCheck } from "./dead-classes.ts";
+export type {
+  DeckCheckResult,
+  DeckPaths,
+  DeckPluginConfig,
+  DeckSourceFile,
+  DeckSourceScan,
+  DeckStamp,
+} from "./deck-pack.ts";
+export {
+  checkDeckArtifact,
+  deckPaths,
+  packDeckPlugin,
+  readDeckStamp,
+  scanDeckSources,
+} from "./deck-pack.ts";
 export type { DevConfig, WatcherDef } from "./dev.ts";
 export { startDevMode } from "./dev.ts";
 export type {
@@ -102,6 +102,14 @@ export type {
   MarketplaceReleaseMetadataOptions,
 } from "./marketplace-inventory.ts";
 export { writeMarketplaceReleaseMetadata } from "./marketplace-inventory.ts";
+export type { NuiBundleOptions } from "./nui-vite.ts";
+// `resourceVersion` is exported separately from `nuiBundleOptions` because three
+// bundles (tELS, tAFK, tCAD) carry their own resolve blocks and so declare their
+// own `define`, but must still read the version the same way — see the note on
+// it for why a hand-rolled second reader is the thing to avoid.
+export { nuiBundleOptions, resourceVersion } from "./nui-vite.ts";
+export type { StagingConfig } from "./prod.ts";
+export { ProductionStager } from "./prod.ts";
 export type {
   PropEditorGalleryCli,
   PropEditorGalleryInit,
@@ -117,8 +125,8 @@ export {
   ensureNuiBundle,
   GALLERY_PROP_DATA,
   GALLERY_VEHICLE_MATRIX,
-  parsePropEditorGalleryCli,
   PROP_EDITOR_ROOT,
+  parsePropEditorGalleryCli,
   renderPropEditorGallery,
   reportPropEditorGallery,
   SHARED_PROP_EDITOR_VIEWS,
@@ -126,6 +134,8 @@ export {
   toolActive,
   toolSelector,
 } from "./prop-editor-gallery.ts";
+export type { StandardBuildOptions } from "./resource.ts";
+export { buildStandardResource, runStandardBuild } from "./resource.ts";
 /**
  * The release-artifact contract for runtime state, plus the tlib_modules
  * inventory check. Deliberately separate from `manifest-coverage.ts`: that one
@@ -151,14 +161,10 @@ export {
   checkDeclaredModules,
   checkStagedTree,
   declaredModules,
+  FORBIDDEN_RUNTIME_STATE,
   failing,
   formatFindings,
-  FORBIDDEN_RUNTIME_STATE,
 } from "./runtime-state-contract.ts";
-export type { StagingConfig } from "./prod.ts";
-export { ProductionStager } from "./prod.ts";
-export type { StandardBuildOptions } from "./resource.ts";
-export { buildStandardResource, runStandardBuild } from "./resource.ts";
 export type { VersionTarget } from "./version.ts";
 export {
   getManifestVersion,
@@ -170,8 +176,6 @@ export {
   throwIfMissed,
   toSemver,
 } from "./version.ts";
-export type { NuiBundleOptions } from "./nui-vite.ts";
-export { nuiBundleOptions } from "./nui-vite.ts";
 export type {
   SelfHostWebFontsOptions,
   SelfHostWebFontsResult,
