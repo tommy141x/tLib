@@ -20,14 +20,14 @@
  * the real module, runs a two-step migration over it, and asserts:
  *
  *   1. the migration RAN and the document was stamped;
- *   2. ⛔ the pre-migration backup is BYTE-IDENTICAL to the file that was there;
+ * 2. the pre-migration backup is BYTE-IDENTICAL to the file that was there;
  *   3. every top-level key that was there before is still there after;
  *   4. a deep value sampled from the real document survived unchanged;
- *   5. ⛔ the original file was NOT modified.
+ * 5. the original file was NOT modified.
  *
  * ## What is stubbed, and what that costs
  *
- * ⚠️ fengari ships no `cjson`, so `json.encode`/`json.decode` cannot be the real
+ * fengari ships no `cjson`, so `json.encode`/`json.decode` cannot be the real
  * ones. The codec here special-cases ONE string — the actual bytes of the file
  * under test — so `decode(realBytes)` returns the real decoded document. That
  * keeps both halves of assertion 2 honest: the bytes handed to `_backup` are the
@@ -37,7 +37,7 @@
  * cjson's own round-trip behaviour on these documents — notably that an empty
  * Lua table re-encodes as `{}` whether it went in as `[]` or `{}`, which tCAD's
  * `sv_json.lua` and tRadio's `array_compaction.lua` both document as a real
- * hazard. ⛔ This probe therefore cannot tell you a migration is SAFE to run on
+ * hazard. This probe therefore cannot tell you a migration is SAFE to run on
  * a live server. It tells you the module's own logic holds on real-shaped data,
  * which is strictly less and was previously zero.
  *
@@ -72,7 +72,10 @@ function luaLiteral(value: unknown): string {
     // A JSON null inside an array decodes to nothing at all under cjson, which
     // is the hole `array_compaction.lua` exists for. Reproduced rather than
     // smoothed over: dropping it here would make the probe kinder than reality.
-    return `{${value.map((v) => (v === null ? "" : luaLiteral(v))).filter(Boolean).join(",")}}`;
+    return `{${value
+      .map((v) => (v === null ? "" : luaLiteral(v)))
+      .filter(Boolean)
+      .join(",")}}`;
   }
   if (typeof value === "object") {
     const parts = Object.entries(value as Record<string, unknown>)
@@ -84,7 +87,9 @@ function luaLiteral(value: unknown): string {
 }
 
 /** A deep path into the document, for assertion 4. Deepest-first, so it bites. */
-function deepSample(doc: Record<string, unknown>): { path: string[]; value: string | number | boolean } | null {
+function deepSample(
+  doc: Record<string, unknown>
+): { path: string[]; value: string | number | boolean } | null {
   let best: { path: string[]; value: string | number | boolean } | null = null;
   const walk = (node: unknown, path: string[]) => {
     if (path.length > 8) return;
@@ -117,7 +122,8 @@ interface Probe {
 function probeFor(resource: string, raw: string, doc: Record<string, unknown>): string {
   const keys = Object.keys(doc);
   const sample = deepSample(doc);
-  if (!sample) die(`${resource}/data.json has no scalar value to sample; the probe would be vacuous`);
+  if (!sample)
+    die(`${resource}/data.json has no scalar value to sample; the probe would be vacuous`);
 
   // `string.format('%q')` is not used for `raw`: it escapes newlines as `\` +
   // newline, which is valid Lua but means the literal in the generated file is
@@ -262,7 +268,7 @@ print(('PROBE-OK %s — %d top-level keys, %d bytes, backup byte-identical, deep
 `;
 }
 
-// ── Run ──────────────────────────────────────────────────────────────────────
+// Run
 
 const work = mkdtempSync(join(tmpdir(), "jsonstore-real-probe-"));
 const results: Probe[] = [];
@@ -292,7 +298,15 @@ for (const resource of CANDIDATES) {
   writeFileSync(probePath, probeFor(resource, raw, doc as Record<string, unknown>), "utf8");
 
   const run = Bun.spawnSync(
-    ["bunx", "--bun", "--package", "fengari-node-cli", "fengari", "scripts/run-lua-suite.lua", probePath],
+    [
+      "bunx",
+      "--bun",
+      "--package",
+      "fengari-node-cli",
+      "fengari",
+      "scripts/run-lua-suite.lua",
+      probePath,
+    ],
     { cwd: TLIB, stdout: "pipe", stderr: "pipe" }
   );
   const out = new TextDecoder().decode(run.stdout) + new TextDecoder().decode(run.stderr);
@@ -308,7 +322,7 @@ for (const resource of CANDIDATES) {
 
 rmSync(work, { recursive: true, force: true });
 
-// ⛔ The floor. "No resource failed" and "no resource was read" are otherwise
+// The floor. "No resource failed" and "no resource was read" are otherwise
 // the same green, and this probe reads files that are gitignored in five of the
 // seven candidates — so a clean checkout has fewer of them, and a clean
 // checkout is exactly where a vacuous pass would go unnoticed.
@@ -326,10 +340,19 @@ if (results.length < MIN_PROBES) {
 
 console.log(`jsonstore real-data probe — ${results.length} real data.json file(s)\n`);
 for (const r of results) {
-  console.log(`  ${r.ok ? "PASS" : "FAIL"}  ${r.resource.padEnd(10)} ${String(r.keys).padStart(3)} keys, ${String(r.bytes).padStart(7)} B`);
-  if (!r.ok) console.error(r.detail.split("\n").map((l) => `          ${l}`).join("\n"));
+  console.log(
+    `  ${r.ok ? "PASS" : "FAIL"}  ${r.resource.padEnd(10)} ${String(r.keys).padStart(3)} keys, ${String(r.bytes).padStart(7)} B`
+  );
+  if (!r.ok)
+    console.error(
+      r.detail
+        .split("\n")
+        .map((l) => `          ${l}`)
+        .join("\n")
+    );
 }
-if (missing.length > 0) console.log(`\n  no data.json on disk (not a failure): ${missing.join(", ")}`);
+if (missing.length > 0)
+  console.log(`\n  no data.json on disk (not a failure): ${missing.join(", ")}`);
 
 const failed = results.filter((r) => !r.ok);
 if (failed.length > 0) {

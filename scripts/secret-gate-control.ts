@@ -30,7 +30,7 @@
  *   DRILL        with the pattern list narrowed so the key cannot match, the
  *                PLANTED case passes — so the red above is caused by the rule
  *
- * ⛔ Every value planted here is obviously synthetic. Nothing in this file is a
+ * Every value planted here is obviously synthetic. Nothing in this file is a
  * credential for anything.
  *
  * Usage:  bun run scripts/secret-gate-control.ts
@@ -72,7 +72,7 @@ function run(cwd: string, cmd: string[], env?: Record<string, string>): Run {
   };
 }
 
-// ── The fixture ─────────────────────────────────────────────────────────────
+// The fixture
 //
 // Synthetic, and shaped like the real thing: aligned assignments, a nested
 // block, and `dispatchNacId` present because it is the key that must NOT be
@@ -100,7 +100,7 @@ const PLANTED = "SYNTHETIC-NOT-A-REAL-CREDENTIAL-0000";
  * real tLib, so the hook's `../tLib/scripts/secret-gate.ts` branch — the one
  * every consumer resource actually takes — is what gets exercised.
  *
- * ⚠️ MEASURED: an earlier version dropped a one-line `scripts/secret-gate.ts`
+ * MEASURED: an earlier version dropped a one-line `scripts/secret-gate.ts`
  * re-export into the fixture instead. That took the hook's "we are tLib" branch,
  * `bun run` loaded the gate as an imported module, `import.meta.main` was false,
  * `main()` never ran and the hook exited 0 — a hook that looked installed and
@@ -147,7 +147,7 @@ function makeRepo(label: string): string {
 const cleanup: string[] = [];
 
 /**
- * ⛔ The junction is UNLINKED FIRST, explicitly, and tLib is re-checked
+ * The junction is UNLINKED FIRST, explicitly, and tLib is re-checked
  * afterwards.
  *
  * A recursive delete over a directory containing a junction to tLib is one
@@ -172,13 +172,13 @@ function dispose(): void {
   }
 }
 
-// ── 0. The gate can see itself ─────────────────────────────────────────────
+// 0. The gate can see itself
 
 console.log("\n0. preconditions");
 check(hookIsCurrent(tlibRoot), "tLib's own .githooks/pre-commit is the canonical bytes");
 check(secretPatterns().length >= 18, "the pattern list parsed from Lua is non-trivial");
 
-// ── 1. CLEAN: the baseline must be green, or nothing below means anything ──
+// 1. CLEAN: the baseline must be green, or nothing below means anything
 
 console.log("\n1. CLEAN — a blank tracked config, value in the gitignored sidecar");
 {
@@ -221,7 +221,7 @@ console.log("\n1. CLEAN — a blank tracked config, value in the gitignored side
   check(!isSecretName("dispatchNacId"), "…and it needs no exemption to be safe");
 }
 
-// ── 2. PLANTED: a credential typed into the tracked file ──────────────────
+// 2. PLANTED: a credential typed into the tracked file
 
 console.log("\n2. PLANTED — a credential-shaped key given a value in the tracked config");
 let plantedRepo = "";
@@ -288,7 +288,7 @@ let plantedRepo = "";
   check(head.out.includes("at HEAD") && head.out.includes("authToken"), "…naming HEAD and the key");
 }
 
-// ── 2b. A config file that is not at HEAD yet is read from the INDEX ──────
+// 2b. A config file that is not at HEAD yet is read from the INDEX
 //
 // MEASURED 2026-10-06 on tDB, which has `config.example.lua` staged as an add
 // and `config.lua` staged as a delete — so neither exists at HEAD. The first
@@ -328,7 +328,7 @@ console.log("\n2b. STAGED-ADD — a brand-new config file, never yet committed")
   check(blanked.code === 0, "and the same staged-add file passes once the value is blank");
 }
 
-// ── 3. The DRILL: break the rule and the planted case must pass ───────────
+// 3. The DRILL: break the rule and the planted case must pass
 //
 // A red verdict above is only evidence if the rule is what produced it. The gate
 // derives its patterns from the Lua file, so the drill narrows that file in a
@@ -385,7 +385,7 @@ console.log("\n3. DRILL — pattern list narrowed; the planted case must go GREE
   );
 }
 
-// ── Verdict ────────────────────────────────────────────────────────────────
+// Verdict
 
 dispose();
 console.log("");

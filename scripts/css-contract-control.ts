@@ -65,7 +65,7 @@ function setCheck(name: string, actual: string[], expected: string[]): void {
   );
 }
 
-// ── Fixture ────────────────────────────────────────────────────────────────────
+// Fixture
 //
 // Written to the OS temp dir rather than into the repo: a fixture under `src`
 // would be swept up by the very gate it is testing, and by every other
@@ -138,7 +138,7 @@ writeFileSync(
 );
 
 try {
-  // ── 0. The walker descends at-rules and does not choke on the hard selector ─
+  // 0. The walker descends at-rules and does not choke on the hard selector
   const probe = cssRules(
     `@layer components { .segment:hover:not([aria-pressed="true"]):not([a-b="x{y"]) { color: red } }`
   );
@@ -148,7 +148,7 @@ try {
     ["segment"]
   );
 
-  // ── 1. surface.css is the source of the guarded names, not a list here ─────
+  // 1. surface.css is the source of the guarded names, not a list here
   const surface = surfaceClassNames();
   const mustGuard = [
     "panel",
@@ -180,7 +180,7 @@ try {
     []
   );
 
-  // ── 2. Correct usage produces nothing, from either gate ────────────────────
+  // 2. Correct usage produces nothing, from either gate
   const correct = { cssRoots: [root] };
   const onlyCorrect = { cssRoots: [join(root, "..", "nope")] };
   check(
@@ -204,7 +204,7 @@ try {
     []
   );
 
-  // ── 3. Each planted defect turns an exact named set red ────────────────────
+  // 3. Each planted defect turns an exact named set red
   setCheck(
     "planted collisions are reported, by name",
     findSurfaceCollisions(correct)
@@ -230,7 +230,7 @@ try {
     [".drop", ".inner", ".listed", ".em"]
   );
 
-  // ── 4. The allow-list escape hatch actually suppresses ─────────────────────
+  // 4. The allow-list escape hatch actually suppresses
   setCheck(
     "allowSurfaceCollisions suppresses exactly what it names",
     findSurfaceCollisions({ cssRoots: [root], allowSurfaceCollisions: ["panel", "segment"] }).map(
@@ -239,7 +239,7 @@ try {
     ["prop-input", "list-row", "field-hint"]
   );
 
-  // ── 5. Broken-gate drill ───────────────────────────────────────────────────
+  // 5. Broken-gate drill
   //
   // The rightmost-compound rule is the only judgement in gate 1. Replace it
   // with the naive reading and the CORRECT fixture must go red -- otherwise case
@@ -274,7 +274,7 @@ try {
     ["list-row"]
   );
 
-  // ── 6. The blur predicate, on the two values the audit's regex got wrong ───
+  // 6. The blur predicate, on the two values the audit's regex got wrong
   check(
     "DRILL: the audit's proposed regex misses `inset 0 0 8px rgba(...)`",
     !/box-shadow:[^;]*[1-9][0-9]*px [1-9]/.test("box-shadow: inset 0 0 8px rgba(255,255,255,.2)") &&

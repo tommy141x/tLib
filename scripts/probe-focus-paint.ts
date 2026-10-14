@@ -44,8 +44,8 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { inflateSync } from "node:zlib";
 import { resolve } from "node:path";
+import { inflateSync } from "node:zlib";
 
 const TSCRIPTS = resolve(import.meta.dir, "../..");
 
@@ -69,12 +69,49 @@ interface Case {
   readonly trigger: "tab" | "tab-in" | "attr" | "static";
   /** `input` where the real element is a text field, else `button`/`div`. */
   readonly tag: "button" | "input" | "div";
+  /**
+   * Mount the target with `tabindex="0"`, because the real element has it.
+   *
+   * NOT A CONVENIENCE. A `div` is not focusable, so a `tab` trigger on one
+   * lands the Tab somewhere else entirely and the case measures zero -- which
+   * reads exactly like a broken indicator rather than like a mis-specified
+   * probe. tUnit's `ElementList` row is a real `role="option"` div carrying
+   * `tabindex={0}` and its OWN `focus-visible:` utilities, so it is genuinely a
+   * keyboard-focusable div and must be mounted as one. The `tab-in` trigger is
+   * not the same thing: that is for `focus-within`, where the focus lands on a
+   * CHILD and the parent never receives it.
+   */
+  readonly focusable?: boolean;
+  /**
+   * Skip the `outward` negative control for this case, because its premise does
+   * not hold here.
+   *
+   * NOT A TOLERANCE, and not a way to quiet a control that is telling you
+   * something. `outward` forces `outline-offset` positive and REQUIRES 0 ink,
+   * which isolates the negative offset as the load-bearing part. That is only
+   * true when the target is flush with the `overflow: hidden` clipper on all four
+   * sides -- which every case mounting a bare element with no intrinsic box is.
+   *
+   * `.prop-input` is not: it sets its own `padding: 6px 9px` and takes its
+   * intrinsic input height, so its top and bottom edges sit INSIDE the clipper
+   * and an outline 2px outward of them is not clipped at all. Measured: 12 px of
+   * ink. For that element the negative offset genuinely is not what makes the
+   * affordance visible -- its own box is -- so asserting 0 here would be
+   * asserting something false about the geometry.
+   *
+   * The `ring` control still runs, and it is the one that proves the clipper is
+   * clipping at all.
+   */
+  readonly skipOutwardControl?: boolean;
   readonly ink: Ink;
 }
 
 interface Bundle {
   readonly name: string;
-  /** The built stylesheet. A glob, because the filename is content-hashed. */
+  /**
+   * The built stylesheet. Located by prefix, because the filename is usually
+   * content-hashed -- but the hash is optional: see `newestCss`.
+   */
   readonly cssDir: string;
   readonly cssPrefix: string;
   /** Theme tokens this bundle's rules read, in the dialect its uno.config sets. */
@@ -113,6 +150,19 @@ const VALUE_TOKENS = {
 const FOCUS_VISIBLE =
   "focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid " +
   "focus-visible:outline-ring/40 focus-visible:-outline-offset-1";
+
+/**
+ * tUnit's spelling, which is NOT `FOCUS_VISIBLE` and must not be unified with it.
+ *
+ * Two real differences, both in the shipped source: there is no
+ * `focus-visible:border-ring` (neither element has a border to tint), and the
+ * colour is the full-opacity `outline-ring` rather than `outline-ring/40`. Both
+ * strings are asserted verbatim against their components, so folding them into
+ * one constant would fail the verbatim check rather than tidying anything.
+ */
+const TUNIT_FOCUS =
+  "outline-none focus-visible:outline-2 focus-visible:outline-solid " +
+  "focus-visible:outline-ring focus-visible:-outline-offset-1";
 
 const BUNDLES: readonly Bundle[] = [
   {
@@ -158,14 +208,30 @@ const BUNDLES: readonly Bundle[] = [
     tokens: HSL_TOKENS,
     cases: [
       {
+        /*
+         * RETARGETED. This case used to name
+         * `tAFK/client/web/src/components/ui/input.tsx` and a six-utility focus
+         * string. That file is GONE -- tAFK's Input converged into
+         * `@tlib/shared/ui/input`, whose affordance is one hand-written class,
+         * `.prop-input` in `@tlib/shared/css/surface.css`, not a utility string.
+         * So the old case could not pass: the probe reads `source` off disk and
+         * threw ENOENT before tCAD, tUnit and tRadio's bundles were reached at
+         * all.
+         *
+         * It is still tAFK's real input, and the rule is still in tAFK's built
+         * sheet (`.prop-input` is emitted there), so the paint measurement is
+         * unchanged in substance -- it just measures the class the control
+         * actually carries. `:focus` with `outline: 2px solid hsl(var(--ring)/0.4)`
+         * at `outline-offset: -1px`, which is the same affordance the deleted
+         * utility string spelt.
+         */
         name: "input, real Tab",
-        source: "tAFK/client/web/src/components/ui/input.tsx",
-        classes:
-          "outline-none focus:border-ring focus:outline-2 focus:outline-solid " +
-          "focus:outline-ring/40 focus:-outline-offset-1",
+        source: "tLib/shared/css/surface.css",
+        classes: "prop-input",
         trigger: "tab",
         tag: "input",
         ink: "accent",
+        skipOutwardControl: true,
       },
       {
         name: "editor bar button, real Tab",
@@ -201,6 +267,61 @@ const BUNDLES: readonly Bundle[] = [
         trigger: "static",
         tag: "button",
         ink: "white",
+      },
+    ],
+  },
+  {
+    /*
+     * tUnit WAS NOT COVERED HERE UNTIL 2026-10-07, AND THAT IS WHY ITS TWO
+     * DEFECTS WENT UNNOTICED.
+     *
+     * Both were the same `unocss-merge` 0.10.0 fault, in the outline namespace:
+     * a POSITIVE `outline-offset-*` and an outline COLOUR are filed into one
+     * conflict group and the colour is deleted. `ElementList.tsx`'s rows and
+     * `CharacterEditor.tsx`'s slot chips each shipped without
+     * `focus-visible:outline-ring` and painted focus in `currentColor` instead
+     * of `--ring`. Every class involved is real and resolves to CSS, so nothing
+     * reported it and no review would have.
+     *
+     * THIS PROBE WOULD NOT HAVE CAUGHT THEM EITHER, AND SAYING SO IS THE
+     * POINT OF THIS NOTE. It measures the class string the component really
+     * ships; both defects were in the MERGED OUTPUT of `cn()`, so the shipped
+     * string was already the broken one and this probe would have measured it
+     * faithfully and reported a visible indicator in `currentColor`. The gate
+     * for that is the `outline-*` shield in `shared/ts/cn.ts` and its contract
+     * suite. What this covers is the half that shield cannot: that the settled
+     * spelling, in tUnit's OWN built stylesheet, paints pixels in Chromium 103
+     * inside a clipping ancestor. Both halves are needed; neither is the other.
+     *
+     * Tokens are the HSL dialect (`--ring:211 80% 55%` in the built sheet, read
+     * through `hsl(var(--ring))`), and `uno.config.ts` sets `target: "nui"` with
+     * no `nuiElevationException`, so the ring blocklist applies and is asserted.
+     */
+    name: "tUnit/client/web",
+    blocklisted: true,
+    cssDir: `${TSCRIPTS}/tUnit/client/ui/assets`,
+    cssPrefix: "index-",
+    tokens: HSL_TOKENS,
+    cases: [
+      {
+        // A `role="option"` div with `tabindex={0}` and its own `focus-visible:`
+        // utilities — hence `focusable`. The offset is the NEGATIVE spelling, which
+        // is what this case exists to keep honest.
+        name: "element list row, real Tab onto a focusable div",
+        source: "tUnit/client/web/src/components/ElementList.tsx",
+        classes: TUNIT_FOCUS,
+        trigger: "tab",
+        tag: "div",
+        focusable: true,
+        ink: "accent",
+      },
+      {
+        name: "character slot chip, real Tab",
+        source: "tUnit/client/web/src/components/CharacterEditor.tsx",
+        classes: TUNIT_FOCUS,
+        trigger: "tab",
+        tag: "button",
+        ink: "accent",
       },
     ],
   },
@@ -253,7 +374,7 @@ const BUNDLES: readonly Bundle[] = [
   },
 ];
 
-// ── A PNG reader, because the verdict is pixels ──────────────────────────────
+// A PNG reader, because the verdict is pixels
 //
 // Deliberately NOT `sharp`: that is a native binary, it is pinned in tRadio for
 // a documented reason, and tLib must stay installable without it. Chromium's
@@ -279,7 +400,12 @@ function decodePng(bytes: Uint8Array): Bitmap {
   const idat: Uint8Array[] = [];
   while (off < bytes.length) {
     const len = view.getUint32(off);
-    const type = String.fromCharCode(bytes[off + 4], bytes[off + 5], bytes[off + 6], bytes[off + 7]);
+    const type = String.fromCharCode(
+      bytes[off + 4],
+      bytes[off + 5],
+      bytes[off + 6],
+      bytes[off + 7]
+    );
     const body = bytes.subarray(off + 8, off + 8 + len);
     if (type === "IHDR") {
       width = view.getUint32(off + 8);
@@ -364,7 +490,7 @@ function countInk(bmp: Bitmap, ink: Ink): number {
   return n;
 }
 
-// ── The page ────────────────────────────────────────────────────────────────
+// The page
 //
 // The target FILLS the clipper exactly, which is the whole geometry of the
 // defect: an outward stroke then lies entirely outside the clipper's padding box
@@ -394,11 +520,14 @@ function pageHtml(css: string, tokens: Record<string, string>): string {
 <script>
   const clip = document.getElementById("clip");
   window.probe = {
-    mount(tag, classes, withInner) {
+    mount(tag, classes, withInner, focusable) {
       clip.innerHTML = "";
       const el = document.createElement(tag === "input" ? "input" : tag);
       el.id = "target";
       if (tag === "input") el.type = "text";
+      // The real element's own tabindex. See \`Case.focusable\`: without it a
+      // \`tab\` trigger on a div lands nowhere near the target and measures 0.
+      if (focusable) el.setAttribute("tabindex", "0");
       el.className = classes;
       if (withInner) {
         const inner = document.createElement("button");
@@ -444,7 +573,7 @@ function pageHtml(css: string, tokens: Record<string, string>): string {
 </script></body></html>`;
 }
 
-// ── Harness ─────────────────────────────────────────────────────────────────
+// Harness
 
 const failures: string[] = [];
 const lines: string[] = [];
@@ -453,16 +582,33 @@ function check(ok: boolean, msg: string): void {
   if (!ok) failures.push(msg);
 }
 
+/**
+ * The built stylesheet for one bundle.
+ *
+ * The hash in the filename is OPTIONAL, and that is not a tolerance -- it is the
+ * estate's two real spellings. Most bundles emit vite's default `index-<hash>.css`;
+ * `tELS/client/web` sets `assetFileNames: "assets/[name][extname]"` deliberately
+ * (see its vite.config.ts: a renamed bundle 404s off FiveM's file table until a
+ * `refresh`, and FiveM keys its cache on the file hash, not the name), so it emits
+ * a bare `index.css`. Matching only `<prefix>*` made this probe throw
+ * "expected exactly one index-*.css ... found 0" on a CORRECT tELS build, so
+ * `bun run probe:focus` exited 1 and tELS's cases could never run at all --
+ * a gate that cannot pass, which is worse than no gate.
+ */
 function newestCss(dir: string, prefix: string): string {
   if (!existsSync(dir)) {
     throw new Error(`no built assets at ${dir} -- build the bundle first`);
   }
-  const names = [...new Set(readdirSyncSafe(dir))].filter(
-    (n) => n.startsWith(prefix) && n.endsWith(".css")
-  );
+  // A trailing '-' in the prefix is the hash separator, so it is part of what is
+  // optional. `[^.]+` rather than `\w+` because a vite hash can itself contain '-'
+  // (tRadio ships `cef-Brz-C1Wx.css`).
+  const base = prefix.replace(/-$/, "");
+  const pattern = new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(-[^.]+)?\\.css$`);
+  const names = [...new Set(readdirSyncSafe(dir))].filter((n) => pattern.test(n));
   if (names.length !== 1) {
     throw new Error(
-      `expected exactly one ${prefix}*.css in ${dir}, found ${names.length}: ${names.join(", ")}`
+      `expected exactly one ${base}.css or ${base}-<hash>.css in ${dir}, ` +
+        `found ${names.length}: ${names.join(", ") || "(none)"}`
     );
   }
   return resolve(dir, names[0]);
@@ -505,9 +651,7 @@ try {
         `${bundle.name}: no ring-namespace rule in the built sheet (${ringRules})`
       );
     } else {
-      console.log(
-        `     ring-namespace rules: ${ringRules} (exempt bundle, reported not asserted)`
-      );
+      console.log(`     ring-namespace rules: ${ringRules} (exempt bundle, reported not asserted)`);
     }
 
     const html = pageHtml(css, bundle.tokens);
@@ -548,7 +692,7 @@ try {
 
       const mount = async (control?: "ring" | "outward"): Promise<void> => {
         await page.evaluate(
-          `window.probe.mount(${JSON.stringify(c.tag)}, ${JSON.stringify(c.classes)}, ${c.trigger === "tab-in"})`
+          `window.probe.mount(${JSON.stringify(c.tag)}, ${JSON.stringify(c.classes)}, ${c.trigger === "tab-in"}, ${c.focusable === true})`
         );
         if (control) await page.evaluate(`window.probe.control(${JSON.stringify(control)})`);
         await new Promise((r) => setTimeout(r, 60));
@@ -565,13 +709,16 @@ try {
         await new Promise((r) => setTimeout(r, 120)); // the outline-color transition
       };
 
-      // ── The measurement. OFF then ON; the verdict is the delta.
+      // The measurement. OFF then ON; the verdict is the delta.
       await mount();
-      const off = c.trigger === "static" ? await (async () => {
-        await page.evaluate("window.probe.strip()");
-        await new Promise((r) => setTimeout(r, 60));
-        return shoot();
-      })() : await shoot();
+      const off =
+        c.trigger === "static"
+          ? await (async () => {
+              await page.evaluate("window.probe.strip()");
+              await new Promise((r) => setTimeout(r, 60));
+              return shoot();
+            })()
+          : await shoot();
       if (c.trigger === "static") await mount();
       await turnOn();
       if (c.trigger === "tab" || c.trigger === "tab-in") {
@@ -581,10 +728,12 @@ try {
       }
       const on = await shoot();
       const delta = on - off;
-      lines.push(`${bundle.name.padEnd(19)} ${c.name.padEnd(52)} ${String(off).padStart(5)} -> ${String(on).padStart(5)}  (+${delta})`);
+      lines.push(
+        `${bundle.name.padEnd(19)} ${c.name.padEnd(52)} ${String(off).padStart(5)} -> ${String(on).padStart(5)}  (+${delta})`
+      );
       check(delta > 0, `${c.name}: the indicator PAINTS -- ${off} -> ${on} px (+${delta})`);
 
-      // ── Control 1: the outward box-shadow the ring compiled to. Must be 0.
+      // Control 1: the outward box-shadow the ring compiled to. Must be 0.
       await mount("ring");
       const ringOff = await shoot();
       await turnOn();
@@ -594,15 +743,25 @@ try {
         `${c.name}: CONTROL the outward box-shadow a ring compiles to paints 0 inside the clipper (${ringOn - ringOff})`
       );
 
-      // ── Control 2: the same outline, pushed outward. Must be 0.
-      await mount("outward");
-      const outOff = await shoot();
-      await turnOn();
-      const outOn = await shoot();
-      check(
-        outOn - outOff === 0,
-        `${c.name}: CONTROL the same outline at a POSITIVE offset paints 0 (${outOn - outOff})`
-      );
+      // Control 2: the same outline, pushed outward. Must be 0.
+      //
+      // Skipped only where the target is not flush with the clipper, in which case
+      // nothing is clipped and 0 would be the wrong assertion -- see
+      // `Case.skipOutwardControl`. Reported either way, so a skip is never silent.
+      if (c.skipOutwardControl) {
+        console.log(
+          `  skip  ${c.name}: CONTROL positive offset -- target is not flush with the clipper`
+        );
+      } else {
+        await mount("outward");
+        const outOff = await shoot();
+        await turnOn();
+        const outOn = await shoot();
+        check(
+          outOn - outOff === 0,
+          `${c.name}: CONTROL the same outline at a POSITIVE offset paints 0 (${outOn - outOff})`
+        );
+      }
     }
   }
 } finally {

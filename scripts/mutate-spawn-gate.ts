@@ -44,8 +44,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "containment",
     proves: "a binary resolving outside the caller's directory is refused",
-    from: "    if (target !== realRoot && !target.startsWith(realRoot + probes.sep)) return \"\";",
-    to: "    if (false) return \"\";",
+    from: '    if (target !== realRoot && !target.startsWith(realRoot + probes.sep)) return "";',
+    to: '    if (false) return "";',
   },
   {
     name: "case-folding-is-not-containment",

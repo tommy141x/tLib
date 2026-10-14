@@ -1,7 +1,7 @@
 /**
  * Deliberately-wrong fixture for `scripts/boolean-attr-selector-scan.ts`.
  *
- * ⚠️ DO NOT "FIX" THIS FILE. Every defect in it is load-bearing. It is not
+ * DO NOT "FIX" THIS FILE. Every defect in it is load-bearing. It is not
  * imported, not built, not type-checked against the app and renders nothing;
  * it exists so that a drifted scanner rule FAILS instead of reporting zero.
  *

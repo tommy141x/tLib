@@ -34,12 +34,12 @@
  *
  * `assets/` is git-ignored and is not shipped, so this is safe to regenerate at will.
  *
- * ⚠️ This drives the REAL built bundle with a mocked NUI transport, exactly as
+ * This drives the REAL built bundle with a mocked NUI transport, exactly as
  * `tests/browser/*.ts` do — same `GetParentResourceName` stub, same `https://tlib/**` route,
  * same `{name, args:[payload]}` envelope. The fixtures are the difference: `gallery-fixtures.ts`
  * is representative content, those harnesses use content chosen to break things.
  *
- * ⚠️ Every shot asserts its surface is actually on screen before the shutter. Without that, a
+ * Every shot asserts its surface is actually on screen before the shutter. Without that, a
  * payload the UI silently rejected photographs as an empty page that looks like a real result.
  */
 
@@ -91,7 +91,7 @@ const want = (s: Surface) => only.includes(s);
 const flags: string[] = [];
 const written: string[] = [];
 
-// ── The prop editor: one run per host, out of that host's own bundle ────────
+// The prop editor: one run per host, out of that host's own bundle
 // First, and in its own block, because it is the one surface that does not come out of
 // tLib's bundle — everything below this point is about tLib's own NUI, and a
 // `--only propeditor` run has no reason to build it or open a browser on it.
@@ -130,16 +130,20 @@ if (!only.some((s) => s !== "propeditor")) {
 
 if (process.argv.includes("--rebuild") || !(await Bun.file(join(dist, "index.html")).exists())) {
   console.log("[tLib gallery] building client/ui");
-  const res = Bun.spawnSync(["bun", "run", "build"], { cwd: ROOT, stdout: "inherit", stderr: "inherit" });
+  const res = Bun.spawnSync(["bun", "run", "build"], {
+    cwd: ROOT,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
   if (res.exitCode !== 0) process.exit(res.exitCode ?? 1);
 }
-
 
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
   fetch(request) {
-    const relative = decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, "") || "index.html";
+    const relative =
+      decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, "") || "index.html";
     const path = resolve(dist, relative);
     // The URL decides the path, so it is confined to the bundle rather than trusted.
     if (!path.startsWith(dist + sep)) return new Response("", { status: 403 });
@@ -160,7 +164,8 @@ const MENU_CLOSED = { version: 1, visible: false, menus: [] };
 let menuSnapshot: unknown = MENU_CLOSED;
 
 await page.addInitScript(() => {
-  (window as unknown as { GetParentResourceName: () => string }).GetParentResourceName = () => "tLib";
+  (window as unknown as { GetParentResourceName: () => string }).GetParentResourceName = () =>
+    "tLib";
 });
 await page.route("https://tlib/**", async (route) => {
   const event = new URL(route.request().url()).pathname;
@@ -175,10 +180,10 @@ await page.route(`${MARKET_OPEN.baseUrl}/**`, async (route) => {
 });
 
 const send = (name: string, data?: unknown) =>
-  page.evaluate(
-    ({ name, data }) => window.postMessage({ name, args: [data] }, location.origin),
-    { name, data }
-  );
+  page.evaluate(({ name, data }) => window.postMessage({ name, args: [data] }, location.origin), {
+    name,
+    data,
+  });
 
 await page.goto(`http://127.0.0.1:${server.port}`);
 await page.addStyleTag({ content: `html,body{background:${background} !important}` });
@@ -214,18 +219,21 @@ const MAX_VIEWPORT_H = 3000;
  * overflow is inside an element rather than the document.
  */
 async function clippedBy(selector: string): Promise<number> {
-  return await page.locator(selector).first().evaluate((root, tolerance) => {
-    let worst = 0;
-    for (const el of [root, ...root.querySelectorAll("*")] as HTMLElement[]) {
-      const over = el.scrollHeight - el.clientHeight;
-      // Only containers that actually scroll: `visible` overflow reports the same numbers while
-      // painting outside its box, and is therefore in the shot already.
-      if (over <= tolerance) continue;
-      const overflow = getComputedStyle(el).overflowY;
-      if (overflow === "auto" || overflow === "scroll") worst = Math.max(worst, over);
-    }
-    return worst;
-  }, CLIP_TOLERANCE_PX);
+  return await page
+    .locator(selector)
+    .first()
+    .evaluate((root, tolerance) => {
+      let worst = 0;
+      for (const el of [root, ...root.querySelectorAll("*")] as HTMLElement[]) {
+        const over = el.scrollHeight - el.clientHeight;
+        // Only containers that actually scroll: `visible` overflow reports the same numbers while
+        // painting outside its box, and is therefore in the shot already.
+        if (over <= tolerance) continue;
+        const overflow = getComputedStyle(el).overflowY;
+        if (overflow === "auto" || overflow === "scroll") worst = Math.max(worst, over);
+      }
+      return worst;
+    }, CLIP_TOLERANCE_PX);
 }
 
 /**
@@ -256,14 +264,16 @@ async function shoot(name: string, selector: string): Promise<void> {
     // has to over-ask to converge rather than creep.
     const height = Math.min(MAX_VIEWPORT_H, Math.ceil(current + over / 0.85) + 16);
     if (height <= current) {
-      flags.push(`${name}: ${over}px of it is scrolled out of the shot, at the ${MAX_VIEWPORT_H}px viewport ceiling`);
+      flags.push(
+        `${name}: ${over}px of it is scrolled out of the shot, at the ${MAX_VIEWPORT_H}px viewport ceiling`
+      );
       break;
     }
     await page.setViewportSize({ width: vpW, height });
     await page.waitForTimeout(250);
     grown = true;
 
-    // ⚠️ Stop on what the growth MEASURED, not on an attempt budget. A surface with a fixed pixel
+    // Stop on what the growth MEASURED, not on an attempt budget. A surface with a fixed pixel
     // height does not grow with the viewport at all — `.mp-panel` is 650px tall at both 900px and
     // 1788px of viewport, and its list overflows by the same 112px either way. Against a fixed
     // budget that spends every attempt, gains nothing, and then takes the shot without flagging:
@@ -292,7 +302,6 @@ async function shoot(name: string, selector: string): Promise<void> {
     await page.waitForTimeout(250);
   }
 }
-
 
 if (want("menu")) {
   for (const entry of MENUS) {
@@ -408,8 +417,7 @@ await server.stop(true);
 // tLib's own surfaces are all at this viewport; the prop-editor shots are at each
 // consumer's, which is why that count is called out separately rather than folded in.
 console.log(
-  `[tLib gallery] ${written.length} shots → ${outDir}` +
-    ` (tLib's own surfaces at ${vpW}x${vpH})`
+  `[tLib gallery] ${written.length} shots → ${outDir}` + ` (tLib's own surfaces at ${vpW}x${vpH})`
 );
 for (const flag of flags) console.log(`  flag: ${flag}`);
 if (!written.length) process.exit(1);

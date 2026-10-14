@@ -10,7 +10,7 @@
  *   bun run check:boolattr --strict         # also fail on `unknown` / `never-emitted`
  *   bun run check:boolattr --root <dir>     # scan a consumer instead
  *
- * ── THE DEFECT ───────────────────────────────────────────────────────────────
+ * THE DEFECT
  *
  * `@solidjs/web/dist/web.js`:
  *
@@ -26,29 +26,15 @@
  * there is no longer any "false" value to match. No error, no warning, no build
  * failure: the base rule simply wins.
  *
- * It shipped. tRadio's `/tradio` Callsign row declares its Set button
- * `flex = "shrink"`; with `.tlib-nui-field-cell[data-shrink="true"]` dead the
- * button fell back to `flex: 1 1 140px` and took half the row, and with
- * `[data-labelless="true"]` dead it lost its 26px pad and sat a label-height
- * above the input. One serialisation change, both halves of the misalignment,
- * caught by a user with a screenshot.
- *
- * ── WHY THE CONTROL IS THE POINT ─────────────────────────────────────────────
+ * WHY THE CONTROL IS THE POINT
  *
  * Every rule below is also run against `boolean-attr-selector-control.fixture.tsx`,
  * a file written to be wrong on purpose. If a rule stops matching there the whole
  * run exits 2 — even when the real tree reports clean.
  *
- * That is not ceremony. This defect survived the migration precisely because
- * every signal available read as "fine": zero compiler errors, zero lint
- * findings, zero failing tests. A scanner whose regex has drifted — a renamed
- * attribute convention, a reformatted selector, biome wrapping a ternary —
- * reports zero findings, and a zero from a drifted rule is indistinguishable
- * from a clean tree. The control is the only thing that tells those apart.
- *
  * The control is always read from THIS repo, so `--root` cannot weaken it.
  *
- * ── WHAT IS AND IS NOT A FINDING ─────────────────────────────────────────────
+ * WHAT IS AND IS NOT A FINDING
  *
  * The scanner does not flag a selector for its shape. It resolves how the
  * attribute is actually PRODUCED in the same project first:
@@ -72,7 +58,7 @@
  * passed as one. It is only flagged when the JSX hands it a RAW boolean, which
  * writes `aria-x=""` — invalid ARIA, and dead against any `="true"` selector.
  *
- * ── SOLID 1 ROOTS ────────────────────────────────────────────────────────────
+ * SOLID 1 ROOTS
  *
  * Under Solid 1 the same site is CORRECT: `data-x={bool}` stringified. Scanning
  * a Solid 1 root therefore reports its findings as `latent` and does not fail.
@@ -80,7 +66,7 @@
  * is migrated. This project's own version is read from the package.json files
  * under the root, so nothing has to be passed in.
  *
- * ⚠️ AND DO NOT PRE-EMPTIVELY APPLY THE FIX THERE. Presence is exact under Solid
+ * AND DO NOT PRE-EMPTIVELY APPLY THE FIX THERE. Presence is exact under Solid
  * 2 only because `false` REMOVES the attribute. Solid 1 writes `data-x="false"`,
  * which IS present — so `[data-x]` in a Solid 1 project matches the false state
  * too, and converting early inverts the rule instead of future-proofing it. The
@@ -115,9 +101,7 @@ const STRICT = process.argv.includes("--strict");
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "backups", "assets", "solid-compat"]);
 /**
  * Every dot-directory, which is ripgrep's default and the right call here:
- * `.output`, `.nitro`, `.vinxi` are build output, and tCAD keeps a whole
- * pre-migration tree in `.migration-backup/`. Reported as 6 dead selectors on
- * the first run — all of them in code that is not loaded by anything.
+ * build output, and the pre-migration trees a consumer keeps in one.
  */
 const skipDir = (name: string) => SKIP_DIRS.has(name) || name.startsWith(".");
 const SCAN_EXT = /\.(css|scss|html|tsx?|jsx?|mdx)$/;
@@ -235,7 +219,7 @@ type Binding = {
 };
 
 /**
- * ⚠️ REACT IS NOT AFFECTED. React stringifies a boolean `data-*`/`aria-*` value
+ * REACT IS NOT AFFECTED. React stringifies a boolean `data-*`/`aria-*` value
  * to "true"/"false", so `[data-x="true"]` beside `data-x={bool}` is CORRECT in a
  * React file and must not be touched. shark-ui ships a `registry/react` and a
  * `registry/solid` side by side, with the same component in both — without this,
@@ -412,7 +396,7 @@ function evaluate(sites: Site[], producers: Producers, solidMajor: number): Find
     // instead of silently becoming `never-emitted`.
     const app = all.filter((b) => !b.fromTest);
     let bindings = app.length > 0 ? app : all;
-    // ⚠️ Same-renderer bindings win when there are any.
+    // Same-renderer bindings win when there are any.
     //
     // shark-ui ships `registry/react` and `registry/solid` side by side with the
     // same component in both, and `data-active` is bound to a boolean in each.

@@ -3,7 +3,7 @@
  * Install (or re-install, or verify) the secret gate's per-resource wiring in
  * every sibling resource.
  *
- * ── Why a provisioner and not eleven hand edits ────────────────────────────
+ * Why a provisioner and not eleven hand edits
  *
  * The gate itself is one implementation in tLib. The per-resource part is four
  * small things — a `.githooks/pre-commit`, three `package.json` scripts, a
@@ -20,7 +20,7 @@
  *   bun run scripts/secret-gate-provision.ts --check     # assert, exit 1 on drift
  *   bun run scripts/secret-gate-provision.ts --only tRadio
  *
- * ⚠️ It does NOT run `git add`, `git commit` or `git config`. Writing files is
+ * It does NOT run `git add`, `git commit` or `git config`. Writing files is
  * reversible and reviewable; staging and committing on a developer's behalf in
  * eleven repos is not. `core.hooksPath` is set by each resource's own
  * `secrets:install-hooks`, which is in its `setup`.
@@ -136,7 +136,7 @@ function provision(repo: string, repoRoot: string, check: boolean): Change[] {
 
   // 2. package.json scripts.
   //
-  // ⚠️ Inserted TEXTUALLY, immediately after `"scripts": {`, never by
+  // Inserted TEXTUALLY, immediately after `"scripts": {`, never by
   // parse-and-restringify. Several of these package.json files have hand-set
   // indentation (tLib's and tRadio's mix two and four spaces around their
   // `//…:control` doc entries), and a round-trip through `JSON.stringify`

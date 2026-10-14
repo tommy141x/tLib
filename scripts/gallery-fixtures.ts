@@ -17,13 +17,13 @@
  */
 
 import type { DialogData } from "../client/web/src/components/dialog-model.ts";
-import type { MarketplaceItem, OpenData } from "../shared/ts/marketplace/ui/types.ts";
-import type { ToastData } from "../client/web/src/lib/toast-lifetime.ts";
-import type { Anchor, Component } from "../shared/ts/hud-geometry.ts";
 import type { LayoutOpen } from "../client/web/src/layout/LayoutEditor.tsx";
+import type { ToastData } from "../client/web/src/lib/toast-lifetime.ts";
 import type { Branding, Snapshot } from "../client/web/src/menu/types.ts";
+import type { Anchor, Component } from "../shared/ts/hud-geometry.ts";
+import type { MarketplaceItem, OpenData } from "../shared/ts/marketplace/ui/types.ts";
 
-// ── Menus ───────────────────────────────────────────────────────────────────
+// Menus
 
 /** Every row kind on one page: that is the point of the shot. */
 const CONTROLS: Snapshot = {
@@ -56,7 +56,13 @@ const CONTROLS: Snapshot = {
         { id: "h", kind: "status", label: "Plate", rightLabel: "46EEK572" },
         { id: "i", kind: "submenu", label: "Performance", menu: "gallery:stats" },
         { id: "j", kind: "action", label: "Delete vehicle", danger: true },
-        { id: "k", kind: "action", label: "Impound", description: "No impound lot nearby.", disabled: true },
+        {
+          id: "k",
+          kind: "action",
+          label: "Impound",
+          description: "No impound lot nearby.",
+          disabled: true,
+        },
       ],
     },
   ],
@@ -115,8 +121,16 @@ const STATS: Snapshot = {
           label: "Engine",
           value: "3",
           options: [
-            { label: "Stock", value: "0", vehicleStats: { speed: 0.52, acceleration: 0.48, braking: 0.4, traction: 0.61 } },
-            { label: "EMS Level 4", value: "3", vehicleStats: { speed: 0.71, acceleration: 0.78, braking: 0.4, traction: 0.61 } },
+            {
+              label: "Stock",
+              value: "0",
+              vehicleStats: { speed: 0.52, acceleration: 0.48, braking: 0.4, traction: 0.61 },
+            },
+            {
+              label: "EMS Level 4",
+              value: "3",
+              vehicleStats: { speed: 0.71, acceleration: 0.78, braking: 0.4, traction: 0.61 },
+            },
           ],
           vehicleStats: { speed: 0.71, acceleration: 0.78, braking: 0.4, traction: 0.61 },
         },
@@ -164,7 +178,7 @@ export const MENUS: ReadonlyArray<{ id: string; snapshot: Snapshot; branding: Br
   { id: "controls-accent", snapshot: CONTROLS, branding: branded("default", "#e0662a") },
 ];
 
-// ── Dialogs ─────────────────────────────────────────────────────────────────
+// Dialogs
 
 export const DIALOGS: readonly DialogData[] = [
   {
@@ -229,7 +243,12 @@ export const DIALOGS: readonly DialogData[] = [
       { id: "text", type: "text", label: "Text", placeholder: "Type here" },
       { id: "number", type: "number", label: "Number", defaultValue: 12, min: 0, max: 100 },
       { id: "password", type: "password", label: "Password", defaultValue: "hunter2" },
-      { id: "textarea", type: "textarea", label: "Notes", defaultValue: "Rear bumper damage, reported 14:20." },
+      {
+        id: "textarea",
+        type: "textarea",
+        label: "Notes",
+        defaultValue: "Rear bumper damage, reported 14:20.",
+      },
       {
         id: "select",
         type: "select",
@@ -283,17 +302,27 @@ export const DIALOGS: readonly DialogData[] = [
   },
 ];
 
-// ── Toasts ──────────────────────────────────────────────────────────────────
+// Toasts
 
 export const TOASTS: readonly ToastData[] = [
-  { id: "t-success", type: "success", title: "Vehicle stored", description: "Buffalo STX · Legion Square" },
+  {
+    id: "t-success",
+    type: "success",
+    title: "Vehicle stored",
+    description: "Buffalo STX · Legion Square",
+  },
   { id: "t-error", type: "error", title: "Not enough cash", description: "$18,400 short." },
-  { id: "t-warning", type: "warning", title: "Engine damaged", description: "Repair before the next call." },
+  {
+    id: "t-warning",
+    type: "warning",
+    title: "Engine damaged",
+    description: "Repair before the next call.",
+  },
   { id: "t-info", type: "info", title: "Shift starts in 5 minutes" },
   { id: "t-loading", type: "loading", title: "Installing layout…", description: "WCC2 · 1.4 MB" },
 ];
 
-// ── Marketplace ─────────────────────────────────────────────────────────────
+// Marketplace
 
 const item = (
   slug: string,
@@ -316,8 +345,22 @@ const item = (
 });
 
 export const MARKET_UIS: readonly MarketplaceItem[] = [
-  item("wcc-slimline", "WCC Slimline", "ui", "A narrow lightbar HUD for a single-row chassis.", 1840, 412_000),
-  item("wcc-console", "WCC Console", "ui", "Console-style HUD with per-stage readouts.", 906, 631_000),
+  item(
+    "wcc-slimline",
+    "WCC Slimline",
+    "ui",
+    "A narrow lightbar HUD for a single-row chassis.",
+    1840,
+    412_000
+  ),
+  item(
+    "wcc-console",
+    "WCC Console",
+    "ui",
+    "Console-style HUD with per-stage readouts.",
+    906,
+    631_000
+  ),
   item("wcc-minimal", "WCC Minimal", "ui", "Four indicators and nothing else.", 2417, 184_000),
 ];
 
@@ -334,7 +377,7 @@ export const MARKET_OPEN: OpenData = {
   initialTab: "uis",
 };
 
-// ── Layout editor ───────────────────────────────────────────────────────────
+// Layout editor
 
 /** Offsets are a ratio of a 1080px reference screen (geometry.ts REFERENCE_HEIGHT), NOT pixels —
  *  a literal 24 here is 24 screen-heights out and the widget lands nowhere. `ref()` converts. */

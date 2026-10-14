@@ -28,7 +28,7 @@
  * So: this sweep is cheap, offline, always valid, and lives in
  * `check:regression`. The artifact assertion lives at the point of release.
  *
- * Exit 0 pass, 1 a finding, 2 the gate could not run. ⚠️ Exit 2 is NOT a pass.
+ * Exit 0 pass, 1 a finding, 2 the gate could not run. Exit 2 is NOT a pass.
  */
 
 import { existsSync, readdirSync } from "node:fs";
@@ -45,7 +45,7 @@ const SIBLINGS = resolve(TLIB, "..");
 const strict = process.argv.includes("--strict");
 
 /**
- * ⛔ The floor. "No resource has a bad declaration" and "no resource was read"
+ * The floor. "No resource has a bad declaration" and "no resource was read"
  * are otherwise the same green, and the discovery below is a directory listing
  * filtered by a name pattern — exactly the kind of thing that returns an empty
  * array after a reorganisation and reports success.

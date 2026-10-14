@@ -16,6 +16,8 @@
  * retired from the scanner, delete its case here in the same commit.
  */
 
+// rule: solid1-type-moved  (JSX and ValidComponent belong to @solidjs/web now)
+import type { Component, JSX, ValidComponent } from "solid-js";
 // rule: solid1-import-removed  (onMount, mergeProps, splitProps, on, Index)
 import {
   createEffect,
@@ -27,12 +29,10 @@ import {
   onMount,
   splitProps,
 } from "solid-js";
-// rule: solid1-type-moved  (JSX and ValidComponent belong to @solidjs/web now)
-import type { Component, JSX, ValidComponent } from "solid-js";
-// rule: solid1-web-import
-import { Dynamic, Portal } from "solid-js/web";
 // rule: solid1-store-import
 import { createStore } from "solid-js/store";
+// rule: solid1-web-import
+import { Dynamic, Portal } from "solid-js/web";
 
 type ControlState = { open: boolean; label: string };
 

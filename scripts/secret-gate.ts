@@ -2,14 +2,14 @@
 /**
  * The one secret gate, run by every resource.
  *
- * ⚠️ THIS FILE LIVES IN tLib AND IS RUN BY ALL OF THEM. The per-resource part
+ * THIS FILE LIVES IN tLib AND IS RUN BY ALL OF THEM. The per-resource part
  * is a `.githooks/pre-commit` shim, two `package.json` scripts and a CI
  * workflow — nothing that can drift. The precedent is tUnit's `scan:solid2`,
  * which already runs `../tLib/scripts/solid2-scan.ts` for exactly this reason:
  * "a rule that has drifted reports zero, and zero reads exactly like a finished
  * migration".
  *
- * ── Usage ──────────────────────────────────────────────────────────────────
+ * Usage
  *
  *   bun run ../tLib/scripts/secret-gate.ts                 # HEAD  (CI backstop)
  *   bun run ../tLib/scripts/secret-gate.ts --staged        # index (pre-commit)
@@ -21,7 +21,7 @@
  * Exit codes: 0 clean, 1 a credential has a value, 2 the gate could not run
  * (no repo, no config files found, a malformed policy). A 2 is NOT a pass.
  *
- * ── Where a developer's local value lives ──────────────────────────────────
+ * Where a developer's local value lives
  *
  * Not in the tracked file. The tracked `config.lua` holds blanks permanently
  * and the real values live in a gitignored sidecar next to it
@@ -123,7 +123,7 @@ type ReadFiles = {
 };
 
 /**
- * ⚠️ A file this could not read is reported, never swallowed.
+ * A file this could not read is reported, never swallowed.
  *
  * MEASURED 2026-10-06: tDB has `config.example.lua` staged as an ADD and
  * `config.lua` staged as a delete, so at HEAD neither exists. An earlier draft

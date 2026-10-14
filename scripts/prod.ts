@@ -62,6 +62,7 @@ runProd(
       "server/sv_menu.lua",
       "server/sv_permission.lua",
       "server/sv_serversettings.lua",
+      "server/sv_telemetry.lua",
       "server/lib/adapter",
       "server/lib/menu",
       "server/dist/bundle.js",

@@ -10,7 +10,7 @@
  *   bun run ../tLib/scripts/deck-stale.ts --id … --repo /path/to/resource
  *   bun run ../tLib/scripts/deck-stale.ts --id … --list      # name every source file
  *
- * ── Why this exists ─────────────────────────────────────────────────────────
+ * Why this exists
  *
  * Because it had already happened. On 2026-10-06 tRadio's published download was
  * five days old and 9 files short of its own source tree — missing two property
@@ -19,7 +19,7 @@
  * are tracked, and no gate related the two. The measurement is in the header of
  * tLib/shared/ts/build/deck-pack.ts.
  *
- * ── What it asserts, and what it only reports ───────────────────────────────
+ * What it asserts, and what it only reports
  *
  * Asserted: the stamp beside the plugin describes the published artifact's exact
  * bytes, AND the hash of the source set still matches what the stamp recorded.

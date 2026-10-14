@@ -5,7 +5,7 @@
  *
  *   bun run ../tLib/scripts/deck-stale-control.ts --id com.timmyg-studios.tradio
  *
- * ── Why this is here ────────────────────────────────────────────────────────
+ * Why this is here
  *
  * Because the gate's green output and a gate that measured nothing look
  * identical. `deck-stale` prints a file count and two hashes; a copy of the
@@ -15,7 +15,7 @@
  * `//controls` note in tRadio/package.json for the roll-call — so the gate does
  * not get to be trusted on its own say-so.
  *
- * ── How it works, and why it needs no Elgato CLI and no network ─────────────
+ * How it works, and why it needs no Elgato CLI and no network
  *
  * It builds a SYNTHETIC resource root in the OS temp directory: the real plugin
  * project copied in, plus a `docs/public/<id>.streamDeckPlugin` of arbitrary
@@ -26,7 +26,7 @@
  * whole rule set without running `streamdeck pack`, without `bun install`, and
  * without touching anything inside the repo.
  *
- * ── The cases ───────────────────────────────────────────────────────────────
+ * The cases
  *
  * A BASELINE that must be green, with a floor under the file count (an empty
  * copy would make every case below red for the wrong reason), then one planted
@@ -51,7 +51,7 @@
  * not measure, and reading a 2 as a pass is how a gate that measures nothing
  * stays green forever.
  *
- * ── STILL UNPROVEN, and it says so here rather than nowhere ─────────────────
+ * STILL UNPROVEN, and it says so here rather than nowhere
  *
  * One tamper passes: edit a source file, then rewrite the stamp from the edited
  * tree without re-packing. Both hashes then agree and the published artifact is
@@ -69,13 +69,13 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { deckPaths, scanDeckSources } from "../shared/ts/build/deck-pack.ts";
@@ -217,7 +217,7 @@ function check(name: string, expected: number, plant: (root: string) => void): v
 }
 
 try {
-  // ── baseline ──────────────────────────────────────────────────────────────
+  // baseline
   const base = build();
   const baseRun = runGate(base.root);
   note(`deck-stale-control: ${pluginId}`);
@@ -240,7 +240,7 @@ try {
   }
   note(`  ok    baseline           exit 0`);
 
-  // ── defects that must be caught ───────────────────────────────────────────
+  // defects that must be caught
   check("source-edited", 1, (root) => {
     const f = anySdPluginFile(root);
     writeFileSync(f, `${readFileSync(f, "utf8")}\n`);
@@ -278,7 +278,7 @@ try {
     writeFileSync(paths.stamp, `${JSON.stringify(stamp, null, 2)}\n`);
   });
 
-  // ── the gate must say "I could not measure", never "fine" ─────────────────
+  // the gate must say "I could not measure", never "fine"
   check("no-sdplugin", 2, (root) => {
     rmSync(join(root, pluginDir, `${pluginId}.sdPlugin`), { recursive: true, force: true });
   });
@@ -287,7 +287,7 @@ try {
     rmSync(join(root, pluginDir, "src"), { recursive: true, force: true });
   });
 
-  // ── decoys: these must NOT fail ───────────────────────────────────────────
+  // decoys: these must NOT fail
   check("bin-edited", 0, (root) => {
     writeFileSync(
       join(root, pluginDir, `${pluginId}.sdPlugin`, "bin", "plugin.js"),

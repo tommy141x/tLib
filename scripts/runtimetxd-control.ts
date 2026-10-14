@@ -81,7 +81,15 @@ for (const [mode, patches] of Object.entries(MODES)) {
   writeFileSync(file, patched);
 
   const result = Bun.spawnSync(
-    ["bunx", "--bun", "--package", "fengari-node-cli", "fengari", "scripts/run-lua-suite.lua", SUITE],
+    [
+      "bunx",
+      "--bun",
+      "--package",
+      "fengari-node-cli",
+      "fengari",
+      "scripts/run-lua-suite.lua",
+      SUITE,
+    ],
     {
       cwd: root,
       env: { ...process.env, RUNTIMETXD_CONTROL: mode, RUNTIMETXD_SOURCE: file },
@@ -100,7 +108,9 @@ for (const [mode, patches] of Object.entries(MODES)) {
     );
     failures++;
   } else {
-    console.log(`ok   control ${mode}: ${(out.split(/\r?\n/).find((l) => l.includes(expected)) ?? "").trim()}`);
+    console.log(
+      `ok   control ${mode}: ${(out.split(/\r?\n/).find((l) => l.includes(expected)) ?? "").trim()}`
+    );
   }
 }
 
