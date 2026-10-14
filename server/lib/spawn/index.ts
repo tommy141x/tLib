@@ -4,27 +4,11 @@
  * Everything crosses as JSON strings because the callers are a mix of Lua,
  * bundled TypeScript and plain CommonJS, and the shapes are small.
  *
- * ## Why this exists
- *
- * FXServer refuses `spawn` unless the *calling* resource is named in an
- * `add_unsafe_child_process_permission` line, and the check is attributed to
- * whichever resource's runtime made the call — measured, not assumed. So every
- * t* resource that ships a local engine needed its own line, and a customer who
- * dropped in a new one got a feature that silently did not work.
- *
- * One line for tLib replaces all of them. That is only an improvement if what
- * sits behind the line is *narrower* than four unrestricted grants, which is the
- * entire job of `catalog.ts` and `gate.ts`: a caller names a declared program,
- * never a path, and tLib builds the command line itself. What tDB could run
- * yesterday was "anything"; what it can run now is `pocketbase`, from inside its
- * own directory, with arguments matching a shape written down in tLib.
- *
- * ## What this does not claim
- *
- * `GetInvokingResource()` identifies the calling resource container and nothing
- * more. A hostile folder named `tDB` passes it, exactly as it passed
- * `add_unsafe_child_process_permission tDB`. Consolidation does not change that
- * and no comment here should suggest it does.
+ * FXServer attributes its `spawn` permission check to the CALLING resource, so
+ * every t* resource shipping a local engine needed its own
+ * `add_unsafe_child_process_permission` line. One line for tLib replaces them,
+ * and that is only an improvement because what sits behind it is NARROWER: see
+ * catalog.ts and docs/internal/spawn-gate.md.
  */
 
 import * as crypto from "node:crypto";
@@ -33,19 +17,14 @@ import * as path from "node:path";
 import { describeFamily } from "./catalog";
 import {
   currentResource,
+  fEmit,
   fExports,
   fOn,
   invokingResource,
   resourceAuthors,
   resourcePath,
 } from "./fivem";
-import {
-  type Platform,
-  type Probes,
-  type Refusal,
-  type Resolved,
-  resolveSpawn,
-} from "./gate";
+import { type Platform, type Probes, type Refusal, type Resolved, resolveSpawn } from "./gate";
 import { SpawnHost } from "./host";
 
 const host = new SpawnHost();
@@ -62,14 +41,10 @@ const probes: Probes = {
   },
   sha256: (target) => crypto.createHash("sha256").update(fs.readFileSync(target)).digest("hex"),
   authors: resourceAuthors,
-  // The one place the real platform is read. Everything downstream takes it as
-  // an argument, which is what lets the gate's whole test suite run under both
-  // shapes rather than only the one this machine happens to be.
-  //
-  // Anything that is not Windows is treated as Linux, because those are the two
-  // FXServer ships and a third would have no binaries in any catalog entry
-  // anyway — it fails at "not present inside <resource>", which names the real
-  // problem better than an unsupported-platform error would.
+  // The one place the real platform is read; everything downstream takes it as an
+  // argument, which is what lets the gate's suite run under both shapes. Anything
+  // that is not Windows is treated as Linux -- a third platform has no binaries
+  // in any catalog entry and fails at "not present inside <resource>".
   platform: () => (process.platform === "win32" ? "win32" : "linux") as Platform,
   join: (...parts) => path.join(...parts),
   resolve: (...parts) => path.resolve(...parts),
@@ -88,33 +63,50 @@ function decode(payload: unknown): Record<string, unknown> | null {
 }
 
 /**
- * Says yes once, loudly, and says no once, loudly.
- *
- * Every refusal reaches the console as well as the caller. A caller that
- * swallows the JSON error — and one of them will — otherwise turns a deliberate
- * security refusal into "the feature just does not work", which is the failure
- * mode that costs an evening.
+ * Says yes once, loudly, and says no once, loudly. Every refusal reaches the
+ * console as well as the caller: a caller that swallows the JSON error -- and one
+ * of them will -- otherwise turns a deliberate security refusal into "the feature
+ * just does not work".
  */
+const announced = new Set<string>();
+
 function announce(resource: string, plan: Resolved | Refusal, what: string): void {
   if ("error" in plan) {
     console.log(`[tLib] spawn: refused ${resource}'s ${what} — ${plan.error}`);
     return;
   }
   if (plan.authorWarning) console.log(`[tLib] spawn: ${plan.authorWarning}`);
-  console.log(
-    `[tLib] spawn: ${resource} → ${plan.program} ${plan.loggable.join(" ")} (cwd ${plan.cwd})`
-  );
+
+  // Once per (resource, program), not per invocation: tDB runs the same binary
+  // four times at boot -- update, superuser upsert, migrate, serve -- and the
+  // fourth copy of a sentence does not make it louder.
+  //
+  // Keyed on the PROGRAM, not the arguments, so a second program or a second
+  // resource is still a new fact and still announces. The refusal branch above
+  // is never deduplicated.
+  const key = `${resource}\u0000${plan.program}`;
+  if (announced.has(key)) return;
+  announced.add(key);
+
+  // Still says yes, once, per the contract above -- but WITHOUT the argument
+  // list and the absolute cwd. Those made each line ~200 characters, and tDB
+  // alone spawns four times at boot (update, superuser upsert, migrate, serve),
+  // so the single noisiest thing in a startup log was tLib narrating its own
+  // plumbing in full. The program and the resource are what an operator needs
+  // to see; the arguments are a debugging detail, and `plan` is already
+  // reachable from the gate's own tests and docs/internal/spawn-gate.md.
+  //
+  // The REFUSAL branch above is deliberately untouched and stays verbatim.
+  // A refusal that is quiet reads as "the feature just does not work", which is
+  // the exact failure this function's docstring exists to prevent.
+  console.log(`[tLib] spawn: ${resource} → ${plan.program}`);
 }
 
 /**
  * Wraps an export so a throw inside it does not reach the caller as `undefined`.
- *
- * FiveM does not propagate an exception across the export boundary: the caller's
- * `exports.tLib.X(...)` simply evaluates to `undefined`, and the first thing it
- * usually does with that is `JSON.parse`, which then reports `"undefined" is not
- * valid JSON`. That message names the symptom and hides the cause — measured
- * here, on the first live run of the probe path — so every export answers with
- * its own failure and writes the real one to the console.
+ * FiveM does not propagate an exception across the export boundary, and the
+ * caller's first `JSON.parse` then reports `"undefined" is not valid JSON` --
+ * naming the symptom and hiding the cause.
  */
 function guarded(name: string, fn: (...args: unknown[]) => string): (...args: unknown[]) => string {
   return (...args: unknown[]): string => {
@@ -130,29 +122,41 @@ function guarded(name: string, fn: (...args: unknown[]) => string): (...args: un
 
 export function installSpawn(): void {
   // The allowlist is hardcoded, so server.cfg no longer tells an operator who
-  // may spawn. This line is where they find out instead.
-  console.log(
-    `[tLib] spawn: child processes on behalf of — ${describeFamily().join(" | ")}. ` +
-      "One add_unsafe_child_process_permission tLib covers all of them."
-  );
+  // may spawn. This is still where they find out -- but it is now a ROW IN
+  // tLib'S BANNER rather than a separate line above it, because it is a static
+  // startup fact and that is what the banner is for. The intent is unchanged:
+  // the catalogue has to be visible somewhere an operator will actually look.
+  //
+  // DEFERRED BY A TICK, and it does not work without that. `installSpawn()`
+  // runs while this bundle is loading, which is BEFORE sv_main.lua calls the
+  // version check and subscribes to this event -- so emitting inline fired it
+  // into nothing and the row silently never appeared. Measured: the `Hub:` row
+  // landed and `Spawns:` did not, because the hub becomes ready later and this
+  // is known immediately. Being early is what broke it.
+  setTimeout(() => {
+    fEmit(
+      "tlib:vcInfo:spawns",
+      `${describeFamily().join(" | ")} (one add_unsafe_child_process_permission tLib covers all)`
+    );
+  }, 0);
 
   /** Start a long-lived process. Idempotent per key; returns `{ pid }` or `{ error }`. */
-  fExports("SpawnServe", guarded("SpawnServe", (payload: unknown): string => {
-    const resource = invokingResource();
-    const request = decode(payload);
-    if (!request) return JSON.stringify({ error: "malformed request" });
-    const key = typeof request.key === "string" ? request.key : "";
-    // `bytes` is the duplex mode: stdout comes back base64 with nothing dropped
-    // and stdin stays open for `SpawnWrite`. It exists for tAI's speech process,
-    // which exchanges length-prefixed audio frames rather than lines. It widens
-    // the DATA path only — the program, its path and its arguments go through
-    // exactly the same gate either way.
-    const mode = request.mode === "bytes" ? "bytes" : "lines";
-    const plan = resolveSpawn(resource, request, probes);
-    announce(resource, plan, `${String(request.program)} (${key})`);
-    if ("error" in plan) return JSON.stringify({ error: plan.error });
-    return host.serve(plan, resource, key, mode);
-  }) as (...args: unknown[]) => string);
+  fExports(
+    "SpawnServe",
+    guarded("SpawnServe", (payload: unknown): string => {
+      const resource = invokingResource();
+      const request = decode(payload);
+      if (!request) return JSON.stringify({ error: "malformed request" });
+      const key = typeof request.key === "string" ? request.key : "";
+      // `bytes` is the duplex mode, for tAI's speech process: it widens the DATA
+      // path only, and the program, path and arguments go through the same gate.
+      const mode = request.mode === "bytes" ? "bytes" : "lines";
+      const plan = resolveSpawn(resource, request, probes);
+      announce(resource, plan, `${String(request.program)} (${key})`);
+      if ("error" in plan) return JSON.stringify({ error: plan.error });
+      return host.serve(plan, resource, key, mode);
+    }) as (...args: unknown[]) => string
+  );
 
   /** Writes base64 bytes to a duplex child's stdin. `bytes` mode only. */
   fExports("SpawnWrite", (key: unknown, data: unknown): boolean => {
@@ -166,26 +170,35 @@ export function installSpawn(): void {
   });
 
   /** Lines a served process has written, plus whether it is still alive. */
-  fExports("SpawnOutput", guarded("SpawnOutput", (key: unknown, since: unknown): string => {
-    if (typeof key !== "string") return JSON.stringify({ lines: [], next: 0, alive: false });
-    return host.output(invokingResource(), key, Number(since) || 0);
-  }) as (...args: unknown[]) => string);
+  fExports(
+    "SpawnOutput",
+    guarded("SpawnOutput", (key: unknown, since: unknown): string => {
+      if (typeof key !== "string") return JSON.stringify({ lines: [], next: 0, alive: false });
+      return host.output(invokingResource(), key, Number(since) || 0);
+    }) as (...args: unknown[]) => string
+  );
 
   /** A one-shot process. Returns `{ job }`; poll `SpawnJob` for the result. */
-  fExports("SpawnRun", guarded("SpawnRun", (payload: unknown): string => {
-    const resource = invokingResource();
-    const request = decode(payload);
-    if (!request) return JSON.stringify({ error: "malformed request" });
-    const plan = resolveSpawn(resource, request, probes);
-    announce(resource, plan, String(request.program));
-    if ("error" in plan) return JSON.stringify({ error: plan.error });
-    return host.run(plan, resource, typeof request.stdin === "string" ? request.stdin : null);
-  }) as (...args: unknown[]) => string);
+  fExports(
+    "SpawnRun",
+    guarded("SpawnRun", (payload: unknown): string => {
+      const resource = invokingResource();
+      const request = decode(payload);
+      if (!request) return JSON.stringify({ error: "malformed request" });
+      const plan = resolveSpawn(resource, request, probes);
+      announce(resource, plan, String(request.program));
+      if ("error" in plan) return JSON.stringify({ error: plan.error });
+      return host.run(plan, resource, typeof request.stdin === "string" ? request.stdin : null);
+    }) as (...args: unknown[]) => string
+  );
 
-  fExports("SpawnJob", guarded("SpawnJob", (id: unknown): string => {
-    if (typeof id !== "string") return JSON.stringify({ state: "unknown" });
-    return host.job(invokingResource(), id);
-  }) as (...args: unknown[]) => string);
+  fExports(
+    "SpawnJob",
+    guarded("SpawnJob", (id: unknown): string => {
+      if (typeof id !== "string") return JSON.stringify({ state: "unknown" });
+      return host.job(invokingResource(), id);
+    }) as (...args: unknown[]) => string
+  );
 
   fExports("SpawnCancel", (id: unknown): boolean => {
     if (typeof id !== "string") return false;
@@ -193,9 +206,12 @@ export function installSpawn(): void {
   });
 
   /** Diagnostics: what is running, for whom. No paths, no arguments. */
-  fExports("SpawnList", guarded("SpawnList", (): string => JSON.stringify(host.list())));
+  fExports(
+    "SpawnList",
+    guarded("SpawnList", (): string => JSON.stringify(host.list()))
+  );
 
-  // ── Reaping ────────────────────────────────────────────────────────────────
+  // Reaping
   //
   // The feature, not an afterthought. See host.ts: a child started here belongs
   // to tLib's VM and will not die with its owner unless this fires.
@@ -208,7 +224,16 @@ export function installSpawn(): void {
       if (killed > 0) console.log(`[tLib] spawn: stopped ${killed} process(es) on shutdown`);
       return;
     }
-    const killed = host.killAll(resource);
-    if (killed > 0) console.log(`[tLib] spawn: stopped ${killed} process(es) for ${resource}`);
+    // Forget what was announced for it, or the dedupe above makes every spawn
+    // after a resource's first restart silent for the rest of tLib's life --
+    // a quiet grant being the thing announce() exists to prevent.
+    for (const key of announced) {
+      if (key.startsWith(`${resource}\u0000`)) announced.delete(key);
+    }
+
+    // Silent. Reaping a stopped resource's children is bookkeeping that always
+    // happens; tLib's OWN shutdown above still says so, because there the
+    // children outliving it is the failure this exists to prevent.
+    host.killAll(resource);
   });
 }

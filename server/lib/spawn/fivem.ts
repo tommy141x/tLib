@@ -6,10 +6,12 @@
 
 type ExportsFn = (name: string, fn: (...args: unknown[]) => unknown) => void;
 type OnFn = (event: string, handler: (...args: unknown[]) => void) => void;
+type EmitFn = (event: string, ...args: unknown[]) => void;
 
 const g = globalThis as unknown as {
   exports: ExportsFn;
   on: OnFn;
+  emit: EmitFn;
   GetInvokingResource?: () => string | null;
   GetResourcePath?: (resourceName: string) => string | null;
   GetCurrentResourceName?: () => string;
@@ -18,6 +20,8 @@ const g = globalThis as unknown as {
 
 export const fExports: ExportsFn = g.exports;
 export const fOn: OnFn = g.on;
+/** Used to feed tLib's own startup banner rather than printing extra lines. */
+export const fEmit: EmitFn = g.emit;
 
 /**
  * The resource on the other end of an export call.

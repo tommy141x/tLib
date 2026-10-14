@@ -6,7 +6,7 @@
 -- because nothing but the admin panel ever writes the map. tRadar was carrying
 -- a copy of the same code.
 
--- ── host stubs ──────────────────────────────────────────────────────────────
+-- host stubs
 
 local function deepcopy(value)
     if type(value) ~= 'table' then return value end
@@ -85,7 +85,16 @@ end
 -- really reaches disk.
 local demoOn = false
 
+local recordedTimings = {}
+
 tlib = {
+    -- A sink for jsonstore's instrumented write path. A RECORDER rather than
+    -- a no-op even where this suite does not read it, so the call is exercised
+    -- rather than merely tolerated; tests/lua/jsonstore.lua is where the
+    -- assertion that the instrumentation still FIRES lives.
+    telemetry   = { record = function(op, budget, ms)
+        recordedTimings[#recordedTimings + 1] = { op = op, budget = budget, ms = ms }
+    end },
     demo        = {
         active = function() return demoOn end,
         -- The real module's dropWrite is `active()` plus a one-time console
@@ -142,7 +151,7 @@ local function seed(data)
     files['tRadar/data.json'] = json.encode(data)
 end
 
--- ── a first boot seeds only what is genuinely on disk ───────────────────────
+-- a first boot seeds only what is genuinely on disk
 
 reset()
 files['tRadar/layouts/sounds/beep.wav'] = 'RIFF'
@@ -155,7 +164,7 @@ assert(#store.installedSounds == 1 and store.installedSounds[1].slug == 'beep',
 assert(writes == 1, 'the seeded registry is persisted once')
 assert(store:config().defaultSoundKeys == KEYS, 'the panel payload carries the key list')
 
--- ── the two-boot cascade, which is why the order is what it is ──────────────
+-- the two-boot cascade, which is why the order is what it is
 
 reset()
 seed({ soundWavMap = { BEEP = 'beep.wav' }, installedSounds = { { filename = 'beep.wav', slug = 'beep' } } })
@@ -182,9 +191,11 @@ assert(#store.installedSounds == 1 and store.toneWavMap.BEEP == 'beep.wav',
 -- above is deliberately identical; only the level and the wording differ.
 assert(not loggedAt(tlib.logger.WARN),
     'a folder that was read and holds no audio is not a warning')
-local empty = loggedAt(tlib.logger.INFO)
+assert(not loggedAt(tlib.logger.INFO),
+    'nor an INFO line on every boot of a stock install')
+local empty = loggedAt(tlib.logger.DEBUG)
 assert(empty and empty:find('holds no audio files', 1, true),
-    'it is still stated, so an operator who expected tones knows where they go')
+    'it is still recorded at DEBUG, for a boot where tones were expected')
 
 -- With the folder readable, the phantom pass judges mappings against the disk
 -- rather than against a list the previous step may have just emptied.
@@ -197,7 +208,7 @@ assert(store.toneWavMap.BEEP == 'beep.wav', 'a default mapping whose file is pre
 assert(store.toneWavMap.LOCK == nil, 'a default mapping whose file is gone is cleared')
 assert(#store.installedSounds == 1, 'the file on disk is tracked even though data.json had nothing')
 
--- ── the phantom rule only ever touches auto-seeded mappings ─────────────────
+-- the phantom rule only ever touches auto-seeded mappings
 
 reset()
 seed({ soundWavMap = { BEEP = 'operator-choice.wav', SIREN = 'siren.wav' }, installedSounds = {} })
@@ -219,7 +230,7 @@ store = open({ phantom = function(_, filename) return filename == 'gps_connected
 assert(store.toneWavMap.BEEP == nil, 'the consumer predicate decides, and it matched on filename alone')
 assert(store.toneWavMap.LOCK == 'keep.wav', 'a mapping it did not accept is left alone')
 
--- ── self-heal falls back to a direct read when the listing is unavailable ───
+-- self-heal falls back to a direct read when the listing is unavailable
 --
 -- The environment where the directory cannot be listed is exactly the one that
 -- needs healing most, and LoadResourceFile still works there.
@@ -231,7 +242,7 @@ store = open()
 assert(store.toneWavMap.LOCK == 'lock.wav', 'a file confirmed by direct read is mapped')
 assert(store.toneWavMap.BEEP == nil, 'a file that fails the read is not')
 
--- ── saving is a read-modify-write, not a truncation ─────────────────────────
+-- saving is a read-modify-write, not a truncation
 
 reset()
 seed({ soundWavMap = {}, installedSounds = {}, hudLayout = 'compact', beamRange = 300 })
@@ -248,7 +259,7 @@ assert(not store:setMapping(nil, 'x.wav'), 'a missing key is rejected')
 assert(store:setMapping('BEEP', ''), 'an empty filename is the documented way to clear')
 assert(store.toneWavMap.BEEP == nil, 'and it clears')
 
--- ── removing a sound sweeps every tone that pointed at it ───────────────────
+-- removing a sound sweeps every tone that pointed at it
 
 reset()
 seed({
@@ -264,7 +275,7 @@ assert(store.toneWavMap.FAST_LOCK == 'other.wav', 'unrelated mappings are untouc
 assert(#store.installedSounds == 1, 'the record is gone')
 assert(not store:removeSound(''), 'a malformed filename is rejected outright')
 
--- ── marketplace install / uninstall ─────────────────────────────────────────
+-- marketplace install / uninstall
 
 reset()
 seed({ soundWavMap = {}, installedSounds = { { filename = 'siren.wav', slug = 'old-pack' } } })
@@ -278,7 +289,7 @@ assert(removed == 'siren.wav', 'the removed filename is reported back')
 assert(store.toneWavMap.BEEP == nil, 'and its mappings are cleared')
 assert(loggedAt(tlib.logger.INFO), 'the clearing is logged, since the admin did not ask for it')
 
--- ── a refused native write falls back, and is never swallowed ───────────────
+-- a refused native write falls back, and is never swallowed
 --
 -- FiveM for GTAV Enhanced refuses SaveResourceFile outright for some resources
 -- while Node's fs writes the identical path, so a refusal is not the end of the
@@ -322,14 +333,14 @@ assert(err and err:find('will not survive a restart', 1, true),
 assert(err:find('bridge is unavailable', 1, true),
     'and it names the bridge rather than blaming file permissions')
 
--- ── a log handle is not optional ────────────────────────────────────────────
+-- a log handle is not optional
 
 reset()
 scanReply = nil
 local ok = pcall(soundstore.open, { keys = KEYS })
 assert(not ok, 'every branch here is destructive or corrective; none of them may run silently')
 
--- ── demo mode drops the write, and reports success ─────────────────────────
+-- demo mode drops the write, and reports success
 --
 -- The half of demo mode that keeps a showroom server pristine. Two properties
 -- matter and they pull in opposite directions: nothing may reach disk, and the

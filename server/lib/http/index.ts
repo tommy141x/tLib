@@ -52,7 +52,12 @@ export function installHttp(): void {
   const readiness = new HttpReadiness(cfg.publicUrlOverride, cfg.port, (status) => {
     // Server-local notification only. Subscribe then query GetHttpStatus so a
     // consumer starting after this notification cannot miss readiness.
-    if (status.ready) log("info", `hub: ${status.publicUrl}`);
+    // The hub URL goes to tLib's STARTUP BANNER, not to its own log line.
+    // tLib already draws a banner, and this was one of six lines it printed
+    // around it at boot. A failure still logs loudly -- an operator who cannot
+    // reach the hub needs the reason in front of them, and a banner row that
+    // silently reads nothing is not that.
+    if (status.ready) fEmit("tlib:vcInfo:hub", status.publicUrl);
     else if (status.publicUrlState === "failed") log("warn", status.error!);
     fEmit("tLib:http:status", status);
   });
@@ -94,7 +99,9 @@ export function installHttp(): void {
       return;
     }
 
-    const removed = unregisterResource(stopped);
-    if (removed.length) log("info", `${stopped} stopped — unmounted ${removed.join(", ")}`);
+    // Silent, like the mount in bridge.ts: a resource stopping and dropping
+    // its mounts is bookkeeping that always happens, and it printed a line per
+    // restart for every mounted resource.
+    unregisterResource(stopped);
   });
 }

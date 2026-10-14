@@ -1,54 +1,16 @@
 /**
  * What may be spawned, by whom, with which arguments.
  *
- * This file is the security control. `add_unsafe_child_process_permission tLib`
- * is a grant to run *anything*; everything narrower than that is written down
- * here, and nothing outside this file can widen it.
+ * THIS FILE IS THE SECURITY CONTROL. `add_unsafe_child_process_permission tLib`
+ * is a grant to run anything; everything narrower is written down here, and
+ * nothing outside this file can widen it. A caller names a program declared
+ * below and never passes a path: tLib resolves it, requires it to be inside the
+ * caller's own resource directory after `realpath`, builds the argv from the
+ * declared shape, and execs with `shell: false`.
  *
- * ## The order of strength, and where each rung actually stops
- *
- *  1. **Which resource is calling** — `GetInvokingResource()`, taken from the
- *     engine, not from the payload, so a caller cannot claim to be someone
- *     else. Strong *as an identity of the calling script container*. It is NOT
- *     a statement about who wrote that container: a folder named `tAI`
- *     containing hostile code passes this check, exactly as it passes today's
- *     `add_unsafe_child_process_permission tAI`. Consolidating the grants does
- *     not make that worse, and it does not make it better. Nothing here should
- *     ever be described as if it did.
- *
- *  2. **What is being spawned** — the real control, and the reason this is an
- *     improvement over four cfg lines. A caller names a *program declared
- *     below*; it never passes a path. tLib resolves the path itself, requires
- *     it to be inside the caller's own resource directory after `realpath`,
- *     builds the argv from the declared shape, and execs with `shell: false`.
- *     A compromised caller can therefore ask for `pocketbase serve` with
- *     different directories — it cannot ask for `cmd.exe`, cannot reach a
- *     binary in another resource, and cannot append a second command.
- *
- *  3. **The author in the caller's fxmanifest** — `author` metadata. Recorded
- *     and logged when it does not match, never consulted for the decision. A
- *     hostile resource writes whatever author it likes in its own manifest, so
- *     this catches an accidental fork or a copied folder, not an attacker.
- *     Treating a match as authorisation would be a straightforward mistake;
- *     `gate.ts` deliberately has no branch on it.
- *
- * ## Why the programs are not SHA-256 pinned
- *
- * tLib already has a pinned-asset system (`shared/ts/assets`) and it is the
- * right tool when tLib can know the hash. It cannot here:
- *
- *  - PocketBase **updates itself** (`pocketbase update`, tDB's `AutoUpdate`), so
- *    its hash changes underneath any pin tLib could ship.
- *  - `llama-server`, `whisper-server`, `piper` and the vendored Node are fetched
- *    per platform and per upstream release by each product's own setup script,
- *    which verifies them against the publisher's checksums at fetch time. tLib
- *    would have to carry a hash table per product per version per platform and
- *    would block a legitimate upgrade the day it went stale.
- *
- * So pinning is *supported* — set `sha256` on a program and the gate enforces it
- * before the exec — and currently used by nothing. That is a real, stated gap,
- * not an oversight: the integrity guarantee for these binaries lives at fetch
- * time in each product, and the containment rule above is what tLib adds.
+ * The `author` rung is recorded and logged, NEVER consulted for the decision.
+ * Design notes, including why nothing is SHA-256 pinned:
+ * docs/internal/spawn-gate.md
  */
 
 /** The two platforms FXServer ships for. */
@@ -56,18 +18,6 @@ export type Platform = "win32" | "linux";
 
 /**
  * What one argument token is allowed to look like.
- *
- * `shell: false` and an argv array already mean a metacharacter is just a
- * character — there is no shell to interpret it, so `;` in a filename cannot
- * chain a command. The kinds below are therefore about *shape* rather than
- * quoting, with two exceptions worth stating:
- *
- *  - A NUL byte is rejected everywhere. It is the one character that genuinely
- *    changes meaning at the syscall boundary, by truncating the string the OS
- *    actually sees.
- *  - `text` additionally rejects shell metacharacters. Nothing depends on that
- *    today; it is there so a future caller that does reach a shell inherits a
- *    value that was never allowed to carry one.
  */
 export type ValueKind =
   | "path"
@@ -97,14 +47,6 @@ export interface FlagSpec {
 
 /**
  * One permitted way of invoking a program.
- *
- * `head` is an exact ordered prefix — this is what stops a positional value kind
- * from turning the whole spec into "anything goes". `pocketbase superuser upsert
- * <email> <secret>` is a shape; an `<email>` on its own is not, so a token that
- * happens to look like an email cannot appear where a subcommand belongs.
- *
- * Everything after `head` is drawn from `flags`, in any order, at most once
- * each.
  */
 export interface Invocation {
   /** For refusal messages and logs: `pocketbase serve`, not "invocation 2". */
@@ -117,39 +59,15 @@ export interface Program {
   id: string;
   /**
    * Resource-relative candidate paths, first existing one wins.
-   *
-   * Relative and declared here rather than passed in, because a path the caller
-   * chooses is a path the caller can aim.
    */
   paths: Record<Platform, string[]>;
   /**
-   * A bundled glibc loader to exec instead, when one is present.
-   *
-   * Some hosts' libc cannot run an `ubuntu-x64` build at all, so the product
-   * ships `ld-linux-x86-64.so.2` and its libraries. tLib builds that argv
-   * (`<loader> --library-path <dir> <binary> …`) rather than letting the caller
-   * hand over a command, which would be a path the caller aims again.
-   *
-   * **Declaring it is not the same as requiring it.** The directory is resolved
-   * through the containment rule like everything else, and when it is absent —
-   * or holds no loader, or resolves outside the resource — the gate execs the
-   * binary directly, which is what every glibc host does today. So a product
-   * can declare the loader before it ships one: a release built without the
-   * bundle behaves exactly as it did before the declaration, and a release
-   * built with it stops depending on the host's interpreter. The alternative,
-   * refusing to start when a declared loader is missing, would turn an
-   * optimisation for musl hosts into an outage on the hosts that already work.
+   * Where a loadable backend lives, if the program has one. See gate.ts's
+   * `loaderDir` handling for the cases and why llama.cpp needs it.
    */
   loaderDir?: string;
   /**
    * Resource-relative paths tLib puts in front of the caller's arguments.
-   *
-   * For an interpreter: the vendored Node runs `bin/tts-sidecar.js`, and that
-   * script is a *path*, which is the one thing a caller may never choose. So the
-   * catalog names it, tLib resolves it through the same containment rule as the
-   * executable, and the caller's arguments start after it. A caller that could
-   * pass the script could run any JavaScript on the box through a binary the
-   * gate had already approved.
    */
   prepend?: string[];
   /** Resource-relative working directories the caller may pick. `""` is the root. */
@@ -176,7 +94,7 @@ export interface Caller {
   programs: Program[];
 }
 
-// ── Shared argument vocabulary ───────────────────────────────────────────────
+// Shared argument vocabulary
 
 /**
  * llama.cpp's server, which tAI and tRadio both run.
@@ -220,11 +138,7 @@ const LLAMA_SERVER_FLAGS: FlagSpec[] = [
  * engine name. Only the paths differ; the argument vocabulary is upstream's and
  * is therefore shared.
  */
-function llamaServer(options: {
-  win32: string;
-  linux: string;
-  loaderDir?: string;
-}): Program {
+function llamaServer(options: { win32: string; linux: string; loaderDir?: string }): Program {
   return {
     id: "llama-server",
     paths: { win32: [options.win32], linux: [options.linux] },
@@ -242,7 +156,7 @@ function dirOf(relative: string): string {
   return cut === -1 ? "" : relative.slice(0, cut);
 }
 
-// ── The first-party family ───────────────────────────────────────────────────
+// The first-party family
 //
 // Hardcoded, not operator configuration. Making this a config file would move
 // four `server.cfg` lines into a fifth file and gain nothing: an operator who

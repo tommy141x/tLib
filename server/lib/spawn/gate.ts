@@ -17,12 +17,17 @@
 import {
   type Caller,
   type FlagSpec,
+  findCaller,
+  findProgram,
   type Invocation,
   type Platform,
   type ValueKind,
-  findCaller,
-  findProgram,
 } from "./catalog";
+
+// `Probes.platform()` returns this, so anyone implementing Probes needs the type.
+// Re-exported because `gate` is this directory's facade and `catalog` is internal:
+// `index.ts` and `gate.test.ts` both already imported `Platform` from here.
+export type { Platform } from "./catalog";
 
 /** The filesystem and engine facts the gate needs. Injected so it can be faked. */
 export interface Probes {
@@ -76,7 +81,7 @@ export interface SpawnRequest {
   stdin?: unknown;
 }
 
-// ── Value shapes ─────────────────────────────────────────────────────────────
+// Value shapes
 
 /**
  * A NUL truncates the string the kernel actually receives, so a value carrying
@@ -144,7 +149,7 @@ function valueOk(kind: ValueKind, value: string): boolean {
   }
 }
 
-// ── Argument matching ────────────────────────────────────────────────────────
+// Argument matching
 
 interface Matched {
   argv: string[];
@@ -172,10 +177,7 @@ function matchFlag(
     return null;
   }
 
-  if (
-    (spec.form === "inline" || spec.form === "either") &&
-    token.startsWith(`${spec.name}=`)
-  ) {
+  if ((spec.form === "inline" || spec.form === "either") && token.startsWith(`${spec.name}=`)) {
     const value = token.slice(spec.name.length + 1);
     if (!spec.value || !valueOk(spec.value, value)) return null;
     return { consumed: 1, value };
@@ -229,7 +231,7 @@ function matchInvocation(shape: Invocation, tokens: readonly string[]): Matched 
   return { argv, loggable };
 }
 
-// ── Containment ──────────────────────────────────────────────────────────────
+// Containment
 
 /**
  * Where a resource-relative path really is, or "" when it is not the caller's.
@@ -259,7 +261,7 @@ function pickPath(probes: Probes, root: string, candidates: readonly string[]): 
   return "";
 }
 
-// ── The bundled loader ───────────────────────────────────────────────────────
+// The bundled loader
 
 /**
  * glibc's interpreter, by the only name it has on x86-64.
@@ -333,7 +335,7 @@ function loaderFor(probes: Probes, root: string, loaderDir: string): BundledLoad
   };
 }
 
-// ── The decision ─────────────────────────────────────────────────────────────
+// The decision
 
 function strings(value: unknown): string[] | null {
   if (value === undefined || value === null) return [];

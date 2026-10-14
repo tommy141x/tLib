@@ -97,7 +97,9 @@ export function registerBridge(
       return { ok: false, error: result.error };
     }
 
-    log("info", `${caller} mounted '${result.mount.mount}' -> 127.0.0.1:${port}`);
+    // No success line. The URL a mount produces is returned right here, and
+    // every consumer puts it in its OWN startup banner (`Admin:` in tDB,
+    // `Panel:` in tRadio) one line later. The FAILURE above stays loud.
     return { ok: true, url: `${current.publicUrl}${result.mount.mount}` };
   });
 
@@ -105,9 +107,7 @@ export function registerBridge(
   // rebinds its listener.
   runtime.exports("UnregisterWebApp", () => {
     const caller = runtime.invokingResource() ?? "?";
-    const removed = unregisterResource(caller);
-    if (removed.length) log("info", `${caller} unmounted ${removed.join(", ")}`);
-    return removed.length;
+    return unregisterResource(caller).length;
   });
 
   /** The router's public base URL, for resources composing their own links. */

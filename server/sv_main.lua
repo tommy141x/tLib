@@ -40,4 +40,18 @@ vc({
     current = GetResourceMetadata(GetCurrentResourceName(), 'version', 0),
     author  = 'TIMMYG Studios',
     fetch   = vc.github('tommy141x/tLib'),
+    -- tLib printed more loose startup lines than any other resource here --
+    -- `listening on`, `hub:`, the spawn catalogue, and a full command line per
+    -- spawned process -- while its own banner carried nothing but a version.
+    -- These two rows are the facts worth keeping; the rest is gone or shortened
+    -- at the source. See server/lib/http/index.ts and server/lib/spawn/index.ts.
+    --
+    -- Neither is `required`: a server with the HTTP hub disabled, or one where
+    -- nothing ever spawns, still gets its banner. A startup summary that
+    -- refuses to draw because an optional subsystem is absent is worse than one
+    -- with a missing row.
+    info = {
+        { key = 'Hub',    event = 'tlib:vcInfo:hub' },
+        { key = 'Spawns', event = 'tlib:vcInfo:spawns' },
+    },
 })
