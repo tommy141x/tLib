@@ -56,39 +56,12 @@ function scriptsFor(repo: string): Record<string, string> {
   };
 }
 
-function workflowFor(repo: string): string {
-  const clone =
-    repo === "tLib"
-      ? ""
-      : `
-      # The gate lives in tLib and is run from there by every resource, so CI has
-      # to have it. tLib is a public GitHub repo, so a shallow clone needs no
-      # credentials and does not care which forge is running this. Cloned rather
-      # than checked out because actions/checkout builds its URL from the FORGE
-      # THIS RUNS ON, which on Gitea resolves to an org that does not exist.
-      - name: Clone tLib (the gate lives there)
-        run: git clone --depth 1 https://github.com/tommy141x/tLib.git tLib
-`;
-  const dir = repo === "tLib" ? "tLib" : repo;
-  const gate = repo === "tLib" ? "scripts/secret-gate.ts" : "../tLib/scripts/secret-gate.ts";
-
+function workflowFor(): string {
   return `name: Secrets
 
-# Layer 3 of 3, and the only one that cannot be skipped.
-#
-# \`.githooks/pre-commit\` is per-clone (\`core.hooksPath\` is not tracked) and
-# \`--no-verify\` bypasses it; the release packager only ever sees a release. This
-# job asserts the thing that actually matters -- that no credential-shaped key in
-# a tracked config file holds a value at HEAD -- and it does not care what is
-# configured on anybody's machine.
-#
-# gitleaks.yml is DETECTION and runs beside this. It scans for values that look
-# like credentials anywhere in the diff; this asserts a property of the config
-# files by key NAME, so it catches a short or oddly-shaped secret that no entropy
-# rule would flag. Neither replaces the other.
-#
-# No \`bun install\`: the gate imports only node builtins and Bun, deliberately, so
-# this job is a clone and a run.
+# Layer 3 of 3, and the only one that cannot be skipped. What the gate asserts,
+# and why gitleaks runs beside it rather than instead of it, is in the shared
+# workflow this calls.
 
 on:
   push:
@@ -97,22 +70,8 @@ on:
 
 jobs:
   secrets:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout ${repo}
-        uses: https://github.com/actions/checkout@v4
-        with:
-          fetch-depth: 1
-          path: ${dir}
-${clone}
-      - name: Set up bun
-        uses: https://github.com/oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Every credential-shaped key in a tracked config file is blank at HEAD
-        working-directory: ${dir}
-        run: bun run ${gate}
+    uses: TIMMYG-Studios/workflows/.gitea/workflows/secrets.yml@main
+    secrets: inherit
 `;
 }
 
@@ -195,7 +154,7 @@ function provision(repo: string, repoRoot: string, check: boolean): Change[] {
   // real finding and must stay one.
   if (repo !== "tLib") {
     const workflowPath = path.join(repoRoot, ".gitea", "workflows", "secrets.yml");
-    const workflow = workflowFor(repo);
+    const workflow = workflowFor();
     const existing = fs.existsSync(workflowPath) ? fs.readFileSync(workflowPath, "utf8") : null;
     if (existing !== workflow) {
       changes.push({ repo, what: ".gitea/workflows/secrets.yml is missing or stale" });
