@@ -99,6 +99,29 @@ local function contains(text, part) assert(text:find(part, 1, true), 'Missing: '
 local function excludes(text, part) assert(not text:find(part, 1, true), 'Unexpected: ' .. part) end
 local function current(cb) cb({ version = '1.0.0' }) end
 
+-- Five of the tests below load a SIBLING resource (`../tDB`, `../tRadio`, ...)
+-- to prove tLib's shared versioncheck is what those resources actually call.
+-- A standalone clone of tLib from GitHub has no siblings, and `scripts/test-lua.ts`
+-- globs this directory with no allowlist, so without this the whole suite dies on
+-- the first `assert(loadfile(...))` of a file that is not there.
+--
+-- Presence is detected with `loadfile` itself rather than a filesystem probe:
+-- fengari has no `io.open` (see the branding note in `fixture` above), and
+-- `loadfile` returning nil for a missing file IS the check. The chunk is thrown
+-- away; the test body loads it again exactly as before, so in a tree that HAS
+-- the siblings nothing about these tests changes.
+local skipped = {}
+local function testWithSiblings(name, paths, fn)
+    for _, path in ipairs(paths) do
+        if not loadfile(path) then
+            skipped[#skipped + 1] = name
+            report('SKIP ' .. name .. ': ' .. path .. ' is absent')
+            return
+        end
+    end
+    test(name, fn)
+end
+
 test('manifest author enables art even after resource rename', function()
     local f = fixture({ 'Another author', 'TIMMYG Studios' }, 'renamed-folder')
     assert(#f.vc.lean('tDB') == 5)
@@ -218,7 +241,9 @@ test('Studios timeout prints failure without accepting a late result', function(
     assert(#f.output == count)
 end)
 
-test('tDB forwards initial and subsequent database status through tLib', function()
+testWithSiblings('tDB forwards initial and subsequent database status through tLib', {
+    '../tDB/server/utils/version.lua',
+}, function()
     local f = fixture({ 'TIMMYG Studios' })
     tlib = { versioncheck = f.vc }
     assert(loadfile('../tDB/server/utils/version.lua'))()
@@ -237,7 +262,10 @@ test('tDB forwards initial and subsequent database status through tLib', functio
     contains(f.text(), 'Database authentication failed')
 end)
 
-test('all five shipped manifests explicitly credit TIMMYG Studios', function()
+testWithSiblings('all five shipped manifests explicitly credit TIMMYG Studios', {
+    '../tLib/fxmanifest.lua', '../tRadio/fxmanifest.lua', '../tELS/fxmanifest.lua',
+    '../tAFK/fxmanifest.lua', '../tDB/fxmanifest.lua',
+}, function()
     for _, resource in ipairs({ 'tLib', 'tRadio', 'tELS', 'tAFK', 'tDB' }) do
         local authors = {}
         local function author(value)
@@ -279,7 +307,9 @@ test('duplicate status events do not satisfy other required startup fields', fun
     contains(f.text(), 'http://localhost:7777/dispatch')
 end)
 
-test('tAFK and tELS startup scripts use the shared provider and info events', function()
+testWithSiblings('tAFK and tELS startup scripts use the shared provider and info events', {
+    '../tAFK/server/sv_version.lua', '../tELS/server/sv_version.lua',
+}, function()
     for _, resource in ipairs({ 'tAFK', 'tELS' }) do
         local f = fixture({ 'TIMMYG Studios' }, resource)
         tlib = { versioncheck = f.vc }
@@ -392,7 +422,9 @@ test('throwing beforePrint does not suppress the tLib completion event', functio
     contains(f.text(), 'up to date')
 end)
 
-test('tDetector uses shared unpublished-version handling', function()
+testWithSiblings('tDetector uses shared unpublished-version handling', {
+    '../tDetector/server/sv_version.lua',
+}, function()
     local f = fixture({ 'TIMMYG Studios' }, 'tDetector')
     tlib = { versioncheck = f.vc }
     assert(loadfile('../tDetector/server/sv_version.lua'))()
@@ -414,7 +446,9 @@ test('Studios changelogs retain both title and body', function()
     contains(f.text(), 'Important details')
 end)
 
-test('radio Lua bridge renders structured update failure without claiming current', function()
+testWithSiblings('radio Lua bridge renders structured update failure without claiming current', {
+    '../tRadio/server/sv_version.lua',
+}, function()
     local f = fixture({ 'TIMMYG Studios' }, 'tRadio')
     local env = setmetatable({
         Config = { exposeWeb = false, isSatelliteServer = false },
@@ -435,3 +469,13 @@ end)
 
 
 report(('Passed %d versioncheck tests'):format(passed))
+if #skipped > 0 then
+    report(('Skipped %d test(s) that load a sibling resource, none of which is present: %s')
+        :format(#skipped, table.concat(skipped, '; ')))
+    report('This is a standalone tLib checkout. The cross-resource half of versioncheck is UNPROVEN here.')
+end
+-- A suite that skipped everything must not read as a pass.
+if passed == 0 then
+    report('FAIL: no versioncheck test ran at all.')
+    os.exit(1)
+end

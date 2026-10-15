@@ -53,12 +53,25 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { isStandaloneClone } from "./siblings.ts";
 
 const TLIB = resolve(import.meta.dir, "..");
 const SIBLINGS = resolve(TLIB, "..");
 
 /** Resources known to keep a `data.json`. Absent ones are reported, not skipped. */
 const CANDIDATES = ["tAFK", "tCAD", "tDetector", "tELS", "tRadar", "tRadio", "tUnit"];
+
+// No sibling at all is a different thing from "the siblings are there and their
+// data.json files are not". The first is a standalone clone of tLib, where this
+// probe does not apply; the second is the exit-2 below, which must stay an
+// exit 2 because that is a tree where the probe COULD have run.
+if (isStandaloneClone(TLIB)) {
+  console.log(
+    `jsonstore-real-data-probe: skipped — no sibling resource is checked out beside tLib in ` +
+      `${SIBLINGS}, so there is no real data.json anywhere to probe.`
+  );
+  process.exit(0);
+}
 
 function die(message: string): never {
   console.error(`jsonstore-real-data-probe: ${message}`);

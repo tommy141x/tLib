@@ -35,7 +35,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const REPO = join(import.meta.dirname, "..");
-const PRIVATE = ["internal", ".gitea"];
+// Directories, and `scripts/deck-publish.ts` — a single file, which the two
+// places that read this list already handle: the skip test below is
+// `p === d || p.startsWith(`${d}/`)`, and the removal is an existsSync plus a
+// recursive rmSync, both of which are true of a file as well as of a directory.
+// It is here rather than guarded like the other sibling-aware scripts because
+// it is referenced by nothing — no package.json entry, no import — and its own
+// header documents it being run from a sibling. There is no dangling reference
+// to leave behind, which is the only reason the other scripts stay.
+const PRIVATE = ["internal", ".gitea", "scripts/deck-publish.ts"];
 const SOURCE = "internal";
 const PUBLISHED = "main";
 const MARK = "refs/publish/last-internal";
@@ -72,7 +80,7 @@ if (git(["status", "--porcelain"]) !== "") {
 for (const path of PRIVATE) {
   if (git(["ls-files", path]) === "") {
     refuse(
-      `${path}/ is not tracked on ${SOURCE}. Either you are on the wrong branch or the ` +
+      `${path} is not tracked on ${SOURCE}. Either you are on the wrong branch or the ` +
         "private half has gone missing — publishing now would silently ship a tree that is " +
         "public because something was lost, not because it was filtered."
     );

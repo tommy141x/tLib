@@ -31,7 +31,6 @@
  * Exit 0 pass, 1 a finding, 2 the gate could not run. Exit 2 is NOT a pass.
  */
 
-import { existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   availableModules,
@@ -39,6 +38,7 @@ import {
   failing,
   type RuntimeStateFinding,
 } from "../shared/ts/build/runtime-state-contract.ts";
+import { siblingResources } from "./siblings.ts";
 
 const TLIB = resolve(import.meta.dir, "..");
 const SIBLINGS = resolve(TLIB, "..");
@@ -69,11 +69,19 @@ if (available.length === 0) {
   );
 }
 
-const resources = readdirSync(SIBLINGS, { withFileTypes: true })
-  .filter((e) => e.isDirectory() && /^t[A-Z]/.test(e.name) && e.name !== "tLib")
-  .map((e) => e.name)
-  .filter((name) => existsSync(join(SIBLINGS, name, "fxmanifest.lua")))
-  .sort();
+const resources = siblingResources(TLIB);
+
+// Zero is not "too few", it is "not applicable". tLib ships standalone under
+// MIT and a clone of it alone has no siblings to sweep; the floor below is for
+// the case it was written for — siblings ARE there and the discovery rule
+// stopped matching most of them.
+if (resources.length === 0) {
+  console.log(
+    `check:runtime-state: skipped — no sibling resource is checked out beside tLib in ` +
+      `${SIBLINGS}. This sweep is estate-wide and has nothing to read in a standalone clone.`
+  );
+  process.exit(0);
+}
 
 if (resources.length < MIN_RESOURCES) {
   die(

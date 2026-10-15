@@ -29,6 +29,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { hookIsCurrent, PRE_COMMIT, writeHook } from "../shared/ts/secrets/hook.ts";
+import { isStandaloneClone } from "./siblings.ts";
 
 const tlibRoot = path.resolve(import.meta.dir, "..");
 const scriptsRoot = path.resolve(tlibRoot, "..");
@@ -173,6 +174,19 @@ function main(): void {
   const check = argv.includes("--check");
   const onlyIndex = argv.indexOf("--only");
   const only = onlyIndex === -1 ? null : argv[onlyIndex + 1];
+
+  // There is nothing to provision in a standalone clone of tLib, and nothing to
+  // assert either: every resource this writes wiring into is a sibling. Checked
+  // before the scan rather than after, because the scan is "any directory with a
+  // .git and a package.json" — in a clone sitting beside somebody's unrelated
+  // repos that would otherwise find them and write tLib's hooks into them.
+  if (isStandaloneClone(tlibRoot)) {
+    console.log(
+      `  🔒 secret-gate provisioning skipped — no sibling resource beside tLib in ${scriptsRoot}. ` +
+        "The wiring this writes is per-sibling; tLib's own gate is unaffected."
+    );
+    return;
+  }
 
   const repos = fs
     .readdirSync(scriptsRoot, { withFileTypes: true })

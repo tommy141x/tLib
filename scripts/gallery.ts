@@ -55,6 +55,7 @@ import {
   MENUS,
   TOASTS,
 } from "./gallery-fixtures.ts";
+import { isStandaloneClone } from "./siblings.ts";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -105,7 +106,17 @@ const written: string[] = [];
 // First, and in its own block, because it is the one surface that does not come out of
 // tLib's bundle — everything below this point is about tLib's own NUI, and a
 // `--only propeditor` run has no reason to build it or open a browser on it.
-if (want("propeditor")) {
+// A missing host is already a flag rather than a failure, but a tree with NO
+// host at all is a standalone clone of tLib rather than a partial checkout, and
+// three flags saying so plus a `--only propeditor` run that exits 1 is a broken
+// gallery, not a report.
+const standalone = isStandaloneClone(ROOT);
+if (want("propeditor") && standalone) {
+  console.log(
+    "[tLib gallery] prop editor: skipped — no consumer resource is checked out beside tLib. " +
+      "This surface is shot out of each consumer's own bundle, never out of tLib's."
+  );
+} else if (want("propeditor")) {
   const base = join(outDir, "propeditor");
   // Replace the folder rather than its contents: a host that stopped being shot would
   // otherwise leave its old shots sitting there looking current.
@@ -135,7 +146,7 @@ if (want("propeditor")) {
 if (!only.some((s) => s !== "propeditor")) {
   console.log(`\n[tLib gallery] ${written.length} shots → ${join(outDir, "propeditor")}`);
   for (const flag of flags) console.log(`  flag: ${flag}`);
-  process.exit(written.length && !flags.length ? 0 : 1);
+  process.exit(standalone || (written.length && !flags.length) ? 0 : 1);
 }
 
 if (process.argv.includes("--rebuild") || !(await Bun.file(join(dist, "index.html")).exists())) {
