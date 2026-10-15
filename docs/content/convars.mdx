@@ -208,6 +208,10 @@ own console.
 All server-read. The resolved public URL is sent to clients over the wire, so
 none of these needs replicating.
 
+The listener starts on `7777` with no configuration. Opening that port on the
+host and in NAT is the operator's job and the step most often missed — see
+[Installation](/docs/tLib/installation#open-port-7777).
+
 | Convar | Command | Type / unit | Default | What it does |
 | --- | --- | --- | --- | --- |
 | `tlib_http_port` | `set` | integer, 1–65535 | `7777` | The one external listen port. |

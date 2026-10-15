@@ -36,6 +36,25 @@ Add to your `server.cfg` **before** any resource that depends on it:
 ensure tLib
 ```
 
+### Open port 7777
+
+tLib listens on **port 7777** and serves the hub — one page linking every tLib
+resource that publishes a web surface. tDB's admin panel and tRadio's dispatch
+panel both reach players through it, so a resource that looks installed and
+correct is still unreachable until the port is open.
+
+Open `7777/tcp` **on the machine**, not only in `server.cfg`: the host firewall,
+and NAT port-forwarding if the server is behind a router. Nothing tLib does can
+open it for you.
+
+Then visit `http://<your-server-ip>:7777` — the hub lists what is published.
+
+To use a different port, set it before `ensure tLib` and open that one instead:
+
+```txt title="server.cfg"
+set tlib_http_port 8080
+```
+
 </Steps>
 
 ---
@@ -87,6 +106,7 @@ Modules are lazy-loaded — they only load when first accessed.
 
 ## Next steps
 
+- The port, the bind address and the advertised URL: [Convars](/docs/tLib/convars#http-router)
 - Every module you can reach through `tlib`: [Import Modules](/docs/tLib/import-modules)
 - The export surface — menus, dialogs, toasts, HUD: [Exports](/docs/tLib/exports)
 - What an owner can change in `server.cfg`: [Convars](/docs/tLib/convars)
