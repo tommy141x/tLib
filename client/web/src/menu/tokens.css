@@ -17,7 +17,7 @@
      prefers-reduced-motion as no-preference whatever the host OS says. */
   --motion: 1;
   /* `#3089e8` is `hsl(211 80% 55%)` — `--primary` in theme-tokens.css, `--ring`
-     in every component in `shared/ts/ui/*`, and `--nui-accent` in nui-kit as of
+     in every component in `internal/shared-ts/ui/*`, and `--nui-accent` in nui-kit as of
      the same change. One affirmative/selected/focus colour across all seven
      bundles; see the long note beside `--nui-accent` in nui-kit/nui.css for why
      it moved to the blue rather than the other five moving to the grey.
@@ -31,7 +31,7 @@
   --panel: #171717;
   --border: #343434;
   --selected: #3089e8;
-  /* Near-black, NOT the white `--primary-foreground` that `shared/ts/ui/*` puts
+  /* Near-black, NOT the white `--primary-foreground` that `internal/shared-ts/ui/*` puts
      on this same blue: white on #3089e8 measures 3.58:1 and trips the hard 4.5:1
      floor tests/browser/dialog.ts asserts on every text part. Black is 5.81:1.
      The full reasoning, and what the proper cross-bundle fix is, is beside

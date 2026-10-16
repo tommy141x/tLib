@@ -30,6 +30,9 @@ GlobalRegistrator.register({ url: "http://localhost/" });
 
 const WEB = path.join(import.meta.dir, "..");
 const SHARED_TS = path.join(WEB, "..", "..", "shared", "ts");
+// The estate-only half. It may be absent -- publish-public.ts strips it -- and
+// every reader below tolerates that.
+const INTERNAL_TS = path.join(WEB, "..", "..", "internal", "shared-ts");
 
 // Solid 1 vendor compatibility, for the bun test runtime
 mock.module("virtual:solid-1-compat-real/solid-js", () => realSolid);
@@ -262,7 +265,16 @@ function collectIconSpecifiers(dir: string, found = new Set<string>()): Set<stri
   return found;
 }
 {
-  const icons = collectIconSpecifiers(SHARED_TS, collectIconSpecifiers(path.join(WEB, "src")));
+  // `internal/shared-ts` is scanned too, and not optionally: the `ui/` kit and
+  // the prop editor live there and they are where most of these specifiers
+  // are. Omitting it does not fall back to anything -- bun reports
+  // `Cannot find module '~icons/lucide/redo-2'` as an unhandled error BETWEEN
+  // tests, which takes out the whole file and reads as the file being broken
+  // rather than as one unstubbed specifier. Measured: four files, 75 tests.
+  const icons = collectIconSpecifiers(
+    INTERNAL_TS,
+    collectIconSpecifiers(SHARED_TS, collectIconSpecifiers(path.join(WEB, "src")))
+  );
   if (icons.size === 0) {
     throw new Error("[tests/_setup] scanned 0 `~icons/*` specifiers; the stub would do nothing.");
   }

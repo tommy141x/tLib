@@ -19,7 +19,7 @@
  * `defaultPrevented`.
  *
  * It is `.ts` deliberately -- no markup, and no class names reachable by UnoCSS's
- * scanner. The buttons live in `shared/ts/ui/undo-redo.tsx`.
+ * scanner. The buttons live in `internal/shared-ts/ui/undo-redo.tsx`.
  */
 
 import type { UndoHistory } from "./undo";

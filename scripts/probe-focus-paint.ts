@@ -222,7 +222,7 @@ const BUNDLES: readonly Bundle[] = [
          * RETARGETED. This case used to name
          * `tAFK/client/web/src/components/ui/input.tsx` and a six-utility focus
          * string. That file is GONE -- tAFK's Input converged into
-         * `@tlib/shared/ui/input`, whose affordance is one hand-written class,
+         * `@tlib/internal/ui/input`, whose affordance is one hand-written class,
          * `.prop-input` in `@tlib/shared/css/surface.css`, not a utility string.
          * So the old case could not pass: the probe reads `source` off disk and
          * threw ENOENT before tCAD, tUnit and tRadio's bundles were reached at

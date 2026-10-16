@@ -44,7 +44,7 @@
 }
 
 /* The elevation ladder: --background ≤ --card < --input = --popover < --border. Every
-   component in shared/ts/ui/* assumes that order, so never re-declare one of those five
+   component in internal/shared-ts/ui/* assumes that order, so never re-declare one of those five
    alone — if --card rises above --input, every field edge turns darker than its panel.
    tests/unit/theme-ladder.test.ts fails any block here that breaks the order. */
 

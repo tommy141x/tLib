@@ -33,7 +33,7 @@
  *      tELS's, tAFK's, tUnit's and tCAD's. The belief that it reached them came
  *      from `prop-editor/prop-editor.css`, which NAMES `nui-kit/nui.css` in its
  *      header prose and does not `@import` it — and `PropEditor.tsx` builds its
- *      chrome from `shared/ts/ui/*` (the Ark kit) instead. So the fallbacks were
+ *      chrome from `internal/shared-ts/ui/*` (the Ark kit) instead. So the fallbacks were
  *      protecting a surface that does not exist in those hosts, in a file they
  *      do not load.
  *
@@ -67,7 +67,7 @@
      `-raw` partner too, or the alpha tints below render invalid and paint
      nothing. */
   --nui-text-raw: var(--foreground);
-  /* The accent is the SAME blue `shared/ts/ui/*` paints
+  /* The accent is the SAME blue `internal/shared-ts/ui/*` paints
    *
    * `211 80% 55%`, which is `--primary` in theme-tokens.css and `--ring` in the
    * components built on it. Only the VALUE is shared: the `--nui-*` namespace is
@@ -80,7 +80,7 @@
    * left on a grey screen": the defect was an ISOLATED blue, and neutralising it
    * was one of the two ways to end the isolation. It turned out to be the wrong
    * one, because the other five bundles kept painting `hsl(var(--ring))` from
-   * `shared/ts/ui/*` and never moved. Measured in the built sheets: tLib's bundle
+   * `internal/shared-ts/ui/*` and never moved. Measured in the built sheets: tLib's bundle
    * emits `outline-color: hsl(var(--nui-accent-raw) / .4)` and the other five emit
    * `hsl(var(--ring) / .4)`. So a player opening a tLib confirm dialog from inside
    * the tELS editor watched the primary button change colour, which is the same
@@ -90,7 +90,7 @@
    * everywhere rather than in one sheet.
    *
    * `--nui-accent-text` stays `#111111`, and that is the ONE thing deliberately
-   * not matched to `shared/ts/ui/*`, which paints `--primary-foreground` (white)
+   * not matched to `internal/shared-ts/ui/*`, which paints `--primary-foreground` (white)
    * on this same blue.
    *
    * Measured in `tests/browser/dialog.ts`, which asserts a hard 4.5:1 floor on
@@ -104,7 +104,7 @@
    * resolution is to move `--primary-foreground` in theme-tokens.css to match, so
    * all seven bundles use the readable ink; that token is on five other bundles'
    * primary buttons and badges and needs their galleries, so it is a separate
-   * change. Until then: `shared/ts/ui`'s primary button is the 3.58:1 one, not
+   * change. Until then: `internal/shared-ts/ui`'s primary button is the 3.58:1 one, not
    * this. Do NOT "fix the inconsistency" by whitening this token — it will trip
    * the dialog harness, which is where that number came from. */
   --nui-accent-raw: 211 80% 55%;
@@ -168,7 +168,7 @@
  *     `ui/select.tsx`.
  *
  * So: two signals, border-colour AND an outline, which is what the Ark kit in
- * `shared/ts/ui/*` now does as well. The border survives clipping; the outline
+ * `internal/shared-ts/ui/*` now does as well. The border survives clipping; the outline
  * survives a host that restyles the border. `outline-offset` is negative so the
  * ring draws INSIDE the box and a dense row's neighbours do not move, and the
  * transition names `outline-color` rather than the `outline` shorthand, which
@@ -307,7 +307,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  /* 16px, matching `shared/ts/ui/checkbox.tsx` exactly. It was 17: an odd pixel
+  /* 16px, matching `internal/shared-ts/ui/checkbox.tsx` exactly. It was 17: an odd pixel
      that bought nothing and made the two kits' checkboxes impossible to compare
      side by side. `--nui-radius-sm` is `var(--radius-tight)`, which is the radius
      that file now names directly for the same reason. */

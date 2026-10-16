@@ -264,7 +264,7 @@ an `overflow: hidden` ancestor is clipped to nothing. Measured in Chromium 103 b
 `scripts/probe-focus-paint.ts`: in that geometry the outward box-shadow a ring
 compiles to paints **0** accent pixels, as does the same outline pushed to a
 positive offset, while the outline at a negative offset paints 404. The fix is to
-make focus an outline, which `shared/ts/ui/` already was. Blocking the family
+make focus an outline, which `internal/shared-ts/ui/` already was. Blocking the family
 before the consumers that still spelt focus with a ring had followed would have
 *deleted* their focus indication rather than corrected it, so it waited for them;
 the condition was a count, not a date. `bun run probe:focus` re-measures every

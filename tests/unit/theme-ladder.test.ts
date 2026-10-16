@@ -2,7 +2,7 @@
  * The elevation ladder in `shared/css/theme-tokens.css`, asserted rather than
  * described.
  *
- * Every component in `shared/ts/ui/*` fills a control with `--input` and draws its
+ * Every component in `internal/shared-ts/ui/*` fills a control with `--input` and draws its
  * edge with `--input` or `--border`, on a panel filled with `--card`. So the file is
  * only correct while
  *

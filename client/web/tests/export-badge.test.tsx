@@ -31,16 +31,34 @@
  *    behaviour, which is what the hand-rolled copy got wrong, is driven below.
  */
 
+import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cleanup, render } from "@solidjs/testing-library";
 import { flush } from "solid-js";
 import { createEscapeLayer, escapeLayers } from "../../../shared/ts/escape-layer";
-import {
-  DEFAULT_EXPORT_BADGE_STRINGS,
-  ExportBadge,
-  type ExportBadgeStringKey,
-  type ExportTarget,
-} from "../../../shared/ts/ui/export-badge";
+import type {
+  ExportBadgeStringKey,
+  ExportTarget,
+} from "../../../internal/shared-ts/ui/export-badge";
+
+// The control kit moved to `internal/`, which publish-public.ts strips. This
+// file stays in the published half for the reason prop-editor-guard.test.tsx
+// gives: the DOM harness it needs -- happy-dom, @solidjs/testing-library and
+// the dedupe rewrite in `_setup.ts` -- is a client/web devDependency, and a
+// second copy of it under internal/ would be two harnesses to keep in step. So
+// the suite declares that the private half may be absent instead.
+//
+// A STATIC import fails at module load in a public clone and takes the whole
+// file with it, so the kit is awaited below. The `import type` beside it is
+// erased before runtime and so cannot.
+const HAS_UI_KIT = existsSync(new URL("../../../internal/shared-ts/ui/export-badge.tsx", import.meta.url));
+const describeWithUiKit = HAS_UI_KIT ? describe : describe.skip;
+const { DEFAULT_EXPORT_BADGE_STRINGS, ExportBadge } = HAS_UI_KIT
+  ? await import("../../../internal/shared-ts/ui/export-badge")
+  : {
+      DEFAULT_EXPORT_BADGE_STRINGS: {} as never,
+      ExportBadge: (() => null) as never,
+    };
 
 /** The shape `inst:getExportTargets()` really answers with, first row first. */
 const TARGETS: ExportTarget[] = [
@@ -169,7 +187,7 @@ function pressEscape(target: EventTarget = document.body) {
   return down;
 }
 
-describe("the badge at rest", () => {
+describeWithUiKit("the badge at rest", () => {
   test("renders a trigger, no source chip, and a closed picker", async () => {
     const h = await mount();
     expect(trigger(h.container)).not.toBeNull();
@@ -236,7 +254,7 @@ describe("the badge at rest", () => {
   });
 });
 
-describe("the picker", () => {
+describeWithUiKit("the picker", () => {
   test("opening it asks the host for targets, exactly once", async () => {
     const h = await mount();
     expect(await openPicker(h)).not.toBeNull();
@@ -330,7 +348,7 @@ describe("the picker", () => {
   });
 });
 
-describe("the confirm step", () => {
+describeWithUiKit("the confirm step", () => {
   test("choosing a target asks rather than exporting", async () => {
     const h = await mount();
     await openPicker(h);
@@ -385,7 +403,7 @@ describe("the confirm step", () => {
   });
 });
 
-describe("the focus affordance", () => {
+describeWithUiKit("the focus affordance", () => {
   /**
    * THE REGRESSION THIS PINS, and it is the one no other check can see.
    *
@@ -443,7 +461,7 @@ describe("the focus affordance", () => {
   });
 });
 
-describe("sizes are classes, not mergeable utilities", () => {
+describeWithUiKit("sizes are classes, not mergeable utilities", () => {
   test("no arbitrary text size anywhere in the badge or its picker", async () => {
     // `unoMerge` files an arbitrary `text-[Npx]` and a text colour into ONE
     // conflict group and drops one of them. tLib's `cn` shields that pair, but
@@ -481,7 +499,7 @@ describe("sizes are classes, not mergeable utilities", () => {
   });
 });
 
-describe("Escape", () => {
+describeWithUiKit("Escape", () => {
   /**
    * A LIVE BUG IN tRADIO BEFORE THIS CONVERGENCE, and this block is what
    * names it. Its picker closed through an `onKeyDown` on the filter input that
@@ -577,7 +595,7 @@ describe("Escape", () => {
   });
 });
 
-describe("strings", () => {
+describeWithUiKit("strings", () => {
   test("a host translator wins, per key", async () => {
     const translate = (key: ExportBadgeStringKey) =>
       key === "export_no_resources" ? "Rien trouvé" : undefined;

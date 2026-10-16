@@ -1,5 +1,5 @@
 // THE MENU-ROW CONTROL SET. Not a component library, and not an alternative to
-// one -- see the rule at the top of `shared/ts/ui/meta.ts`, which names this
+// one -- see the rule at the top of `internal/shared-ts/ui/meta.ts`, which names this
 // file as the single permitted exception to it.
 //
 // A checkbox box and a range input, drawn once, with one --nui-* theming
@@ -15,7 +15,7 @@
 // keeps aria-pressed, the draft and pending flow, onCycle and changeSlider for
 // itself.
 //
-// Anything that is NOT a menu row uses `shared/ts/ui/*`. A second surface
+// Anything that is NOT a menu row uses `internal/shared-ts/ui/*`. A second surface
 // wanting a bare control is a signal to re-read that rule, not to add one here.
 
 import type { JSX } from "@solidjs/web";

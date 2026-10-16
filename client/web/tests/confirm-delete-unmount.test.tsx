@@ -32,17 +32,32 @@
  * control.
  */
 
+import { existsSync } from "node:fs";
 import { afterEach, expect, test } from "bun:test";
 import { cleanup, render } from "@solidjs/testing-library";
-import { ConfirmDelete } from "@tlib/shared/ui/confirm-delete";
 import { flush } from "solid-js";
+
+// The control kit moved to `internal/`, which publish-public.ts strips. This
+// file stays in the published half for the reason prop-editor-guard.test.tsx
+// gives: the DOM harness it needs -- happy-dom, @solidjs/testing-library and
+// the dedupe rewrite in `_setup.ts` -- is a client/web devDependency, and a
+// second copy of it under internal/ would be two harnesses to keep in step. So
+// the suite declares that the private half may be absent instead.
+//
+// A STATIC import fails at module load in a public clone and takes the whole
+// file with it, so the control is awaited below.
+const HAS_UI_KIT = existsSync(new URL("../../../internal/shared-ts/ui/confirm-delete.tsx", import.meta.url));
+const testWithUiKit = HAS_UI_KIT ? test : test.skip;
+const { ConfirmDelete } = HAS_UI_KIT
+  ? await import("../../../internal/shared-ts/ui/confirm-delete")
+  : { ConfirmDelete: (() => null) as never };
 
 afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
 });
 
-test("the arm window still expires on its own while mounted", async () => {
+testWithUiKit("the arm window still expires on its own while mounted", async () => {
   // The half of `disarm` that must NOT have gone away with the cleanup change:
   // a timeout firing into a still-mounted component, where writing the signal is
   // the correct thing to do. Swap `disarm` for `clearTimer` in `handleClick`'s
@@ -61,7 +76,7 @@ test("the arm window still expires on its own while mounted", async () => {
   expect(getByRole("button").getAttribute("aria-label")).toBe("Delete");
 });
 
-test("a confirm fires exactly once, even when its callback unmounts the control", () => {
+testWithUiKit("a confirm fires exactly once, even when its callback unmounts the control", () => {
   // The shape every real call site has: `onConfirm` removes the row, so the
   // second click disposes the very component handling it. The count is the
   // assertion — a disarm that ran after the callback instead of before it could
@@ -89,7 +104,7 @@ test("a confirm fires exactly once, even when its callback unmounts the control"
   expect(confirms).toBe(1);
 });
 
-test("the first click never confirms", () => {
+testWithUiKit("the first click never confirms", () => {
   let confirms = 0;
   const { getByRole } = render(() => <ConfirmDelete onConfirm={() => confirms++} />);
   flush();

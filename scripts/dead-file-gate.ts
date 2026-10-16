@@ -10,12 +10,15 @@
 // Four things keep a file alive, in this order of authority:
 //
 //   1. shared/ts/package.json's `exports` map — the DECLARED public surface.
-//      ui/card, ui/color-picker, ui/meta, ui/progress and ui/tabs are each
-//      named there and imported by nothing in this estate; a graph-only gate
-//      called all five dead.
+//      `nui-kit`, `marketplace/ui` and several hud-* modules are named there
+//      and imported by nothing in this estate; a graph-only gate calls them
+//      dead. The measured case was the ui/ kit, before it moved to internal/:
+//      ui/card, ui/color-picker, ui/meta, ui/progress and ui/tabs were each
+//      exported and imported nowhere, and a graph-only gate called all five
+//      dead. The kit is out of this gate's scope now; the reasoning is not.
 //   2. scripts/public-entries.json — the measured record of deep paths
-//      consumers import by relative path outside that map. 80 of them:
-//      build/*, fs/server, secrets/release, modules/*, telemetry/*, every ui/*.
+//      consumers import by relative path outside that map. 61 of them:
+//      build/*, fs/server, secrets/release, modules/*, telemetry/*.
 //   3. The import graph, through relative specifiers, `@tlib/shared/*`, `@/*`.
 //   4. Paths written as STRINGS rather than imported — the ui_page html's
 //      module src, and anything a package.json script hands to `bun`. That last
@@ -121,10 +124,12 @@ class Gate {
 	}
 
 	// shared/ts/package.json's `exports` map: the DECLARED public API, which
-	// outranks anything inferred from imports. ui/card, ui/color-picker,
-	// ui/meta, ui/progress and ui/tabs are each named there and imported by
-	// nothing anywhere in this estate — a gate reading only the import graph
-	// called all five dead, which is the measured reason this reader exists.
+	// outranks anything inferred from imports. The measured case was ui/card,
+	// ui/color-picker, ui/meta, ui/progress and ui/tabs — each exported and
+	// imported by nothing anywhere in this estate, and a gate reading only the
+	// import graph called all five dead. That kit has since moved to internal/,
+	// which this gate excludes, but the same holds for what is still exported
+	// here and that is the reason this reader exists.
 	exportMapEntries(): string[] {
 		if (this.skips.has("export-map")) return [];
 		const p = join(this.root, "shared/ts/package.json");

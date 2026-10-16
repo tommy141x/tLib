@@ -1077,7 +1077,7 @@ export default function LayoutEditor() {
                 {/*
                  * The label comes off the history now, so these say what they
                  * will take back — "Undo move Speedometer" — rather than just
-                 * "Undo". `shared/ts/ui/undo-redo.tsx` is the same pair for
+                 * "Undo". `internal/shared-ts/ui/undo-redo.tsx` is the same pair for
                  * adopters; this surface keeps NuiButton because that is the
                  * control the rest of this panel is built from.
                  */}

@@ -29,11 +29,11 @@
 //      `zoneBankLetter` at all, which are the keys the painted heads bind. This is
 //      the same defect tWeb's `scripts/sync-hud-sdk.ts` header describes finding
 //      in its own hand-written port, inherited from tg-new's.
-//   2. It could not be fixed by gating it the way `shared/ts/deck` is gated. That
-//      vendoring runs from this PUBLIC library into private consumers. A manifest
-//      sync would run the other way — tLib reading tRadio and tELS — which
-//      inverts the dependency tLib exists to keep one-directional and puts two
-//      paid resources' manifests in a public repo.
+//   2. It could not be fixed by gating it the way `internal/shared-ts/deck` is
+//      gated. That vendoring runs one way, from a library into private
+//      consumers. A manifest sync would run the other way — tLib reading
+//      tRadio and tELS — which inverts the dependency tLib exists to keep
+//      one-directional and puts two paid resources' manifests in a public repo.
 //
 // Its only consumer was `internal/tgstudios-v2`, which now reads the real
 // manifests off disk through its own sibling alias. A project that CANNOT see the

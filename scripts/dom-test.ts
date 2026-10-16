@@ -65,18 +65,22 @@ const WEB = resolve(ROOT, "client", "web");
  * Re-measure when you add a batch.
  */
 /**
- * prop-editor lives in `internal/`, which publish-public.ts strips, so in a
- * PUBLIC clone `prop-editor-guard.test.tsx` skips its 24 tests and the suite
- * is legitimately smaller. The floor has to know that or it fires on a clone
- * that is behaving correctly -- a floor that cannot tell "deliberately absent"
- * from "silently vanished" is the stale-floor failure this comment warns about,
- * just in the other direction.
+ * prop-editor and the `ui/` control kit live in `internal/`, which
+ * publish-public.ts strips, so in a PUBLIC clone the files below skip their
+ * cases and the suite is legitimately smaller. The floor has to know that or it
+ * fires on a clone that is behaving correctly -- a floor that cannot tell
+ * "deliberately absent" from "silently vanished" is the stale-floor failure the
+ * comment above warns about, just in the other direction.
+ *
+ * MEASURED, per file, not apportioned: prop-editor-guard 24; export-badge 31;
+ * undo-redo-ui 16; confirm-delete-unmount 3; harness 1 (one case of eight, the
+ * one needing a component from a second package tree). 75 of the 122.
  */
-const PROP_EDITOR_GUARD_TESTS = 24;
-const HAS_PROP_EDITOR = existsSync(
-  resolve(ROOT, "internal", "shared-ts", "prop-editor", "PropEditor.tsx")
-);
-const DEFAULT_MINIMUM_TESTS = HAS_PROP_EDITOR ? 115 : 115 - PROP_EDITOR_GUARD_TESTS;
+const INTERNAL_ONLY_TESTS = 24 + 31 + 16 + 3 + 1;
+const HAS_INTERNAL =
+  existsSync(resolve(ROOT, "internal", "shared-ts", "prop-editor", "PropEditor.tsx")) &&
+  existsSync(resolve(ROOT, "internal", "shared-ts", "ui", "undo-redo.tsx"));
+const DEFAULT_MINIMUM_TESTS = HAS_INTERNAL ? 115 : 115 - INTERNAL_ONLY_TESTS;
 
 const raw = process.env.TLIB_DOM_TEST_MIN;
 let MINIMUM_TESTS = DEFAULT_MINIMUM_TESTS;

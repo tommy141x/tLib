@@ -16,7 +16,7 @@
  *
  * It is `.ts` deliberately: UnoCSS never scans plain `.ts`, so no class-shaped
  * string in this prose can leak into a consumer's stylesheet as a dead rule. The
- * UI affordance is `shared/ts/ui/undo-redo.tsx` and the keyboard binding is
+ * UI affordance is `internal/shared-ts/ui/undo-redo.tsx` and the keyboard binding is
  * `shared/ts/undo-keys.ts`.
  */
 

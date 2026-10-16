@@ -120,7 +120,7 @@ export const DEFECTS: Record<string, Defect> = {
    *  raw class attribute. It cannot prove unoMerge would eat the colour without
    *  the shield -- happy-dom sees the string, not the stylesheet. */
   "export-positive-outline-offset": {
-    file: "shared/ts/ui/export-badge.tsx",
+    file: "internal/shared-ts/ui/export-badge.tsx",
     find: "focus-visible:-outline-offset-1",
     replace: "focus-visible:outline-offset-1",
     count: 1,
@@ -135,7 +135,7 @@ export const DEFECTS: Record<string, Defect> = {
    *  keydown whether or not `closeOnEscape` is set, so the registry stand-down
    *  cannot be reddened from here and is asserted rather than guarded. */
   "export-ark-escape-off": {
-    file: "shared/ts/ui/export-badge.tsx",
+    file: "internal/shared-ts/ui/export-badge.tsx",
     find: "        closeOnEscape\n",
     replace: "        closeOnEscape={false}\n",
     count: 1,
@@ -146,7 +146,7 @@ export const DEFECTS: Record<string, Defect> = {
   /** The one irreversible action: confirming moves a config out of the resource
    *  that owns it. Both copies gated it and neither had a test saying so. */
   "export-unconfirmed": {
-    file: "shared/ts/ui/export-badge.tsx",
+    file: "internal/shared-ts/ui/export-badge.tsx",
     find: "onClick={() => setConfirming(target.name)}",
     replace: "onClick={() => doExport(target.name)}",
     count: 1,

@@ -10,12 +10,26 @@
  * Read `_setup.ts` for the mechanisms. This file is the evidence that they fired.
  */
 
+import { existsSync } from "node:fs";
 import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, render } from "@solidjs/testing-library";
 import { createSignal, flush } from "solid-js";
-import { UndoRedo } from "../../../shared/ts/ui/undo-redo";
 import { UndoHistory } from "../../../shared/ts/undo";
 import { undoKeyDiagnostics } from "../../../shared/ts/undo-keys";
+
+// One case below needs a component from a SECOND package tree with its own
+// node_modules, which is the whole point of it -- that is the arrangement the
+// dedupe rewrite in `_setup.ts` exists for. `UndoRedo` is the subject because
+// it registers on a page-wide singleton from `onSettled`, so a missing owner
+// shows up in a public registry rather than only in `getOwner()`.
+//
+// It lives in `internal/`, which publish-public.ts strips, so a public clone
+// skips that one case instead of failing at module load.
+const HAS_UI_KIT = existsSync(new URL("../../../internal/shared-ts/ui/undo-redo.tsx", import.meta.url));
+const testWithUiKit = HAS_UI_KIT ? test : test.skip;
+const { UndoRedo } = HAS_UI_KIT
+  ? await import("../../../internal/shared-ts/ui/undo-redo")
+  : { UndoRedo: (() => null) as never };
 
 afterEach(cleanup);
 
@@ -88,9 +102,9 @@ describe("the module graph is production's", () => {
     expect(g.__solidVendorFilesRewritten?.() ?? 0).toBeGreaterThan(0);
   });
 
-  test("a shared/ts component gets a real owner, so its cleanups run", () => {
+  testWithUiKit("a component from a sibling package gets a real owner, so its cleanups run", () => {
     // THIS IS THE ONE THAT WAS BROKEN AND GREEN. With two copies of solid-js
-    // a component in shared/ts rendered with no owner at all: `onSettled` fired,
+    // a component outside client/web rendered with no owner at all: `onSettled` fired,
     // `onCleanup` never did, and the cleanup `onSettled` RETURNED never did.
     //
     // For this directory that is not a leak, it is a wrong answer:

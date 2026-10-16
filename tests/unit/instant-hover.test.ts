@@ -7,7 +7,7 @@
  * row, its hover has to land on the frame the cursor arrives, not 100-200ms later.
  *
  * Why this is asserted and not just commented. These classes are consumed through
- * `@tlib/shared` by tELS, tUnit, tRadio, tAFK and tCAD, so one `transition-colors`
+ * `@tlib/internal` by tELS, tUnit, tRadio, tAFK and tCAD, so one `transition-colors`
  * put back here for "polish" re-slows six products at once, in a repo whose own
  * tests would all still pass. Nothing else reads the decision.
  *
@@ -23,13 +23,19 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "../..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
 const SURFACE = read("shared/css/surface.css");
+
+// The control kit is estate-only and lives in `internal/`, which
+// publish-public.ts strips. surface.css stays published, so the first block
+// below is asserted in every clone and the two that parse the kit are not.
+const UI = "internal/shared-ts/ui";
+const describeWithUiKit = existsSync(join(root, UI, "tabs.tsx")) ? describe : describe.skip;
 
 /** The body of one top-level `.<name> { … }` rule, comments stripped. */
 function rule(css: string, selector: string): string {
@@ -56,16 +62,16 @@ describe("surface.css: a row is one of many", () => {
   });
 });
 
-describe("shared/ts/ui: the repeated primitives tint instantly", () => {
+describeWithUiKit("the repeated primitives tint instantly", () => {
   const COLOUR_TRANSITION = /transition-colors|transition-all|transition-\[[^\]]*color/;
 
   const cases: [string, string][] = [
     // A tab strip is the canonical row of neighbours.
-    ["shared/ts/ui/tabs.tsx", "tabTriggerVariants"],
+    [`${UI}/tabs.tsx`, "tabTriggerVariants"],
     // `interactive` Cards arrive in grids.
-    ["shared/ts/ui/card.tsx", "cardVariants"],
+    [`${UI}/card.tsx`, "cardVariants"],
     // Badges arrive in tag rows.
-    ["shared/ts/ui/badge.tsx", "badgeVariants"],
+    [`${UI}/badge.tsx`, "badgeVariants"],
   ];
 
   for (const [file, symbol] of cases) {
@@ -81,7 +87,7 @@ describe("shared/ts/ui: the repeated primitives tint instantly", () => {
   }
 
   test("the Checkbox control and its label declare no colour transition", () => {
-    const src = read("shared/ts/ui/checkbox.tsx");
+    const src = read(`${UI}/checkbox.tsx`);
     for (const konst of ["CONTROL_BASE", "LABEL_BASE"]) {
       const start = src.indexOf(`const ${konst} =`);
       expect(start).toBeGreaterThan(-1);
@@ -92,7 +98,7 @@ describe("shared/ts/ui: the repeated primitives tint instantly", () => {
   test("the export dropdown's rows declare no colour transition", () => {
     // `tlib-export-row` renders inside a `<For>`; the trigger beside it sits in
     // the prop-editor's icon toolbar. Both are one-of-many.
-    const src = read("shared/ts/ui/export-badge.tsx");
+    const src = read(`${UI}/export-badge.tsx`);
     for (const handle of ["tlib-export-row ", "tlib-export-trigger "]) {
       const start = src.indexOf(handle);
       expect(start).toBeGreaterThan(-1);
@@ -101,21 +107,21 @@ describe("shared/ts/ui: the repeated primitives tint instantly", () => {
   });
 });
 
-describe("the transitions that carry meaning survive", () => {
+describeWithUiKit("the transitions that carry meaning survive", () => {
   test("the Switch thumb still slides, and the track still follows it", () => {
     // Stripping the track's colour while the thumb kept its 200ms slide would
     // read as broken, not as fast: the two are one movement.
-    const src = read("shared/ts/ui/switch.tsx");
+    const src = read(`${UI}/switch.tsx`);
     expect(src).toContain("transition-transform duration-200");
     expect(src).toMatch(/transition-\[[^\]]*background-color[^\]]*\] duration-200/);
   });
 
   test("the Tabs indicator still slides between triggers", () => {
-    expect(read("shared/ts/ui/tabs.tsx")).toContain("transition: mounted()");
+    expect(read(`${UI}/tabs.tsx`)).toContain("transition: mounted()");
   });
 
   test("Popover and Tooltip still animate open", () => {
-    for (const file of ["shared/ts/ui/popover.tsx", "shared/ts/ui/tooltip.tsx"]) {
+    for (const file of [`${UI}/popover.tsx`, `${UI}/tooltip.tsx`]) {
       expect(read(file)).toContain("transition-[opacity,transform] duration-150");
     }
   });

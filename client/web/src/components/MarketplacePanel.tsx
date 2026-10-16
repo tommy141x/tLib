@@ -17,7 +17,7 @@ import type { OpenData } from "@tlib/shared/marketplace/ui";
 //
 // Both resolve the same icon set, and this app had four imports in the virtual
 // form against seven files in the package form -- the "dependency inconsistency
-// to fix" that `@tlib/shared/ui/meta.ts` names. One app, one spelling.
+// to fix" that `@tlib/internal/ui/meta.ts` names. One app, one spelling.
 //
 // `lucide-solid` is the one chosen FOR THIS APP, not for the repo: deep per-icon
 // paths are already the documented rule in `menu/components/lucide.ts` (the

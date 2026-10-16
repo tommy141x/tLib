@@ -24,11 +24,31 @@
  * actually been.
  */
 
+import { existsSync } from "node:fs";
 import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, render } from "@solidjs/testing-library";
 import { flush } from "solid-js";
-import { UndoDirty, UndoHint, UndoRedo, useUndoState } from "../../../shared/ts/ui/undo-redo";
 import { UndoHistory } from "../../../shared/ts/undo";
+
+// The control kit moved to `internal/`, which publish-public.ts strips. This
+// file stays in the published half for the reason prop-editor-guard.test.tsx
+// gives: the DOM harness it needs -- happy-dom, @solidjs/testing-library and
+// the dedupe rewrite in `_setup.ts` -- is a client/web devDependency, and a
+// second copy of it under internal/ would be two harnesses to keep in step. So
+// the suite declares that the private half may be absent instead.
+//
+// A STATIC import fails at module load in a public clone and takes the whole
+// file with it, so the kit is awaited below.
+const HAS_UI_KIT = existsSync(new URL("../../../internal/shared-ts/ui/undo-redo.tsx", import.meta.url));
+const describeWithUiKit = HAS_UI_KIT ? describe : describe.skip;
+const { UndoDirty, UndoHint, UndoRedo, useUndoState } = HAS_UI_KIT
+  ? await import("../../../internal/shared-ts/ui/undo-redo")
+  : {
+      UndoDirty: (() => null) as never,
+      UndoHint: (() => null) as never,
+      UndoRedo: (() => null) as never,
+      useUndoState: (() => null) as never,
+    };
 
 afterEach(cleanup);
 
@@ -66,7 +86,7 @@ function counter() {
 const buttons = (container: HTMLElement) =>
   [...container.querySelectorAll("button")] as HTMLButtonElement[];
 
-describe("UndoRedo", () => {
+describeWithUiKit("UndoRedo", () => {
   test("renders exactly two buttons, both disabled on an empty stack", () => {
     const { history } = counter();
     const { container } = render(() => <UndoRedo history={history} />);
@@ -150,7 +170,7 @@ describe("UndoRedo", () => {
   });
 });
 
-describe("UndoHint", () => {
+describeWithUiKit("UndoHint", () => {
   test("names both chords", () => {
     const { container } = render(() => <UndoHint />);
     const kbd = [...container.querySelectorAll("kbd")].map((k) => k.textContent);
@@ -187,7 +207,7 @@ describe("UndoHint", () => {
   });
 });
 
-describe("UndoDirty", () => {
+describeWithUiKit("UndoDirty", () => {
   test("absent while clean, present and a status role once dirty", () => {
     const c = counter();
     const { container } = render(() => <UndoDirty history={c.history} />);
@@ -236,7 +256,7 @@ describe("UndoDirty", () => {
   });
 });
 
-describe("useUndoState", () => {
+describeWithUiKit("useUndoState", () => {
   test("is readable on first render, with no initial gap", () => {
     // `onChange` fires the listener immediately, which is what makes a UI that
     // mounts AFTER the first edit show the right buttons rather than an empty

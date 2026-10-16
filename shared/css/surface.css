@@ -72,8 +72,8 @@
     color: hsl(var(--muted-foreground));
   }
 
-  /* THE input surface. `shared/ts/ui/input.tsx`, the trigger in
-     `shared/ts/ui/select.tsx` and any hand-rolled text field in a consumer are all
+  /* THE input surface. `internal/shared-ts/ui/input.tsx`, the trigger in
+     `internal/shared-ts/ui/select.tsx` and any hand-rolled text field in a consumer are all
      this one class, so they cannot drift apart.
 
      `--input` (9.8%) fill on a `--card` (6.67%) panel with a `--border` (20.39%)
@@ -117,7 +117,7 @@
   }
 
   /* One segment of a choice between MODES — "Literal text / Live value",
-     "Move / Rotate", "Local / World". Styling for `shared/ts/ui/segmented.tsx`.
+     "Move / Rotate", "Local / World". Styling for `internal/shared-ts/ui/segmented.tsx`.
 
      A segmented control rather than `ui/radio-group`, which hardcodes `text-sm`
      on its own `ItemText`, so a caller's size override styles the wrapper and

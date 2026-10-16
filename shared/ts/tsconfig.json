@@ -41,8 +41,6 @@
     "marketplace/**/*.tsx",
     "nui-kit/**/*.ts",
     "nui-kit/**/*.tsx",
-    "ui/**/*.ts",
-    "ui/**/*.tsx",
     // Not optional. `telemetry/` was reachable
     // from this config only through `nui.ts -> telemetry/ambient.ts`, so tsc
     // followed that ONE leaf and checked nothing else in the directory —
@@ -55,8 +53,9 @@
     // directories were covered by nothing: a comment pass broke block
     // delimiters in deck/card.ts, deck/strip.ts and build/deck-pack.ts and this
     // config reported EXIT 0 on all three. Only biome's parse stage found them.
+    // `deck/` has since moved to internal/shared-ts, whose own config includes
+    // it for this reason; build/deck-pack.ts, which packs it, is still here.
     "build/**/*.ts",
-    "deck/**/*.ts",
     "fs/**/*.ts",
     "modules/**/*.ts",
     "secrets/**/*.ts",

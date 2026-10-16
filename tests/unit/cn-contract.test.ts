@@ -319,7 +319,7 @@ describe("cn: SHIELD -- the outline offset does not eat the outline colour", () 
   });
 
   test("ConfirmDelete's four focus tokens now survive INSIDE cn()", () => {
-    // `shared/ts/ui/confirm-delete.tsx` concatenates them outside `cn()` deliberately, with a
+    // `internal/shared-ts/ui/confirm-delete.tsx` concatenates them outside `cn()` deliberately, with a
     // measurement in its header saying why. This is the assertion that the workaround is no
     // longer needed -- the icon-only form's box IS the glyph, so its offset has to be POSITIVE
     // and it cannot use the negative spelling `buttonVariants` escapes through.
@@ -463,7 +463,7 @@ describe("cn: the real call sites the shield was measured against", () => {
   // Each was verified against the unshielded function before the shield landed.
 
   test("a floating panel's title and description render at their intended size", () => {
-    // shared/ts/ui/popover.tsx -- PopoverTitle and PopoverDescription. The comments there name
+    // internal/shared-ts/ui/popover.tsx -- PopoverTitle and PopoverDescription. The comments there name
     // the steps of the type scale these are meant to sit on; unshielded, neither size was ever
     // emitted and both inherited whatever the parent set.
     expect(parts("text-[13px] font-semibold text-foreground")).toContain("text-[13px]");
@@ -471,7 +471,7 @@ describe("cn: the real call sites the shield was measured against", () => {
   });
 
   test("a tooltip renders at its intended size", () => {
-    // shared/ts/ui/tooltip.tsx -- note the data-attribute variants in the same call, which are
+    // internal/shared-ts/ui/tooltip.tsx -- note the data-attribute variants in the same call, which are
     // the second defect family, and the bracketed transform-origin, which must pass through.
     const tooltip = parts(
       "z-50 rounded-md bg-secondary px-3 py-1.5 text-[12px] text-secondary-foreground",
@@ -485,7 +485,7 @@ describe("cn: the real call sites the shield was measured against", () => {
   });
 
   test("a tab trigger renders at its intended size under both variants", () => {
-    // shared/ts/ui/tabs.tsx -- a cva whose BASE carries the size and whose every variant
+    // internal/shared-ts/ui/tabs.tsx -- a cva whose BASE carries the size and whose every variant
     // carries a colour, so the two always meet. Both variants were affected.
     const base =
       "inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-[12px] font-medium ring-offset-background transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 relative";
