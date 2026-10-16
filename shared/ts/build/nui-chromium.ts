@@ -153,13 +153,21 @@ export async function launch(opts: LaunchOptions = {}): Promise<LaunchedBrowser>
   let wsPath = "";
   let port = 0;
   while (Date.now() < deadline) {
-    if (fs.existsSync(portFile)) {
+    // The read is inside the try, not guarded by existsSync, because the two together are a
+    // race rather than a check: Chromium creates DevToolsActivePort and then writes it, and on
+    // Windows opening it in that window throws EBUSY. Existing behaviour let that escape the
+    // loop and kill the run outright — intermittently, roughly one launch in ten, across every
+    // gallery and thumb script that uses this. A failed read just means "not ready", which is
+    // what the next poll is for; the 30s deadline below is still the thing that gives up.
+    try {
       const [p, w] = fs.readFileSync(portFile, "utf8").split("\n");
       if (p && w) {
         port = Number(p);
         wsPath = w.trim();
         break;
       }
+    } catch {
+      // not written yet, or being written right now
     }
     await new Promise((r) => setTimeout(r, 100));
   }

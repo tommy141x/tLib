@@ -34,6 +34,99 @@ const FONT_DIR = path.resolve(
   "fonts"
 );
 
+/**
+ * The light rig, shared with `deck-banner.ts` rather than copied into it.
+ *
+ * Back to front: a key above the frame, haze for its beams to be visible in, the beams
+ * themselves, and the spill where those beams land on the subject. `.atmos` is the light in the
+ * air; `.spill` is the same light on the subject. They share one geometry block and differ only
+ * in z-index and in what each beam paints, so the two sets cannot drift apart. Both carry the
+ * same inset so the percentage offsets resolve against the same box.
+ *
+ * Anything drawing over `.atmos` (z-index 1) must set a z-index above it, or the airborne beams
+ * paint in FRONT of it as a white wash.
+ */
+export const LIGHT_RIG_CSS = `
+  .atmos, .spill { position: absolute; inset: -25%; pointer-events: none; }
+  .atmos { z-index: 1; }
+  /* Overlay against white doubles dark values and leaves light ones alone, which is an exposure
+     lift that keeps the subject's contrast. Screen greys a dark UI out instead, and
+     backdrop-filter clips to the element box in 103 — both read as a sheet laid over the picture
+     rather than as light falling on it. */
+  .spill { z-index: 4; mix-blend-mode: overlay; }
+
+  /* The source sits above the top edge so only its falloff is in frame. An emitter you can see
+     reads as a blob; one you cannot reads as a light. */
+  .key {
+    position: absolute;
+    left: 50%;
+    top: -26%;
+    width: 140%;
+    height: 90%;
+    transform: translateX(-50%);
+    background: radial-gradient(50% 50% at 50% 50%,
+      rgba(216,234,255,.20) 0%, rgba(188,212,246,.06) 40%, rgba(0,0,0,0) 68%);
+  }
+
+  /* Airborne haze. Beams are only visible because of what they shine through. */
+  .haze {
+    position: absolute;
+    left: -10%;
+    right: -10%;
+    top: 24%;
+    height: 42%;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(178,203,238,.06) 46%, rgba(0,0,0,0) 100%);
+    filter: blur(90px);
+  }
+
+  .beams { position: absolute; inset: 0; }
+  .beams i {
+    position: absolute;
+    top: -40%;
+    height: 180%;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(228,240,255,.55) 50%, rgba(255,255,255,0) 100%);
+    transform-origin: 50% 0;
+    /* No mask. mask-clip is border-box, so a fade along the length would cut the blur off square
+       at the un-blurred rectangle's edge and put hard sides back on every beam. Not needed
+       anyway — each spans far past both frame edges, so its ends are off-camera. */
+  }
+  /* Blur is ~half the width on every beam, and that ratio is the trick: at a fixed blur a wide
+     beam keeps a flat lit core with two straight sides, which is a rectangle however soft its
+     edges are. Widths and angles are uneven so they do not read as a pattern. */
+  .beams i:nth-child(1) { left: 53%; width: 200px; opacity: .62; transform: rotate(19deg); filter: blur(100px); }
+  .beams i:nth-child(2) { left: 66%; width: 84px;  opacity: .92; transform: rotate(13deg); filter: blur(44px); }
+  .beams i:nth-child(3) { left: 71%; width: 150px; opacity: .40; transform: rotate(16deg); filter: blur(76px); }
+  .beams i:nth-child(4) { left: 26%; width: 320px; opacity: .16; transform: rotate(25deg); filter: blur(160px); }
+  .beams i:nth-child(5) { left: 44%; width: 46px;  opacity: .58; transform: rotate(21deg); filter: blur(26px); }
+
+  /* Overlay doubles what it lands on, so white here goes further than the same white in the air. */
+  .spill i {
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.52) 50%, rgba(255,255,255,0) 100%);
+  }`;
+
+/** Goes first in `.frame`; the spill half goes last, over the subject. */
+export const ATMOS_HTML = `<div class="atmos">
+    <div class="key"></div>
+    <div class="haze"></div>
+    <div class="beams"><i></i><i></i><i></i><i></i><i></i></div>
+  </div>`;
+export const SPILL_HTML = `<div class="spill"><div class="beams"><i></i><i></i><i></i><i></i><i></i></div></div>`;
+
+/**
+ * Grain, last. Atmosphere is the reason it is here, but it also pays for itself: these frames are
+ * mostly one wide dark gradient, and an 8-bit JPEG of that bands visibly in the falloff. A few
+ * counts of noise dither the steps away for less than the banding costs.
+ */
+export const GRAIN_CSS = `
+  .grain {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+    opacity: .055;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }`;
+
 export interface HeroLayer {
   /** Absolute path to a PNG/WEBP/JPEG. Transparent grounds are fine and get no border radius. */
   file: string;
@@ -68,7 +161,7 @@ function esc(s: string): string {
 
 /** Inline every asset. A file:// page cannot fetch siblings without loosening Chromium's file
  *  access, and a font that silently fails to load falls back to Arial — which looks deliberate. */
-function dataUri(file: string): string {
+export function dataUri(file: string): string {
   if (!fs.existsSync(file)) throw new Error(`hero: missing input ${file}`);
   const ext = path.extname(file).toLowerCase();
   const mime =
@@ -125,69 +218,7 @@ function document(
     isolation: isolate;
   }
 
-  /* ── Light rig ──────────────────────────────────────────────────────────────
-     Back to front: a key above the frame, haze for its beams to be visible in,
-     the beams themselves, and the spill where those beams land on the captures.
-     .atmos is the light in the air; .spill is the same light on the subject.
-     They share one geometry block and differ only in z-index and in what each
-     beam paints, so the two sets cannot drift apart. Both carry the same inset
-     so the percentage offsets resolve against the same box. */
-  .atmos, .spill { position: absolute; inset: -25%; pointer-events: none; }
-  .atmos { z-index: 1; }
-  /* Overlay against white doubles dark values and leaves light ones alone, which is an exposure
-     lift that keeps the captures' contrast. Screen greys a dark UI out instead, and
-     backdrop-filter clips to the element box in 103 — both read as a sheet laid over the picture
-     rather than as light falling on it. */
-  .spill { z-index: 4; mix-blend-mode: overlay; }
-
-  /* The source sits above the top edge so only its falloff is in frame. An emitter you can see
-     reads as a blob; one you cannot reads as a light. */
-  .key {
-    position: absolute;
-    left: 50%;
-    top: -26%;
-    width: 140%;
-    height: 90%;
-    transform: translateX(-50%);
-    background: radial-gradient(50% 50% at 50% 50%,
-      rgba(216,234,255,.20) 0%, rgba(188,212,246,.06) 40%, rgba(0,0,0,0) 68%);
-  }
-
-  /* Airborne haze. Beams are only visible because of what they shine through. */
-  .haze {
-    position: absolute;
-    left: -10%;
-    right: -10%;
-    top: 24%;
-    height: 42%;
-    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(178,203,238,.06) 46%, rgba(0,0,0,0) 100%);
-    filter: blur(90px);
-  }
-
-  .beams { position: absolute; inset: 0; }
-  .beams i {
-    position: absolute;
-    top: -40%;
-    height: 180%;
-    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(228,240,255,.55) 50%, rgba(255,255,255,0) 100%);
-    transform-origin: 50% 0;
-    /* No mask. mask-clip is border-box, so a fade along the length would cut the blur off square
-       at the un-blurred rectangle's edge and put hard sides back on every beam. Not needed
-       anyway — each spans far past both frame edges, so its ends are off-camera. */
-  }
-  /* Blur is ~half the width on every beam, and that ratio is the trick: at a fixed blur a wide
-     beam keeps a flat lit core with two straight sides, which is a rectangle however soft its
-     edges are. Widths and angles are uneven so they do not read as a pattern. */
-  .beams i:nth-child(1) { left: 53%; width: 200px; opacity: .62; transform: rotate(19deg); filter: blur(100px); }
-  .beams i:nth-child(2) { left: 66%; width: 84px;  opacity: .92; transform: rotate(13deg); filter: blur(44px); }
-  .beams i:nth-child(3) { left: 71%; width: 150px; opacity: .40; transform: rotate(16deg); filter: blur(76px); }
-  .beams i:nth-child(4) { left: 26%; width: 320px; opacity: .16; transform: rotate(25deg); filter: blur(160px); }
-  .beams i:nth-child(5) { left: 44%; width: 46px;  opacity: .58; transform: rotate(21deg); filter: blur(26px); }
-
-  /* Overlay doubles what it lands on, so white here goes further than the same white in the air. */
-  .spill i {
-    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.52) 50%, rgba(255,255,255,0) 100%);
-  }
+${LIGHT_RIG_CSS}
 
   .wordmark {
     position: absolute;
@@ -250,24 +281,10 @@ function document(
       linear-gradient(0deg, rgba(5,6,7,.55) 0%, rgba(5,6,7,0) 22%);
   }
 
-  /* Grain, last. Atmosphere is the reason it is here, but it also pays for itself: the frame is
-     mostly one wide dark gradient, and an 8-bit JPEG of that bands visibly in the falloff. A few
-     counts of noise dither the steps away for less than the banding costs. */
-  .grain {
-    position: absolute;
-    inset: 0;
-    z-index: 6;
-    pointer-events: none;
-    opacity: .055;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
+${GRAIN_CSS}
 </style>
 <div class="frame">
-  <div class="atmos">
-    <div class="key"></div>
-    <div class="haze"></div>
-    <div class="beams"><i></i><i></i><i></i><i></i><i></i></div>
-  </div>
+  ${ATMOS_HTML}
   <div class="wordmark">
     <h1>${esc(spec.headline)}</h1>
     <p>${esc(spec.subtitle)}</p>
@@ -275,93 +292,119 @@ function document(
   <div class="stage">
     ${imgs}
   </div>
-  <div class="spill"><div class="beams"><i></i><i></i><i></i><i></i><i></i></div></div>
+  ${SPILL_HTML}
   <div class="vignette"></div>
   <div class="grain"></div>
 </div>`;
 }
 
-export async function renderHero(spec: HeroSpec): Promise<void> {
-  const log = spec.log ?? console.log;
-  const fmt = FORMATS[spec.format ?? "thumb"];
-  const banner = (spec.format ?? "thumb") === "banner";
-  const headlineSize = spec.headlineSize ?? fmt.headline;
-
-  const html = document({
-    headline: spec.headline,
-    subtitle: spec.subtitle,
-    layers: spec.layers,
-    w: fmt.w,
-    h: fmt.h,
-    headlineSize,
-    subtitleSize: fmt.subtitle,
-    stageTop: fmt.stageTop,
-    stageCss: spec.stageCss ?? "",
-    banner,
-  });
-
+/**
+ * Render one document and photograph it. Shared with `deck-banner.ts`.
+ *
+ * The two guards are the whole reason this is not four lines of CDP. `load` fires before the
+ * webfont and before any image has decoded, and a shot taken then is the fallback face over
+ * half-painted art — which still writes a perfectly plausible file. So both are waited on, and
+ * then both are checked: the brand face must measure differently from Arial, and every `<img>`
+ * must report a non-zero natural width.
+ */
+export async function shoot(opts: {
+  html: string;
+  width: number;
+  height: number;
+  /** Size to load and probe the brand face at — any size the document actually uses. */
+  fontSizePx: number;
+  /** How many `<img>` the document should contain. A missing one is a silent hole otherwise. */
+  expectImages: number;
+  out: string;
+  label: string;
+  log: (msg: string) => void;
+}): Promise<void> {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "t-hero-"));
-  const page = path.join(tmp, "hero.html");
-  fs.writeFileSync(page, html);
+  const page = path.join(tmp, "page.html");
+  fs.writeFileSync(page, opts.html);
 
-  const browser = await launch({ headless: true, log });
+  const browser = await launch({ headless: true, log: opts.log });
   try {
     await browser.page.send("Emulation.setDeviceMetricsOverride", {
-      width: fmt.w,
-      height: fmt.h,
+      width: opts.width,
+      height: opts.height,
       deviceScaleFactor: 1,
       mobile: false,
     });
     await browser.page.navigate(`file:///${page.replace(/\\/g, "/")}`);
 
-    // Wait on the font and every decode explicitly. `load` fires before either, and a shot taken
-    // then is the fallback face over half-painted images — which still writes a plausible file.
     const probe = await browser.page.evaluate<string>(
       `(async () => {
-         await document.fonts.load('700 ${headlineSize}px "Alte Haas Grotesk"');
+         await document.fonts.load('700 ${opts.fontSizePx}px "Alte Haas Grotesk"');
          await document.fonts.ready;
          await Promise.all([...document.images].map((i) => i.decode().catch(() => {})));
          const el = document.createElement('span');
-         el.style.cssText = 'position:absolute;white-space:pre;font:700 ${headlineSize}px "Alte Haas Grotesk";';
+         el.style.cssText = 'position:absolute;white-space:pre;font:700 ${opts.fontSizePx}px "Alte Haas Grotesk";';
          el.textContent = 'Database Radio';
          document.body.appendChild(el);
          const brand = el.getBoundingClientRect().width;
-         el.style.font = '700 ${headlineSize}px Arial';
+         el.style.font = '700 ${opts.fontSizePx}px Arial';
          const fallback = el.getBoundingClientRect().width;
          el.remove();
          return JSON.stringify({ brand, fallback, images: [...document.images].map((i) => i.naturalWidth) });
        })()`
     );
     const state = JSON.parse(probe) as { brand: number; fallback: number; images: number[] };
-    // The brand face measures differently from Arial at this size; equal widths means it never
-    // loaded and the headline is about to be photographed in the fallback.
     if (Math.abs(state.brand - state.fallback) < 1) {
       throw new Error(
-        `hero: brand face did not load — headline would render in Arial (both ${state.brand}px)`
+        `${opts.label}: brand face did not load — text would render in Arial (both ${state.brand}px)`
       );
     }
-    if (state.images.length !== spec.layers.length || state.images.some((w) => w === 0)) {
+    if (state.images.length !== opts.expectImages || state.images.some((w) => w === 0)) {
       throw new Error(
-        `hero: a layer failed to decode — widths ${state.images.join(", ") || "(none)"}`
+        `${opts.label}: expected ${opts.expectImages} images, got widths ${state.images.join(", ") || "(none)"}`
       );
     }
 
-    const png = path.extname(spec.out).toLowerCase() === ".png";
+    const png = path.extname(opts.out).toLowerCase() === ".png";
     const { data } = await browser.page.send<{ data: string }>("Page.captureScreenshot", {
       format: png ? "png" : "jpeg",
       ...(png ? {} : { quality: 92 }),
-      clip: { x: 0, y: 0, width: fmt.w, height: fmt.h, scale: 1 },
+      clip: { x: 0, y: 0, width: opts.width, height: opts.height, scale: 1 },
       captureBeyondViewport: false,
     });
-    const shot = Buffer.from(data, "base64");
+    const buf = Buffer.from(data, "base64");
 
-    fs.mkdirSync(path.dirname(spec.out), { recursive: true });
-    fs.writeFileSync(spec.out, shot);
-    log(
-      `[hero] ${path.basename(spec.out)} ${fmt.w}×${fmt.h} ${(shot.length / 1024).toFixed(0)} KB`
+    fs.mkdirSync(path.dirname(opts.out), { recursive: true });
+    fs.writeFileSync(opts.out, buf);
+    opts.log(
+      `[${opts.label}] ${path.basename(opts.out)} ${opts.width}×${opts.height} ${(buf.length / 1024).toFixed(0)} KB`
     );
   } finally {
     await browser.close();
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+}
+
+export async function renderHero(spec: HeroSpec): Promise<void> {
+  const fmt = FORMATS[spec.format ?? "thumb"];
+  const banner = (spec.format ?? "thumb") === "banner";
+  const headlineSize = spec.headlineSize ?? fmt.headline;
+
+  await shoot({
+    html: document({
+      headline: spec.headline,
+      subtitle: spec.subtitle,
+      layers: spec.layers,
+      w: fmt.w,
+      h: fmt.h,
+      headlineSize,
+      subtitleSize: fmt.subtitle,
+      stageTop: fmt.stageTop,
+      stageCss: spec.stageCss ?? "",
+      banner,
+    }),
+    width: fmt.w,
+    height: fmt.h,
+    fontSizePx: headlineSize,
+    expectImages: spec.layers.length,
+    out: spec.out,
+    label: "hero",
+    log: spec.log ?? console.log,
+  });
 }
