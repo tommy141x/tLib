@@ -44,17 +44,13 @@ local function announce()
     for _, line in ipairs(BANNER) do print(line) end
 end
 
--- Repeated on a timer as well as at boot. A banner that scrolls past once during
--- a noisy start is a banner nobody read, and the failure this guards against --
--- a production server left in demo mode -- is total and silent from the console's
--- point of view, because everything appears to work.
-CreateThread(function()
-    Wait(5000)
-    while true do
-        if Demo.active() then announce() end
-        Wait(30 * 60 * 1000)
-    end
-end)
+-- Said ONCE, at boot, and again only when an operator turns demo mode on by
+-- command. It used to repeat every 30 minutes, on the argument that a banner
+-- lost in a noisy start is a banner nobody read. Measured 2026-10-16 on a
+-- 15-hour-old server: 31 banners, 310 lines of console, all of them correct and
+-- none of them read. On a showroom box demo mode is deliberate and permanent,
+-- so the repeat only buys noise; `tlib_demo` with no argument still answers at
+-- any time, which is the question an operator who missed the banner would ask.
 
 -- Broadcasting
 
