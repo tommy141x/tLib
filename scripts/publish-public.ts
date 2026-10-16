@@ -138,9 +138,33 @@ try {
     // -n so any private path the commit also touched is dropped before
     // anything is recorded.
     if (tryGit(["cherry-pick", "-n", "--allow-empty", sha], work) === null) {
-      console.error(`publish-public: ${sha.slice(0, 9)} ${subject}`);
-      console.error(`  conflicted. The worktree is at ${work} for inspection; resolve or reset.`);
-      process.exit(1);
+      // A MIXED commit -- one that edits published files and also creates or
+      // edits a private path -- conflicts here even though the private half is
+      // deleted four lines below. `main` has no internal/ history for the merge
+      // to stand on, so every internal/ path comes back DU (deleted by us,
+      // modified by them). That is not a conflict in anything this branch
+      // publishes. Measured 2026-10-16: the move commits conflicted on 16 such
+      // paths and nothing else, which stalled the first real publish after the
+      // dry run had passed -- the dry run does not apply, so it cannot see this.
+      //
+      // Resolve by removal, and fail only when a PUBLISHED path conflicted,
+      // which is a real conflict a human has to look at.
+      const unmerged = git(["diff", "--name-only", "--diff-filter=U"], work)
+        .split("\n")
+        .filter(Boolean);
+      const publicConflicts = unmerged.filter(
+        (p) => !PRIVATE.some((d) => p === d || p.startsWith(`${d}/`))
+      );
+      if (unmerged.length === 0 || publicConflicts.length > 0) {
+        console.error(`publish-public: ${sha.slice(0, 9)} ${subject}`);
+        for (const p of publicConflicts) console.error(`  conflicted: ${p}`);
+        console.error(`  The worktree is at ${work} for inspection; resolve or reset.`);
+        process.exit(1);
+      }
+      for (const path of unmerged) {
+        tryGit(["rm", "-r", "--quiet", "--cached", "--ignore-unmatch", path], work);
+        rmSync(join(work, path), { recursive: true, force: true });
+      }
     }
 
     for (const path of PRIVATE) {
