@@ -47,7 +47,10 @@ function TriggerEvent(event, payload, ...)
     if event:match('^tlib:marketplace:do') then
         if dispatchError then error('dispatch failure') end
         dispatched[#dispatched + 1] = { event = event, p = payload }
-    else hooks[#hooks + 1] = { event = event, p = payload } end
+    -- The varargs matter: a lifecycle hook is `(itemType, slug, meta)`, so the
+    -- meta table -- which is where `installedAt` legitimately lives -- arrives
+    -- entirely in `...` and was being dropped on the floor here.
+    else hooks[#hooks + 1] = { event = event, p = payload, args = { ... } } end
 end
 -- Loaded FIRST, exactly as fxmanifest's server_scripts orders them. The
 -- marketplace's admin gate is `Permission.isPlayerAdmin` now, so stubbing the
@@ -73,9 +76,11 @@ local function req(action, resource, kind, slug, version, player)
     handlers['tlib:marketplace:' .. action](resource, kind, slug, version)
 end
 local function last() return dispatched[#dispatched].p end
-local function result(token, resource, ok)
+local function result(token, resource, ok, extra)
     invoking = resource
-    handlers['tlib:marketplace:agentResult']({ token = token, ok = ok ~= false, slug = 'forged', resource = 'forged' })
+    local value = { token = token, ok = ok ~= false, slug = 'forged', resource = 'forged' }
+    for key, item in pairs(extra or {}) do value[key] = item end
+    handlers['tlib:marketplace:agentResult'](value)
 end
 local function advance(ms)
     now = now + ms
@@ -158,6 +163,22 @@ reg('a', 'ui', { installPath = 'layouts', onInstall = function() error('callback
 req('install', 'a', 'ui', 'throws'); result(last().token, 'a')
 eq(replies[#replies].p.ok, true, 'callback failure does not lose reply')
 req('uninstall', 'a', 'ui', 'throws'); result(last().token, 'a')
+
+-- An install reply carries COUNTS AND NO PATH.
+--
+-- `installFromData` answers with an absolute `<resourceRoot>/<installPath>/<slug>`
+-- and the coordinator used to forward it to the client, where the only reader was
+-- a log line printing the server's directory layout. The inspect reply was already
+-- asserted path-free below; the write path was not, which is how it kept one.
+req('install', 'a', 'ui', 'paths'); result(last().token, 'a', true,
+    { installedAt = '/private/root/layouts/paths', fileCount = 3, bytesWritten = 4096 })
+local installedReply = replies[#replies].p
+eq(installedReply.ok, true); eq(installedReply.installedAt, nil, 'no filesystem path to the client')
+eq(installedReply.fileCount, 3); eq(installedReply.bytesWritten, 4096)
+-- Still handed to the consumer, server-side, where it never leaves the host.
+eq(hooks[#hooks].event, 'a:marketplace:installed')
+eq(hooks[#hooks].args[2].installedAt, '/private/root/layouts/paths')
+eq(hooks[#hooks].args[1], 'paths')
 
 req('install', 'a', 'ui', 'stop'); local stopped = last().token
 handlers.onResourceStop('a'); eq(replies[#replies].p.token, stopped)

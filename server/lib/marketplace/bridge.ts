@@ -1,20 +1,39 @@
-// The FiveM exports the Lua side calls into. All install and HTTP work happens
-// here on the Node runtime; server/sv_marketplace.lua wraps these with
-// friendlier names and fires the consumer's onInstall callback.
+// The FiveM exports the Lua side calls into. HTTP work happens here on the Node
+// runtime; server/sv_marketplace.lua wraps these with friendlier names and fires
+// the consumer's onInstall callback.
 //
 // An async export takes a Lua callback as its last argument rather than
 // returning a Promise, so no Lua consumer has to await userdata.
+//
+// EVERY EXPORT HERE IS A READ, AND THAT IS NOW THE RULE.
+//
+// A `fExports` name is callable by ANY resource on the customer's server with any
+// arguments, with no ACE check and no `source` to attribute it to. That is the
+// same reason `shared/ts/marketplace/catalogue.ts` forbids handing
+// `TLIB_PUBLIC_KEY` to an export, and it is why installs and uninstalls do not go
+// through this file: they are a net event in `server/sv_marketplace.lua`, gated on
+// `tlib.admin`, and the disk work happens in the owning consumer's own bundle
+// (`shared/ts/marketplace/agent.ts`).
+//
+// This file used to also export `mpInstallFromFile` and `mpUninstall`, which
+// wrote and DELETED a registered consumer's installed content on any caller's
+// say-so. Nothing in any resource in this estate called either of them — the
+// coordinator has only ever dispatched to the agent — so they were an
+// unauthenticated write surface that existed purely because the install path used
+// to live here. `mpListTypes` and `mpUnregisterResource` went with them: also
+// uncalled, and the latter's comment claimed Lua invoked it on resource stop when
+// `./index.ts` has always handled that with its own `onResourceStop` listener.
+//
+// So: anything added here must be a read. A write belongs on a net event with the
+// admin gate, dispatched to the agent.
 
-import * as fs from "node:fs";
-import * as path from "node:path";
 import {
   assertItemBelongsToResource,
   CatalogueError,
 } from "../../../shared/ts/marketplace/catalogue";
-import { type BrowseParams, browseItems, likeItem, previewHtml } from "./browse";
-import { fExports, fGetCurrentResourceName, fGetResourcePath } from "./fivem";
-import { installFromData, uninstallItem } from "./installer";
-import { list as listTargets, register as registerTarget, unregisterResource } from "./registry";
+import { type BrowseParams, browseItems, likeItem, previewHtml, themeJson } from "./browse";
+import { fExports } from "./fivem";
+import { register as registerTarget } from "./registry";
 
 let installed = false;
 
@@ -24,7 +43,10 @@ export function registerBridge(): void {
 
   //   exports.tLib:mpRegisterType(resourceName, type, installPath)
   //
-  // Files are written into resourceName, at installPath relative to its root.
+  // The one write-shaped export, and it writes only to this process's in-memory
+  // registry: it declares where a consumer's items land. The coordinator calls it
+  // from `RegisterMarketplaceType`, which has already resolved the resource name
+  // from `GetInvokingResource()` rather than from its arguments.
   fExports("mpRegisterType", (resourceName: unknown, type: unknown, installPath: unknown) => {
     if (typeof resourceName !== "string" || !resourceName) return false;
     if (typeof type !== "string" || !type) return false;
@@ -33,21 +55,13 @@ export function registerBridge(): void {
     return true;
   });
 
-  // Called by Lua when a consumer resource stops — drops its registered types.
-  fExports("mpUnregisterResource", (resourceName: unknown) => {
-    if (typeof resourceName !== "string" || !resourceName) return false;
-    unregisterResource(resourceName);
-    return true;
-  });
-
-  // Synchronously returns a JSON string of registered types, for diagnostics.
-  fExports("mpListTypes", () => JSON.stringify(listTargets()));
-
   //   exports.tLib:mpBrowse(paramsJson, function(ok, err, resultJson) end)
   //
-  // The only async export in this file, so it follows the convention stated in
-  // `../community-configs/bridge.ts`: the Lua callback is the LAST argument and
-  //
+  // The first of the four async exports here, and the one that states the
+  // convention the other three follow — it is `../community-configs/bridge.ts`'s:
+  // the Lua callback is the LAST argument, it is invoked exactly once, and no
+  // rejection escapes into the Lua VM. (This said "the only async export in this
+  // file", which stopped being true the moment `mpLike` was added.)
   fExports("mpBrowse", (paramsJson: unknown, cb: unknown) => {
     if (typeof cb !== "function") return;
     const done = cb as (ok: boolean, err: string | null, value?: unknown) => void;
@@ -116,6 +130,23 @@ export function registerBridge(): void {
     );
   });
 
+  //   exports.tLib:mpThemeJson(slug, function(ok, err, json) end)
+  //
+  // A `theme` item's published definition, for the dispatch-panel preview. A
+  // READ, same async convention as the three above.
+  fExports("mpThemeJson", (slug: unknown, cb: unknown) => {
+    if (typeof cb !== "function") return;
+    const done = cb as (ok: boolean, err: string | null, value?: unknown) => void;
+    if (typeof slug !== "string" || !slug) {
+      done(false, "slug required");
+      return;
+    }
+    void themeJson(slug).then(
+      (json) => done(true, null, json),
+      (e: unknown) => done(false, e instanceof Error ? e.message : String(e))
+    );
+  });
+
   //   exports.tLib:mpAssertItemResource(resourceName, slug, function(ok, err) end)
   //
   // "Does this slug belong to this product?" The coordinator installs into the
@@ -152,63 +183,5 @@ export function registerBridge(): void {
           e instanceof CatalogueError ? e.code : e instanceof Error ? e.message : String(e)
         )
     );
-  });
-
-  // Lua writes the downloaded zip to a temp file and Node reads it back off
-  // disk, which sidesteps the Lua→JS binary string encoding problem.
-  // tmpRelPath is relative to the tLib resource root, e.g. '.tmp/install-x.zip'.
-  fExports(
-    "mpInstallFromFile",
-    (
-      resourceName: unknown,
-      type: unknown,
-      slug: unknown,
-      tmpRelPath: unknown,
-      expectedHash: unknown,
-      expectedSize: unknown
-    ) => {
-      if (typeof resourceName !== "string" || !resourceName)
-        return JSON.stringify({ ok: false, error: "resourceName required" });
-      if (typeof type !== "string" || !type)
-        return JSON.stringify({ ok: false, error: "type required" });
-      if (typeof slug !== "string" || !slug)
-        return JSON.stringify({ ok: false, error: "slug required" });
-      if (typeof tmpRelPath !== "string" || !tmpRelPath)
-        return JSON.stringify({ ok: false, error: "tmpRelPath required" });
-
-      const tLibRoot = fGetResourcePath(fGetCurrentResourceName());
-      if (!tLibRoot)
-        return JSON.stringify({ ok: false, error: "could not resolve tLib resource path" });
-
-      const fullPath = path.join(tLibRoot, tmpRelPath);
-      let buf: Buffer;
-      try {
-        buf = fs.readFileSync(fullPath);
-      } catch (err) {
-        return JSON.stringify({
-          ok: false,
-          error: `could not read temp file: ${err instanceof Error ? err.message : String(err)}`,
-        });
-      } finally {
-        try {
-          fs.unlinkSync(fullPath);
-        } catch {
-          /* best-effort cleanup */
-        }
-      }
-
-      const hash = typeof expectedHash === "string" ? expectedHash : "";
-      const size = typeof expectedSize === "number" ? expectedSize : 0;
-      return JSON.stringify(installFromData(resourceName, type, slug, buf, hash, size));
-    }
-  );
-
-  // Sync: delete installed files for a slug. Returns JSON of UninstallOutcome.
-  fExports("mpUninstall", (resourceName: unknown, type: unknown, slug: unknown) => {
-    if (typeof resourceName !== "string" || !resourceName)
-      return JSON.stringify({ ok: false, error: "resourceName required" });
-    if (typeof type !== "string") return JSON.stringify({ ok: false, error: "type required" });
-    if (typeof slug !== "string") return JSON.stringify({ ok: false, error: "slug required" });
-    return JSON.stringify(uninstallItem(resourceName, type, slug));
   });
 }

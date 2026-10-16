@@ -25,7 +25,7 @@ const BROWSE_TIMEOUT_MS = 10_000;
  * that refuses genuine content is a gate and the account quota is the only size
  * gate that should exist.
  */
-const MAX_PREVIEW_BYTES = 10 * 1024 * 1024;
+export const MAX_PREVIEW_BYTES = 10 * 1024 * 1024;
 
 /**
  * An alias, not a definition: the shape and the conversion live in
@@ -96,6 +96,39 @@ export async function previewHtml(slug: string): Promise<string> {
     // The secret is safe here and nowhere client-side: this runs in the Node
     // bundle and must never reach a FiveM export.
     marketplaceHeaders({ Accept: "text/html" }),
+    BROWSE_TIMEOUT_MS
+  );
+  if (!resp.ok) throw toError(resp);
+  if (resp.body.length > MAX_PREVIEW_BYTES) {
+    throw new MarketplaceError("preview_too_large", resp.status);
+  }
+  return resp.body;
+}
+
+/**
+ * The published definition of a `theme` item, as JSON text.
+ *
+ * Brokered for the same reason the browse is — the request needs the resource
+ * secret, which must never reach a client — and NOT because the panel reads the
+ * body the way it reads a preview document. It does not: the string is pushed
+ * into tRadio's offline panel over `postMessage` and that frame does the work.
+ *
+ * Returned as text rather than parsed because the only consumer that can usefully
+ * validate it is the one that mounts it, and parsing here would make this module
+ * a second place the theme contract is spelled out. `parsePanelThemeDefinition`
+ * in `shared/ts/marketplace/ui/preview-frame.ts` is that one place.
+ *
+ * The same `MAX_PREVIEW_BYTES` backstop applies: a definition is a few KB in
+ * practice, but it crosses the Lua VM and a NUI message exactly as a document
+ * does, and that is what the ceiling is about.
+ */
+export async function themeJson(slug: string): Promise<string> {
+  if (!slug) throw new MarketplaceError("slug_required", 0);
+  const resp = await request(
+    `${marketplaceApiV2()}/items/${encodeURIComponent(slug)}/theme`,
+    "GET",
+    "",
+    marketplaceHeaders({ Accept: "application/json" }),
     BROWSE_TIMEOUT_MS
   );
   if (!resp.ok) throw toError(resp);

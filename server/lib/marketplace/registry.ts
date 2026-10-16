@@ -49,7 +49,3 @@ export function unregisterResource(resourceName: string): void {
 export function get(resourceName: string, type: string): InstallTarget | null {
   return registry.get(`${resourceName}:${type}`) ?? null;
 }
-
-export function list(): InstallTarget[] {
-  return Array.from(registry.values());
-}

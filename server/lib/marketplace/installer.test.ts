@@ -229,6 +229,52 @@ describe("marketplace installer isolation and ownership", () => {
     expect(uninstallItem("test", "sound", "bgDog").ok).toBe(false);
     expect(fs.readFileSync(file("bgDog.wav"), "utf8")).toBe("SHIPPED");
   });
+  test("⛔ the case-variant scan covers a FLAT AUDIO name, not just the folder", () => {
+    // The Linux half of the test above, which this machine's filesystem cannot
+    // reach on its own: the only way to have a stat for `bgdog.wav` miss while
+    // `bgDog.wav` is in the directory listing is to make the listing say so.
+    //
+    // THE BUG THIS PINS. The scan used to be handed the bare slug, so it looked
+    // for an entry case-equal to `bgdog` and never for one case-equal to
+    // `bgdog.wav`/`.ogg`/`.mp3`. Sounds are most of the catalogue and a sound's
+    // destination is a flat file, so on a case-sensitive filesystem an install of
+    // slug `bgdog` wrote a second sound beside the shipped `bgDog.wav` with no
+    // refusal and no warning — the exact outcome the scan exists to prevent.
+    fs.mkdirSync(base());
+    const readdir = fs.readdirSync;
+    spyOn(fs, "readdirSync").mockImplementation(((p: string, opts: unknown) =>
+      path.resolve(p) === base() && !opts
+        ? ["bgDog.wav"]
+        : (readdir as (p: string, o: unknown) => unknown)(p, opts)) as typeof fs.readdirSync);
+    const outcome = installFromData("test", "sound", "bgDog", wav, "", 0);
+    expect(outcome.ok).toBe(false);
+    // Named precisely here, because the stat cannot have fired: nothing is
+    // actually on disk, so the listing is the only evidence there is.
+    if (!outcome.ok)
+      expect(outcome.error).toBe(
+        'existing target "bgDog.wav" differs from "bgdog.wav" only by case; refusing to install beside it'
+      );
+    mock.restore();
+    expect(fs.readdirSync(base())).toEqual([]);
+  });
+  test("a corrupt receipt is refused by name, not by JSON byte offset", () => {
+    // Every other refusal in `owned()` is a sentence an operator can act on.
+    // This one was a bare SyntaxError — `Unexpected token } in JSON at position
+    // 42` — surfaced verbatim in the admin panel as the reason the install
+    // failed, naming neither the file nor the fact that it is tLib's own
+    // bookkeeping rather than anything the operator installed.
+    expect(install(bundle(), "ui").ok).toBe(true);
+    fs.writeFileSync(file(".marketplace-demo.json"), '{"version":1,');
+    for (const outcome of [install(bundle(), "ui"), uninstallItem("test", "ui", "demo")]) {
+      expect(outcome.ok).toBe(false);
+      if (!outcome.ok)
+        expect(outcome.error).toBe(
+          "unreadable marketplace ownership receipt: .marketplace-demo.json"
+        );
+    }
+    // And the refusal is still a refusal: nothing was overwritten or deleted.
+    expect(fs.existsSync(file("demo"))).toBe(true);
+  });
   test("receipt does not authorize removal of changed or newly added content", () => {
     expect(install(bundle(), "ui").ok).toBe(true);
     fs.writeFileSync(file("demo/unrelated"), "keep");

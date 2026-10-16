@@ -27,7 +27,6 @@
 
 import type { JSX } from "@solidjs/web";
 import { createEscapeLayer } from "@tlib/shared/escape-layer";
-import { isBuiltin } from "@tlib/shared/marketplace/install-machine";
 import { localInstallKind } from "@tlib/shared/marketplace/local-name";
 import {
   browseMarketplace,
@@ -39,11 +38,13 @@ import {
   type InstallState,
   ItemCard,
   inspectableIdentity,
+  isBuiltin,
   likeMarketplaceItem,
   type MarketplaceItem,
   matchesInspectionReply,
   type OpenData,
   PreviewOverlay,
+  patchInstalledNames,
   summarizeInspection,
 } from "@tlib/shared/marketplace/ui";
 // See the note on the Lucide imports in `../MarketplacePanel.tsx`: the package
@@ -65,6 +66,16 @@ export interface MarketplaceBrowserProps {
    * aborts anything in flight; going true again re-applies `data` from scratch,
    * so leaving and returning to the tab re-browses rather than showing a stale
    * page.
+   *
+   * NEITHER FIRST-PARTY MOUNT EVER PASSES `false`, measured 2026-10-15, and the
+   * reason is worth knowing before relying on this: both of them tie `active` to
+   * the very condition that MOUNTS the component. `MarketplacePanel` passes
+   * `active={open()}` inside `Show when={open()}`, and `Dialog.tsx` passes
+   * `active={props.open}` inside a branch that renders only while the marketplace
+   * tab is selected. So this path is correct and untested — a host that wants to
+   * HIDE the browser rather than unmount it is what it is for, and that is a
+   * host worth having, because unmounting is what loses an install result (see
+   * the ledger in `@tlib/shared/marketplace/ui`).
    */
   active: boolean;
   /** Chrome rendered at the start of the header row (the modal's title). */
@@ -87,7 +98,6 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   const [error, setError] = createSignal<string | null>(null);
   const [operationError, setOperationError] = createSignal<string | null>(null);
   const [installStates, setInstallStates] = createSignal<Record<string, InstallState>>({});
-  const pendingInstallTypes: Record<string, string> = {};
   const [installedLayouts, setInstalledLayouts] = createSignal<string[]>([]);
   const [installedSounds, setInstalledSounds] = createSignal<InstalledSound[]>([]);
   const [sort, setSort] = createSignal<"downloads" | "created_at">("downloads");
@@ -98,6 +108,17 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   const [previewItem, setPreviewItem] = createSignal<MarketplaceItem | null>(null);
   const [previewFn, setPreviewFn] = createSignal<string | null>(null);
   const [previewState, setPreviewState] = createSignal<Record<string, unknown> | null>(null);
+  const [panelPreviewUrl, setPanelPreviewUrl] = createSignal<string | null>(null);
+
+  /**
+   * Slugs with a like round trip in flight, so the heart can say so and cannot
+   * be double-pressed into two outbound requests.
+   *
+   * A SET OF SLUGS AND NOT ONE BOOLEAN. The grid renders a whole page of
+   * cards; a single flag would disable every heart on the page while one of them
+   * was waiting.
+   */
+  const [likePending, setLikePending] = createSignal<Record<string, true>>({});
 
   const [inspection, setInspection] = createSignal<InspectionState | null>(null);
   let inspectionTimeout: number | undefined;
@@ -169,7 +190,13 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
 
   async function fetchItems(offset = 0) {
     const base = baseUrl();
-    if (!base || !props.active) return;
+    if (!base || !props.active) {
+      // `handleSearchInput` turns the spinner on BEFORE its debounce fires, so
+      // bailing out silently here leaves the grid saying "Loading items…" with
+      // nothing in flight and no way back except another keystroke.
+      setLoading(false);
+      return;
+    }
     const request = ++browseRequest;
     browseAbort?.abort();
     const controller = new AbortController();
@@ -214,6 +241,57 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     }
   }
 
+  /**
+   * The whole catalogue for one type, paged.
+   *
+   * ONE REQUEST USED TO BE THE WHOLE IMPLEMENTATION, at `limit: 100`, which is
+   * also the server's clamp. Past the hundredth item of a type, an installed
+   * layout got no catalogue entry: the Installed tab then showed it by its bare
+   * directory name with no creator, no size and no Reinstall, and nothing said
+   * why. Silent, and it gets worse with every item published.
+   *
+   * Sequential WITHIN a type and parallel ACROSS the two, which keeps at most two
+   * requests outstanding against `READ_MAX_IN_FLIGHT = 3` in
+   * `server/sv_marketplace.lua`. Paging both types concurrently would make that
+   * budget a function of catalogue size and start getting "too many marketplace
+   * requests in flight" refusals.
+   *
+   * `MAX_PAGES` is a stop, not a size estimate: an open panel must not be able to
+   * issue unbounded outbound requests from the game server, and a cursor that
+   * failed to advance would otherwise loop forever. Both are guarded — the cursor
+   * check below is load-bearing because `nextCursor` is taken from the wire
+   * whenever it is a number.
+   *
+   * A mid-sequence failure keeps the pages that DID arrive rather than discarding
+   * them: a partial catalogue names most of the rows, where an empty one names
+   * none.
+   */
+  async function catalogueForType(
+    type: "ui" | "sound",
+    resource: string | undefined,
+    request: number
+  ): Promise<MarketplaceItem[]> {
+    const PAGE_SIZE = 100;
+    const MAX_PAGES = 10;
+    const items: MarketplaceItem[] = [];
+    let cursor = 0;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      let result: Awaited<ReturnType<typeof browseMarketplace>>;
+      try {
+        result = await browseMarketplace({ type, resource, limit: PAGE_SIZE, cursor });
+      } catch {
+        break;
+      }
+      if (request !== installedRequest) break;
+      items.push(...result.items);
+      if (!result.hasMore || result.items.length === 0) break;
+      const next = result.nextCursor > cursor ? result.nextCursor : cursor + result.items.length;
+      if (next <= cursor) break;
+      cursor = next;
+    }
+    return items;
+  }
+
   async function fetchInstalledItems() {
     const base = baseUrl();
     if (!base) return;
@@ -221,21 +299,16 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     setInstalledLoading(true);
     try {
       const resource = resourceFilter() ?? undefined;
-      // Two calls rather than one unfiltered call: the Installed tab matches
+      // Two sequences rather than one unfiltered one: the Installed tab matches
       // catalogue entries to what is on disk by slug, and a `ui` and a `sound`
-      // may share one. Kept as-is through the transport change — the browse
-      // cap is per request, so merging them would halve what either can carry.
+      // may share one. The per-request cap is per TYPE, so merging them would
+      // halve what either can carry within a page.
       const pages = await Promise.all(
-        (["ui", "sound"] as const).map((type) =>
-          browseMarketplace({ type, resource, limit: 100 }).catch(() => ({
-            items: [] as MarketplaceItem[],
-          }))
-        )
+        (["ui", "sound"] as const).map((type) => catalogueForType(type, resource, request))
       );
-      if (request === installedRequest)
-        setInstalledMarketplaceItems(pages.flatMap((page) => page.items));
-    } catch {
-      if (request === installedRequest) setInstalledMarketplaceItems([]);
+      if (request === installedRequest) setInstalledMarketplaceItems(pages.flat());
+      // No `catch`: `catalogueForType` handles the only fallible call and answers
+      // with the pages it got. `finally` is what guarantees the spinner clears.
     } finally {
       if (request === installedRequest) setInstalledLoading(false);
     }
@@ -243,19 +316,38 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
 
   function applyOpenData(data: OpenData) {
     invalidateRequests();
-    for (const slug of Object.keys(pendingInstallTypes)) delete pendingInstallTypes[slug];
     setBaseUrl(data.baseUrl);
     setResourceFilter(data.resource ?? null);
     setSearch("");
     setOperationError(null);
     setSort("downloads");
     setTab(data.initialTab ?? "uis");
-    setInstalledLayouts(data.installedLayouts ?? []);
-    setInstalledSounds(data.installedSounds ?? []);
+    // THE HOST'S SNAPSHOT, PATCHED WITH WHAT THIS SESSION WATCHED HAPPEN.
+    //
+    // `data` is sent once per open and the signal holding it keeps that object,
+    // so re-applying it after an unmount re-applies a `readdir` from before any
+    // install this session performed. `patchInstalledNames` is the correction —
+    // see the ledger's header in `@tlib/shared/marketplace/ui`. Without it,
+    // leaving the Marketplace tab and coming back offered Install for an item
+    // already on disk, which is the report `../local-name.ts` exists to answer.
+    setInstalledLayouts(patchInstalledNames(data.installedLayouts ?? [], "ui"));
+    const sounds = data.installedSounds ?? [];
+    const soundNames = patchInstalledNames(
+      sounds.map((entry) => entry.slug),
+      "sound"
+    );
+    const bySlug = new Map(sounds.map((entry) => [entry.slug, entry]));
+    setInstalledSounds(soundNames.map((slug) => bySlug.get(slug) ?? { slug, filename: slug }));
     setInstalledMarketplaceItems([]);
     setPreviewItem(null);
     setPreviewFn(data.previewFn ?? null);
     setPreviewState(data.previewState ?? null);
+    setPanelPreviewUrl(data.panelPreviewUrl ?? null);
+    // Cleared with the rest of the per-session state. A like whose round trip
+    // was still out when the panel was re-fed left its slug in here, so the
+    // heart on the re-rendered card came back already spinning and disabled —
+    // until the old promise settled, which is up to the 25s reply timeout.
+    setLikePending({});
 
     /**
      * SOUND SLUGS ONLY NOW REACH THIS SEED, and a layout's state is DERIVED
@@ -271,7 +363,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
      * so the two keyspaces that were sharing this object are now one.
      */
     const seed: Record<string, InstallState> = {};
-    for (const slug of data.installedSlugs ?? []) {
+    for (const slug of patchInstalledNames(data.installedSlugs ?? [], "sound")) {
       seed[slug] = { state: "installed" };
     }
     setInstallStates(seed);
@@ -326,14 +418,18 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   );
 
   onCleanup(
-    onNuiEvent<{ ok: boolean; slug: string; error?: string; resource?: string }>(
+    onNuiEvent<{ ok: boolean; slug: string; error?: string; resource?: string; type?: string }>(
       "marketplaceInstallResult",
       (data) => {
         if (!data || typeof data.slug !== "string" || !props.active) return;
         if (data.resource && data.resource !== resourceFilter()) return;
         clearInspection();
-        const type = pendingInstallTypes[data.slug];
-        delete pendingInstallTypes[data.slug];
+        // Off the WIRE. `server/sv_marketplace.lua`'s `reply` has always carried
+        // `type = p.itemType`; this component kept its own `pendingInstallTypes`
+        // side-table to remember what it had asked for, which duplicated a field
+        // already on the payload and could not survive the unmount the ledger in
+        // `@tlib/shared/marketplace/ui` now covers.
+        const type = data.type;
         if (data.ok) {
           setInstallState(data.slug, { state: "installed" });
           if (type === "ui") {
@@ -440,7 +536,6 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     const current = installStates()[item.slug]?.state;
     if (current === "installing" || current === "uninstalling") return;
     setInstallState(item.slug, { state: "installing" });
-    pendingInstallTypes[item.slug] = item.type;
     void fetchNui("marketplaceInstall", {
       type: item.type,
       slug: item.slug,
@@ -464,16 +559,6 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
       resource: resourceFilter() ?? "",
     });
   }
-
-  /**
-   * Slugs with a like round trip in flight, so the heart can say so and cannot
-   * be double-pressed into two outbound requests.
-   *
-   * A SET OF SLUGS AND NOT ONE BOOLEAN. The grid renders a whole page of
-   * cards; a single flag would disable every heart on the page while one of them
-   * was waiting.
-   */
-  const [likePending, setLikePending] = createSignal<Record<string, true>>({});
 
   /**
    * Toggle this player's like on one item.
@@ -717,6 +802,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
                 onUninstall={() => handleUninstall(item())}
                 previewFn={previewFn()}
                 previewState={previewState()}
+                panelPreviewUrl={panelPreviewUrl()}
               />
             )}
           </Show>
