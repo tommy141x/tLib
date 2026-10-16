@@ -15,6 +15,7 @@
  */
 
 import { fetchNui, onNuiEvent } from "../../nui";
+import { type PanelThemeDefinition, parsePanelThemeDefinition } from "./preview-frame";
 import type { MarketplaceItem } from "./types";
 
 export interface BrowseParams {
@@ -186,6 +187,49 @@ export interface LikeState {
 }
 
 /**
+ * The published definition of a `theme` item — a dispatch panel's CSS variables,
+ * raw CSS, slot fragments and script.
+ *
+ * Through the bridge rather than fetched, for the same reason browse is: CEF's
+ * origin is `cfx-nui-tLib` and the catalogue sends no `Access-Control-Allow-Origin`,
+ * so the frame would make the request and then be refused the body. The panel the
+ * definition is pushed into IS loaded cross-origin — it is an application, not a
+ * document this code reads — which is exactly why only the definition needs a
+ * round trip.
+ *
+ * Deliberately NOT cached beside the preview documents: a definition is a few KB
+ * against their megabytes, so it has no claim on that budget, and the LRU's
+ * eviction arithmetic is in bytes of HTML.
+ */
+export function marketplaceThemeDefinition(
+  slug: string,
+  signal?: AbortSignal
+): Promise<PanelThemeDefinition> {
+  return nuiRequest<PanelThemeDefinition>(
+    "marketplaceThemeJson",
+    "marketplaceThemeJsonResult",
+    { slug },
+    // The wire carries the definition as TEXT and it is parsed here, so the Lua
+    // VM stays a relay: decoding a stranger's JSON there would put an unbounded
+    // table through a runtime with no structural check to apply to it, and the
+    // only check worth running is the frame-contract one next door.
+    (reply: { json?: unknown }) => {
+      if (typeof reply.json !== "string") throw new Error("Theme preview unavailable");
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(reply.json);
+      } catch {
+        throw new Error("Theme preview unavailable");
+      }
+      const definition = parsePanelThemeDefinition(parsed);
+      if (!definition) throw new Error("Theme preview unavailable");
+      return definition;
+    },
+    signal
+  );
+}
+
+/**
  * The preview document for a UI item, as text.
  *
  * Text, and not a frame URL, because the caller reads it: it injects the
@@ -231,17 +275,19 @@ interface PreviewCacheEntry {
   bytes: number;
 }
 
-/**
- * Preview documents already fetched, newest use last.
- *
- * `MAX_PREVIEW_BYTES` on the server (`server/lib/marketplace/browse.ts`) refuses
- * any single document over 2 MB, so the budget below holds at least four of the
- * largest documents that can reach here at all.
- */
+/** Preview documents already fetched, newest use last. */
 const previewCache = new Map<string, PreviewCacheEntry>();
 
-/** 8 MB — four of the largest documents the server will pass, at 2 MB each. */
-const PREVIEW_CACHE_BUDGET_BYTES = 8 * 1024 * 1024;
+/**
+ * 8 MB — four of the 1.0–1.8 MB documents this corpus actually contains.
+ *
+ * It is NOT a multiple of the server's own ceiling, and must not be read as one.
+ * `MAX_PREVIEW_BYTES` in `server/lib/marketplace/browse.ts` is 10 MB (raised from
+ * 2 MB on 2026-10-08, once two shipped tELS documents turned out to exceed the
+ * old cap), so ONE admissible document can be larger than this whole budget. That
+ * is what `evict` keeping the newest entry is for.
+ */
+export const PREVIEW_CACHE_BUDGET_BYTES = 8 * 1024 * 1024;
 
 function evict(): void {
   let total = 0;
@@ -250,6 +296,14 @@ function evict(): void {
   // the least recently used.
   for (const [slug, entry] of previewCache) {
     if (total <= PREVIEW_CACHE_BUDGET_BYTES) return;
+    // NEVER EVICT DOWN TO NOTHING.
+    //
+    // A single document may exceed the entire budget — the server admits 10 MB
+    // against the 8 MB above — and this loop used to delete the only entry
+    // there was, immediately after charging it. The effect was silent and
+    // exactly backwards: the biggest documents, the ones whose re-fetch costs
+    // the most across the NUI boundary, were the only ones never cached at all.
+    if (previewCache.size <= 1) return;
     // An in-flight entry is 0 bytes and evicting it would abandon a request
     // another surface may already be awaiting, for no memory back.
     if (entry.bytes === 0) continue;

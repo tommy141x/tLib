@@ -72,6 +72,17 @@ const { previewMarketplaceHtml, clearPreviewCache, previewCacheStats } = await i
   "../../shared/ts/marketplace/ui/browse"
 );
 
+// A separate MODULE, not a corner of `browse.ts`: its listener has to outlive the
+// component. Imported here because both halves need the same `shared/ts/nui`
+// mock, and `mock.module` replaces a module for the rest of the test process.
+const { clearInstallLedger, installLedger, patchInstalledNames } = await import(
+  "../../shared/ts/marketplace/ui/install-ledger"
+);
+
+// The REAL server-side ceiling, imported rather than written out again: a
+// literal here is the same drift that let the budget fall below it unnoticed.
+const { MAX_PREVIEW_BYTES } = await import("../../server/lib/marketplace/browse");
+
 /** A document of a given size, shaped like the real ones: mostly base64. */
 function doc(slug: string, bytes: number): string {
   const head = `<div data-radio-width="209.5" data-radio-height="426.5" id="${slug}">`;
@@ -82,6 +93,7 @@ beforeEach(() => {
   calls = [];
   bodies = new Map();
   clearPreviewCache();
+  clearInstallLedger();
 });
 
 describe("round trips", () => {
@@ -146,12 +158,28 @@ describe("failure is not cached", () => {
 });
 
 describe("the byte budget", () => {
-  test("holds four of the largest documents the server will pass", async () => {
-    // `MAX_PREVIEW_BYTES` in `server/lib/marketplace/browse.ts` refuses anything
-    // over 2 MB, so four at 2 MB is the worst case the budget has to survive.
+  test("holds four documents the size this corpus actually contains", async () => {
+    // The real documents run 1.0-1.8 MB, so four at 2 MB is the ordinary load
+    // the 8 MB budget has to survive. It is NOT four of the largest the server
+    // will pass — `MAX_PREVIEW_BYTES` is 10 MB, which the case below covers.
     for (let i = 0; i < 4; i++) bodies.set(`big${i}`, doc(`big${i}`, 2 * 1024 * 1024));
     for (let i = 0; i < 4; i++) await previewMarketplaceHtml(`big${i}`);
     expect(previewCacheStats().entries).toBe(4);
+  });
+
+  test("a document larger than the whole budget is still cached", async () => {
+    // THE REGRESSION. `MAX_PREVIEW_BYTES` was raised 2 MB -> 10 MB on 2026-10-08
+    // and this budget stayed at 8 MB, so a 10 MB document was charged to the
+    // budget and then evicted by the very `evict()` call that charged it — it
+    // was the only entry, so it was the least recently used one too. Nothing
+    // errored; the largest documents simply re-fetched on every single open.
+    bodies.set("huge", doc("huge", MAX_PREVIEW_BYTES));
+    await previewMarketplaceHtml("huge");
+    expect(previewCacheStats().entries).toBe(1);
+
+    const before = calls.length;
+    await previewMarketplaceHtml("huge");
+    expect(calls).toHaveLength(before);
   });
 
   test("evicts the least recently used rather than growing without bound", async () => {
@@ -183,5 +211,103 @@ describe("the byte budget", () => {
     expect(calls).toHaveLength(before); // survived, because it was touched
     await previewMarketplaceHtml("big1");
     expect(calls).toHaveLength(before + 1); // evicted in its place
+  });
+});
+
+/**
+ * THE SAME FILE ON PURPOSE, despite the name.
+ *
+ * `shared/ts/nui` has to be mocked for both, and `mock.module` replaces a module
+ * for the rest of the `bun test` PROCESS — this file's own header says so — so a
+ * second suite mocking it would race this one over which fake the ledger's
+ * load-time subscription was bound to. One mock, one file.
+ */
+describe("the install ledger", () => {
+  /** Deliver a coordinator reply the way `cl_marketplace.lua` does. */
+  function outcome(event: string, data: Record<string, unknown>) {
+    listeners.get(event)?.(data);
+  }
+
+  test("a confirmed install is recorded even with no surface mounted", () => {
+    // The defect: both mounts UNMOUNT the browser, so an install that lands
+    // after the panel is closed used to be delivered to nobody at all.
+    outcome("marketplaceInstallResult", { ok: true, slug: "tdet-rdx-4000", type: "ui" });
+    expect(installLedger().get("tdet-rdx-4000")).toEqual({ type: "ui", installed: true });
+  });
+
+  test("a FAILED install records nothing, because nothing changed on disk", () => {
+    outcome("marketplaceInstallResult", {
+      ok: false,
+      slug: "tdet-rdx-4000",
+      type: "ui",
+      error: "x",
+    });
+    expect(installLedger().size).toBe(0);
+  });
+
+  test("a malformed reply records nothing", () => {
+    outcome("marketplaceInstallResult", { ok: true, type: "ui" });
+    outcome("marketplaceInstallResult", { ok: true, slug: "", type: "ui" });
+    outcome("marketplaceUninstallResult", undefined as unknown as Record<string, unknown>);
+    expect(installLedger().size).toBe(0);
+  });
+
+  test("the host's stale snapshot is patched with what was installed", () => {
+    // `installedLayouts` is a `readdir` from before the install, and the signal
+    // holding the open payload keeps that object — so a remount re-applied it and
+    // offered Install for something now on disk.
+    outcome("marketplaceInstallResult", { ok: true, slug: "tdet-arc-360", type: "ui" });
+    expect(patchInstalledNames(["RDX-4000"], "ui")).toEqual(["RDX-4000", "tdet-arc-360"]);
+  });
+
+  test("and with what was uninstalled", () => {
+    outcome("marketplaceUninstallResult", { ok: true, slug: "tdet-arc-360", type: "ui" });
+    expect(patchInstalledNames(["RDX-4000", "tdet-arc-360"], "ui")).toEqual(["RDX-4000"]);
+  });
+
+  test("a SHIPPED built-in is never filtered out by a slug that is not its name", () => {
+    // `installedLayouts` holds directory names (`QRX-720`) and the ledger holds
+    // catalogue slugs (`tradio-qrx-720`). They must not be confused: filtering a
+    // built-in out would hide a layout the operator can see in game, and
+    // `../local-name.ts` is what reconciles the two namings.
+    outcome("marketplaceUninstallResult", { ok: true, slug: "tradio-qrx-720", type: "ui" });
+    expect(patchInstalledNames(["QRX-720"], "ui")).toEqual(["QRX-720"]);
+  });
+
+  test("a slug is keyed by its on-disk spelling, which is lowercase", () => {
+    // The coordinator's `slugName` refuses anything but lowercase and
+    // `installer/core.ts` writes `slug.toLowerCase()` as the directory name, so
+    // the key, the lookup and the directory are one string. Folding on the way in
+    // is what keeps them one if a non-conforming reply ever arrives.
+    outcome("marketplaceInstallResult", { ok: true, slug: "TDET-ARC-360", type: "ui" });
+    expect([...installLedger().keys()]).toEqual(["tdet-arc-360"]);
+    expect(patchInstalledNames([], "ui")).toEqual(["tdet-arc-360"]);
+  });
+
+  test("an outcome for another type leaves this type's list alone", () => {
+    // One directory can back more than one item type, and a sound's name does
+    // not belong in the layout list.
+    outcome("marketplaceInstallResult", { ok: true, slug: "tdet-airhorn", type: "sound" });
+    expect(patchInstalledNames(["RDX-4000"], "ui")).toEqual(["RDX-4000"]);
+    expect(patchInstalledNames([], "sound")).toEqual(["tdet-airhorn"]);
+  });
+
+  test("a reinstall of something already listed does not duplicate it", () => {
+    outcome("marketplaceInstallResult", { ok: true, slug: "tdet-arc-360", type: "ui" });
+    expect(patchInstalledNames(["tdet-arc-360"], "ui")).toEqual(["tdet-arc-360"]);
+  });
+
+  test("the last outcome for a slug wins", () => {
+    outcome("marketplaceInstallResult", { ok: true, slug: "tdet-arc-360", type: "ui" });
+    outcome("marketplaceUninstallResult", { ok: true, slug: "tdet-arc-360", type: "ui" });
+    outcome("marketplaceInstallResult", { ok: true, slug: "tdet-arc-360", type: "ui" });
+    expect(patchInstalledNames([], "ui")).toEqual(["tdet-arc-360"]);
+  });
+
+  test("an empty ledger returns the host's list unchanged, as a copy", () => {
+    const names = ["RDX-4000"];
+    const patched = patchInstalledNames(names, "ui");
+    expect(patched).toEqual(names);
+    expect(patched).not.toBe(names);
   });
 });

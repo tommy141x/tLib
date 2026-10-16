@@ -48,6 +48,13 @@ export function ItemCard(props: {
   const identity = () => cardIdentity(props.item);
   const stats = () => cardStats(props.item).filter((stat) => stat.key !== "size");
   const like = () => likeAffordance(props.item, props.onLike !== undefined);
+  // Through `cardStats` rather than off `item.size_bytes`, because `size_bytes`
+  // goes through `num()` and so reads 0 both for "zero bytes" and for "nobody
+  // measured this" — and this line printed a confident `0B` for the second. The
+  // omit-a-zero rule is `cardStatsOf`'s, stated once there; `InstalledTab`
+  // already guarded it by hand and this surface did not, so one catalogue item
+  // described its own size two ways depending on which tab you were on.
+  const size = () => cardStats(props.item).find((stat) => stat.key === "size")?.value;
 
   return (
     <div class="mp-card">
@@ -59,9 +66,9 @@ export function ItemCard(props: {
             {identity().version ? ` · v${identity().version}` : ""}
           </span>
         </div>
-        {/*
-         */}
-        <span class="text-sm mp-muted shrink-0">{formatBytes(props.item.size_bytes)}</span>
+        <Show when={size()}>
+          {(bytes) => <span class="text-sm mp-muted shrink-0">{formatBytes(bytes())}</span>}
+        </Show>
       </div>
 
       <Show when={identity().description}>

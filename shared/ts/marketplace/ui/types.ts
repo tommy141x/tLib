@@ -23,8 +23,24 @@ export interface InstalledSound {
   slug: string;
 }
 
+/**
+ * The payload a host hands the browser when it opens or feeds it.
+ *
+ * THERE IS NO `type` FIELD, and there was one until it was measured. It was
+ * declared here, forwarded by `client/cl_marketplace.lua`'s `buildPayload`, and
+ * documented in `docs/content/exports.mdx` as "`{ type = 'ui-radio' }` filters it
+ * on open" — and nothing ever read it. `MarketplaceBrowser.applyOpenData` reads
+ * every other field on this interface and not that one, `shared/imports/
+ * marketplace/client.lua`'s `buildOpts` never put it on the payload in the first
+ * place, so the two documented call shapes could not even deliver it, and
+ * `ui-radio` is not one of the three types the panel browses (`ui`, `sound`,
+ * `theme`) — it is a name from before the type vocabulary settled.
+ *
+ * What a host actually has is `initialTab`, which picks the UIs or Sounds tab,
+ * and `resource`, which scopes the catalogue to one product. If a per-type filter
+ * is ever wanted it needs a tab or a control to express it, not a silent field.
+ */
 export interface OpenData {
-  type?: string;
   /** Marketplace site base URL (no /api/v1 suffix). */
   baseUrl: string;
   /**
@@ -53,6 +69,16 @@ export interface OpenData {
   previewFn?: string;
   /** Dummy state to feed into the preview update function so the UI renders non-empty. */
   previewState?: Record<string, unknown>;
+  /**
+   * Where this host serves tRadio's offline dispatch panel (`preview.html`), so a
+   * `theme` item can be previewed on the product instead of as a swatch strip.
+   *
+   * A URL and not a flag, and supplied by the CONSUMER rather than derived here:
+   * tLib has no business naming tRadio, and the file is reachable only because
+   * tRadio's own `fxmanifest.lua` publishes it. A consumer that sells no themes
+   * sends nothing and its cards fall back exactly as before.
+   */
+  panelPreviewUrl?: string;
 }
 
 /**

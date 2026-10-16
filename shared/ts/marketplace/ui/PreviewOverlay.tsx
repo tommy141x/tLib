@@ -17,6 +17,7 @@ import IconPlay from "~icons/lucide/play";
 import IconTrash2 from "~icons/lucide/trash-2";
 import { buildHudPreviewScript } from "../../hud-preview-script";
 import { NuiButton } from "../../nui-kit/NuiButton";
+import { cardIdentity } from "../card-model";
 import {
   BUILTIN_EXPLANATION,
   canInstall,
@@ -26,17 +27,47 @@ import {
   isBuiltin,
   isInstallBusy,
 } from "../install-machine";
-import { previewMarketplaceHtml } from "./browse";
+import { marketplaceThemeDefinition, previewMarketplaceHtml } from "./browse";
 import { InstallError } from "./InstallError";
+import { PanelPreviewFrame } from "./PanelPreviewFrame";
 import {
   fitScale,
+  injectBeforeBodyEnd,
+  type PanelThemeDefinition,
   PREVIEW_FRAME_ATTRS,
   PREVIEW_FRAME_STYLE,
   parsePreviewCanvasSize,
   previewBoxStyle,
+  previewKind,
   resolvePreviewState,
+  toPanelPreviewTheme,
 } from "./preview-frame";
 import { fmtTime, formatBytes, type InstallState, type MarketplaceItem } from "./types";
+
+/**
+ * The name to show, through `card-model`'s empty-name fallback.
+ *
+ * Three places in this file render it — the header, the theme screenshot's `alt`
+ * and the preview frame's `title` — and the last two are a11y strings, so a
+ * listing published with no name gave a screen reader "` preview`" with nothing
+ * in front of it. One read rather than three copies of the `||`.
+ */
+const displayName = (item: MarketplaceItem) => cardIdentity(item).name;
+
+/**
+ * One waveform bar's height, as a fraction of the 0..1 viewBox.
+ *
+ * CLAMPED AT THE TOP, which it was not. `preview_waveform` is normalised peaks on
+ * the backend but arrives through `numArray`, which keeps any finite number — so a
+ * single out-of-range peak gave `y = (1 - h) / 2` a negative value and drew that
+ * bar off the top and bottom of the SVG, over the time readouts. Nothing errors;
+ * an SVG happily paints outside its own viewBox.
+ *
+ * The floor is so a silent sample is still a visible tick rather than nothing.
+ * Both bar passes below — the unplayed greys and the clipped accent copy — go
+ * through this, because two copies of the clamp is how one of them loses it.
+ */
+const barHeight = (peak: number) => Math.min(1, Math.max(0.04, peak * 0.9));
 
 export function PreviewOverlay(props: {
   item: MarketplaceItem;
@@ -47,6 +78,12 @@ export function PreviewOverlay(props: {
   onUninstall: () => void;
   previewFn?: string | null;
   previewState?: Record<string, unknown> | null;
+  /**
+   * Where this host serves tRadio's offline dispatch panel, for a `theme` item.
+   * Absent is the honest state for a consumer that is not tRadio — see
+   * `previewKind`'s `panelPreview`.
+   */
+  panelPreviewUrl?: string | null;
 }) {
   const s = () => props.installState;
   // From `../install-machine`. This block was a VERBATIM copy of the one in
@@ -69,7 +106,7 @@ export function PreviewOverlay(props: {
           Back
         </NuiButton>
         <span class="mp-sep w-px h-3 shrink-0" />
-        <span class="text-sm font-semibold mp-fg truncate">{props.item.name}</span>
+        <span class="text-sm font-semibold mp-fg truncate">{displayName(props.item)}</span>
         <Show when={props.item.creator_name}>
           <span class="text-sm mp-muted truncate shrink-0">by {props.item.creator_name}</span>
         </Show>
@@ -145,7 +182,7 @@ export function PreviewOverlay(props: {
             <AudioPreviewPlayer item={props.item} baseUrl={props.baseUrl} />
           </Match>
           <Match when={props.item.type === "theme"}>
-            <ThemePreview item={props.item} />
+            <ThemePreview item={props.item} panelPreviewUrl={props.panelPreviewUrl} />
           </Match>
         </Switch>
       </div>
@@ -274,8 +311,13 @@ function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
         }}
       />
 
+      {/* The size half is dropped when the catalogue sent none. `size_bytes` is
+          `num()`-normalised, so 0 means "nobody measured this" as often as it
+          means zero bytes, and `0B` beside a real install count reads as a fact.
+          Same rule as `cardStatsOf`, which is what `ItemCard` now goes through. */}
       <div class="text-sm mp-muted">
-        {props.item.downloads} installs · {formatBytes(props.item.size_bytes)}
+        {props.item.downloads} installs
+        <Show when={props.item.size_bytes > 0}> · {formatBytes(props.item.size_bytes)}</Show>
       </div>
 
       <div class="flex items-center gap-3 w-full max-w-sm px-4 py-3 rounded-lg mp-audio">
@@ -328,7 +370,7 @@ function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
                     <For each={peaks}>
                       {(peak, i) => {
                         const x = i() + 0.2;
-                        const h = Math.max(0.04, peak * 0.9);
+                        const h = barHeight(peak);
                         const y = (1 - h) / 2;
                         return (
                           <rect
@@ -346,7 +388,7 @@ function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
                       <For each={peaks}>
                         {(peak, i) => {
                           const x = i() + 0.2;
-                          const h = Math.max(0.04, peak * 0.9);
+                          const h = barHeight(peak);
                           const y = (1 - h) / 2;
                           return (
                             <rect
@@ -383,54 +425,115 @@ function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
 }
 
 /**
- * A theme, shown as what a theme actually is: its palette, plus the creator's
- * screenshot when they supplied one.
+ * A theme, shown on the dispatch panel it restyles.
  *
- * There is no rendered-preview path here and there deliberately is not one. A theme
- * is CSS variables applied to the WHOLE panel; the only faithful render is the panel
- * itself restyled, which cannot happen inside a preview that is also the panel. The
- * swatch row is the honest reduction — it is the same reduction tRadio's admin
- * marketplace card already makes, and it is what the backend projects `preview_colors`
- * for.
+ * This used to be the creator's screenshot over a swatch row, with a comment
+ * arguing that a faithful render "cannot happen inside a preview that is also the
+ * panel". That was true of the surface it was written for and is not true here:
+ * tRadio ships an OFFLINE panel built from the same graph as the shipped one, and
+ * this frame is `cfx-nui-tLib` rather than the panel itself. So the argument held
+ * only while nobody had built the thing it said was impossible.
  *
- * Both fields are optional on the wire, and `../item.ts` is explicit that an optional
- * field is OMITTED rather than set to `undefined` precisely so a presence check like
- * the ones below means what it says. A theme carrying neither falls through to the
- * same "Preview unavailable" line every other empty preview shows, rather than to a
- * blank swatch row that looks like a rendered result.
+ * The creator's screenshot is no longer what a theme resolves to — `previewKind`
+ * now takes `panel` ahead of `thumbnail` — but it is still the fallback for a
+ * host with no panel to mount, which in practice is a consumer that is not
+ * tRadio. Changing that case was never asked for and nothing here would be
+ * better for it.
  */
-function ThemePreview(props: { item: MarketplaceItem }) {
+function ThemePreview(props: { item: MarketplaceItem; panelPreviewUrl?: string | null }) {
+  const [definition, setDefinition] = createSignal<PanelThemeDefinition | null>(null);
+  const [failed, setFailed] = createSignal(false);
   const [thumbFailed, setThumbFailed] = createSignal(false);
   const colors = () => props.item.preview_colors ?? [];
-  const thumb = () => (thumbFailed() ? undefined : props.item.thumbnail);
-  const hasAnything = () => !!thumb() || colors().length > 0;
+
+  // `failed` drops a theme whose definition could not be fetched back down the
+  // same chain every other host walks, rather than leaving a frame that will
+  // never be posted a theme sitting there empty.
+  const kind = createMemo(() =>
+    previewKind(props.item, {
+      panelPreview: !!props.panelPreviewUrl && !failed(),
+      thumbFailed: thumbFailed(),
+    })
+  );
+
+  // Only `compute` tracks, so the slug and the URL are read up there; the braces
+  // on `apply` are load-bearing — a returned setter result is taken for a cleanup
+  // function and takes the reactive graph down with it.
+  createEffect(
+    () => (props.panelPreviewUrl ? props.item.slug : null),
+    (slug) => {
+      if (!slug) return;
+      let cancelled = false;
+      marketplaceThemeDefinition(slug).then(
+        (value) => {
+          if (!cancelled) setDefinition(value);
+        },
+        // Dropping to the swatches rather than to an error: the reader came here
+        // to judge a theme, and its palette is still a smaller true answer than a
+        // sentence about a failed request.
+        () => {
+          if (!cancelled) setFailed(true);
+        }
+      );
+      return () => {
+        cancelled = true;
+      };
+    }
+  );
+
+  const theme = createMemo(() => {
+    const value = definition();
+    return value ? toPanelPreviewTheme(props.item.slug, value, displayName(props.item)) : null;
+  });
 
   return (
     <div class="w-full h-full flex flex-col items-center justify-center gap-3 bg-black rounded overflow-hidden p-3">
-      <Show when={!hasAnything()}>
-        <span class="text-sm mp-muted">Preview unavailable</span>
-      </Show>
+      <Switch>
+        <Match when={kind() === "panel"}>
+          <Show
+            when={theme()}
+            fallback={
+              <span class="inline-flex items-center gap-2 text-sm mp-muted">
+                <IconLoaderCircle class="w-4 h-4 animate-spin" />
+                Loading preview…
+              </span>
+            }
+          >
+            {(value) => (
+              <PanelPreviewFrame
+                // biome-ignore lint/style/noNonNullAssertion: kind() is "panel" only with a URL
+                src={props.panelPreviewUrl!}
+                theme={value()}
+                title={`${displayName(props.item)} preview`}
+              />
+            )}
+          </Show>
+        </Match>
 
-      <Show when={thumb()}>
-        {(src) => (
+        <Match when={kind() === "thumbnail"}>
           <img
-            src={src()}
-            alt={`${props.item.name} preview`}
+            // biome-ignore lint/style/noNonNullAssertion: previewKind returns "thumbnail" only with a thumbnail
+            src={props.item.thumbnail!}
+            alt={`${displayName(props.item)} preview`}
             class="max-w-full min-h-0 flex-1 object-contain rounded"
-            // A dead screenshot URL must not take the palette down with it: drop to
-            // the swatches rather than leaving a broken-image glyph as the preview.
+            // A dead screenshot URL must not take the palette down with it: fall
+            // through to the swatches rather than leave a broken-image glyph.
             onError={() => setThumbFailed(true)}
           />
-        )}
-      </Show>
+        </Match>
 
-      <Show when={colors().length > 0}>
-        <div class="w-full h-12 shrink-0 flex rounded overflow-hidden">
-          <For each={colors()}>
-            {(color) => <div class="flex-1 h-full" style={{ background: color }} title={color} />}
-          </For>
-        </div>
-      </Show>
+        <Match when={kind() === "swatches"}>
+          <div class="w-full h-12 shrink-0 flex rounded overflow-hidden">
+            <For each={colors()}>
+              {(color) => <div class="flex-1 h-full" style={{ background: color }} title={color} />}
+            </For>
+          </div>
+        </Match>
+
+        <Match when={kind() === "none"}>
+          <span class="text-sm mp-muted">Preview unavailable</span>
+        </Match>
+      </Switch>
     </div>
   );
 }
@@ -442,7 +545,17 @@ function UiPreviewFrame(props: {
   previewState?: Record<string, unknown> | null;
 }) {
   const [html, setHtml] = createSignal<string | null>(null);
-  const [loadError, setLoadError] = createSignal(false);
+  /**
+   * THE REASON, not a boolean, and a retry that re-asks for it.
+   *
+   * This was `createSignal(false)` rendering a bare "Preview unavailable", which
+   * threw away the one useful thing the failure carried. The broker words these
+   * for a person — `request_timed_out`, `preview_too_large`, `http_404` — and the
+   * first of those is the common one and the one a second press fixes. Without a
+   * control the only way to re-ask was Back, re-find the card and press Preview
+   * again, which also throws away the grid's scroll position.
+   */
+  const [loadError, setLoadError] = createSignal<string | null>(null);
 
   /**
    * Has the FRAME finished, as opposed to has the string arrived?
@@ -481,8 +594,8 @@ function UiPreviewFrame(props: {
 
   // `onSettled` is Solid 2's `onMount`. The observer's teardown is RETURNED at
   // the bottom rather than registered with a nested `onCleanup`, which
-  // `onSettled` refuses outright. The fetch below is deliberately NOT awaited
-  // here — its `.then` resolves after this callback has returned, so it cannot
+  // `onSettled` refuses outright. `load()` is deliberately NOT awaited here —
+  // its `.then` resolves after this callback has returned, so it cannot
   // contribute to the cleanup and never did.
   onSettled(() => {
     const ro = new ResizeObserver(() => {
@@ -491,10 +604,21 @@ function UiPreviewFrame(props: {
     });
     ro.observe(containerRef);
 
-    // The document arrives as TEXT, brokered by the game server — see
-    // `./browse.ts`. It cannot simply be an `<iframe src>`: everything below
-    // this line reads the markup, and a cross-origin frame cannot be read or
-    // scripted by its parent.
+    load();
+
+    return () => ro.disconnect();
+  });
+
+  // The document arrives as TEXT, brokered by the game server — see
+  // `./browse.ts`. It cannot simply be an `<iframe src>`: everything below this
+  // line reads the markup, and a cross-origin frame cannot be read or scripted
+  // by its parent.
+  //
+  // A named function rather than a call inlined in `onSettled`, so Retry has
+  // something to call. A rejected document is NOT cached (`./browse.ts` drops
+  // the entry on rejection), so a retry genuinely reaches the bridge again.
+  function load() {
+    setLoadError(null);
     previewMarketplaceHtml(props.item.slug)
       .then((text) => {
         // Relative assets inside the document still resolve against the v1
@@ -543,15 +667,17 @@ function UiPreviewFrame(props: {
          */
         const state = resolvePreviewState(props.previewState);
         const previewScript = buildHudPreviewScript(props.previewFn, state);
-        rewritten = rewritten.replace(/<\/body>/i, `${previewScript}</body>`);
-        if (!/<\/body>/i.test(rewritten)) rewritten += previewScript;
+        // Through the shared injector: a marketplace layout is a FRAGMENT, so the
+        // only `</body>` in it is usually one inside a script or a comment, and
+        // splicing there ends that script early. See injectBeforeBodyEnd.
+        rewritten = injectBeforeBodyEnd(rewritten, previewScript);
 
         setHtml(rewritten);
       })
-      .catch(() => setLoadError(true));
-
-    return () => ro.disconnect();
-  });
+      .catch((e: unknown) =>
+        setLoadError(e instanceof Error && e.message ? e.message : "Preview unavailable")
+      );
+  }
 
   // Canvas size, in descending order of trust: studio-design metadata, tRadio's
   // data attributes, then the largest explicit pixel dimensions in the CSS. The
@@ -585,7 +711,15 @@ function UiPreviewFrame(props: {
         </span>
       </Show>
       <Show when={loadError()}>
-        <span class="text-sm mp-muted">Preview unavailable</span>
+        {(message) => (
+          <div class="flex flex-col items-center gap-2">
+            <span class="text-sm mp-muted">Preview unavailable</span>
+            <span class="text-sm mp-muted">{message()}</span>
+            <NuiButton class="mp-action" onClick={load}>
+              Try again
+            </NuiButton>
+          </div>
+        )}
       </Show>
       <Show when={html()}>
         {/* The `overflow: hidden` + `flex-shrink: 0` pair this file already had
@@ -594,7 +728,7 @@ function UiPreviewFrame(props: {
             never did. Shared so that cannot recur. */}
         <div style={previewBoxStyle(canvasSize(), scale())}>
           <iframe
-            title={`${props.item.name} preview`}
+            title={`${displayName(props.item)} preview`}
             srcdoc={html()!}
             onLoad={() => setFrameReady(true)}
             {...PREVIEW_FRAME_ATTRS}

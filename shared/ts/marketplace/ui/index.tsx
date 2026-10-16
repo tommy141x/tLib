@@ -37,12 +37,24 @@ export { NuiButton } from "../../nui-kit/NuiButton";
 // composes these parts needs the same predicates to drive them — and because a
 // host deriving `busy` itself is how three copies of it appeared in this
 // directory in the first place.
+//
+// The three `builtin`-aware members are here for the same reason, and were the
+// ones missing: `isInstalled` was exported while `isBuiltin`, `canInstall` and
+// `canUninstall` were not, so a host composing these parts could ask "is it
+// installed" but not "is this a control that can succeed" — which is the whole
+// point of `builtin` being a state rather than a flag. The evidence that the gap
+// was real is that `MarketplaceBrowser` reached past this barrel into
+// `../install-machine` to get `isBuiltin`; it now takes it from here.
 export {
+  BUILTIN_EXPLANATION,
+  canInstall,
+  canUninstall,
   INSTALL_ACTION_LABEL,
   INSTALL_FAILED_FALLBACK,
   type InstallAction,
   installAction,
   installError,
+  isBuiltin,
   isInstallBusy,
   isInstalled,
 } from "../install-machine";
@@ -51,5 +63,8 @@ export { ErrorPane, InstallError } from "./InstallError";
 export { InstalledTab } from "./InstalledTab";
 export { ItemCard } from "./ItemCard";
 export * from "./inspection";
+// The install ledger is a MODULE and not a corner of `./browse.ts`: its listener
+// has to outlive the component to see a result the component is not mounted for.
+export * from "./install-ledger";
 export { PreviewOverlay } from "./PreviewOverlay";
 export * from "./types";

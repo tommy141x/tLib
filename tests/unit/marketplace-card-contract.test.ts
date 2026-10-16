@@ -42,10 +42,14 @@ import {
 import {
   DEFAULT_HUD_PREVIEW_STATE,
   fitScale,
+  isPanelPreviewReady,
+  PANEL_PREVIEW_CHANNEL,
   PREVIEW_FRAME_ATTRS,
+  parsePanelThemeDefinition,
   previewBoxStyle,
   previewKind,
   resolvePreviewState,
+  toPanelPreviewTheme,
 } from "../../shared/ts/marketplace/ui/preview-frame";
 
 function item(over: Partial<MarketplaceItem> = {}): MarketplaceItem {
@@ -430,6 +434,96 @@ describe("previewKind", () => {
 
   it("treats an empty swatch array as nothing, not as a blank swatch row", () => {
     expect(previewKind(item({ type: "theme", preview_colors: [] }))).toBe("none");
+  });
+
+  /**
+   * The reported complaint, in the owner's words: "there should be no
+   * 'thumbnail' for dispatch panel previews". A theme IS the dispatch panel, so
+   * the creator's screenshot is a picture of the thing we can now render.
+   */
+  it("shows a dispatch panel rather than the screenshot a theme shipped", () => {
+    expect(
+      previewKind(item({ type: "theme", thumbnail: "t", preview_colors: ["#000"] }), {
+        panelPreview: true,
+      })
+    ).toBe("panel");
+  });
+
+  /**
+   * The ordering is scoped to themes and to hosts that can mount the panel —
+   * deleting the `thumbnail` kind outright was tried and broke tRadio's
+   * `server/web` typecheck at HEAD.
+   */
+  it("leaves every other type's thumbnail alone, and the thumb-failed fallthrough with it", () => {
+    expect(previewKind(item({ type: "ui", thumbnail: "t" }), { panelPreview: true })).toBe(
+      "thumbnail"
+    );
+    expect(
+      previewKind(item({ type: "ui", thumbnail: "t" }), { panelPreview: true, thumbFailed: true })
+    ).toBe("ui");
+  });
+
+  it("falls back to the swatches where the host has no panel to mount", () => {
+    expect(previewKind(item({ type: "theme", preview_colors: ["#000"] }))).toBe("swatches");
+  });
+});
+
+describe("the dispatch-panel preview contract", () => {
+  it("defaults a theme onto the panel's own dark base rather than leaving it half-painted", () => {
+    const theme = toPanelPreviewTheme("tradio-midnight", { cssVars: { "--accent": "#0f0" } });
+    expect(theme).toEqual({
+      id: "tradio-midnight",
+      name: "tradio-midnight",
+      extends: "dark",
+      cssVars: { "--accent": "#0f0" },
+    });
+  });
+
+  /**
+   * A CSS-only theme carries `jsText: ""` by the definition's own default, and
+   * an empty body handed to `new Function` is a script where there is none.
+   */
+  it("drops an empty script instead of compiling it", () => {
+    expect(toPanelPreviewTheme("x", { jsText: "   " }).jsText).toBeUndefined();
+    expect(toPanelPreviewTheme("x", { jsText: "console.log(1)" }).jsText).toBe("console.log(1)");
+  });
+
+  it("keeps only the fields the frame reads", () => {
+    expect(
+      parsePanelThemeDefinition({
+        cssVars: { "--a": "1" },
+        cssText: "a{}",
+        jsText: "x",
+        template: "<div></div>",
+        slots: { header: "<b></b>" },
+        secret: "nope",
+      })
+    ).toEqual({
+      cssVars: { "--a": "1" },
+      cssText: "a{}",
+      jsText: "x",
+      template: "<div></div>",
+      slots: { header: "<b></b>" },
+    });
+  });
+
+  it("refuses a body that is not an object, and drops fields of the wrong shape", () => {
+    expect(parsePanelThemeDefinition(null)).toBeNull();
+    expect(parsePanelThemeDefinition("{}")).toBeNull();
+    expect(parsePanelThemeDefinition([])).toBeNull();
+    expect(parsePanelThemeDefinition({ cssVars: { "--a": 1 }, cssText: 5 })).toEqual({});
+  });
+
+  /**
+   * An opaque-origin frame posts from origin `"null"`, which every other preview
+   * on the page also posts from — so this guard is about the message SHAPE and
+   * the caller still has to compare `event.source` to its own `contentWindow`.
+   */
+  it("recognises only the frame's own ready handshake", () => {
+    expect(isPanelPreviewReady({ source: PANEL_PREVIEW_CHANNEL, type: "ready" })).toBe(true);
+    expect(isPanelPreviewReady({ source: PANEL_PREVIEW_CHANNEL, type: "warnings" })).toBe(false);
+    expect(isPanelPreviewReady({ source: "something-else", type: "ready" })).toBe(false);
+    expect(isPanelPreviewReady(null)).toBe(false);
   });
 });
 

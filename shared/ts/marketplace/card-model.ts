@@ -88,7 +88,13 @@ export interface CardIdentity {
 
 export function cardIdentity(item: MarketplaceItem): CardIdentity {
   return {
-    name: item.name,
+    // The slug when the catalogue sent no name. `name` goes through `str()` in
+    // `toCatalogueItem`, so a listing published without one arrives as the empty
+    // string and the card drew a nameless row above a real creator and a real
+    // Install button — the one field a card cannot do without, missing, with
+    // nothing to identify the thing being installed. The slug is the one field
+    // that is always there: `browseCatalogue` drops a slugless entry outright.
+    name: item.name || item.slug,
     creator: item.creator_name,
     ...(item.current_version ? { version: item.current_version } : {}),
     ...(item.description ? { description: item.description } : {}),
