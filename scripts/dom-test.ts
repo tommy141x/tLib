@@ -24,6 +24,7 @@
  * and the only one whose `resolve.dedupe` list matches the shipped bundle's.
  */
 
+import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -63,7 +64,19 @@ const WEB = resolve(ROOT, "client", "web");
  * one at 209 while its suite grew to 398, which had quietly disarmed it.
  * Re-measure when you add a batch.
  */
-const DEFAULT_MINIMUM_TESTS = 115;
+/**
+ * prop-editor lives in `internal/`, which publish-public.ts strips, so in a
+ * PUBLIC clone `prop-editor-guard.test.tsx` skips its 24 tests and the suite
+ * is legitimately smaller. The floor has to know that or it fires on a clone
+ * that is behaving correctly -- a floor that cannot tell "deliberately absent"
+ * from "silently vanished" is the stale-floor failure this comment warns about,
+ * just in the other direction.
+ */
+const PROP_EDITOR_GUARD_TESTS = 24;
+const HAS_PROP_EDITOR = existsSync(
+  resolve(ROOT, "internal", "shared-ts", "prop-editor", "PropEditor.tsx")
+);
+const DEFAULT_MINIMUM_TESTS = HAS_PROP_EDITOR ? 115 : 115 - PROP_EDITOR_GUARD_TESTS;
 
 const raw = process.env.TLIB_DOM_TEST_MIN;
 let MINIMUM_TESTS = DEFAULT_MINIMUM_TESTS;

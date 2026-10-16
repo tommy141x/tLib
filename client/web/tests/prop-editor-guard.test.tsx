@@ -41,21 +41,42 @@
  *    defect would silently change.
  */
 
+import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { cleanup, render } from "@solidjs/testing-library";
 import { flush } from "solid-js";
-import { closePropEditor, propEditorState } from "../../../internal/shared-ts/prop-editor/store";
 import { UndoHistory } from "../../../shared/ts/undo";
 import { createUndoScope, undoKeyDiagnostics } from "../../../shared/ts/undo-keys";
+
+// PropEditor lives in `internal/`, which publish-public.ts strips. This file
+// stays in the published half because the DOM harness it needs -- happy-dom,
+// @solidjs/testing-library and the dedupe rewrite in `_setup.ts` -- is a
+// client/web devDependency, and a second copy of it under internal/ would be
+// two harnesses to keep in step. So the suite declares that the private half
+// may be absent, exactly as tests/integration/versioncheck-provider.test.ts
+// declares a sibling resource may be.
+//
+// A STATIC import of `store` fails at module load in a public clone and takes
+// the whole file with it, so it is awaited below instead.
+const PROP_EDITOR = new URL("../../../internal/shared-ts/prop-editor/", import.meta.url);
+const HAS_PROP_EDITOR = existsSync(new URL("PropEditor.tsx", PROP_EDITOR));
+const describeWithPropEditor = HAS_PROP_EDITOR ? describe : describe.skip;
 
 // Must be registered before `PropEditor` is imported, which is why this file
 // imports it with a top-level `await import` below rather than a static import:
 // `mock.module` registers an override in the module registry, and a static
 // import of `PropEditor` would already have pulled the real viewport in.
+if (HAS_PROP_EDITOR) {
 mock.module("../../../internal/shared-ts/prop-editor/PropEditorViewport", () => ({
   PropEditorViewport: () => null,
 }));
-const { PropEditor } = await import("../../../internal/shared-ts/prop-editor/PropEditor");
+}
+const { PropEditor } = HAS_PROP_EDITOR
+  ? await import("../../../internal/shared-ts/prop-editor/PropEditor")
+  : { PropEditor: (() => null) as never };
+const { closePropEditor, propEditorState } = HAS_PROP_EDITOR
+  ? await import("../../../internal/shared-ts/prop-editor/store")
+  : { closePropEditor: (() => {}) as never, propEditorState: {} as never };
 
 const PREFIX = "tlibtest";
 /** The editor namespaces everything it sends; a bare name would never match. */
@@ -161,7 +182,7 @@ function typeInto(el: HTMLInputElement, value: string, { blur = true } = {}) {
   }
 }
 
-describe("the editor mounts at all", () => {
+describeWithPropEditor("the editor mounts at all", () => {
   test("closed until the init message, then the chrome is there", async () => {
     const { container } = render(() => <PropEditor prefix={PREFIX} />);
     await settle();
@@ -188,7 +209,7 @@ describe("the editor mounts at all", () => {
   });
 });
 
-describe("the guard: a CLEAN session closes in one press", () => {
+describeWithPropEditor("the guard: a CLEAN session closes in one press", () => {
   test("Escape on an untouched session sends propEditorCancel and shows no prompt", async () => {
     const { container } = await openEditor();
     pressEscape();
@@ -205,7 +226,7 @@ describe("the guard: a CLEAN session closes in one press", () => {
   });
 });
 
-describe("the guard: a DIRTY session asks first", () => {
+describeWithPropEditor("the guard: a DIRTY session asks first", () => {
   test("Escape asks instead of discarding when the session is dirty", async () => {
     const { container } = await openEditor();
     typeInto(field(container, "X"), "3");
@@ -298,7 +319,7 @@ describe("the guard: a DIRTY session asks first", () => {
   });
 });
 
-describe("the guard: Escape while the question is up", () => {
+describeWithPropEditor("the guard: Escape while the question is up", () => {
   test("onInternal dismisses the prompt before the escape layer can act", async () => {
     // `onInternal` runs first, so Escape answers the QUESTION and nothing else.
     // It is also what stops the press that OPENED the prompt from confirming it
@@ -336,7 +357,7 @@ describe("the guard: Escape while the question is up", () => {
   });
 });
 
-describe("isDirty counts an OPEN batch, so the guard must settle before asking", () => {
+describeWithPropEditor("isDirty counts an OPEN batch, so the guard must settle before asking", () => {
   test("mid-gesture, with the batch still open, the session is dirty", async () => {
     // A bare `change` with no blur leaves the batch open. `canUndo()` includes
     // `pending`, which is what makes a field still focused count as something to
@@ -397,7 +418,7 @@ describe("isDirty counts an OPEN batch, so the guard must settle before asking",
   });
 });
 
-describe("nesting against a host page", () => {
+describeWithPropEditor("nesting against a host page", () => {
   test("depth 1 beats a host page's scope, and the host never sees the press", async () => {
     // The live case: tRadio's settings app hosts this editor inside itself, two
     // independent histories and one keyboard.
@@ -496,7 +517,7 @@ describe("nesting against a host page", () => {
   });
 });
 
-describe("session boundaries", () => {
+describeWithPropEditor("session boundaries", () => {
   test("a new init clears the history, so a fresh session is never already dirty", async () => {
     const { container } = await openEditor();
     typeInto(field(container, "X"), "3");
