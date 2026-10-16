@@ -35,10 +35,15 @@ import { type Component, createSignal, omit, onSettled } from "solid-js";
  * Trigger text is 12px, not `text-sm` (14px) — the body step of the scale at the
  * top of `shared/css/surface.css`. The `default` indicator lost its own
  * elevation: CEF does not composite it, so it was never on screen anyway.
+ *
+ * The trigger's hover/selected colours are instant — a strip is a row of
+ * neighbours and a 200ms tint fading in and out behind the cursor reads as lag.
+ * The sliding INDICATOR below keeps its transition: that one carries meaning
+ * (it shows which tab you came from), and it is a transform, not a tint.
  */
 
 const tabTriggerVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-[12px] font-medium transition-all duration-200 ease-out outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:pointer-events-none disabled:opacity-50 relative",
+  "inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-[12px] font-medium outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1 disabled:pointer-events-none disabled:opacity-50 relative",
   {
     variants: {
       variant: {

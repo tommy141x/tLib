@@ -35,7 +35,12 @@ const cardVariants = cva("rounded-lg text-card-foreground", {
       default: "bg-card",
       elevated: "bg-card",
       outlined: "bg-card border-2 border-primary",
-      interactive: "bg-card hover:border-accent transition-all cursor-pointer",
+      /* The hover border lands instantly: interactive Cards come in grids, and a
+         fade across a grid of them trails the cursor. The blanket transition this
+         used to carry animated the border colour and nothing else, so it only ever
+         bought lag. Do not name a utility class in this comment -- UnoCSS scans
+         comments too, and would emit the very rule the line above removed. */
+      interactive: "bg-card hover:border-accent cursor-pointer",
       ghost: "bg-transparent border border-border",
     },
   },

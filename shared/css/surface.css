@@ -140,10 +140,6 @@
     line-height: 1.2;
     white-space: nowrap;
     cursor: pointer;
-    transition:
-      background-color 100ms ease,
-      color 100ms ease,
-      border-color 100ms ease;
   }
   .segment:hover:not([aria-pressed="true"]):not([aria-disabled="true"]) {
     color: hsl(var(--foreground));
@@ -188,10 +184,6 @@
     font-size: 12px;
     text-align: left;
     cursor: pointer;
-    transition:
-      background-color 100ms ease,
-      color 100ms ease,
-      border-color 100ms ease;
   }
   .list-row:hover {
     background: hsl(var(--secondary) / 0.8);
@@ -209,8 +201,7 @@
      muted token, which is the "can barely see it exists" report. A 26px target
      with its own fill and border AT REST is findable without hovering first.
 
-     Sized constantly rather than revealed on hover: a control that appears on hover
-     shifts the row's metrics under the cursor. */
+     Sized constantly, not revealed on hover: a control that appears under the cursor shifts the row's metrics. */
   .row-action {
     display: flex;
     align-items: center;
@@ -223,10 +214,6 @@
     background: hsl(var(--input));
     color: hsl(var(--muted-foreground));
     cursor: pointer;
-    transition:
-      background-color 100ms ease,
-      color 100ms ease,
-      border-color 100ms ease;
   }
   .row-action:hover,
   .row-action:focus-visible {

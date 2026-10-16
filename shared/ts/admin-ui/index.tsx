@@ -129,7 +129,9 @@ export function AdminToggle(props: {
     "border-radius": "4px",
     border: "none",
     cursor: "pointer",
-    transition: "background 0.15s, color 0.15s",
+    // The ON/OFF pair is two adjacent buttons, repeated once per setting down a
+    // panel. The 0.15s cross-fade it used to have meant a click you could watch
+    // resolve; the state it reports now lands on the frame you clicked.
   };
 
   return (

@@ -4,8 +4,10 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { Component } from "solid-js";
 import { omit, Show } from "solid-js";
 
+// No colour transition: badges arrive in rows of tags and status chips, so the
+// `clickable` hover tint has to land under the cursor, not chase it.
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1",
+  "inline-flex items-center gap-1 rounded-md border px-2.5 py-0.5 text-xs font-semibold outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:-outline-offset-1",
   {
     variants: {
       variant: {

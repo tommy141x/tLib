@@ -196,7 +196,7 @@ export const ExportBadge: Component<ExportBadgeProps> = (props) => {
              the toolbar gained an icon-only undo/redo pair. A glyph is not an
              identity; this is. */
           data-export-trigger=""
-          class={`tlib-export-trigger flex items-center gap-1 font-mono font-semibold cursor-pointer bg-card/95 border border-border/60 text-muted-foreground hover:bg-secondary hover:text-foreground transition-[color,background-color,border-color,outline-color] ${FOCUS_RING}`}
+          class={`tlib-export-trigger flex items-center gap-1 font-mono font-semibold cursor-pointer bg-card/95 border border-border/60 text-muted-foreground hover:bg-secondary hover:text-foreground ${FOCUS_RING}`}
           title={T()("export_title")}
           aria-label={T()("export_title")}
         >
@@ -267,7 +267,7 @@ export const ExportBadge: Component<ExportBadgeProps> = (props) => {
                   <button
                     type="button"
                     data-export-target={target.name}
-                    class={`tlib-export-row w-full text-left font-mono flex items-center gap-1.5 text-foreground hover:bg-secondary/60 transition-colors ${FOCUS_RING}${
+                    class={`tlib-export-row w-full text-left font-mono flex items-center gap-1.5 text-foreground hover:bg-secondary/60 ${FOCUS_RING}${
                       target.isLocal ? " border-b border-border/30" : ""
                     }`}
                     onClick={() => setConfirming(target.name)}

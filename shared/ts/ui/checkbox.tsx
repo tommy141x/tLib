@@ -63,13 +63,16 @@ const SIZES = {
  * the neutral border token, not the accent -- an unchecked box advertising itself
  * as the affirmative control before anybody affirmed anything.
  */
+// No colour transition: checkboxes come as a column of options, and at 200ms the
+// box was still filling in after the click that checked it. Both the hover edge
+// and the checked fill land on the frame they are asked for.
 const CONTROL_BASE =
-  "peer shrink-0 rounded-[var(--radius-tight)] border border-border transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-200 ease-out hover:border-ring outline-none data-[focus-visible]:border-ring data-[focus-visible]:outline-2 data-[focus-visible]:outline-solid data-[focus-visible]:outline-ring/40 data-[focus-visible]:-outline-offset-1 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground";
+  "peer shrink-0 rounded-[var(--radius-tight)] border border-border hover:border-ring outline-none data-[focus-visible]:border-ring data-[focus-visible]:outline-2 data-[focus-visible]:outline-solid data-[focus-visible]:outline-ring/40 data-[focus-visible]:-outline-offset-1 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground";
 
 const INDICATOR_BASE = "flex items-center justify-center w-full h-full [&[hidden]]:hidden";
 
 const LABEL_BASE =
-  "font-medium leading-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70 transition-[color,background-color,border-color,text-decoration-color,fill,stroke,outline-color] duration-150 cursor-pointer select-none";
+  "font-medium leading-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70 cursor-pointer select-none";
 
 export const Checkbox = (props: CheckboxProps & { size?: keyof typeof SIZES }) => {
   const others = omit(props, "children", "class", "size");

@@ -77,8 +77,9 @@ li{min-width:0}
 a.card{--accent:#d4d4d4;
   display:flex;align-items:center;gap:14px;height:100%;min-height:96px;padding:18px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  color:inherit;text-decoration:none;
-  transition:border-color .15s,background .15s}
+  color:inherit;text-decoration:none}
+/* The hover tint is instant. This is a grid of cards, and a .15s fade behind a
+   cursor crossing them is the one thing that makes a static page feel slow. */
 a.card:hover{background:#191919;border-color:#525252}
 a:focus-visible{outline:2px solid #fafafa;outline-offset:4px}
 .ico{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:var(--radius);
@@ -98,7 +99,6 @@ footer{margin-top:24px;padding-top:16px;border-top:1px solid var(--border);color
 footer a{display:inline-flex;align-items:center;min-height:44px;color:#d4d4d4;text-underline-offset:4px}
 footer a:hover{color:#fff}
 @media(max-width:600px){main{padding:32px 20px}ul{grid-template-columns:minmax(0,1fr)}a.card{padding:16px;gap:12px}}
-@media(prefers-reduced-motion:reduce){a.card{transition:none}}
 @media(forced-colors:active){a:focus-visible{outline-color:Highlight}}
 </style></head>
 <body><main>${body}</main></body></html>`;
