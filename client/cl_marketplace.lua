@@ -28,18 +28,24 @@ local function buildPayload(opts)
     return {
         resource         = type(opts.resource)         == 'string' and opts.resource         or nil,
         initialTab       = type(opts.initialTab)       == 'string' and opts.initialTab       or nil,
-        type             = type(opts.type)             == 'string' and opts.type             or nil,
         baseUrl          = baseUrl,
         installedSlugs   = type(opts.installedSlugs)   == 'table'  and opts.installedSlugs   or nil,
         installedLayouts = type(opts.installedLayouts) == 'table'  and opts.installedLayouts or nil,
         installedSounds  = type(opts.installedSounds)  == 'table'  and opts.installedSounds  or nil,
         previewFn        = type(opts.previewFn)        == 'string' and opts.previewFn        or nil,
         previewState     = type(opts.previewState)     == 'table'  and opts.previewState     or nil,
+        -- Where this consumer serves tRadio's offline dispatch panel, for a
+        -- `theme` item's live preview. The consumer's own URL, because only it
+        -- knows whether that file is published by its fxmanifest at all.
+        panelPreviewUrl  = type(opts.panelPreviewUrl)   == 'string' and opts.panelPreviewUrl  or nil,
     }
 end
 
 local function registerExports()
-    --- `opts.type` filters the panel on open, e.g. OpenMarketplace({ type = 'ui-radio' }).
+    --- `opts.resource` scopes the catalogue to one product; `opts.initialTab`
+    --- picks 'uis' or 'sounds'. There is no per-TYPE filter — `opts.type` was
+    --- forwarded here and documented for a while, and nothing in the browser
+    --- ever read it. See `OpenData` in shared/ts/marketplace/ui/types.ts.
     Platform.export('tLib', 'OpenMarketplace', function(opts)
         opts = type(opts) == 'table' and opts or {}
         SendNUIMessage({ action = 'openMarketplace', data = buildPayload(opts) })
@@ -143,6 +149,18 @@ RegisterNetEvent('tlib:marketplace:previewResult', function(result)
     SendNUIMessage({ action = 'marketplacePreviewResult', data = result })
 end)
 
+-- A theme's published DEFINITION, for the dispatch-panel preview. Relayed as
+-- text: this VM never decodes it, because the only check worth making is the
+-- frame-contract one the NUI applies before it posts the theme across.
+RegisterNUICallback('marketplaceThemeJson', function(data, cb)
+    cb(1)
+    if type(data) ~= 'table' or type(data.requestId) ~= 'string' or type(data.slug) ~= 'string' then return end
+    TriggerServerEvent('tlib:marketplace:themeJson', data)
+end)
+RegisterNetEvent('tlib:marketplace:themeJsonResult', function(result)
+    SendNUIMessage({ action = 'marketplaceThemeJsonResult', data = result })
+end)
+
 -- Read-only, but still server-side: it needs the ACE and a registered resource.
 RegisterNUICallback('marketplaceInspect', function(data, cb)
     cb(1)
@@ -158,7 +176,14 @@ end)
 RegisterNetEvent('tlib:marketplace:installResult', function(result)
     SendNUIMessage({ action = 'marketplaceInstallResult', data = result })
     if type(result) == 'table' and result.ok then
-        log(('installed "%s" → %s'):format(tostring(result.slug), tostring(result.installedAt)), 2)
+        -- Counts, not a path. The server no longer sends `installedAt` -- see the
+        -- note on `reply` in server/sv_marketplace.lua -- and these answer the
+        -- question an admin watching a progress spinner actually has.
+        log(('installed "%s" (%s file(s), %s bytes)'):format(
+            tostring(result.slug),
+            tostring(result.fileCount or '?'),
+            tostring(result.bytesWritten or '?')
+        ), 2)
     else
         log(('install failed for "%s": %s'):format(
             tostring(result and result.slug or '?'),

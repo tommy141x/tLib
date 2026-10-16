@@ -38,3 +38,9 @@ export { inspectMarketplaceLock, recoverMarketplaceLock } from "./installer/lock
 export { protectedInventoryFromRelease, snapshotProtectedInventory } from "./installer/protected";
 export type { ResetOutcome, ResetResult } from "./installer/reset";
 export { resetInstalledToShipped } from "./installer/reset";
+export type { UiLayoutContractOptions } from "./installer/ui-contract";
+export {
+  UI_LAYOUT_ALLOWED_EXTS,
+  UI_LAYOUT_DOCUMENT,
+  uiLayoutContract,
+} from "./installer/ui-contract";

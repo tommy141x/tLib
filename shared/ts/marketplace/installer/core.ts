@@ -196,7 +196,17 @@ export function owned(c: Context): Receipt | null {
   if (s) {
     if (!s.isFile() || s.isSymbolicLink() || s.nlink !== 1 || s.size > 1024 * 1024)
       throw new Error("unsafe marketplace receipt");
-    receipt = JSON.parse(fs.readFileSync(c.receipt, "utf8"));
+    // Parsed inside a try, because a SyntaxError's message is a byte offset.
+    // Every other refusal in this function is a sentence an operator can act on
+    // ("installed content changed; refusing overwrite/delete"), and this one
+    // reached the admin panel verbatim as `Unexpected token } in JSON at
+    // position 42` — which names neither the file nor the fact that the file is
+    // tLib's own bookkeeping rather than anything they installed.
+    try {
+      receipt = JSON.parse(fs.readFileSync(c.receipt, "utf8"));
+    } catch {
+      throw new Error(`unreadable marketplace ownership receipt: ${path.basename(c.receipt)}`);
+    }
     if (
       !receipt ||
       receipt.version !== 1 ||
@@ -241,32 +251,46 @@ export function owned(c: Context): Receipt | null {
   // destructive outcome, but it is an unexplainable one, and "protected
   // everywhere except in the container the customer actually runs" is not a
   // property worth claiming.
-  const sibling = caseVariantOf(c.base, c.name);
-  if (sibling && sibling !== receipt?.destination)
+  //
+  // EVERY destination, not just the module directory. This was handed `c.name`,
+  // so it covered the folder (`bgDog`) and NONE of the three flat audio names a
+  // sound installs as — and sounds are most of the catalogue. On Linux an install
+  // of slug `bgdog` therefore missed `bgDog.wav` by stat, missed it here too, and
+  // wrote a second sound beside the shipped one. `inspection.ts` already folded
+  // case across the whole candidate list, so the inspector and the installer
+  // disagreed about what a target is, which `DESTINATIONS`' header forbids.
+  const sibling = caseVariantOf(c.base, DESTINATIONS(c));
+  if (sibling && sibling.entry !== receipt?.destination)
     throw new Error(
-      `existing target "${sibling}" differs from "${c.name}" only by case; refusing to install beside it`
+      `existing target "${sibling.entry}" differs from "${sibling.candidate}" only by case; refusing to install beside it`
     );
 
   return receipt;
 }
 
 /**
- * An entry in `base` whose name matches `name` case-insensitively but not exactly.
+ * An entry in `base` matching one of `names` case-insensitively but not exactly,
+ * with the candidate it collided with — the caller needs both to say which two
+ * names are the problem.
  *
  * Returns null when the directory is absent or unreadable: this backs a refusal,
  * and a refusal that cannot read the directory has nothing to refuse on. The
  * `stat` check above is what covers "the target is simply there".
  */
-function caseVariantOf(base: string, name: string): string | null {
+function caseVariantOf(
+  base: string,
+  names: readonly string[]
+): { entry: string; candidate: string } | null {
   let entries: string[];
   try {
     entries = fs.readdirSync(base);
   } catch {
     return null;
   }
-  const lower = name.toLowerCase();
+  const wanted = new Map(names.map((name) => [name.toLowerCase(), name]));
   for (const entry of entries) {
-    if (entry !== name && entry.toLowerCase() === lower) return entry;
+    const candidate = wanted.get(entry.toLowerCase());
+    if (candidate && entry !== candidate) return { entry, candidate };
   }
   return null;
 }

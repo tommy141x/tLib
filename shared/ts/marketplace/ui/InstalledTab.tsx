@@ -69,7 +69,11 @@ export function InstalledTab(props: {
           match?.kind === "builtin" ? { state: "builtin" } : { state: "installed" };
         return {
           key: name,
-          displayName: match?.item.name ?? name,
+          // `||`, not `??`: a listing published with no name arrives as the
+          // empty string rather than as absent, and the row then had no label
+          // at all. The local directory name is the better fallback here than
+          // `card-model`'s slug — it is what the operator sees on disk.
+          displayName: match?.item.name || name,
           item: match?.item ?? null,
           slug,
           installState: (slug ? states[slug] : null) ?? base,
@@ -89,7 +93,7 @@ export function InstalledTab(props: {
       })
       .map((s) => ({
         key: s.filename,
-        displayName: bySlug.get(s.slug)?.name ?? s.filename,
+        displayName: bySlug.get(s.slug)?.name || s.filename,
         item: bySlug.get(s.slug) ?? null,
         slug: s.slug || null,
         installState: (s.slug ? states[s.slug] : null) ?? { state: "installed" },

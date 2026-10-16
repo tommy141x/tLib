@@ -70,6 +70,19 @@ local function sanitizeInspection(p, result)
         status = data.status, lock = data.lock, policyAvailable = data.policyAvailable,
     } }
 end
+-- NO `installedAt`, AND THAT IS THE POINT.
+--
+-- `installFromData` answers with an absolute filesystem path
+-- (`<resourceRoot>/<installPath>/<slug>`), and this used to forward it to the
+-- game client, where its only reader was a tLib log line printing the server's
+-- directory layout into an admin's own console. `installer/inspection.ts` states
+-- the rule for the read path — "emits no absolute paths" — and
+-- `tests/lua/marketplace-coordinator.lua` already asserted an inspect reply
+-- carries none; the write path simply never got the same treatment.
+--
+-- It is still on the SERVER-side lifecycle event below, where a consumer has a
+-- legitimate use for it and the value never leaves the host. The counts stay:
+-- `fileCount` and `bytesWritten` say how much landed without saying where.
 local function reply(p, result)
     if not p.src then return end
     -- Never trust scope supplied by an agent; bind every response to its request.
@@ -79,7 +92,6 @@ local function reply(p, result)
         type = p.itemType, action = p.action, token = p.token,
         requestId = p.requestId, inspection = result.inspection,
         fileCount = result.fileCount, bytesWritten = result.bytesWritten,
-        installedAt = result.installedAt,
     })
 end
 local function release(p)
@@ -547,6 +559,41 @@ RegisterNetEvent('tlib:marketplace:preview', function(opts)
     end)
     if not dispatched then
         log('marketplace preview bridge failed: ' .. tostring(dispatchErr), 3)
+        settle({ ok = false, error = 'marketplace bridge unavailable' })
+        return
+    end
+    readBackstop(settle)
+end)
+
+-- The published definition of a `theme` item, as JSON text.
+--
+-- A separate read from the preview document above rather than a mode of it: the
+-- two answer different endpoints, and the panel does opposite things with them —
+-- a UI document is parsed and rewritten here, a theme definition is handed
+-- verbatim to tRadio's offline panel, which applies it through the same code an
+-- install does.
+RegisterNetEvent('tlib:marketplace:themeJson', function(opts)
+    local src = source
+    local settle = beginRead(src, 'themeJson', opts)
+    if not settle then return end
+
+    local slug = type(opts.slug) == 'string' and opts.slug or ''
+    if not slugName(slug) then
+        settle({ ok = false, error = 'invalid theme slug' })
+        return
+    end
+
+    local dispatched, dispatchErr = pcall(function()
+        exports['tLib']:mpThemeJson(slug, function(ok, err, json)
+            if not ok or type(json) ~= 'string' then
+                settle({ ok = false, error = tostring(err or 'theme preview unavailable') })
+                return
+            end
+            settle({ ok = true, slug = slug, json = json })
+        end)
+    end)
+    if not dispatched then
+        log('marketplace themeJson bridge failed: ' .. tostring(dispatchErr), 3)
         settle({ ok = false, error = 'marketplace bridge unavailable' })
         return
     end

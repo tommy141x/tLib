@@ -58,6 +58,8 @@ end
 -- opts.initialTab: 'uis'|'sounds' (default: 'uis')
 -- opts.previewFn: NUI preview callback name string (optional)
 -- opts.previewState: table of preview state data (optional)
+-- opts.panelPreviewUrl: URL of tRadio's offline dispatch panel, for a live
+--   `theme` preview (optional; only tRadio publishes one)
 --
 -- ** installedSlugs CARRIES SOUNDS ONLY, AND THAT IS THE FIX, NOT A TRIM. **
 --
@@ -96,6 +98,7 @@ local function buildOpts(resource, layoutSlugs, soundEntries, opts)
         installedSounds  = soundEntries or {},
         previewFn        = opts.previewFn,
         previewState     = opts.previewState,
+        panelPreviewUrl  = opts.panelPreviewUrl,
     }
 end
 

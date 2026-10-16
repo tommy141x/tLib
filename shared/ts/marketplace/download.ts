@@ -7,7 +7,30 @@ export interface DownloadResult {
   size: number;
 }
 
-/** v1 provides a hash, but size headers are optional on streamed responses. */
+/**
+ * v1 provides a hash, but size headers are optional on streamed responses.
+ *
+ * NO REDIRECT FOLLOWING, AND THAT IS CORRECT RATHER THAN MISSING.
+ *
+ * `http.get` does not follow a 3xx, so one arrives here as
+ * `download failed: HTTP 302`. Read against the route before "fixing" that:
+ * `/api/v1/items/:slug/download` is `buildItemDownloadResponse` in tWeb's
+ * `src/lib/marketplace/shared.ts`, and all three item types answer with the bytes
+ * on the same response — a `ui` item is zipped in the isolate
+ * (`new Response(zipBytes)`), a `sound` and an `anim` stream their stored object
+ * (`new Response(object.body)`). None of them redirects to storage.
+ *
+ * And a redirect could not be followed safely anyway: `x-marketplace-file-hash`
+ * is set by the WORKER, not by the bucket, so a hop to a storage origin would
+ * arrive without it — and `assertBundleHash`/the check below fail closed on a
+ * missing hash. Following a redirect would therefore turn a working install into
+ * `missing or invalid marketplace hash`, which is a worse failure than the honest
+ * `HTTP 302`.
+ *
+ * Why the size header is the OPTIONAL one: a `ui` bundle is a fixed-length body
+ * and gets a `content-length`; a streamed sound or anim pack need not. Hence
+ * `sizeHeader === undefined` is a tolerated case and a missing hash is not.
+ */
 export function downloadBundle(
   url: string,
   maxBytes: number,
