@@ -18,6 +18,7 @@ type GetConvarFn = (name: string, defaultValue: string) => string;
 type GetCurrentResourceNameFn = () => string;
 type GetInvokingResourceFn = () => string | null;
 type GetResourcePathFn = (resourceName: string) => string | null;
+type LoadResourceFileFn = (resourceName: string, fileName: string) => string | null;
 
 const g = globalThis as unknown as {
   exports: ExportsFn;
@@ -27,6 +28,7 @@ const g = globalThis as unknown as {
   GetCurrentResourceName: GetCurrentResourceNameFn;
   GetInvokingResource: GetInvokingResourceFn;
   GetResourcePath: GetResourcePathFn;
+  LoadResourceFile: LoadResourceFileFn;
 };
 
 export const fExports: ExportsFn = g.exports;
@@ -36,3 +38,4 @@ export const fGetConvar: GetConvarFn = g.GetConvar;
 export const fGetCurrentResourceName: GetCurrentResourceNameFn = g.GetCurrentResourceName;
 export const fGetInvokingResource: GetInvokingResourceFn = g.GetInvokingResource;
 export const fGetResourcePath: GetResourcePathFn = g.GetResourcePath;
+export const fLoadResourceFile: LoadResourceFileFn = g.LoadResourceFile;

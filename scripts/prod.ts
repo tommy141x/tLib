@@ -28,6 +28,12 @@ runProd(
       "client/ui/index.html",
       "client/ui/assets/hud-layout.js",
       "server/dist/bundle.js",
+      // Not in the bundle on purpose -- it is 300KB and a server that never
+      // renders the hub should not carry it -- so it has to ship as a FILE.
+      // It did not, until 2026-10-15: every customer release had a hub with
+      // no icons, because the source tree is the runtime on a dev box and
+      // nothing here noticed the difference.
+      "server/lib/http/icons.json",
     ],
     include: [
       "fxmanifest.lua",
@@ -36,6 +42,7 @@ runProd(
       "README.md",
       "LICENSE",
 
+      "shared/sh_api.lua",
       "shared/sh_branding.lua",
       "shared/sh_coords.lua",
       "shared/sh_utils.lua",
@@ -44,6 +51,7 @@ runProd(
       "shared/imports",
 
       "client/cl_dialog.lua",
+      "client/cl_keybinds.lua",
       "client/cl_layout.lua",
       "client/cl_main.lua",
       "client/cl_marketplace.lua",
@@ -56,7 +64,9 @@ runProd(
       "client/ui",
 
       "server/sv_community_configs.lua",
+      "server/sv_demo.lua",
       "server/sv_discovery.lua",
+      "server/sv_feedback.lua",
       "server/sv_main.lua",
       "server/sv_marketplace.lua",
       "server/sv_menu.lua",
@@ -65,6 +75,10 @@ runProd(
       "server/sv_telemetry.lua",
       "server/lib/adapter",
       "server/lib/menu",
+      // The hub's icon set. server/lib/http is otherwise Vite SOURCE that
+      // compiles into server/dist/bundle.js, which is why this directory is
+      // not shipped whole and this one data file has to be named.
+      "server/lib/http/icons.json",
       "server/dist/bundle.js",
     ],
   },
