@@ -84,6 +84,31 @@ export default function LayoutEditor() {
   const [session, setSession] = createSignal<number | null>(null);
   const [components, setComponents] = createSignal<Component[]>([]);
   const [layouts, setLayouts] = createStore<Record<string, Layout>>({});
+  /**
+   * The same placements as `layouts`, readable synchronously.
+   *
+   * A SOLID 2 STORE WRITE IS NOT READABLE IN THE TICK IT HAPPENED, and three
+   * things here read a placement back in the tick they wrote it:
+   *
+   *  - `UndoHistory.with()`, which captures, mutates and captures again inside
+   *    one call. Every discrete edit goes through it — hide, show, Reset this,
+   *    Reset all.
+   *  - `settleKey`, which re-anchors from where the gesture ended.
+   *  - any gesture settled by the same event that flushed its last frame: a
+   *    quick drag whose only `pointermove` is flushed by its own `pointerup`.
+   *
+   * Reading the proxy there compares a value against ITSELF. The consequences
+   * were not subtle: `capture()` returned the pre-write value, `UndoHistory`
+   * discarded the batch as a no-op, and so hiding six components recorded
+   * nothing — `canUndo()` stayed false, and that flag IS this editor's dirty
+   * flag, so Cancel then threw the whole session away WITHOUT ASKING. The same
+   * read made `settleKey` re-anchor the pre-drag placement back over a flicked
+   * drag, undoing it.
+   *
+   * So: the store is what the DOM subscribes to, this is what every decision is
+   * made from, and `update()` is the only writer of either.
+   */
+  let placed: Record<string, Layout> = {};
   const [selected, setSelected] = createSignal("");
   const [viewport, setViewport] = createSignal<Viewport>({
     width: window.innerWidth,
@@ -164,9 +189,29 @@ export default function LayoutEditor() {
   // One index instead of an O(n) find on every pointermove.
   const index = createMemo(() => new Map(components().map((c) => [c.key, c])));
   const active = () => index().get(selected());
-  const current = (component: Component) => layouts[component.key] ?? component.layout;
+  /**
+   * Where a component is. The store read is the SUBSCRIPTION the render needs
+   * and is load-bearing even though the mirror answers first — drop it and the
+   * proxies stop following a drag. The mirror is the VALUE, because for the rest
+   * of the tick after a write the two disagree and only the mirror is right.
+   */
+  const current = (component: Component) => {
+    const rendered = layouts[component.key];
+    return placed[component.key] ?? rendered ?? component.layout;
+  };
   const canUndo = () => undoState().canUndo;
   const canRedo = () => undoState().canRedo;
+  /**
+   * No edit may start right now: a save is in flight, or the discard question is
+   * up and is supposed to be MODAL.
+   *
+   * `discarding()` belongs here because the question's shade only covers the
+   * panel. Everything outside it — every proxy outline, its eye button, the
+   * wheel, the arrow keys, the panel's own drag handle — kept working behind a
+   * dialog that says "This cannot be undone", so the player could keep
+   * positioning a HUD that the pending answer was about to throw away.
+   */
+  const busy = () => finishing() || discarding();
   const undoTitle = () => {
     const label = undoState().undoLabel;
     return label ? `Undo ${label} · Ctrl Z` : "Nothing to undo";
@@ -186,7 +231,10 @@ export default function LayoutEditor() {
     undoables.set(
       key,
       history.register<Layout>(tagOf(key), {
-        capture: () => ({ ...(layouts[key] ?? component.layout) }),
+        // The mirror, NEVER the store proxy — see `placed`. This capture runs
+        // from `push()`/`commit()`, so a proxy read here both returns a stale
+        // value and subscribes the snapshot to the store it is snapshotting.
+        capture: () => ({ ...(placed[key] ?? component.layout) }),
         restore: (layout) => update(key, layout),
         // The no-op guard: a gesture that ended where it started records nothing,
         // which is what `LayoutHistory.record`'s early return did.
@@ -211,6 +259,13 @@ export default function LayoutEditor() {
     // undo and resize-response goes through here, so all of them are clamped.
     // The anchor is re-derived once at gesture end; mid-drag it would thrash.
     const next = constrainLayout(component, layout, viewport());
+    // Nothing moved, so there is nothing to paint and nothing to tell the game.
+    // Worth the two lines because the no-op callers are the bulk ones: `resized`
+    // re-clamps EVERY component (one `layoutPreview` post each, for placements
+    // that a resize left legal) and `restore` can put a component back where it
+    // already is.
+    if (placed[key] && sameLayout(placed[key], next)) return;
+    placed[key] = next;
     setLayouts((draft) => {
       draft[key] = next;
     });
@@ -227,7 +282,7 @@ export default function LayoutEditor() {
    */
   function settleKey(key: string) {
     const component = index().get(key);
-    const after = layouts[key];
+    const after = placed[key];
     if (!component || !after) {
       history.abort();
       return;
@@ -254,8 +309,14 @@ export default function LayoutEditor() {
     gesture = undefined;
     snapTargets = undefined;
     setGuides({});
+    // Here rather than at the pointer handlers that used to carry it: the
+    // badge is a property of a gesture being in flight, and `settle()` ends
+    // one from `blur`, from `resize` and before every discrete edit. Cleared
+    // only there, a corner resize interrupted by losing focus left a stale
+    // percentage pinned to the widget for the rest of the session.
+    setScalingKey("");
     releaseGestureCapture(completed);
-    if (!layouts[completed.key]) {
+    if (!placed[completed.key]) {
       history.abort();
       return;
     }
@@ -277,7 +338,7 @@ export default function LayoutEditor() {
   }
   /** One discrete edit — a visibility toggle, a reset — as one entry. */
   function change(component: Component, next: Layout, verb = "change") {
-    if (finishing()) return;
+    if (busy()) return;
     settle();
     history.with(
       verbFor(component, verb),
@@ -334,7 +395,7 @@ export default function LayoutEditor() {
    * this loop used to carry.
    */
   function resetAll() {
-    if (finishing()) return;
+    if (busy()) return;
     settle();
     for (const component of components())
       history.with(
@@ -345,7 +406,7 @@ export default function LayoutEditor() {
       );
   }
   function travel(direction: "undo" | "redo") {
-    if (finishing()) return;
+    if (busy()) return;
     settle();
     // The history applies the snapshot itself through the registered `restore`,
     // which routes back through `update` and so is clamped and previewed like any
@@ -357,7 +418,7 @@ export default function LayoutEditor() {
 
   // Gestures
   function grab(event: PointerEvent, component: Component, corner?: Corner) {
-    if (event.button !== 0 || finishing()) return;
+    if (event.button !== 0 || busy()) return;
     event.preventDefault();
     event.stopPropagation();
     settle();
@@ -390,7 +451,7 @@ export default function LayoutEditor() {
     (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
   }
   function onWheel(event: WheelEvent, component: Component) {
-    if (finishing() || !component.canScale) return;
+    if (busy() || !component.canScale) return;
     // Never let a notch scroll the NUI document instead of resizing the widget.
     event.preventDefault();
     event.stopPropagation();
@@ -507,7 +568,6 @@ export default function LayoutEditor() {
       flushPointerMove();
     if (panelGesture?.pointer === event.pointerId) endPanelDrag();
     if (gesture?.pointer === event.pointerId) {
-      setScalingKey("");
       endGesture();
     }
   }
@@ -522,7 +582,6 @@ export default function LayoutEditor() {
     }
     if (panelGesture?.pointer === event.pointerId) endPanelDrag();
     if (gesture?.pointer === event.pointerId) {
-      setScalingKey("");
       endGesture(true);
     }
   }
@@ -553,7 +612,7 @@ export default function LayoutEditor() {
     panelObserver.observe(element);
   }
   function startPanelDrag(event: PointerEvent) {
-    if (event.button !== 0 || !panel || finishing()) return;
+    if (event.button !== 0 || !panel || busy()) return;
     event.preventDefault();
     event.stopPropagation();
     settle();
@@ -576,7 +635,7 @@ export default function LayoutEditor() {
   }
   function movePanelWithKeys(event: KeyboardEvent) {
     const direction = arrows[event.key];
-    if (!direction || !panel || finishing()) return;
+    if (!direction || !panel || busy()) return;
     event.preventDefault();
     event.stopPropagation();
     settle();
@@ -610,7 +669,13 @@ export default function LayoutEditor() {
   function keyDown(event: KeyboardEvent) {
     if (session() === null || event.defaultPrevented) return;
     if (event.key === "Tab" && surface) {
-      const controls = [...surface.querySelectorAll<HTMLElement>("button:not(:disabled)")].filter(
+      // While the discard question is up, the cycle is the question's own two
+      // answers. Its shade is opaque and covers the panel, but Tab does not care
+      // about paint: focus walked straight through to Save, Cancel and the reset
+      // buttons behind it, and Enter then pressed one.
+      const scope =
+        (discarding() && surface.querySelector<HTMLElement>(".tlib-nui-confirm")) || surface;
+      const controls = [...scope.querySelectorAll<HTMLElement>("button:not(:disabled)")].filter(
         (control) => control.tabIndex >= 0
       );
       const at = controls.indexOf(document.activeElement as HTMLElement);
@@ -626,7 +691,7 @@ export default function LayoutEditor() {
       }
       return;
     }
-    if (finishing()) return;
+    if (busy()) return;
     /*
      * Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y are NOT handled here any more. They are a
      * registered scope — see the `createUndoScope` call in `onSettled` below —
@@ -695,7 +760,13 @@ export default function LayoutEditor() {
     untrackAll();
     setSession(null);
     setFinishing(false);
+    // The question is about a session that no longer exists. Left standing, it
+    // was still standing over the NEXT session: the watchdog closing the editor
+    // (focus loss, a dialog, a dead renderer) with the prompt up meant the next
+    // `/tlibhud` opened straight into "Discard layout changes".
+    setDiscarding(false);
     setComponents([]);
+    placed = {};
     setLayouts(() => ({}));
     setGuides({});
     setScalingKey("");
@@ -710,7 +781,10 @@ export default function LayoutEditor() {
     setFinishing(true);
     setNotice("");
     if (save) {
-      preview.retryFailed((key) => layouts[key]);
+      // The mirror, not the store: `settle()` above can have applied a frame in
+      // this very tick, and a retry that re-sends the pre-settle placement is a
+      // retry of the wrong thing.
+      preview.retryFailed((key) => placed[key]);
       preview.flush();
       // Commit waits for every preview; cancellation does not need their results.
       await preview.settle();
@@ -723,12 +797,19 @@ export default function LayoutEditor() {
     }
     const response = await fetchNui<{ ok: boolean }>("layoutFinish", { session: token, save });
     // The backend owns close/rollback. Do not silently hide a failed callback.
+    //
+    // Reached at all only when the reply beats the `layoutClose` event it is
+    // racing — two different channels, so either order is legal — and the
+    // SUCCESS half used to say "You can retry Save or Cancel", which reads as a
+    // failure for the half-second before the editor closes on its own. It says
+    // what happened instead; the buttons stay live either way, which is the
+    // valve for the game never closing us at all.
     if (session() === token) {
       setFinishing(false);
       setNotice(
         response?.ok === true
-          ? "Waiting for game confirmation. You can retry Save or Cancel."
-          : "The game did not confirm your changes. Retry Save or Cancel."
+          ? `${save ? "Saved" : "Discarded"}. Waiting for the game to close the editor…`
+          : `The game did not confirm ${save ? "your changes" : "the discard"}. Retry Save or Cancel.`
       );
     }
   }
@@ -741,9 +822,17 @@ export default function LayoutEditor() {
    * statement. Using it rather than a second `dirty` signal is deliberate — a
    * parallel flag is a thing to forget to set, and there are five call sites that
    * mutate a layout.
+   *
+   * It settles first, so the flag is read about a FINISHED edit. An open batch
+   * counts as dirty whether or not it changed anything, and one can be open
+   * here: hold an arrow key against a widget already clamped at the screen edge
+   * and press Escape, and the question appeared about a nudge that moved
+   * nothing. Settling closes that batch, `sameLayout` discards it as the no-op
+   * it was, and the session closes in one keypress like any other clean one.
    */
   function requestCancel() {
     if (session() === null || finishing()) return;
+    settle();
     if (canUndo()) {
       setDiscarding(true);
       return;
@@ -764,13 +853,15 @@ export default function LayoutEditor() {
       preview.open(data.session);
       setViewport({ width: window.innerWidth, height: window.innerHeight });
       setComponents(data.components);
-      setLayouts(
-        () =>
-          Object.fromEntries(data.components.map((c) => [c.key, { ...c.layout }])) as Record<
-            string,
-            Layout
-          >
-      );
+      const opening = () =>
+        Object.fromEntries(data.components.map((c) => [c.key, { ...c.layout }])) as Record<
+          string,
+          Layout
+        >;
+      // Seeded together, from the same source, so the first `capture()` of the
+      // session compares against what the host actually announced.
+      placed = opening();
+      setLayouts(opening);
       setSelected(data.components[0]?.key ?? "");
       setSafezone(data.safezone);
       setPanelPosition(null);
@@ -801,6 +892,7 @@ export default function LayoutEditor() {
       history.remove(data.key);
       untrackComponent(data.key);
       setComponents((all) => all.filter((c) => c.key !== data.key));
+      delete placed[data.key];
       setLayouts((draft) => {
         delete draft[data.key];
       });
@@ -850,7 +942,7 @@ export default function LayoutEditor() {
       label: "hud-layout-editor",
       depth: 1,
       history,
-      active: () => session() !== null && !finishing(),
+      active: () => session() !== null && !busy(),
       onUndo: () => travel("undo"),
       onRedo: () => travel("redo"),
     });
@@ -974,7 +1066,12 @@ export default function LayoutEditor() {
               }}
               onToggleVisible={toggleVisible}
             />
-            <p class="tlib-layout__help">Drag to move · Scroll to resize · Alt disables snapping</p>
+            {/* The arrow keys are a real gesture here — one nudge per press, 10px
+                with Shift, one undo entry for a held burst — and this line was
+                the only place in the UI that could say so. */}
+            <p class="tlib-layout__help">
+              Drag to move · Scroll to resize · Arrow keys nudge · Alt disables snapping
+            </p>
             <div class="tlib-layout__actions">
               <div class="tlib-layout__history">
                 {/*
@@ -1128,7 +1225,13 @@ export default function LayoutEditor() {
                     data-discard-answer="keep"
                     tone="primary"
                     autofocus
-                    onClick={() => setDiscarding(false)}
+                    onClick={() => {
+                      setDiscarding(false);
+                      // This button is about to be removed from the document,
+                      // which leaves focus on `<body>` — outside the editor's
+                      // own dialog. Hand it back where a grab would put it.
+                      surface?.focus({ preventScroll: true });
+                    }}
                   >
                     {/* The glyphs follow the tone, not the DOM order: the tick
                         belongs on the affirmative answer, which is now this one. */}

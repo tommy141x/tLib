@@ -5,7 +5,8 @@ local ready, pendingDialog, typing = true, false, false
 DialogExports = { isActive = function() return pendingDialog end }
 MenuInput = { isTyping = function() return typing end }
 _TLIB_IS_FIVEM = true
-Logger = { create = function() return function() end end }
+local logLines = {}
+Logger = { create = function() return function(message) logLines[#logLines + 1] = tostring(message) end end }
 Platform = {
     export = function(_, name, fn) exports[name] = fn end,
     onUIRequest = function(_, name, fn) requests[name] = fn end,
@@ -415,6 +416,28 @@ check(exports.GetHudLayout('owned').x == FACTORY.x, 'reset restores every regist
 check(writes > writesBefore and next(captured.layouts) == nil,
     'reset clears the stored layout table, including records for resources that are not running')
 check(exports.ResetHudLayout() >= 2, 'The export with no id resets everything')
+-- A reset whose KVP write fails looks fixed and comes back broken on the next load.
+-- That is the one outcome the player must not be told was a success: the command
+-- used to print "cleared the saved layout" whatever SetResourceKvp did.
+do
+    local realWrite = SetResourceKvp
+    SetResourceKvp = function() error('disk full') end
+    local before = #logLines
+    local count, stored = HudLayout.resetAll()
+    SetResourceKvp = realWrite
+    check(count >= 2 and stored == false, 'resetAll reports the write that did not land')
+    local said = table.concat(logLines, '\n', before + 1)
+    check(said:find('could NOT be cleared') == nil, 'resetAll itself stays quiet; the command reports')
+    before = #logLines
+    SetResourceKvp = function() error('disk full') end
+    commands.tlibhud(nil, { 'reset' })
+    SetResourceKvp = realWrite
+    said = table.concat(logLines, '\n', before + 1)
+    check(said:find('could NOT be cleared') ~= nil,
+        '/tlibhud reset says the saved layout survived instead of claiming it was cleared')
+    check(said:find('cleared the saved layout') == nil, 'and does not also claim success')
+    check(select('#', exports.ResetHudLayout()) == 1, 'the export still answers with exactly a count')
+end
 exports.UnregisterHudComponent('owned')
 exports.UnregisterHudComponent('kept')
 

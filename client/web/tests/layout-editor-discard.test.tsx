@@ -19,15 +19,21 @@
  * pairs were deliberately moved. A destructive confirmation is a different widget
  * answering a different question; the comment at the call site says so.
  *
- * A FINDING, not a fix
+ * A FINDING THAT IS NOW FIXED
  *
- * `requestCancel()` here is `if (canUndo()) setDiscarding(true); else finish(false)`
- * with NO settle of an in-flight gesture — unlike the shared `PropEditor`, whose
- * `isDirty()` gate is reached only after a blur has committed. It gets away with
- * it because its batches are opened and closed by pointer capture, so one is
- * never open when the prompt appears. The last test in this file pins that
- * assumption rather than asserting a settle that is not there, so the day a
- * keyboard-opened batch appears the assumption fails out loud.
+ * `requestCancel()` used to be `if (canUndo()) setDiscarding(true); else
+ * finish(false)` with NO settle of an in-flight gesture — unlike the shared
+ * `PropEditor`, whose `isDirty()` gate is reached only after a blur has
+ * committed. The note here said it got away with that because its batches are
+ * opened and closed by pointer capture, so one is never open when the prompt
+ * appears. That was WRONG about the keyboard: a held arrow key opens a batch and
+ * closes it on `keyup`, so Escape with the key still down reached the gate with
+ * one open — and an open batch counts as dirty whether or not it changed
+ * anything, so a nudge against a clamped edge asked the question about nothing.
+ *
+ * `requestCancel()` settles first now. The last test in this file still pins the
+ * consequence either way: by the time the prompt can be reached, the edit is
+ * complete, so the question is never about a no-op.
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -232,17 +238,14 @@ describe("the guard itself", () => {
     expect(container.textContent).toContain("Speedometer");
   });
 
-  test("⚠️ FINDING: the gate reads canUndo() with NO settle of an in-flight batch", async () => {
-    // Pinned as the ASSUMPTION it is, not as a behaviour anyone chose. Unlike the
-    // shared PropEditor — where the gate is reached only after a field's blur has
-    // committed — this editor asks immediately. It is correct today only because
-    // every batch here is opened and closed by pointer capture, so one is never
-    // open when the prompt appears.
+  test("the gate reads canUndo() about a SETTLED edit", async () => {
+    // `requestCancel()` settles first, so a batch left open by a still-held
+    // arrow key is closed — and discarded by `sameLayout` if it moved nothing —
+    // before the dirty flag is read.
     //
-    // This asserts the consequence that follows from that: a keyboard nudge is a
-    // COMPLETE edit by the time the prompt can be reached, so the prompt is never
-    // asking about a no-op. If a gesture that stays open across a Cancel is ever
-    // added, this goes red and the settle has to be written.
+    // This asserts the consequence: a keyboard nudge is a COMPLETE edit by the
+    // time the prompt can be reached, so the prompt is never asking about a
+    // no-op, and undoing it back to the opening state closes without a question.
     const { container } = await openEditor();
     nudge(container);
     q(container, ".tlib-layout__discard")!.click();

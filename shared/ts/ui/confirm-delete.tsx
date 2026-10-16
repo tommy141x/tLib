@@ -83,11 +83,19 @@ export const ConfirmDelete: Component<ConfirmDeleteProps> = (props) => {
   const [armed, setArmed] = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  function disarm() {
+  /**
+   * Drop the pending arm window. Safe to call from ANY phase, which is the
+   * reason it is split out from `disarm` below.
+   */
+  function clearTimer() {
     if (timer !== null) {
       clearTimeout(timer);
       timer = null;
     }
+  }
+
+  function disarm() {
+    clearTimer();
     setArmed(false);
   }
 
@@ -105,7 +113,24 @@ export const ConfirmDelete: Component<ConfirmDeleteProps> = (props) => {
     timer = setTimeout(disarm, props.timeoutMs ?? CONFIRM_DELETE_TIMEOUT_MS);
   }
 
-  onCleanup(disarm);
+  /*
+   * ⚠️ `clearTimer`, NOT `disarm`. Disposal must not write a signal.
+   *
+   * `onCleanup(disarm)` called `setArmed(false)` from inside the disposal pass,
+   * which Solid 2 rejects with [REACTIVE_WRITE_IN_OWNED_SCOPE] — and it throws
+   * rather than warning. Because disposal runs *during* the render that unmounts
+   * the row, the throw propagates to the host's error boundary: in tELS,
+   * deleting a trigger rule removed the rule and then replaced the ENTIRE editor
+   * with the boundary's fallback. Measured in a browser, not reasoned about.
+   * Every consumer of this control had it, on every unmount — a row delete, a
+   * tab switch away, closing the panel.
+   *
+   * Clearing the timeout is the whole job here anyway: the component is going
+   * away, so there is nothing for `armed` to be read by, while a live timer
+   * firing into a disposed scope is the actual leak (see `handleClick`, which
+   * still disarms for real because it runs while mounted).
+   */
+  onCleanup(clearTimer);
 
   const tip = () => (armed() ? (props.armedTitle ?? ARMED_TITLE) : (props.title ?? IDLE_TITLE));
 
@@ -140,7 +165,7 @@ export const ConfirmDelete: Component<ConfirmDeleteProps> = (props) => {
           disabled={props.disabled}
           data-armed={armed() ? "" : undefined}
           class={cn(
-            "transition-colors shrink-0 rounded-sm",
+            "shrink-0 rounded-sm", // no transition: one of these per list row
             FOCUS_RING,
             armed() ? "text-destructive" : "text-muted-foreground hover:text-destructive/60",
             props.class

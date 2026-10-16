@@ -137,11 +137,16 @@ local function resetLayouts(only)
     else
         saved = {}
     end
-    writeLayouts(saved)
+    -- The second return value is whether the KVP record actually went to disk. The
+    -- in-memory reset has already happened either way and the consumers below are
+    -- about to be told 'commit', so a failed write means the widget looks fixed now
+    -- and comes back broken on the next load -- the one thing the player must not be
+    -- told is that it was cleared.
+    local persisted = writeLayouts(saved)
     -- 'commit' and not 'restore': a consumer that keeps its own store has to be
     -- told to write this down, or its own bad record wins again on the next load.
     for _, component in ipairs(touched) do notify(component, 'commit') end
-    return #touched
+    return #touched, persisted
 end
 function H.resetAll() return resetLayouts(nil) end
 
@@ -331,10 +336,13 @@ function H.init(webui)
     Platform.export('tLib', 'ResetHudLayout', function(id)
         -- No owner check: this is the recovery path, and refusing to un-break a
         -- HUD because the caller could not be identified helps nobody.
+        -- Parenthesised: the export's documented answer is a count, and resetLayouts
+        -- also returns whether the write landed. Forwarding both would change this
+        -- export's arity for every consumer already calling it.
         local name = owner()
-        if id == nil then return resetLayouts(nil) end
+        if id == nil then return (resetLayouts(nil)) end
         if not name or not S.id(id) then return 0 end
-        return resetLayouts({ [name .. ':' .. id] = true })
+        return (resetLayouts({ [name .. ':' .. id] = true }))
     end)
     Platform.export('tLib', 'CloseHudEditor', function()
         local name = owner()
@@ -404,8 +412,13 @@ function H.init(webui)
             -- The unbrick command. Works with the editor shut, with the editor
             -- wedged open, and with every widget dragged off the screen.
             if action == 'reset' then
-                local count = resetLayouts(nil)
-                log(('Reset %d HUD component(s) to their default placement and cleared the saved layout.'):format(count), 3)
+                local count, persisted = resetLayouts(nil)
+                if persisted then
+                    log(('Reset %d HUD component(s) to their default placement and cleared the saved layout.'):format(count), 3)
+                else
+                    log(('Reset %d HUD component(s) for this session, but the saved layout could NOT be cleared -- '
+                        .. 'the old placement will come back on the next load. See the error above.'):format(count), 2)
+                end
                 return
             end
             if action and action ~= 'demo' and action ~= 'open' then

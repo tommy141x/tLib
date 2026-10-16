@@ -90,6 +90,23 @@ export function isHudControl(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest(HUD_CONTROL_SELECTOR) !== null;
 }
 
+/**
+ * How far the pointer must travel before a press becomes a drag.
+ *
+ * Not cosmetic slop. A press and release on the background with no travel is a
+ * CLICK, and committing one writes a placement: `onCommit` is a KVP write and a
+ * `commit` notification in tLib, so a player tapping the chassis of their remote
+ * re-saved its position every time. A zero-delta `pointermove` is routine —
+ * pressure and tilt changes emit one, and CEF emits one on button-down — so
+ * `moved` could not be "a pointermove arrived".
+ *
+ * Measured from the pointerdown, like everything else here, so crossing the
+ * threshold hands the surface the WHOLE delta rather than rebasing: the widget
+ * stays exactly under the cursor afterwards, which `movementX` accumulation and
+ * a rebased origin both give up.
+ */
+const DRAG_THRESHOLD = 3;
+
 export interface HudDragMetrics extends Extents {
   layout: Layout;
 }
@@ -98,7 +115,13 @@ export interface HudDragOptions {
   surface: () => HTMLElement | null | undefined;
   /** Size and current placement. Read ONCE per gesture, at pointerdown. */
   metrics: () => HudDragMetrics | undefined;
-  /** Whether a background press may start a drag right now (open AND focused). */
+  /**
+   * Whether a background press may start a drag right now (open AND focused).
+   *
+   * Asked on every move and again on release, not only at pointerdown, so it
+   * has to stay cheap — and a gesture in flight when it goes false is abandoned
+   * rather than committed.
+   */
   enabled: () => boolean;
   /** Clamped placement, at most once per animation frame. */
   onPreview: (layout: Layout) => void;
@@ -183,7 +206,16 @@ export function attachHudDrag(options: HudDragOptions): () => void {
   }
 
   function down(event: PointerEvent) {
-    if (event.button !== 0 || gesture || !options.enabled()) return;
+    if (event.button !== 0 || !options.enabled()) return;
+    // A gesture still open on THIS pointer id cannot be a live one: a pointer
+    // cannot go down twice without going up, so its `pointerup` was lost — the
+    // window was never focused for it, or the browser swallowed it outside the
+    // page. Abandoning it here is what stops one lost release from wedging the
+    // surface permanently; a DIFFERENT id is a second finger and is ignored.
+    if (gesture) {
+      if (gesture.pointer !== event.pointerId) return;
+      lost();
+    }
     const element = options.surface();
     const metrics = options.metrics();
     if (!element || !metrics) return;
@@ -211,8 +243,21 @@ export function attachHudDrag(options: HudDragOptions): () => void {
     element.setPointerCapture?.(event.pointerId);
   }
   function move(event: PointerEvent) {
-    if (!gesture || gesture.pointer !== event.pointerId) return;
-    gesture.moved = true;
+    const held = gesture;
+    if (!held || held.pointer !== event.pointerId) return;
+    // Re-checked every move, not only at pointerdown. The gate going false
+    // mid-gesture means the surface stopped being draggable while the button was
+    // held — its UI closed, it lost focus, or the shared layout editor took the
+    // component over — and committing after that writes a placement the player
+    // can no longer see. `onCancel` is exactly the "drop the preview, keep the
+    // old placement" answer that wants.
+    if (!options.enabled()) return lost();
+    if (!held.moved) {
+      const dx = event.clientX - held.x,
+        dy = event.clientY - held.y;
+      if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+      held.moved = true;
+    }
     pending = { x: event.clientX, y: event.clientY };
     queue();
   }
@@ -225,7 +270,10 @@ export function attachHudDrag(options: HudDragOptions): () => void {
     const placed = latest;
     latest = undefined;
     // A press that never moved is not a drag, and must not write a placement.
-    if (!held.moved || !placed) return options.onCancel?.();
+    // Nor may a gesture whose surface stopped being draggable while the pointer
+    // was held STILL — the move handler cannot catch that one, because catching
+    // it there needs a move.
+    if (!held.moved || !placed || !options.enabled()) return options.onCancel?.();
     options.onCommit(reanchor(held.extents, placed, held.viewport));
   }
   function cancel(event: PointerEvent) {
@@ -253,6 +301,12 @@ export function attachHudDrag(options: HudDragOptions): () => void {
   window.addEventListener("pointerup", up);
   window.addEventListener("pointercancel", cancel);
   window.addEventListener("blur", lost);
+  // The rect, the extents and the viewport are all captured ONCE per gesture, so
+  // a viewport that changes under a held pointer makes every remaining frame of
+  // the drag a placement against a screen that no longer exists. Abandoning is
+  // the honest answer: the caller keeps the placement it had, which the resize
+  // itself re-clamps, instead of committing one measured in stale pixels.
+  window.addEventListener("resize", lost);
   return () => {
     lost();
     window.removeEventListener("pointerdown", down, true);
@@ -260,5 +314,6 @@ export function attachHudDrag(options: HudDragOptions): () => void {
     window.removeEventListener("pointerup", up);
     window.removeEventListener("pointercancel", cancel);
     window.removeEventListener("blur", lost);
+    window.removeEventListener("resize", lost);
   };
 }

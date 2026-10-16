@@ -482,6 +482,113 @@ test("a press that never moves is a click, not a drag", () => {
   s.detach();
 });
 
+test("a press that twitches below the threshold is still a click", () => {
+  // A zero-delta `pointermove` is routine (pressure, tilt, CEF's own on
+  // button-down) and so is a 1-2px twitch during a click, so "a pointermove
+  // arrived" cannot be what makes a press a drag: every tap on the chassis
+  // would re-commit the placement, which in tLib is a KVP write.
+  for (const [dx, dy] of [
+    [0, 0],
+    [2, 0],
+    [0, -2],
+    [2, 2],
+  ]) {
+    const s = surface();
+    down(s.chassis, 900, 500);
+    move(900 + dx, 500 + dy);
+    expect(vsync()).toBe(0);
+    up();
+    expect(s.previews.length).toBe(0);
+    expect(s.commits.length).toBe(0);
+    expect(s.cancels).toBe(1);
+    expect(s.layout).toEqual(START);
+    s.detach();
+  }
+});
+
+test("crossing the threshold hands over the WHOLE delta, not the remainder", () => {
+  // Rebasing to the crossing point would leave the surface lagging the cursor
+  // by the threshold for the rest of the gesture, which is the one thing this
+  // module exists to guarantee it never does.
+  const s = surface();
+  const before = layoutRect(REMOTE, START, s.viewport);
+  down(s.chassis, 900, 500);
+  move(904, 500);
+  vsync();
+  up();
+  const after = layoutRect(REMOTE, s.layout, s.viewport);
+  expect(after.left - before.left).toBeCloseTo(4, 6);
+  expect(s.commits.length).toBe(1);
+  s.detach();
+});
+
+test("the gate going false mid-drag abandons instead of committing", () => {
+  const s = surface();
+  down(s.chassis, 900, 500);
+  move(1000, 560);
+  vsync();
+  expect(s.previews.length).toBe(1);
+  // The device UI closed, lost focus, or the shared editor took the component
+  // over while the button was still held.
+  s.enabled = false;
+  move(1100, 600);
+  expect(vsync()).toBe(0);
+  up();
+  expect(s.commits.length).toBe(0);
+  expect(s.cancels).toBe(1);
+  s.detach();
+});
+
+test("the gate going false with the pointer held STILL also abandons", () => {
+  // No `pointermove` arrives after the gate closes, so the move handler never
+  // runs and the release is the only place left to notice.
+  const s = surface();
+  down(s.chassis, 900, 500);
+  move(1000, 560);
+  vsync();
+  s.enabled = false;
+  up();
+  expect(s.commits.length).toBe(0);
+  expect(s.cancels).toBe(1);
+  s.detach();
+});
+
+test("a lost pointerup does not wedge the surface for every later press", () => {
+  const s = surface();
+  down(s.chassis, 900, 500);
+  move(1000, 500);
+  vsync();
+  // No `up`, no `pointercancel`, no `blur`: the release happened somewhere this
+  // document never saw it. The gesture is still open, and before this was
+  // handled every subsequent press was discarded as "already dragging".
+  down(s.chassis, 300, 300);
+  expect(s.cancels).toBe(1);
+  // Measured from where the surface is NOW, which is what the second gesture
+  // captured: the host dropped the abandoned preview, this harness keeps it.
+  const resumed = layoutRect(REMOTE, s.layout, s.viewport);
+  move(360, 300);
+  vsync();
+  up();
+  expect(s.commits.length).toBe(1);
+  const after = layoutRect(REMOTE, s.layout, s.viewport);
+  expect(after.left - resumed.left).toBeCloseTo(60, 6);
+  s.detach();
+});
+
+test("a viewport change under a held pointer abandons the drag", () => {
+  const s = surface();
+  down(s.chassis, 900, 500);
+  move(1000, 560);
+  vsync();
+  fire("resize", {});
+  move(1100, 600);
+  expect(vsync()).toBe(0);
+  up();
+  expect(s.commits.length).toBe(0);
+  expect(s.cancels).toBe(1);
+  s.detach();
+});
+
 test("pointercancel discards the gesture and the frame it had queued", () => {
   const s = surface();
   down(s.chassis, 900, 500);

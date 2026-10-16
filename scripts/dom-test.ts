@@ -33,9 +33,21 @@ const WEB = resolve(ROOT, "client", "web");
 /**
  * The suite may not shrink below this many passing tests.
  *
- * MEASURED, not a target: 112 is what `client/web/tests` reports today (8
+ * MEASURED, not a target: 122 is what `client/web/tests` reports today (8
  * harness + 16 undo-redo + 16 undo-keys + 23 prop-editor guard + 9
- * layout-editor + 9 lucide-spread-arity + 31 export-badge).
+ * layout-editor-discard + 7 layout-editor-dirty + 9 lucide-spread-arity +
+ * 31 export-badge + 3 confirm-delete-unmount).
+ *
+ * RE-MEASURED 2026-10-15 when `confirm-delete-unmount.test.tsx` landed with the
+ * ConfirmDelete disposal fix: 3 tests, which is now the smallest file here and
+ * so the margin the floor is allowed. That file is also worth reading before
+ * trusting this suite with anything about reactive-write errors — Solid 2's
+ * [REACTIVE_WRITE_IN_OWNED_SCOPE] guard is DEV-ONLY and is not live here, which
+ * was measured by probe, so a `not.toThrow()` on that class of defect passes
+ * against the bug.
+ *
+ * RE-MEASURED 2026-10-15 when `layout-editor-dirty.test.tsx` landed with the
+ * synchronous placement mirror: 7 tests.
  *
  * RE-MEASURED 2026-10-07 TWICE. First when `lucide-spread-arity.test.tsx`
  * landed and `layout-editor-discard.test.tsx` dropped its `lucide-solid` stub:
@@ -46,12 +58,12 @@ const WEB = resolve(ROOT, "client", "web");
  *
  * A floor rather than an equality, so adding tests is not a chore — but it has
  * to stay high enough that a whole FILE going empty cannot slip under it. The
- * smallest file here carries 8, so a floor 8 below the real count is the
+ * smallest file here carries 7, so a floor 7 below the real count is the
  * loosest it may be. A stale floor is not a conservative floor: tELS left
  * one at 209 while its suite grew to 398, which had quietly disarmed it.
  * Re-measure when you add a batch.
  */
-const DEFAULT_MINIMUM_TESTS = 104;
+const DEFAULT_MINIMUM_TESTS = 115;
 
 const raw = process.env.TLIB_DOM_TEST_MIN;
 let MINIMUM_TESTS = DEFAULT_MINIMUM_TESTS;
