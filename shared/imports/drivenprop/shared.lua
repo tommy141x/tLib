@@ -28,7 +28,7 @@ DrivenProp.SCALE_EPSILON = 1e-4
 --- A usable uniform scale, always. Everything unusable lands on 1.0, NOT on
 --- SCALE_MIN: nil, NaN, infinity, zero and a negative all mean "no scale was
 --- supplied", not "as small as possible". Mirrors `clampUniformScale` in
---- shared/ts/gizmo/types.ts.
+--- internal/shared-ts/gizmo/types.ts.
 --- @param value any
 --- @return number
 function DrivenProp.normaliseScale(value)

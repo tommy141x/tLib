@@ -2,7 +2,7 @@
 
 # tLib
 
-A shared utility library for FiveM resources. Provides a UI component suite (menus, dialogs, toasts, themes), 40 reusable Lua import modules (access, permission, config, KVP, settings, platform, and more), and TypeScript/NUI utilities (3D gizmo, undo system, coordinate helpers) that other resources can depend on.
+A shared utility library for FiveM resources. Provides a UI component suite (menus, dialogs, toasts, themes), 40 reusable Lua import modules (access, permission, config, KVP, settings, platform, and more), and TypeScript/NUI utilities (undo system, coordinate helpers) that other resources can depend on.
 
 FiveM is the only supported runtime. Everything goes through an internal `Platform`
 adapter, so a second runtime could be added without touching the subsystems above it.
@@ -502,13 +502,6 @@ author. The installer reads a sound module and writes only its audio.
 ## TypeScript / NUI Utilities
 
 tLib ships a set of TypeScript modules (`@tlib/shared`) for use in resource NUI frontends.
-
-### Gizmo (`@tlib/shared/gizmo`)
-
-A Three.js–based 3D editor gizmo for translate, rotate, and scale operations. Used to position objects in world/local space within a web editor.
-
-- `GizmoScene` — Main class. Accepts a `GizmoSceneConfig` with options for `scale`, `picking`, `multiSelect`, and `snap` (LED-to-LED edge snapping).
-- `buildVehicleQuat`, `fivemWorldToLocal`, `fivemLocalToWorld` — Vehicle matrix math utilities for syncing the Three.js scene to in-game vehicle state.
 
 ### Undo (`@tlib/shared/undo`)
 

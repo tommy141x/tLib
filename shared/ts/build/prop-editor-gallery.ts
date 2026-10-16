@@ -4,7 +4,7 @@
  *
  * Why this is shared
  *
- * `@tlib/shared/prop-editor` is one component mounted by three resources, and its
+ * `@tlib/internal/prop-editor` is one component mounted by three resources, and its
  * chrome is drawn entirely from token NAMES (`bg-card`, `text-muted-foreground`,
  * `--radius`). The VALUES behind those names are per-resource — tRadio declares
  * its own set on `.radio-settings-root`, tRadar and tDetector inherit tLib's from
@@ -86,7 +86,7 @@ export interface PropEditorGalleryInit {
   cameraFov: number;
 }
 
-/** `fivemLocalToWorld`, from `shared/ts/gizmo/vehicle-math.ts`. */
+/** `fivemLocalToWorld`, from `internal/shared-ts/gizmo/vehicle-math.ts`. */
 function localToWorld(lx: number, ly: number, lz: number) {
   const m = GALLERY_VEHICLE_MATRIX;
   return {

@@ -43,8 +43,6 @@
     "marketplace/**/*.tsx",
     "nui-kit/**/*.ts",
     "nui-kit/**/*.tsx",
-    "prop-editor/**/*.ts",
-    "prop-editor/**/*.tsx",
     "ui/**/*.ts",
     "ui/**/*.tsx",
     // Not optional. `telemetry/` was reachable
@@ -55,17 +53,15 @@
     // exported five symbols that no longer existed. A pass over a file set that
     // does not contain the code is worse than no pass: it is a green light.
     "telemetry/**/*.ts",
-    // Added for the same reason the telemetry note above describes. These nine
+    // Added for the same reason the telemetry note above describes. These seven
     // directories were covered by nothing: a comment pass broke block
     // delimiters in deck/card.ts, deck/strip.ts and build/deck-pack.ts and this
     // config reported EXIT 0 on all three. Only biome's parse stage found them.
     "assets/**/*.ts",
     "audio/**/*.ts",
     "build/**/*.ts",
-    "audio3d/**/*.ts",
     "deck/**/*.ts",
     "fs/**/*.ts",
-    "gizmo/**/*.ts",
     "modules/**/*.ts",
     "secrets/**/*.ts",
     "cn.ts"

@@ -156,7 +156,13 @@ function resolveFromWeb(specifier: string): string {
   }
 }
 
-const FIRST_PARTY_SHARED = /[\\/]shared[\\/]ts[\\/]/;
+// Both halves of the shared TypeScript: the published `shared/ts/` and the
+// estate-only `internal/shared-ts/`, which is where the prop editor lives. A
+// pattern matching only the first left PropEditor.tsx undeduped the moment it
+// moved, and the symptom was not a second Solid — it was
+// `Cannot find module '@solid-primitives/utils'` out of
+// `internal/shared-ts/node_modules`, which reads as a broken install.
+const FIRST_PARTY_SHARED = /[\\/](?:shared[\\/]ts|internal[\\/]shared-ts)[\\/]/;
 const EXCLUDED_FROM_DEDUPE = /[\\/](?:node_modules|solid-compat)[\\/]/;
 
 let dedupedFiles = 0;

@@ -18,7 +18,7 @@ import {
   KEY_COMMANDS,
   NUMPAD_COMMANDS,
   NUMPAD_CTRL_COMMANDS,
-} from "../../shared/ts/prop-editor/numpad";
+} from "../../internal/shared-ts/prop-editor/numpad";
 
 const key = (code: string) => getNumpadKey({ code });
 

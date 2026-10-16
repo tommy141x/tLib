@@ -23,7 +23,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { PropData } from "../../shared/ts/prop-editor/types";
+import type { PropData } from "../../internal/shared-ts/prop-editor/types";
 import {
   fieldUndoLabel,
   GIZMO_UNDO_LABEL,
@@ -31,7 +31,7 @@ import {
   propTransformUndoable,
   sameTransform,
   transformMessages,
-} from "../../shared/ts/prop-editor/undo";
+} from "../../internal/shared-ts/prop-editor/undo";
 import { UndoHistory } from "../../shared/ts/undo";
 
 const ORIGIN: PropData = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, scale: 1 };

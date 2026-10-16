@@ -35,7 +35,7 @@ export interface Defect {
 
 export const DEFECTS: Record<string, Defect> = {
   "ungated-cancel": {
-    file: "shared/ts/prop-editor/PropEditor.tsx",
+    file: "internal/shared-ts/prop-editor/PropEditor.tsx",
     find: "if (history.isDirty()) {",
     replace: "if (false) {",
     count: 1,
@@ -49,7 +49,7 @@ export const DEFECTS: Record<string, Defect> = {
     ],
   },
   "escape-cannot-dismiss": {
-    file: "shared/ts/prop-editor/PropEditor.tsx",
+    file: "internal/shared-ts/prop-editor/PropEditor.tsx",
     find: "        setDiscarding(false);\n        return true;",
     replace: "        return true;",
     count: 1,
@@ -58,7 +58,7 @@ export const DEFECTS: Record<string, Defect> = {
     reddens: ["onInternal dismisses the prompt before the escape layer can act"],
   },
   "no-keep-focus": {
-    file: "shared/ts/prop-editor/PropEditor.tsx",
+    file: "internal/shared-ts/prop-editor/PropEditor.tsx",
     find: "ref={(el: HTMLButtonElement) => queueMicrotask(() => el.focus())}",
     replace: "ref={(_el: HTMLButtonElement) => void 0}",
     count: 1,
@@ -67,7 +67,7 @@ export const DEFECTS: Record<string, Defect> = {
     reddens: ["focus lands on Keep editing, not on the destructive answer"],
   },
   "undo-depth-zero": {
-    file: "shared/ts/prop-editor/PropEditor.tsx",
+    file: "internal/shared-ts/prop-editor/PropEditor.tsx",
     find: "      depth: 1,\n      history,",
     replace: "      depth: 0,\n      history,",
     count: 1,
@@ -79,7 +79,7 @@ export const DEFECTS: Record<string, Defect> = {
     reddens: ["depth 1 holds even when the host registers its scope LAST"],
   },
   "no-blur-commit": {
-    file: "shared/ts/prop-editor/PropEditor.tsx",
+    file: "internal/shared-ts/prop-editor/PropEditor.tsx",
     find: "onCommit={() => history.commit()}",
     replace: "onCommit={undefined}",
     count: 3,
@@ -158,7 +158,7 @@ export const DEFECTS: Record<string, Defect> = {
    *  THROW -- otherwise "every defect reddened something" is not evidence the
    *  patcher fired at all. */
   "drill-cannot-match": {
-    file: "shared/ts/prop-editor/PropEditor.tsx",
+    file: "internal/shared-ts/prop-editor/PropEditor.tsx",
     find: "this string is not in the file",
     replace: "nor is this",
     count: 1,

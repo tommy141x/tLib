@@ -35,7 +35,8 @@
     "test:dom:control": "bun run scripts/dom-control.ts",
     "test:lua:control": "bun run scripts/framerelay-control.ts && bun run scripts/runtimetxd-control.ts && bun run scripts/primitives-control.ts",
     "typecheck": "bunx tsc --noEmit -p client/web/tsconfig.json",
-    "typecheck:shared": "cd shared/ts && bunx tsc --noEmit -p tsconfig.json && bunx tsc --noEmit -p rage/tsconfig.json && bunx tsc --noEmit -p rage-viewer/tsconfig.json",
+    "typecheck:shared": "cd shared/ts && bunx tsc --noEmit -p tsconfig.json",
+    "typecheck:internal": "bun -e \"if (!(await Bun.file('internal/shared-ts/package.json').exists())) { console.log('typecheck:internal: SKIPPED — no internal/ in this tree, which is a published clone of tLib.'); process.exit(0); } process.exit(Bun.spawnSync(['bun','run','typecheck'],{cwd:'internal/shared-ts',stdout:'inherit',stderr:'inherit'}).exitCode ?? 1)\"",
     "typecheck:server": "bunx tsc --noEmit -p server/tsconfig.json",
     "check:imports": "bun run scripts/check-relative-imports.ts",
     "check:classes": "cd client/web && bun run check:classes",
@@ -52,7 +53,7 @@
     "probe:escape": "bun run scripts/probe-escape-layer.ts",
     "probe:focus": "bun run scripts/probe-focus-paint.ts",
     "probe:preview": "bun run scripts/probe-marketplace-preview.ts",
-    "check:regression": "bun run typecheck && bun run typecheck:shared && bun run typecheck:server && bun run check:imports && bun run check:classes && bun run check:classes:control && bun run check:boolattr && bun run check:runtime-state && bun run check:runtime-state:control && bun run check:deadfiles && bun run check:deadfiles:control && bun run check:comments && bun run check:comments:control && bun run secrets:provision:check && bun run secrets:control && bun run test && bun run test:dom && bun run test:dom:control && bun run test:lua && bun run test:lua:control",
+    "check:regression": "bun run typecheck && bun run typecheck:shared && bun run typecheck:internal && bun run typecheck:server && bun run check:imports && bun run check:classes && bun run check:classes:control && bun run check:boolattr && bun run check:runtime-state && bun run check:runtime-state:control && bun run check:deadfiles && bun run check:deadfiles:control && bun run check:comments && bun run check:comments:control && bun run secrets:provision:check && bun run secrets:control && bun run test && bun run test:dom && bun run test:dom:control && bun run test:lua && bun run test:lua:control",
     "verify": "bun run secrets:check && bun run lint && bun run check:regression && bun run build"
   },
   "dependencies": {

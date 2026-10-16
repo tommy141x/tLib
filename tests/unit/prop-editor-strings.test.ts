@@ -10,8 +10,8 @@ import { describe, expect, test } from "bun:test";
 import {
   DEFAULT_PROP_EDITOR_STRINGS,
   makePropEditorTranslator,
-} from "../../shared/ts/prop-editor/strings";
-import type { PropEditorStringKey } from "../../shared/ts/prop-editor/types";
+} from "../../internal/shared-ts/prop-editor/strings";
+import type { PropEditorStringKey } from "../../internal/shared-ts/prop-editor/types";
 
 describe("prop editor strings", () => {
   test("every key has a non-empty English default", () => {

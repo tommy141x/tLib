@@ -1,7 +1,7 @@
 --[[
     tlib.audio3d — the transport half of positional device audio (SERVER).
 
-    Its NUI half is tLib/shared/ts/audio3d. This side answers one question and
+    Its NUI half is tLib/internal/shared-ts/audio3d. This side answers one question and
     nothing else: WHO is close enough to be told that a device made a noise.
 
     ## The emitter is the vehicle

@@ -3,7 +3,7 @@
 
     Receives what the server fanned out, resolves where each emitter actually is
     from this client's own copy of the world, and feeds the NUI half
-    (tLib/shared/ts/audio3d) one batched frame per tick.
+    (tLib/internal/shared-ts/audio3d) one batched frame per tick.
 
     ## Positions are resolved here, not streamed
 

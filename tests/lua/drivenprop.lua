@@ -290,7 +290,7 @@ test('normaliseScale: zero, negative and infinity are NOT SUPPLIED, not SMALLEST
     -- They resolve to 1.0, not to SCALE_MIN. A corrupt or hostile record must
     -- render as a normal-sized prop, not as one shrunk to a tenth — which is a
     -- worse failure and a far more confusing one to diagnose. This also has to
-    -- agree exactly with `clampUniformScale` in shared/ts/gizmo/types.ts, which
+    -- agree exactly with `clampUniformScale` in internal/shared-ts/gizmo/types.ts, which
     -- is the same rule on the NUI side.
     near(DP.normaliseScale(0), 1.0)
     near(DP.normaliseScale(-0.0001), 1.0)

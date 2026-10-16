@@ -11,7 +11,7 @@
  * ## The prop editor is the odd one out, and deliberately so
  *
  * Every other surface here is drawn by tLib's OWN bundle, so one bundle photographs all
- * of them. `@tlib/shared/prop-editor` is not in tLib's NUI at all — tLib ships the
+ * of them. `@tlib/internal/prop-editor` is not in tLib's NUI at all — tLib ships the
  * component, tRadio, tRadar and tDetector mount it — and its whole appearance comes from
  * token NAMES whose VALUES are per-resource (tRadio scopes its own set to
  * `.radio-settings-root`; the other two inherit tLib's `theme-tokens.css` from `:root`).
@@ -63,7 +63,7 @@ const SURFACES = ["menu", "dialog", "toast", "marketplace", "layout", "propedito
 type Surface = (typeof SURFACES)[number];
 
 /**
- * The resources that mount `@tlib/shared/prop-editor`, and where each puts the shots.
+ * The resources that mount `@tlib/internal/prop-editor`, and where each puts the shots.
  *
  * Sibling directories of tLib, which is how every resource in `[tScripts]` already
  * reaches the others (`tRadar/scripts/gallery.ts` imports `../../tLib/...`). A host that

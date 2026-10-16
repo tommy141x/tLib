@@ -14,7 +14,7 @@
 //      named there and imported by nothing in this estate; a graph-only gate
 //      called all five dead.
 //   2. scripts/public-entries.json — the measured record of deep paths
-//      consumers import by relative path outside that map. 115 of them:
+//      consumers import by relative path outside that map. 83 of them:
 //      build/*, fs/server, secrets/release, audio/wav, telemetry/*, every ui/*.
 //   3. The import graph, through relative specifiers, `@tlib/shared/*`, `@/*`.
 //   4. Paths written as STRINGS rather than imported — the ui_page html's
@@ -62,8 +62,6 @@ const LOCAL_ENTRY_GLOBS = [
 	/^tests\/browser\/[^/]+\.ts$/,
 	/\.d\.ts$/,
 	/\.test\.(ts|tsx)$/,
-	/^shared\/ts\/rage\/scripts\//,
-	/^shared\/ts\/rage-viewer\/scripts\//,
 ];
 
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];

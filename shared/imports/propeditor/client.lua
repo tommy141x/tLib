@@ -326,7 +326,7 @@ local function alwaysTrue() return true end
 
 --- English text for every string the shared chrome can show. The Lua half only
 --- needs the two it says out loud; the other 36 belong to the TSX half and live
---- in `tLib/shared/ts/prop-editor/strings.ts`.
+--- in `tLib/internal/shared-ts/prop-editor/strings.ts`.
 local DEFAULT_STRINGS = {
     not_in_vehicle = '~y~You must be in a vehicle to open the prop editor.~w~',
     model_load_failed = '~r~Failed to load the prop model.~w~',

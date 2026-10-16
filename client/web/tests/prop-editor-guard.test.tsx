@@ -44,7 +44,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { cleanup, render } from "@solidjs/testing-library";
 import { flush } from "solid-js";
-import { closePropEditor, propEditorState } from "../../../shared/ts/prop-editor/store";
+import { closePropEditor, propEditorState } from "../../../internal/shared-ts/prop-editor/store";
 import { UndoHistory } from "../../../shared/ts/undo";
 import { createUndoScope, undoKeyDiagnostics } from "../../../shared/ts/undo-keys";
 
@@ -52,10 +52,10 @@ import { createUndoScope, undoKeyDiagnostics } from "../../../shared/ts/undo-key
 // imports it with a top-level `await import` below rather than a static import:
 // `mock.module` registers an override in the module registry, and a static
 // import of `PropEditor` would already have pulled the real viewport in.
-mock.module("../../../shared/ts/prop-editor/PropEditorViewport", () => ({
+mock.module("../../../internal/shared-ts/prop-editor/PropEditorViewport", () => ({
   PropEditorViewport: () => null,
 }));
-const { PropEditor } = await import("../../../shared/ts/prop-editor/PropEditor");
+const { PropEditor } = await import("../../../internal/shared-ts/prop-editor/PropEditor");
 
 const PREFIX = "tlibtest";
 /** The editor namespaces everything it sends; a bare name would never match. */
