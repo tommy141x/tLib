@@ -1346,7 +1346,10 @@ server-side installed-sound registry.
 | `marketplace.provide(resource, layoutNames, soundEntries, opts)` | The same payload into a tab of a dialog you already opened. Takes no focus. |
 | `marketplace.baseUrl()` | The studio API host. Re-read per call, so `tlib_api_base_url` needs no rejoin. |
 
-`opts` carries `initialTab` (`uis` or `sounds`), `previewFn` and `previewState`.
+`opts` carries `initialTab` (`uis` or `sounds`), `previewFn`, `previewState` and
+`panelPreviewUrl` — the URL of a dispatch-panel preview page, which lets a `theme`
+item be shown on the real panel instead of as a swatch strip. Only tRadio publishes
+one; omit it and a theme falls back to its screenshot and colours.
 
 <Callout type="warning">
   **The third argument is sounds, and `installedSlugs` carries sounds only.** A layout's
@@ -1419,7 +1422,9 @@ is dispatched into a page that has not loaded.
 
 Definitions survive a tLib restart — register once and do not re-register on
 `onClientResourceStart`. A registration made while tLib is stopped is cached and installed
-when it returns.
+when it returns. So is one tLib **refuses**: it will not register a component while the HUD
+editor is open, and the bridge retries for a minute rather than dropping the definition, so a
+resource that starts while a player is positioning their HUD still gets its widget.
 
 When tLib stops you receive the last **committed** geometry with `phase = 'rollback'` and
 `editing = false`. Handle that phase, or a stop mid-edit leaves your widget showing a

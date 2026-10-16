@@ -351,6 +351,11 @@ and on the same screen, as everyone else's:
 the editor is one transaction over every component, and **Cancel** would discard your write
 along with the rest. Handle that refusal; do not retry in a loop.
 
+`RegisterHudComponent` is refused the same way, for the same reason, and that one you do have
+to come back from: a resource that starts while a player is positioning their HUD would
+otherwise never register at all. Keep the definition and try again when the editor closes, or
+register through `@tLib/shared/imports/hud/client.lua`, which does that for you.
+
 For a `persist` component the record is written before your `fn` is called, so a `true` means
 the position survives a reload.
 
@@ -441,7 +446,7 @@ publishes.
 | Export | Side | Description |
 | --- | --- | --- |
 | `RegisterMarketplaceType(kind, opts)` | Server | Declare a content type this resource provides. |
-| `OpenMarketplace(opts)` | Client | Open the standalone panel. `{ type = 'ui-radio' }` filters it on open. |
+| `OpenMarketplace(opts)` | Client | Open the standalone panel. `{ resource = 'tRadio' }` scopes it to one product; `{ initialTab = 'sounds' }` picks the tab. |
 | `ProvideMarketplaceData(opts)` | Client | Same payload, no modal: feeds a marketplace tab inside a dialog you already opened. |
 | `CloseMarketplace()` | Client | Close the standalone panel. |
 
