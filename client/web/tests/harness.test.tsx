@@ -16,6 +16,11 @@ import { cleanup, render } from "@solidjs/testing-library";
 import { createSignal, flush } from "solid-js";
 import { UndoHistory } from "../../../shared/ts/undo";
 import { undoKeyDiagnostics } from "../../../shared/ts/undo-keys";
+// The subjects of the two rewrite-counter cases below, named here rather than
+// borrowed from whichever file happened to load first. Both are in the
+// PUBLISHED half deliberately -- see the note on those cases.
+import { NuiButton } from "../../../shared/ts/nui-kit/NuiButton";
+import { Anchor } from "lucide-solid";
 
 // One case below needs a component from a SECOND package tree with its own
 // node_modules, which is the whole point of it -- that is the arrangement the
@@ -95,10 +100,28 @@ describe("the module graph is production's", () => {
     // A rewrite that matches nothing is indistinguishable from one that works:
     // reactivity still functions with two copies of solid-js, so the suites stay
     // green while every `onCleanup` silently does nothing.
+    //
+    // The subject is rendered HERE rather than assumed. Both counters increment
+    // at module-load time, bun walks this directory alphabetically, and until
+    // the control kit moved to internal/ these two cases passed only because
+    // `confirm-delete-unmount` and `export-badge` sort earlier and happened to
+    // drag in a shared component and an Ark vendor file on the way. In a
+    // published clone those files skip, both counters read 0, and the harness
+    // reported its own mechanisms dead -- measured, not imagined. `NuiButton`
+    // is in the published half, so this is now true in either clone and does
+    // not depend on file order.
+    render(() => <NuiButton>ok</NuiButton>);
     expect(g.__dedupedFiles?.() ?? 0).toBeGreaterThan(0);
   });
 
   test("the Solid 1 vendor compat rewrite actually fired", () => {
+    // Same reasoning as the case above, and the same measured failure: the only
+    // vendor file this suite loaded before `harness` was Ark's, pulled in by the
+    // control kit. `lucide-solid` is in VENDOR_PACKAGES and is a client/web
+    // dependency, so naming it here keeps the counter honest in a published
+    // clone -- where `lucide-spread-arity.test.tsx` still covers the rewrite's
+    // BEHAVIOUR, but sorts after this file and so cannot be relied on for it.
+    render(() => <Anchor />);
     expect(g.__solidVendorFilesRewritten?.() ?? 0).toBeGreaterThan(0);
   });
 
