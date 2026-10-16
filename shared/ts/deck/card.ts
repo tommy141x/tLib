@@ -244,7 +244,12 @@ export interface CardTheme {
 export function card(theme: CardTheme, spec: CardSpec): string {
   const s = theme.surface;
   const accent = spec.accent ?? theme.idle;
-  const meter = typeof spec.signal === "number";
+  // `Number.isFinite`, not just `typeof`: a product derives this with
+  // `Number(snapshot.signal)` off the wire, and `Number("")` is 0 while
+  // `Number("c")` is NaN — which is a number, so a bare typeof check drew a
+  // meter with every bar unlit AND took the width back off the flag chips. Two
+  // wrong things from one bad field. No meter is the honest answer.
+  const meter = typeof spec.signal === "number" && Number.isFinite(spec.signal);
   const geom = spec.signalGeom ?? SIGNAL_GEOM_ROW;
   const meterW = signalBarsWidth(geom);
   const meterX = s.width - s.inset - meterW;

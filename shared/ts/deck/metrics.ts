@@ -103,6 +103,25 @@ export function estimateWidth(
   return text.length * size * PER_CHAR + Math.max(0, text.length - 1) * tracking;
 }
 
+/**
+ * Cut `text` to at most `end` UTF-16 units without splitting a surrogate pair.
+ *
+ * A bare `slice` cuts between the two halves of an astral character and leaves a
+ * LONE SURROGATE, which is not a legal XML character — so the key's SVG fails to
+ * parse and the Stream Deck draws nothing at all. Not hypothetical: FiveM player
+ * names carry emoji routinely, and a talker name is the one string on these keys
+ * that is unsanitised human input long enough to need truncating.
+ */
+function sliceToUnits(text: string, end: number): string {
+  if (end <= 0) return "";
+  if (end >= text.length) return text;
+  const last = text.charCodeAt(end - 1);
+  // A high surrogate in the final slot means its pair is the character we are
+  // about to cut off. Drop both.
+  const cut = last >= 0xd800 && last <= 0xdbff ? end - 1 : end;
+  return text.slice(0, cut);
+}
+
 /** Binary-search the longest prefix (plus an ellipsis) that fits `maxWidth`. */
 export function truncateToWidth(
   text: string,
@@ -117,11 +136,12 @@ export function truncateToWidth(
   let hi = text.length;
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1;
-    const candidate = `${text.slice(0, mid).trimEnd()}${ELLIPSIS}`;
+    const candidate = `${sliceToUnits(text, mid).trimEnd()}${ELLIPSIS}`;
     if (estimateWidth(candidate, size, weight, tracking) <= maxWidth) lo = mid;
     else hi = mid - 1;
   }
-  return lo > 0 ? `${text.slice(0, lo).trimEnd()}${ELLIPSIS}` : ELLIPSIS;
+  const head = sliceToUnits(text, lo).trimEnd();
+  return head ? `${head}${ELLIPSIS}` : ELLIPSIS;
 }
 
 /**
@@ -160,9 +180,28 @@ export function fitToWidth(
   return { text: out, size, width: estimateWidth(out, size, opts.weight, opts.tracking) };
 }
 
+/**
+ * Characters that are not legal anywhere in an XML 1.0 document, plus any
+ * surrogate left unpaired.
+ *
+ * Escaping the five markup characters is not enough, because the failure mode of
+ * the rest is total: an SVG carrying one C0 control or one lone surrogate does
+ * not parse, so the Stream Deck draws an EMPTY key rather than a key with an odd
+ * character in it. Everything these keys put on screen that a human typed — a
+ * channel name out of a codeplug, a player's name off the wire — can contain
+ * both, and neither is visible in the string that caused it.
+ *
+ * Tab, newline and carriage return are legal XML and are left alone; the text
+ * primitives draw single lines, so they render as nothing rather than as damage.
+ */
+const XML_ILLEGAL =
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: removing them is the point
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
 /** Escape text for inclusion in SVG markup. */
 export function esc(s: string): string {
   return s
+    .replace(XML_ILLEGAL, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

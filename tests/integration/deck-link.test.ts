@@ -225,6 +225,65 @@ describe("deck link server: binding", () => {
     expect(repainted.has("dispatch")).toBe(true);
   });
 
+  test("a RESTART after giving up gets the whole budget back", async () => {
+    const port = await freePort();
+    cleanups.push(await occupy(port));
+    const { link, faults, log } = makeServer(port, { maxBindAttempts: 2, rebindMs: 10 });
+    const busy = () => log.of("warn").filter((l) => l.includes("busy")).length;
+
+    link.start();
+    expect(await until(() => faults.length === 1)).toBe(true);
+    // A budget of 2 spends one retry (one "busy" warn) then gives up.
+    expect(busy()).toBe(1);
+
+    // The restart has to spend a retry of its OWN. `attempts` was only ever
+    // reset by a SUCCESSFUL bind, so a link that had exhausted its budget
+    // stayed exhausted: start() went straight back to `attempts >= max` and
+    // faulted on the first collision without retrying at all. The port is
+    // deliberately still held here — a restart against a FREE port binds first
+    // time and never consults the budget, which is why that version of this
+    // test passed against the bug.
+    link.stop();
+    link.start();
+    expect(await until(() => faults.length === 2)).toBe(true);
+    expect(busy()).toBe(2);
+  });
+
+  test("stop() clears the ping interval it created", async () => {
+    const port = await freePort();
+    // Observed at the timer, not through the socket: `stop()` closes the WSS
+    // first, so a leaked interval walks an empty client set and emits nothing a
+    // peer could see. It was a local inside `listen()` and therefore
+    // unreachable from `stop()`, so a stopped server kept waking every `pingMs`
+    // for the life of the process and every start/stop cycle left another one
+    // behind — unref'd, silent, and cumulative.
+    const realSet = globalThis.setInterval;
+    const realClear = globalThis.clearInterval;
+    const created: unknown[] = [];
+    const cleared: unknown[] = [];
+    globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
+      const h = realSet(...args);
+      created.push(h);
+      return h;
+    }) as typeof setInterval;
+    globalThis.clearInterval = ((h: Parameters<typeof clearInterval>[0]) => {
+      cleared.push(h);
+      return realClear(h);
+    }) as typeof clearInterval;
+    cleanups.push(() => {
+      globalThis.setInterval = realSet;
+      globalThis.clearInterval = realClear;
+    });
+
+    const { link } = makeServer(port, { pingMs: 15 });
+    link.start();
+    expect(await until(() => link.boundPort() != null)).toBe(true);
+    expect(created.length).toBeGreaterThan(0);
+
+    link.stop();
+    for (const h of created) expect(cleared).toContain(h);
+  });
+
   test("a successful bind after failures clears the budget and the fault", async () => {
     const port = await freePort();
     const release = await occupy(port);

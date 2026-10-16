@@ -216,6 +216,21 @@ export function createDeckLinkServer<TSnap, TSource extends string>(
   let activeWss: WebSocketServer | null = null;
   let rebindTimer: NodeJS.Timeout | null = null;
   let listeningPort: number | null = null;
+  /**
+   * The ping interval, at CLOSURE scope rather than inside `listen()`.
+   *
+   * It was a local, so `stop()` could not reach it: a stopped server left an
+   * interval walking an empty client set every `pingMs` for the life of the
+   * process, and a start/stop cycle left one behind each time. Invisible in
+   * production because it is `unref()`-ed and iterates nothing — and exactly
+   * the shape that makes a test runner that calls `stop()` leak timers.
+   */
+  let heartbeat: NodeJS.Timeout | null = null;
+
+  const stopHeartbeat = (): void => {
+    if (heartbeat) clearInterval(heartbeat);
+    heartbeat = null;
+  };
 
   /* A minimal typed emitter
    * Rather than `node:events`, whose generic signatures differ between the
@@ -355,7 +370,9 @@ export function createDeckLinkServer<TSnap, TSource extends string>(
     const wss = new WebSocketServer({ server });
     activeServer = server;
     activeWss = wss;
-    let heartbeat: NodeJS.Timeout | null = null;
+    // A retry builds a second server, so the previous attempt's interval has to
+    // go even though the error path normally clears it.
+    stopHeartbeat();
     // `ws` re-emits a listen error on BOTH the http server and the WSS, so
     // without this guard the same failure is handled twice.
     let handled = false;
@@ -363,7 +380,7 @@ export function createDeckLinkServer<TSnap, TSource extends string>(
     const onError = (err: NodeJS.ErrnoException): void => {
       if (handled) return;
       handled = true;
-      if (heartbeat) clearInterval(heartbeat);
+      stopHeartbeat();
       listeningPort = null;
       try {
         wss.close();
@@ -454,6 +471,12 @@ export function createDeckLinkServer<TSnap, TSource extends string>(
       if (started) return;
       started = true;
       stopped = false;
+      // A restart gets the whole budget back. Without this a link that had
+      // already given up stayed given-up: `attempts` was only ever reset by a
+      // SUCCESSFUL bind, so `stop()` then `start()` spent its one remaining
+      // attempt and re-faulted immediately — which is the opposite of what
+      // restarting it means.
+      attempts = 0;
       listen();
     },
     stop() {
@@ -463,6 +486,7 @@ export function createDeckLinkServer<TSnap, TSource extends string>(
       listeningPort = null;
       if (rebindTimer) clearTimeout(rebindTimer);
       rebindTimer = null;
+      stopHeartbeat();
       for (const entry of bySource.values()) {
         if (entry.ws?._stale) clearTimeout(entry.ws._stale);
         try {
