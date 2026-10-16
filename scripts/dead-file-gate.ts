@@ -14,8 +14,8 @@
 //      named there and imported by nothing in this estate; a graph-only gate
 //      called all five dead.
 //   2. scripts/public-entries.json — the measured record of deep paths
-//      consumers import by relative path outside that map. 83 of them:
-//      build/*, fs/server, secrets/release, audio/wav, telemetry/*, every ui/*.
+//      consumers import by relative path outside that map. 80 of them:
+//      build/*, fs/server, secrets/release, modules/*, telemetry/*, every ui/*.
 //   3. The import graph, through relative specifiers, `@tlib/shared/*`, `@/*`.
 //   4. Paths written as STRINGS rather than imported — the ui_page html's
 //      module src, and anything a package.json script hands to `bun`. That last

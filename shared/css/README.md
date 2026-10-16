@@ -65,7 +65,7 @@ it works, and only the half that collides quietly does nothing.
 ## The elevation ladder
 
 The four surface tokens are not four independent colours. They are four rungs,
-and every component in `shared/ts/ui/` and `shared/ts/admin-ui/` assumes the
+and every component in `shared/ts/ui/` and `internal/shared-ts/admin-ui/` assumes the
 order:
 
 ```

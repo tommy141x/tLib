@@ -75,7 +75,7 @@
    * host that declares no tLib tokens at all. Do not collapse the two names.
    *
    * It was `#eeeeee` until now, and that neutral was a signed-off repaint, not an
-   * accident — the note in `../admin-ui/index.tsx` records it. What that note was
+   * accident — the note in `internal/shared-ts/admin-ui/index.tsx` records it. What that note was
    * fixing, though, was that the admin-ui controls "became the only blue things
    * left on a grey screen": the defect was an ISOLATED blue, and neutralising it
    * was one of the two ways to end the isolation. It turned out to be the wrong

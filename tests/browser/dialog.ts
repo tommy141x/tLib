@@ -177,7 +177,7 @@ try {
   // rgb(48, 137, 232) is #3089e8 == hsl(211 80% 55%), i.e. --primary in
   // theme-tokens.css and --ring in `shared/ts/ui/*`. These two lines used to pin
   // the neutral #eeeeee, which is the 2026-09-22 repaint recorded in
-  // `shared/ts/admin-ui/index.tsx`; it was reverted because the other five
+  // `internal/shared-ts/admin-ui/index.tsx`; it was reverted because the other five
   // bundles never followed it and a tLib dialog opened over a tELS editor
   // repainted the primary button. Pinned as a literal on purpose: a token read
   // would agree with whatever the sheet says.

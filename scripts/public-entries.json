@@ -1,9 +1,6 @@
 {
 	"//": "Deep paths into shared/ts that consumers import directly, measured by `bun run scripts/dead-file-gate.ts --write-baseline`. Checked in because a fresh clone has no siblings. Not a ratchet — see the note in scripts/dead-file-gate.ts.",
 	"entries": [
-		"shared/ts/admin-ui/index.tsx",
-		"shared/ts/assets/index.ts",
-		"shared/ts/audio/wav.ts",
 		"shared/ts/build/argv.ts",
 		"shared/ts/build/bun-builder.ts",
 		"shared/ts/build/cef-output-contract-control.ts",

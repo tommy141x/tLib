@@ -37,8 +37,6 @@
   "include": [
     "env.d.ts",
     "solid-1-compat-jsx.d.ts",
-    "admin-ui/**/*.ts",
-    "admin-ui/**/*.tsx",
     "marketplace/**/*.ts",
     "marketplace/**/*.tsx",
     "nui-kit/**/*.ts",
@@ -53,12 +51,10 @@
     // exported five symbols that no longer existed. A pass over a file set that
     // does not contain the code is worse than no pass: it is a green light.
     "telemetry/**/*.ts",
-    // Added for the same reason the telemetry note above describes. These seven
+    // Added for the same reason the telemetry note above describes. These
     // directories were covered by nothing: a comment pass broke block
     // delimiters in deck/card.ts, deck/strip.ts and build/deck-pack.ts and this
     // config reported EXIT 0 on all three. Only biome's parse stage found them.
-    "assets/**/*.ts",
-    "audio/**/*.ts",
     "build/**/*.ts",
     "deck/**/*.ts",
     "fs/**/*.ts",

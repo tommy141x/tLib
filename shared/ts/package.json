@@ -20,7 +20,6 @@
     "./latest-request": "./latest-request.ts",
     "./runtime-assets": "./runtime-assets.ts",
     "./ui-manifest": "./ui-manifest.ts",
-    "./admin-ui": "./admin-ui/index.tsx",
     "./nui-kit": "./nui-kit/NuiButton.tsx",
     "./nui-kit/nui.css": "./nui-kit/nui.css",
     "./marketplace/ui": "./marketplace/ui/index.tsx",
