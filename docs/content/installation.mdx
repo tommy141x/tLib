@@ -1,36 +1,27 @@
 ---
 title: "Installation"
-description: "Install tLib on your FiveM server, then depend on it from your own resource through exports or the import modules."
+description: "Install tLib, open its port, and depend on it from your own resource."
 order: 1
 group: "tLib"
 published: true
----
-
-By the end of this page tLib is running, your resource declares it as a dependency, and a
-toast proves the install.
-
-## Prerequisites
-
-- A FiveM server
-
 ---
 
 <Steps>
 
 ### Download
 
-Download the latest release from [GitHub Releases](https://github.com/tommy141x/tLib/releases).
-
-A source checkout is not enough on its own — the release contains the built NUI page and
-server bundle. To work from source, see *Building from source* in the repository README.
+Take the latest release from
+[GitHub Releases](https://github.com/tommy141x/tLib/releases). A source checkout is not
+enough — only the release carries the built NUI page and server bundle. To work from source,
+see *Building from source* in the repository README.
 
 ### Extract
 
-Place the `tLib` folder in your server's `resources` directory.
+Put the `tLib` folder in your server's `resources` directory.
 
-### Start the Resource
+### Start the resource
 
-Add to your `server.cfg` **before** any resource that depends on it:
+Add this to `server.cfg`, **above** every resource that depends on tLib:
 
 ```txt title="server.cfg"
 ensure tLib
@@ -38,18 +29,15 @@ ensure tLib
 
 ### Open port 7777
 
-tLib listens on **port 7777** and serves the hub — one page linking every tLib
-resource that publishes a web surface. tDB's admin panel and tRadio's dispatch
-panel both reach players through it, so a resource that looks installed and
-correct is still unreachable until the port is open.
+tLib serves the hub — one page linking every tLib resource with a web surface, including
+tDB's admin panel and tRadio's dispatch panel. Until the port is open, those resources look
+installed and are unreachable.
 
-Open `7777/tcp` **on the machine**, not only in `server.cfg`: the host firewall,
-and NAT port-forwarding if the server is behind a router. Nothing tLib does can
-open it for you.
+Open `7777/tcp` **on the machine**: the host firewall, plus NAT port-forwarding if the
+server is behind a router. Nothing tLib does can open it for you. Then visit
+`http://<your-server-ip>:7777`.
 
-Then visit `http://<your-server-ip>:7777` — the hub lists what is published.
-
-To use a different port, set it before `ensure tLib` and open that one instead:
+For a different port, set it above `ensure tLib` and open that one instead:
 
 ```txt title="server.cfg"
 set tlib_http_port 8080
@@ -57,57 +45,35 @@ set tlib_http_port 8080
 
 </Steps>
 
----
-
-## Usage in Your Resource
-
-Declare the dependency in your resource's `fxmanifest.lua`:
-
-```lua title="fxmanifest.lua"
-dependencies { 'tLib' }
-```
-
-### Using exports
-
-Call tLib systems directly via exports. Toasts are the shortest thing to prove the install
-with:
-
-```lua
-exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctly.')
-```
-
-The menu is registered rather than built imperatively — pages are declared on the server and
-handlers on the client. See [Exports](/docs/tLib/exports) and
-[Menu Consumers](/docs/tLib/menu-consumers).
-
-### Using import modules
-
-For lightweight Lua modules (coords, kvp, settings, access, permission, and 35
-more), add the imports script. You do not declare the modules:
+## Depend on tLib
 
 ```lua title="fxmanifest.lua"
 dependencies { 'tLib' }
 
 shared_scripts {
-    '@tLib/imports.lua',
+    '@tLib/imports.lua',   -- only if you use the import modules
 }
 ```
 
-Then access them via the `tlib` global:
+Exports need the dependency line alone:
 
 ```lua
-local kvp = tlib.kvp
-local value = kvp.getString('my_key', 'default')
+exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctly.')
 ```
 
-Modules are lazy-loaded — they only load when first accessed.
+The menu is declared, not built imperatively — pages on the server, handlers on the client.
+See [Exports](/docs/tLib/exports) and [Menu Consumers](/docs/tLib/menu-consumers).
 
----
+The import modules need `@tLib/imports.lua` and nothing else. You declare no module names;
+each one loads the first time you touch it:
+
+```lua
+local value = tlib.kvp.getString('my_key', 'default')
+```
 
 ## Next steps
 
-- The port, the bind address and the advertised URL: [Convars](/docs/tLib/convars#http-router)
-- Every module you can reach through `tlib`: [Import Modules](/docs/tLib/import-modules)
-- The export surface — menus, dialogs, toasts, HUD: [Exports](/docs/tLib/exports)
-- What an owner can change in `server.cfg`: [Convars](/docs/tLib/convars)
+- The port, bind address and advertised URL: [Convars](/docs/tLib/convars#http-router)
+- Every module behind `tlib`: [Import Modules](/docs/tLib/import-modules)
+- Menus, dialogs, toasts, HUD: [Exports](/docs/tLib/exports)
 - Build a resource on the shared menu: [Menu Consumers](/docs/tLib/menu-consumers)

@@ -1,6 +1,6 @@
 ---
 title: "tLib"
-description: "A shared UI and utility library for FiveM: one menu, dialogs and toasts for every resource on the server, plus 40 Lua modules and one HTTP port."
+description: "One shared menu, dialog and toast system for every resource on a FiveM server, plus 40 Lua modules and one HTTP port."
 order: 0
 group: "tLib"
 published: true
@@ -8,9 +8,8 @@ published: true
 
 ![](/assets/tLib/banner.jpg)
 
-tLib is the library the other resources on a server share. One NUI menu, one dialog and
-toast system, one themeable surface, one HUD editor, one HTTP port — and 40 small Lua
-modules that a resource reaches through a `tlib` global without declaring any of them.
+One NUI menu, one dialog and toast system, one themeable surface, one HUD editor, one HTTP
+port — and 40 Lua modules reached through a `tlib` global you never declare.
 
 ```lua title="fxmanifest.lua"
 dependencies { 'tLib' }
@@ -26,20 +25,20 @@ exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctl
 
 ## What it is not
 
-- **Not a framework.** tLib answers no questions about jobs, money or inventories. It
-  detects the framework you already run and normalises what it reports — see
+- **Not a framework.** tLib answers nothing about jobs, money or inventories. It detects the
+  framework you already run and normalises what it reports — see
   [`access`](/docs/tLib/import-modules#access).
-- **Not configured in a file.** There is no `config.lua`. Everything an owner can change
-  is a convar in `server.cfg`; see [Convars](/docs/tLib/convars).
-- **Not invisible when it stops.** tLib owns the screen its consumers draw on, so a
-  restart takes their menus with it; they re-register when it returns. See the
+- **Not configured in a file.** There is no `config.lua`. Owners set convars in `server.cfg`
+  — see [Convars](/docs/tLib/convars).
+- **Not invisible when it stops.** tLib owns the screen its consumers draw on, so a restart
+  takes their menus with it. They re-register when it returns — see the
   [lifecycle adapter](/docs/tLib/menu-consumers#shared-lifecycle-adapter-api-v1).
 
 ## Requirements
 
 | Requirement | Detail |
 | --- | --- |
-| Runtime | **FiveM only.** Everything goes through an internal platform adapter, but FiveM is the only one implemented |
+| Runtime | **FiveM only.** Everything goes through a platform adapter, but FiveM is the only one implemented |
 | Install | The **release** zip, not a source checkout — the release carries the built NUI page and server bundle |
 | Load order | `ensure tLib` **before** any resource that depends on it |
 | Framework | None. tLib detects yours; it does not replace it |
@@ -70,5 +69,5 @@ exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctl
 
 ## Licence
 
-tLib is MIT, source included. See `LICENSE.md` in the
+MIT, source included. See `LICENSE.md` in the
 [repository](https://github.com/tommy141x/tLib).

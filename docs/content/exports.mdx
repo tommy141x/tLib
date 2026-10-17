@@ -1,73 +1,70 @@
 ---
 title: "Exports"
-description: "Every Lua export tLib registers, which side it lives on, and what it returns — menus, dialogs, toasts, themes, HUD layout, marketplace, logger, HTTP, permissions and child processes."
+description: "Every Lua export tLib registers, which side it lives on, and what it returns."
 order: 2
 group: "tLib"
 published: true
 ---
 
-All exports are called via `exports['tLib']:FunctionName(...)`.
-
-Exports are registered on the side that owns the state: menu pages and permissions on the
-server, everything that draws on the client. Each section below says which side it is.
+Call every export as `exports['tLib']:FunctionName(...)`. Each section says which side it is
+registered on: menu pages and permissions on the server, everything that draws on the client.
 
 ---
 
 ## Menu System
 
-**Client and server.** One NUI menu shared by every resource on the server. tLib owns the
-screen, the keyboard and the permission check; a consumer declares pages and handles rows.
+**Client and server.** One NUI menu shared by every resource. tLib owns the screen, the
+keyboard and the permission check; you declare pages and handle rows.
 
-Pages are registered on the **server**, because what a player may see is a server decision —
-every open is answered with that player's own ACE-filtered tree. The **client** registers what
-turns that tree into behaviour: handlers, presenters and hooks.
+Pages register on the **server** — what a player may see is a server decision, and every
+open is answered with that player's ACE-filtered tree. Handlers, presenters and hooks
+register on the **client**. Menu IDs are namespaced `owner:name`. Every export takes an
+optional trailing `declaredOwner`, used only where the platform cannot identify the caller.
 
-Menu IDs are namespaced: every page a resource registers must be `owner:name`. Every export
-takes an optional trailing `declaredOwner`, used only where the platform cannot identify the
-caller. Pass it as its own argument — never as the result of a call in the last argument slot,
-since `f(json.decode(x))` expands to *two* values and the second lands in `declaredOwner`.
+<Callout type="warning">
+Pass `declaredOwner` as its own argument, never as a call in the last slot.
+`f(json.decode(x))` expands to *two* values and the second lands in `declaredOwner`.
+</Callout>
 
-[Developing modular menu resources](/docs/tLib/menu-consumers) walks through a complete
-standalone consumer.
+[Menu Consumers](/docs/tLib/menu-consumers) builds one end to end.
 
 ### Server — declaring the tree
 
 | Export | Description |
 | --- | --- |
-| `DefineMenuNamespace(spec)` | Required first. `{ ace, catalog?, order?, capabilities?, theme? }`. `ace` gates the whole namespace. |
-| `RegisterMenuDomains(domains)` | Rate/cooldown domains actions may be assigned to. |
+| `DefineMenuNamespace(spec)` | Required first. `{ ace, catalog?, order?, capabilities?, theme? }`; `ace` gates the namespace. |
+| `RegisterMenuDomains(domains)` | Rate/cooldown domains for actions. |
 | `RegisterMenu(menu, definition)` | One page plus its authority. |
 | `UnregisterMenu(menuId)` | Remove a page. |
-| `RegisterMenuAuthority(spec)` / `UnregisterMenuAuthority()` | Answer for rows this resource does not own. |
-| `OnMenuSnapshot(hook)` | Adjust a player's tree as it is built for them. |
+| `RegisterMenuAuthority(spec)` / `UnregisterMenuAuthority()` | Answer for rows you do not own. |
+| `OnMenuSnapshot(hook)` | Adjust a player's tree as it is built. |
 | `RefreshMenus()` | Re-push every open menu. |
 
 `definition` is `{ ace, actions = { [itemId] = { ace, run?, clientAction?, cooldown?, fixedValue?, domain? } }, theme?, rootVisible? }`.
-`rootVisible = false` omits the automatic shared-root link without changing direct access or
-permissions.
+`rootVisible = false` omits the shared-root link only; it changes no permission.
 
-### Server — changing what is already registered
+### Server — changing what is registered
 
 | Export | Description |
 | --- | --- |
 | `PatchMenuItem(menuId, itemId, changes)` | Patch one row. |
 | `PatchMenuAction(itemId, changes)` | Patch one action; finds the page itself. |
-| `SetMenuLinks(menuId, links)` | Replace dynamic submenu rows on a page you own. `{}` removes them. |
+| `SetMenuLinks(menuId, links)` | Replace dynamic submenu rows on your page. `{}` removes them. |
 | `SetMenuItemVisible(itemId, visible)` | Show or hide a row. |
-| `SetPlayerMenuOptions(source, itemId, options)` | One player's own choices for a selector. |
+| `SetPlayerMenuOptions(source, itemId, options)` | One player's choices for a selector. |
 | `SetMenuNamespaceTheme(theme)` / `SetMenuTheme(menuId, theme)` | `nil` clears. |
 
 ### Client — behaviour
 
 | Export | Description |
 | --- | --- |
-| `RegisterMenuActions(handlers)` | `{ [name] = function(value, context) end }`, installed as one table — all of it or none. |
-| `RegisterMenuCatalogProvider(provider)` | Build this resource's catalog once, off a function that may yield. |
+| `RegisterMenuActions(handlers)` | `{ [name] = function(value, context) end }`. Installed whole — all or none. |
+| `RegisterMenuCatalogProvider(provider)` | Build the catalog once, off a function that may yield. |
 | `RegisterMenuHooks(spec)` | `{ snapshot, enter, leave, page, selection, close }`. `enter` may refuse a navigation. |
 | `RegisterMenuPresenter(spec)` / `UnregisterMenuPresenter()` | Fill rows in as a page is presented. |
-| `RegisterMenuStrings(dictionaries)` | Translations for this resource's rows. |
+| `RegisterMenuStrings(dictionaries)` | Translations for your rows. |
 | `ConfigureMenuInterface(spec)` | The root page. One screen, so the last caller wins. |
-| `SetMenuEffect(name, enabled, definition)` | A handler that keeps running after the row was activated, re-checked against the player's grants. |
+| `SetMenuEffect(name, enabled, definition)` | A handler that keeps running after activation, re-checked against the player's grants. |
 | `PublishMenuItem(name, changes)` | Patch a row from the client. |
 | `SetMenuItemState(name, value)` / `GetMenuItemState(name)` | Read and write a row's value. |
 | `ExecuteMenuAction(name, value, context)` | Run an action as if the row was activated. |
@@ -75,18 +72,38 @@ permissions.
 
 ### Client — the screen
 
-Unscoped: the screen belongs to the player, not to a resource.
+Unscoped: the screen belongs to the player.
 
 | Export | Description |
 | --- | --- |
-| `OpenMenu(menuId?)` | Re-checks the page against a fresh permission-filtered snapshot. Refuses while a menu is already up. |
-| `CloseMenu()` | The same teardown the close key runs. Does not toggle — closing when nothing is open answers `false, 'Menu is not open'`. |
+| `OpenMenu(menuId?)` | Re-checks against a fresh snapshot. Refuses while a menu is up. |
+| `CloseMenu()` | The close key's teardown. No toggle: closing nothing answers `false, 'Menu is not open'`. |
 | `IsMenuVisible()`, `GetMenuStackIds()` | Current state. |
 | `NavigateMenu(menuId)`, `InvalidateMenuContext()` | Move within the open tree. |
-| `BindMenuKey(menuId)` | Claim a key-binding slot for a page; returns the command it runs under. |
+| `BindMenuKey(menuId)` | Claim a key-binding slot; returns the command it runs under. |
 | `SetMenuLocale(tag)` / `GetMenuLocale()` | Row translation locale. |
-| `SetMenuAnchor(anchor)`, `SetMenuPalettes(value)` | Placement and colour presentation. |
-| `PromptMenuText(title, initial, maximum, context)` | The game's own onscreen keyboard. Only from inside an action handler, whose `context` it needs. |
+| `SetMenuAnchor(anchor)`, `SetMenuPalettes(value)` | Placement and colour. |
+| `PromptMenuText(title, initial, maximum, context)` | The game's onscreen keyboard. Only inside an action handler, whose `context` it needs. |
+| `SubmitFeedback(message, callback)` | Send one player message to TIMMYG Studios. |
+
+#### `SubmitFeedback`
+
+For a resource whose settings live in a tLib **dialog**. A menu already grows a "Send
+feedback" row on its owner's root page and needs none of this.
+
+```lua
+local sent = exports['tLib']:SubmitFeedback(message, function(result)
+    if result.ok then return end
+    -- result.error == 'rate-limited' | 'invalid' | 'unreachable'
+end)
+```
+
+| | |
+| --- | --- |
+| Attribution | The **calling** resource, resolved by the runtime. It cannot be sent in another's name. |
+| `callback` | `{ ok, error? }`; `error` is `invalid`, `rate-limited` or `unreachable`. |
+| Return | `false, reason` on a malformed call — empty message, or no callback. |
+| Limits | One per player per minute, six per server per minute, shared with the menu row. The endpoint counts a game server as one IP. |
 
 ### A page
 
@@ -96,21 +113,20 @@ Unscoped: the screen belongs to the player, not to a resource.
 
 ### A row
 
-`kind` is one of `action`, `toggle`, `select`, `slider`, `submenu`, `status`.
+`kind` is `action`, `toggle`, `select`, `slider`, `submenu` or `status`.
 
 | Key | Type | Description |
 | --- | --- | --- |
-| `id` | `string` | `owner:name`, and permanent: it is what the server authorizes and what state is stored under. |
-| `label` / `description` | `string` | What the row says, and the line under the panel. |
+| `id` | `string` | `owner:name`, permanent: what the server authorizes and what state is stored under. |
+| `label` / `description` | `string` | The row text, and the line under the panel. |
 | `value` | `boolean\|string\|number` | A toggle's state, a slider's position. |
-| `options` / `index` | `table` / `number` | A selector's choices and which one is current. |
+| `options` / `index` | `table` / `number` | A selector's choices, and the current one. |
 | `min` / `max` / `step` | `number` | A slider's bounds. |
-| `menu` | `string` | A submenu row's destination page. |
+| `menu` | `string` | A submenu row's destination. |
 | `confirm` | `string` | Ask this before the row runs. |
 | `icon` / `rightIcon` / `rightLabel` | `string` | Row decoration. |
 
-Every `kind` on one page, in the order above — an action, a `rightLabel`, two toggles, a
-selector, a slider, a status row, a submenu and a destructive action:
+Every `kind` on one page, in that order:
 
 <ZoomableImage
   src="/assets/tLib/menu--controls.png"
@@ -119,8 +135,7 @@ selector, a slider, a status row, a submenu and a destructive action:
   alt="A Vehicle page: Repair highlighted, Clean marked free, Engine checked, Doors unchecked, Livery on Police, Dirt level 40, Plate, Performance, Delete"
 />
 
-A namespace or page theme changes the same rows without the page changing. The skin below is
-the same definition under a different `theme`:
+A namespace or page `theme` reskins the same definition:
 
 <ZoomableImage
   src="/assets/tLib/menu--controls-vmenu.png"
@@ -133,62 +148,70 @@ the same definition under a different `theme`:
 
 ## Dialog System
 
-**Client.** Modal form dialogs with multiple field types. Results are delivered via local
-events and via optional inline callbacks — the two are additive, not alternatives.
+**Client.** Modal form dialogs. Results arrive as local events *and* as optional inline
+callbacks — additive, not alternatives.
 
 | Export | Description |
 | --- | --- |
-| `ShowDialog(id, opts)` | Open a dialog. Returns the resolved dialog `id`, or `nil, reason`. |
-| `CloseDialog(id)` | Close an open dialog (fires the cancelled event). |
+| `ShowDialog(id, opts)` | Open one. Returns the resolved `id`, or `nil, reason`. |
+| `CloseDialog(id)` | Close it; fires the cancelled event. |
 | `UpdateDialogField(id, fieldId, changes)` | Patch one field of a live dialog. |
-| `UpdateDialogFields(id, changes)` | Patch several fields at once. |
+| `UpdateDialogFields(id, changes)` | Patch several at once. |
 
 ### ShowDialog options
 
-| Key | Type | Description |
-| --- | --- | --- |
-| `title` | `string` | Dialog heading. |
-| `description` | `string` | Optional subheading. |
-| `submitLabel` | `string` | Submit button label (default `"Submit"`). |
-| `cancelLabel` | `string` | Cancel button label (default `"Cancel"`). |
-| `size` | `string` | `"sm"`, `"md"` or `"lg"` (default `"md"`). |
-| `theme` | `string` | Id of a registered tLib theme. |
-| `blur` | `boolean` | Blur the scene behind the dialog. |
-| `resetState` | `boolean` | Open at the defaults instead of where the player last left this dialog id. |
-| `fields` | `table[]` | Array of field definitions. |
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `title` | `string` | — | Dialog heading. |
+| `description` | `string` | — | Subheading. |
+| `submitLabel` | `string` | `"Submit"` | Submit button label. |
+| `cancelLabel` | `string` | `"Cancel"` | Cancel button label. |
+| `size` | `string` | `"md"` | `"sm"`, `"md"` or `"lg"`. |
+| `theme` | `string` | — | Id of a registered tLib theme. |
+| `blur` | `boolean` | `false` | Blur the scene behind the dialog. |
+| `resetState` | `boolean` | `false` | Open at the defaults, not where the player left it. |
+| `fields` | `table[]` | — | Field definitions. |
 
-A dialog reopens **where the player left it**: the selected tab, each tab's scroll
-position and where the panel was dragged to are remembered per dialog id, so closing
-the dialog for a detour — a HUD reposition, a 3D editor — and reopening it lands back
-on the tab the button was on. This needs no opt-in and applies to every consumer.
-
-Values are never remembered, nor is validation state; a remembered tab that no longer
-exists (config or permissions changed) falls back to the first tab. The state is held
-in the NUI page in memory only, so restarting tLib or reconnecting forgets it. Pass
-`resetState = true` for the rare caller that genuinely wants a first-run dialog.
+A dialog reopens **where the player left it** — selected tab, scroll position, dragged panel
+position — per dialog id, for every consumer, no opt-in. Values and validation state are
+never kept, a missing remembered tab falls back to the first, and the state is in-memory in
+the NUI page, so a tLib restart or a reconnect forgets it.
 
 ### Field types
 
 | Type | Extra keys |
 | --- | --- |
 | `text`, `number`, `password`, `textarea` | `placeholder`, `defaultValue`, `min`/`max` (number only) |
-| `select`, `radio` | `options` (`{ value, label }[]`), `placeholder`, `defaultValue` |
+| `select`, `dropdown`, `radio` | `options` (`{ value, label }[]`), `placeholder`, `defaultValue` |
 | `slider` | `min`, `max`, `step`, `defaultValue` |
 | `checkbox` | `defaultValue` (boolean) |
 | `button` | `variant` (`default` / `primary` / `destructive`), `confirm` |
+| `display` | none |
 
-All fields share: `id` (required), `type`, `label`, `description`, `required`, `disabled`.
+All share `id` (required), `type`, `label`, `description`, `required`, `disabled`. An
+unknown `type` logs a warning and falls back to `text`.
+
+#### `display`
+
+Text, not a control: the `label` renders at full opacity with no input beside it, carries no
+value and is never submitted. Use it for a readout, a section heading or help text.
+
+```lua
+{ id = 'note', type = 'display', label = 'Patterns are saved per vehicle model.' }
+```
+
+<Callout type="warning">
+Do not fake this with a `disabled` button or input. Dimmed means "you may not touch this",
+the wrong thing to say about a readout.
+</Callout>
 
 #### Confirming a dialog button
 
-A `button` field fires `onButtonClick` the moment it is pressed. Give it a `confirm`
-string and the press instead asks that question first, and only a second, explicit press
-of **Confirm** fires the callback. Escape and **Cancel** both answer the question without
-firing anything; the dialog itself stays open either way.
-
-It is the same key, with the same meaning, as a menu row's `confirm` above.
-`variant = 'destructive'` is colour and nothing else, so a button that cannot be undone
-wants both.
+A `button` fires `onButtonClick` on press. Give it a `confirm` string and the press asks
+that question first; only an explicit **Confirm** fires the callback. Escape and **Cancel**
+answer it without firing, and the dialog stays open either way. It is the same key, with the
+same meaning, as a menu row's `confirm`. `variant = 'destructive'` is colour and nothing
+else, so a button that cannot be undone wants both:
 
 ```lua
 {
@@ -200,8 +223,8 @@ wants both.
 }
 ```
 
-One of each type in a single `lg` dialog. `select` with two options renders as a segmented
-control rather than the `Dropdown` list:
+One of each type in an `lg` dialog. A `select` with two options renders as a segmented
+control:
 
 <ZoomableImage
   src="/assets/tLib/dialog--every-field.png"
@@ -212,9 +235,8 @@ control rather than the `Dropdown` list:
 
 ### Events
 
-- `tLib:dialog:opened` — `(dialogId)`
-- `tLib:dialog:submitted` — `(dialogId, values)`, `values` keyed by field `id`
-- `tLib:dialog:cancelled` — `(dialogId)`
+`tLib:dialog:opened` `(dialogId)` · `tLib:dialog:submitted` `(dialogId, values)`, keyed by
+field `id` · `tLib:dialog:cancelled` `(dialogId)`
 
 ```lua
 local dialogId = exports['tLib']:ShowDialog('my_dialog', {
@@ -230,9 +252,7 @@ local dialogId = exports['tLib']:ShowDialog('my_dialog', {
 })
 
 AddEventHandler('tLib:dialog:submitted', function(id, values)
-    if id == dialogId then
-        print('Name:', values.name, 'Age:', values.age, 'Role:', values.role)
-    end
+    if id == dialogId then print(values.name, values.age, values.role) end
 end)
 ```
 
@@ -240,21 +260,19 @@ end)
 
 ## Toast / Notification System
 
-**Client.** Non-interactable notifications that stack in a corner of the screen.
+**Client.** Non-interactable notifications stacked in a screen corner.
 
 | Export | Description |
 | --- | --- |
-| `ShowToast(id, toastType, title, description, duration, theme)` | Show a toast. Returns the resolved `id`, or `nil, reason` at capacity. |
+| `ShowToast(id, toastType, title, description, duration, theme)` | Returns the resolved `id`, or `nil, reason` at capacity. |
 | `UpdateToast(id, changes)` | Merge changes into a live toast in place. |
-| `DismissToast(id)` | Dismiss a single toast before it expires. |
-| `DismissAll()` | Dismiss the calling resource's visible toasts. |
+| `DismissToast(id)` | Dismiss one before it expires. |
+| `DismissAll()` | Dismiss this resource's visible toasts. |
 
-IDs are local to the producing resource: updates and dismissals cannot alter another
-producer's notifications, and stopping a producer removes its persistent cards. A type change
-or `duration = 0` restarts the type default; text- or theme-only updates keep the existing
-deadline. Limits are 32 active per producer and 256 total.
-
-### Types and default durations
+IDs are local to the producing resource, so you cannot alter another producer's toasts, and
+stopping a producer removes its persistent cards. A type change or `duration = 0` restarts
+the type default; text- or theme-only updates keep the deadline. Limits: 32 active per
+producer, 256 total.
 
 | Type | Duration |
 | --- | --- |
@@ -262,10 +280,10 @@ deadline. Limits are 32 active per producer and 256 total.
 | `error` | 6000 ms |
 | `warning` | 5000 ms |
 | `info` | 4000 ms |
-| `loading` | Persistent until dismissed or updated |
+| `loading` | Until dismissed or updated |
 
-Each type carries its own icon and colour, so the type you pass is what a player reads before
-the words. Newest sits at the bottom of the stack:
+Each type carries its own icon and colour, so the type is what a player reads before the
+words. Newest sits at the bottom:
 
 <ZoomableImage
   src="/assets/tLib/toast--stack.png"
@@ -274,12 +292,9 @@ the words. Newest sits at the bottom of the stack:
   alt="Five stacked toasts: green Vehicle stored, red Not enough cash, amber Engine damaged, blue Shift starts in 5 minutes, and a spinning Installing layout"
 />
 
-### Events
-
-- `tLib:toast:shown` — `(id, toastType, title, owner)`
-- `tLib:toast:updated` — `(id, patch, owner)`
-- `tLib:toast:dismissed` — `(id, owner)`
-- `tLib:toast:dismissedAll` — `(owner)`
+Events: `tLib:toast:shown` `(id, toastType, title, owner)` · `tLib:toast:updated`
+`(id, patch, owner)` · `tLib:toast:dismissed` `(id, owner)` · `tLib:toast:dismissedAll`
+`(owner)`
 
 ```lua
 exports['tLib']:ShowToast(nil, 'success', 'Saved', 'Your settings have been saved.')
@@ -292,53 +307,52 @@ exports['tLib']:UpdateToast(toastId, { type = 'success', title = 'Done', descrip
 
 ## Theme System
 
-**Client.** CSS variable–based themes, applied globally or scoped to one dialog, toast or
-menu. One theme id themes all three surfaces.
+**Client.** CSS-variable themes, global or scoped to one dialog, toast or menu. One id
+themes all three surfaces.
 
 | Export | Description |
 | --- | --- |
-| `AddTheme(id, opts)` | Register a theme, or replace one with the same id. Returns `true` on success. |
-| `RemoveTheme(id)` | Unregister a theme. Returns `true` if it existed. |
-| `SetTheme(id)` | Apply a theme globally. Pass `""` to clear. |
-| `GetTheme(id)` | A copy of one theme definition, or `nil`. |
-| `GetThemes()` | A copy of every registered theme, keyed by id. |
+| `AddTheme(id, opts)` | Register, or replace one with the same id. `true` on success. |
+| `RemoveTheme(id)` | Unregister. `true` if it existed. |
+| `SetTheme(id)` | Apply globally. `""` clears. |
+| `GetTheme(id)` | A copy of one definition, or `nil`. |
+| `GetThemes()` | A copy of every theme, keyed by id. |
 
-### AddTheme options
-
-| Key | Type | Description |
+| `opts` key | Type | Description |
 | --- | --- | --- |
-| `name` | `string` | Human-readable display name. |
-| `description` | `string` | Optional description. |
-| `cssVars` | `table` | CSS variable name → value. Keys must **not** include the leading `--`. |
-| `extends` | `string` | Id of another theme to inherit from; these vars overlay it. |
-| `font` | `string` | Font-family string (sets `--font-sans`). |
+| `name` | `string` | Display name. |
+| `description` | `string` | Optional. |
+| `cssVars` | `table` | Variable name → value. Keys must **not** carry the leading `--`. |
+| `extends` | `string` | Theme id to inherit from; these vars overlay it. |
+| `font` | `string` | Font-family string; sets `--font-sans`. |
 | `fontSize` | `string` | Base font-size percentage, e.g. `"87.5%"`. |
 
-### Events
-
-- `tLib:theme:added` — `(id)`
-- `tLib:theme:removed` — `(id)`
-- `tLib:theme:set` — `(id)`
+Events: `tLib:theme:added`, `tLib:theme:removed`, `tLib:theme:set` — each `(id)`.
 
 ---
 
 ## HUD Layout
 
-**Client.** Registers a resource's on-screen element with the shared HUD editor, so the
-player can move, scale and hide it alongside every other resource's HUD.
+**Client.** Puts your on-screen element in the shared HUD editor, so a player moves, scales
+and hides it alongside every other resource's HUD.
 
 | Export | Description |
 | --- | --- |
-| `RegisterHudComponent(id, options, fn)` | Register a draggable component. `fn(layout)` is called whenever its layout changes. |
-| `UnregisterHudComponent(id)` | Remove it again. |
-| `GetHudLayout(id)` | The component's current layout, or `nil`. |
-| `SetHudLayout(id, layout)` | Move one of your own components from code. `true`, or `false, reason`. |
-| `OpenHudEditor(options)` | Open the editor for this resource. `{ demo = true }` adds a sample component. |
+| `RegisterHudComponent(id, options, fn)` | Register a draggable component. `fn(layout)` runs on every layout change. |
+| `UnregisterHudComponent(id)` | Remove it. |
+| `GetHudLayout(id)` | Its current layout, or `nil`. |
+| `SetHudLayout(id, layout)` | Move your own component from code. `true`, or `false, reason`. |
+| `OpenHudEditor(options)` | Open the editor. `{ demo = true }` adds a sample component. |
 | `CloseHudEditor()` | Close it, if this resource opened it. |
-| `ResetHudLayout(id?)` | Restore factory placements and clear the saved record. With no `id`, everything. Returns how many components it restored. |
+| `ResetHudLayout(id?)` | Restore factory placements and clear the saved record. No `id` means all; returns the count. |
 
-There is one editor, not one per resource. Registering puts your component in the same list,
-and on the same screen, as everyone else's:
+`options` is `{ label, width, height, canHide?, canScale?, minScale?, maxScale?, persist?,
+minVisiblePixels?, minVisibleFraction?, defaults = { x, y, scale, visible, anchor },
+layout? }`. Layouts persist per server endpoint; without one they are session-only and tLib
+says so at startup. For a `persist` component the record is written before `fn` runs, so
+`true` means the position survived.
+
+One editor, not one per resource:
 
 <ZoomableImage
   src="/assets/tLib/layout--editor.png"
@@ -347,32 +361,19 @@ and on the same screen, as everyone else's:
   alt="The HUD layout editor listing Lightbar HUD from tELS, Radio from tRadio and Radar from tRadar, with all three drag frames outlined inside a safe-area border"
 />
 
-`SetHudLayout` returns `false, 'Close the layout editor first'` while the editor is open —
-the editor is one transaction over every component, and **Cancel** would discard your write
-along with the rest. Handle that refusal; do not retry in a loop.
-
-`RegisterHudComponent` is refused the same way, for the same reason, and that one you do have
-to come back from: a resource that starts while a player is positioning their HUD would
-otherwise never register at all. Keep the definition and try again when the editor closes, or
-register through `@tLib/shared/imports/hud/client.lua`, which does that for you.
-
-For a `persist` component the record is written before your `fn` is called, so a `true` means
-the position survives a reload.
-
-`options` is `{ label, width, height, canHide?, canScale?, minScale?, maxScale?, persist?,
-minVisiblePixels?, minVisibleFraction?, defaults = { x, y, scale, visible, anchor }, layout? }`.
-Layouts persist per server endpoint; without one they are session-only and tLib says so at
-startup.
+<Callout type="warning">
+**Registration and `SetHudLayout` are both refused while the editor is open** — it is one
+transaction over every component, and **Cancel** would discard your write with the rest.
+`SetHudLayout` answers `false, 'Close the layout editor first'`; handle it, never retry in a
+loop. `RegisterHudComponent` you *must* come back from, or a resource starting mid-edit
+never registers. Retry on close, or register through `@tLib/shared/imports/hud/client.lua`,
+which does it for you.
+</Callout>
 
 ### `defaults` and `layout` are different things
 
-`defaults` is the **factory** placement — the one "Reset this" goes back to. `layout` is where
-the widget **is right now**.
-
-They only coincide for a component that has nowhere else to keep its placement. A consumer that
-passes `persist = false` owns its own storage, and passing its saved position as `defaults` makes
-Reset restore the very placement the player is trying to escape. If a widget can be dragged
-somewhere it cannot be dragged back from, that makes it unrecoverable. Pass both:
+`defaults` is the **factory** placement, where "Reset this" goes. `layout` is where the
+widget **is now**. Pass both, always:
 
 ```lua
 exports['tLib']:RegisterHudComponent('radio', {
@@ -382,106 +383,92 @@ exports['tLib']:RegisterHudComponent('radio', {
 }, onLayout)
 ```
 
-Pass both, always. There is no capability to probe for — pin `tlib_min_version '1.0'`, which
-is the first release carrying `layout`. There is no `GetHudLayoutCapabilities()` export.
+They coincide only for a component with nowhere else to keep its placement. With
+`persist = false` you own the storage, and passing the saved position as `defaults` makes
+Reset restore the placement the player is escaping — a widget draggable somewhere it cannot
+be dragged back from. There is no capability to probe and no `GetHudLayoutCapabilities()`:
+pin `tlib_min_version '1.0'`, the first release carrying `layout`.
 
-Every layout tLib is given — saved record, `layout`, or `defaults` — is validated independently
-and falls through to the next when it is unusable, and the survivor is clamped against the live
-resolution so at least `minVisiblePixels` (96 by default) or `minVisibleFraction` (0.4) of the
-widget stays on screen. That happens on **registration**, not only while editing: a record
-written at another resolution heals on the way in.
+Every layout tLib is handed — saved record, `layout`, `defaults` — is validated
+independently and falls through to the next when unusable, then clamped against the live
+resolution so at least `minVisiblePixels` (96) or `minVisibleFraction` (0.4) stays on
+screen. That runs on **registration**, so a record written at another resolution heals on
+the way in.
 
 ### Units
 
-`x` and `y` are a ratio of a **1080px-tall reference screen on both axes** — the same unit the
-widget's own size scales by — so a corner inset stays visually constant from 16:9 to 32:9.
-Centre-anchored `x` is the one exception and stays proportional to the width. Dividing `x` by the
-viewport *width* is the v1 rule and is wrong: at 3440x1440 it places the widget 3440/1440 = 2.39x
-further from the anchor than the editor's outline, and drags stop being 1:1.
+`x` and `y` are a ratio of a **1080px-tall reference screen on both axes**, the same unit
+the widget's size scales by, so a corner inset looks constant from 16:9 to 32:9.
+Centre-anchored `x` is the exception and stays proportional to width.
 
-### If a player loses their HUD
+<Callout type="warning">
+Dividing `x` by the viewport *width* is the v1 rule and is wrong. At 3440x1440 it places the
+widget 2.39x further from the anchor than the editor's outline, and drags stop being 1:1.
+</Callout>
 
-`/tlibhud reset` restores every registered component to its factory placement and clears the
-saved layout, with the editor open or shut, whichever resource opened it.
+If a player loses their HUD, `/tlibhud reset` restores every component to its factory
+placement and clears the saved layout — editor open or shut, whichever resource opened it.
 
 ---
 
 ## Keybind registry
 
-**Client.** The one place on the server where two *different* resources' key bindings are
-visible at once. A resource's own `tlib.platform.keybindConflicts()` runs inside its own VM, so
-it cannot see the collisions players actually hit: two resources that both default to `B`, both
-firing on one press.
+**Client.** The only place two *different* resources' bindings are visible at once. A
+resource's own `tlib.platform.keybindConflicts()` runs in its own VM, so it cannot see the
+collision players hit: two resources both defaulting to `B`.
 
 | Export | Description |
 | --- | --- |
-| `ReportKeybind(entry)` | Record one bind: `{ token, resource?, label?, default?, group? }`. `tlib.platform.bindKey` calls this for you. |
-| `GetKeybinds()` | Every bind reported so far, as a flat array of `{ resource, token, label, default, group }`. |
-| `GetKeybindConflicts()` | `{ { group, key, claims = { { resource, token, label, default, group }, … } }, … }`. |
+| `ReportKeybind(entry)` | Record one bind: `{ token, resource?, label?, default?, group? }`. `tlib.platform.bindKey` calls it for you. |
+| `GetKeybinds()` | Every bind so far, as `{ resource, token, label, default, group }`. |
+| `GetKeybindConflicts()` | `{ { group, key, claims = { … } }, … }`. |
 
-Only `token` is required. `resource` defaults to `?`, `label` to the token, and `group` to
+Only `token` is required; `resource` defaults to `?`, `label` to the token, `group` to
 `keyboard`. A malformed entry is dropped rather than raised, so a bad call cannot break your
-startup — but it also means a typo here is silent, and the bind simply never appears in
-`GetKeybinds()`.
+startup — and a typo is silent, the bind never appearing in `GetKeybinds()`. An entry with
+no `default` never counts as a collision, and a conflict needs **more than one resource**.
 
-An entry with no `default` is recorded and never counted as a collision, and a conflict needs
-**more than one resource** — two binds on one key from the same resource are left to that
-resource's own `tlib.platform.keybindConflicts()`.
-
-tLib prints its own report ten seconds after start, once. Resource start order is not
-guaranteed, so a bind reported later is still recorded but misses that printout — call
-`GetKeybindConflicts()` yourself if you need an answer after then.
-
-Nothing here reassigns a key. The player's rebind is authoritative and FiveM stores it against
-the command token, so act on a reported conflict by changing a **default** and shipping it, not
-at runtime.
+tLib prints its report ten seconds after start, once; a bind reported later is recorded but
+misses it, so call `GetKeybindConflicts()` yourself after that. Nothing here reassigns a
+key: FiveM stores a rebind against the command token, so act on a conflict by changing a
+**default** and shipping it.
 
 ---
 
 ## Marketplace
 
-**Client and server.** The in-game panel for browsing and installing content a resource
-publishes.
+**Client and server.** The in-game panel for browsing and installing published content.
 
 | Export | Side | Description |
 | --- | --- | --- |
 | `RegisterMarketplaceType(kind, opts)` | Server | Declare a content type this resource provides. |
-| `OpenMarketplace(opts)` | Client | Open the standalone panel. `{ resource = 'tRadio' }` scopes it to one product; `{ initialTab = 'sounds' }` picks the tab. |
-| `ProvideMarketplaceData(opts)` | Client | Same payload, no modal: feeds a marketplace tab inside a dialog you already opened. |
+| `OpenMarketplace(opts)` | Client | The standalone panel. `{ resource = 'tRadio' }` scopes it; `{ initialTab = 'sounds' }` picks the tab. |
+| `ProvideMarketplaceData(opts)` | Client | Same payload into a tab of a dialog you already opened. Takes no NUI focus. |
 | `CloseMarketplace()` | Client | Close the standalone panel. |
 
-`ProvideMarketplaceData` is the integrated path. Give your dialog a tab with
-`view = "marketplace"` and it renders the browser in that tab's panel, inside
-your own dialog chrome. Call this when the server answers with what is
-installed; it takes no NUI focus, because the dialog already has it.
-`OpenMarketplace` stays for places with no host dialog to embed in.
+`ProvideMarketplaceData` is the integrated path: give your dialog a tab with
+`view = "marketplace"` and call it when the server answers with what is installed.
+`OpenMarketplace` is for places with no host dialog to embed in.
 
 ---
 
 ## Logger
 
-**Client and server.** Structured console logger with level filtering.
+**Client and server.** Levels are `1` DEBUG, `2` INFO, `3` WARN, `4` ERROR. A trailing
+number in the arguments is the level; everything else is `tostring`'d and space-joined.
 
 | Export | Description |
 | --- | --- |
-| `CreateLogger(loggerId, printFn, opts)` | Returns a log function pinned to a source name. `opts.minLevel` overrides the global level for that logger alone. |
-| `Log(loggerId, args)` | Format and filter one line. Returns the formatted string, or `nil` when filtered or empty. |
-| `SetLogLevel(level)` | Set the global minimum level. |
-
-Levels: `1` DEBUG, `2` INFO, `3` WARN, `4` ERROR. A trailing number in the arguments is the
-level; everything else is `tostring`'d and joined with spaces.
+| `CreateLogger(loggerId, printFn, opts)` | A log function pinned to a source name. `opts.minLevel` overrides the global level for it alone. |
+| `Log(loggerId, args)` | Format and filter one line. Returns the string, or `nil` when filtered or empty. |
+| `SetLogLevel(level)` | Set the global minimum. |
 
 ```lua
 local log = exports['tLib']:CreateLogger('myresource', print)
 log('Server started')           -- INFO
-log('Debug details', 1)         -- DEBUG
 log('Something went wrong', 4)  -- ERROR
-```
 
-`Log` returns the line and leaves the printing to the caller, for resources that route their
-output somewhere other than the console:
-
-```lua
+-- Log() returns the line and leaves printing to you:
 local line = exports['tLib']:Log('myresource', { 'Something went wrong', 4 })
 if line then print(line) end
 ```
@@ -490,36 +477,29 @@ if line then print(line) end
 
 ## HTTP Helper
 
-**Server.** Non-blocking requests through FiveM's native `PerformHttpRequest`. Separate from
-tLib's public HTTP routing hub, which is documented in the README.
+**Server.** Non-blocking requests through FiveM's `PerformHttpRequest`. Separate from tLib's
+public HTTP routing hub, which the README covers.
 
 | Export | Description |
 | --- | --- |
 | `Fetch(opts, callback)` | Make an HTTP or HTTPS request. |
 
-### Fetch options
-
-| Key | Type | Description |
+| `opts` key | Type | Description |
 | --- | --- | --- |
 | `url` | `string` | Required. Full URL including scheme. |
-| `method` | `string` | HTTP method (default `"GET"`). |
-| `headers` | `table` | Request headers as a key/value table. |
+| `method` | `string` | Default `"GET"`. |
+| `headers` | `table` | Key/value table. |
 | `body` | `string` | Request body. |
 
-Redirects are followed. There are no timeout or TLS-verification options: the native's
-behaviour is used as-is.
-
-**Callback:** `function(statusCode, body, headers, errorData)` — the native's response
-arguments, forwarded unchanged. An HTTP error status is still a delivered response, so check
-the status rather than assuming success.
+Redirects are followed. There are no timeout or TLS-verification options; the native's
+behaviour is used as-is. `callback` is `function(statusCode, body, headers, errorData)` —
+the native's arguments, unchanged. An HTTP error status is still a delivered response, so
+check the status.
 
 ```lua
 exports['tLib']:Fetch({ url = 'https://example.com/api', method = 'GET' },
     function(status, body, headers, err)
-        if status ~= 200 then
-            print('Request failed:', status, err)
-            return
-        end
+        if status ~= 200 then return print('Request failed:', status, err) end
         print('Body:', body)
     end)
 ```
@@ -528,7 +508,7 @@ exports['tLib']:Fetch({ url = 'https://example.com/api', method = 'GET' },
 
 ## Permissions
 
-**Client and server.** Admin levels are `0` none, `1` admin (`tlib.admin`), `2` superadmin
+**Client and server.** Levels: `0` none, `1` admin (`tlib.admin`), `2` superadmin
 (`tlib.superadmin`).
 
 | Export | Side | Description |
@@ -538,67 +518,62 @@ exports['tLib']:Fetch({ url = 'https://example.com/api', method = 'GET' },
 | `RefreshAdminPermission()` | Client | Re-ask the server. |
 | `IsPlayerAdmin(playerId)` | Server | `true` if that player is at least admin. |
 | `GetPlayerLevel(playerId)` | Server | That player's numeric level. |
-| `HasPermission(source, key)` | Server | Check one arbitrary permission key. |
-| `HasPermissionBatch(source, keys)` | Server | A whole key list in one call. Returns `{ [key] = boolean }`. |
-| `RegisterAdminEvent(eventName, handler)` | Server | Register a net event that only fires for admins. Denied attempts are logged. |
-| `RegisterPermissionResolver(fn)` | Server | Replace ACE checks with a framework's own permission system. |
+| `HasPermission(source, key)` | Server | Check one permission key. |
+| `HasPermissionBatch(source, keys)` | Server | A key list in one call. Returns `{ [key] = boolean }`. |
+| `RegisterAdminEvent(eventName, handler)` | Server | A net event that only fires for admins. Denials are logged. |
+| `RegisterPermissionResolver(fn)` | Server | Replace ACE checks with a framework's own system. |
 
 ---
 
 ## Diagnostics consent
 
-**Server.** Two exports, and a UI needs both. Everything crosses as a JSON
-string, so a caller never has to branch on a type. See `tlib_telemetry` in
-[Convars](/docs/tLib/convars#what-is-deliberately-not) for what is collected and
-what deliberately is not.
+**Server.** Both exports cross as a JSON string, so a caller never branches on a type. See
+`tlib_telemetry` in [Convars](/docs/tLib/convars#what-is-deliberately-not) for what is
+collected.
 
-| Export | Side | Description |
-| --- | --- | --- |
-| `GetTelemetryConsent()` | Server | `{ enabled, source, locked, convar, convarValue, queued, transport }`. |
-| `SetTelemetryConsent(enabled)` | Server | `{ ok = true, consent }`, or `{ ok = false, reason, detail }`. |
+| Export | Description |
+| --- | --- |
+| `GetTelemetryConsent()` | `{ enabled, source, locked, convar, convarValue, queued, transport }`. |
+| `SetTelemetryConsent(enabled)` | `{ ok = true, consent }`, or `{ ok = false, reason, detail }`. |
 
 ```lua
 local c = json.decode(exports['tLib']:GetTelemetryConsent())
 ```
 
-⚠️ **Render a switch only when `locked` is false.** `locked` is true when
-`tlib_telemetry` is set, and then the convar is the answer: there is nothing to
-toggle, and a switch that appears to offer one is a control that lies. Show
-`convarValue` and the `convar` name instead, so the operator can find what set
-it. `source` is `convar`, `switch` or `default`.
+<Callout type="warning">
+**Render a switch only when `locked` is false.** `locked` is true when `tlib_telemetry` is
+set, and then the convar is the answer — a switch offering one is a control that lies. Show
+`convarValue` and the `convar` name instead. `source` is `convar`, `switch` or `default`.
+</Callout>
 
-⛔ **There is no `provisioned` field, and a UI must not render a "cannot
-transmit" state.** The ingest authenticates with the same public key every studio
-API call uses, so there is no credential for a consumer to resolve or report on.
+<Callout type="warning">
+**Call `SetTelemetryConsent`, never the bundle's `DiagSetConsent`.** Only this wrapper tells
+already-connected clients; without that broadcast a change applies to players who reconnect
+and nobody else, which reads as "the switch does nothing". It refuses with
+`reason = 'locked'` while the convar has decided.
+</Callout>
 
-⚠️ **Call `SetTelemetryConsent`, never the bundle's `DiagSetConsent` directly.**
-This wrapper is what tells the already-connected clients; without that broadcast
-a change takes effect for players who reconnect and for nobody else, which reads
-as "the switch does nothing". It refuses with `reason = 'locked'` while the
-convar has decided, rather than storing a preference that would be ignored.
+- There is **no `provisioned` field**; never render a "cannot transmit" state. The ingest
+  uses the same public key every studio API call uses, so there is no credential to resolve.
+- It is **not permission-gated**. Gate it at your own call site.
+- **Never put it on an unauthenticated surface.** tLib's hub binds `0.0.0.0` with no auth on
+  its index, so it calls neither export and shows no diagnostics state.
 
-⛔ It is **not** permission-gated here. A consumer exposing it to players must
-gate it at its own call site.
-
-⛔ **And never on an unauthenticated surface.** tLib's own hub binds `0.0.0.0` by
-default and its index carries no auth, so it calls neither of these and shows no
-diagnostics state at all. For an operator, `tlib_telemetry` is the only control.
-
-`tlib_telemetry_status` on the server console prints the same answer, plus the
-queue depth and whether the transport has given up.
+`tlib_telemetry_status` in the server console prints the same answer plus the queue depth
+and whether the transport has given up.
 
 ---
 
 ## Local inference
 
-**Server.** For resources that ship their own model runtime. Everything crosses as a JSON
-string, and an empty string is the universal "no".
+**Server.** For resources shipping their own model runtime. Everything crosses as a JSON
+string; an empty string is the universal "no".
 
 | Export | Description |
 | --- | --- |
-| `InferenceAdvertise(json)` | Register an engine you started: `{ capability, workload, url, model }`. Returns a handle. The URL must be on `127.0.0.1`. |
-| `InferenceLookup(capability, workload)` | An engine another resource already has up for the same weights, or `''`. Never returns your own. |
-| `InferenceWithdraw(handle)` | Drop one of your own advertisements. A resource's entries are dropped for it when it stops. |
+| `InferenceAdvertise(json)` | Register an engine you started: `{ capability, workload, url, model }`. Returns a handle; the URL must be `127.0.0.1`. |
+| `InferenceLookup(capability, workload)` | Another resource's engine for the same weights, or `''`. Never your own. |
+| `InferenceWithdraw(handle)` | Drop one of yours. Stopping the resource does this anyway. |
 | `InferenceList()` | Everything registered, for diagnostics. |
 
 Starting those engines is a separate, gated surface — see [Child processes](#child-processes).
@@ -607,100 +582,85 @@ Starting those engines is a separate, gated surface — see [Child processes](#c
 
 ## Child processes
 
-**Server.** One `add_unsafe_child_process_permission` line for a whole box, however many
-resources on it ship a local engine.
-
-FXServer attributes the child-process check to whichever resource's runtime made the call, so
-without this every resource that spawns would need its own grant. tLib makes the call instead,
-so the only line you need is:
+**Server.** One line covers a whole box, however many resources on it ship a local engine:
 
 ```cfg
 add_unsafe_child_process_permission tLib
 ```
 
-### What sits behind the one line
-
-**The caller names a program, never a path.** tLib holds a catalog of which resources may
-spawn, which programs each may run, where those programs live inside that resource, and what
-their arguments are allowed to look like. It resolves the executable itself, checks the
-resolved path is inside the calling resource after `realpath` (so neither a `..` nor a symlink
-escapes), rebuilds the argv token by token from a declared shape, and execs with **no shell**.
-
-So what tDB can run through this grant is `pocketbase`, from its own directory, with
-PocketBase's own flags — not an arbitrary command line.
-
-<Callout type="warning">
-This narrows what a **compromised first-party resource** can do. It is not a defence against a
-hostile resource *pretending* to be one. `GetInvokingResource()` identifies the calling
-resource container honestly, but a folder named `tDB` containing someone else's code passes
-that check — exactly as it passed `add_unsafe_child_process_permission tDB` before. The
-`author` in a caller's fxmanifest is read and a mismatch is logged loudly, but a resource
-writes its own manifest, so a match authorises nothing and nothing in tLib branches on it.
-</Callout>
-
-### Exports
+FXServer attributes the check to whichever resource's runtime made the call. tLib makes it,
+so no other resource needs its own grant.
 
 | Export | Description |
 | --- | --- |
-| `SpawnServe(json)` | Start a long-lived process: `{ key, program, args, cwd, env, mode }`. Returns `{ pid }` or `{ error }`. Serving the same `key` twice while it is alive returns the first pid rather than a second copy. |
-| `SpawnOutput(key, since)` | `{ lines, next, alive, code }` — what that process has printed since your cursor. In `bytes` mode, `{ chunks, next, stderr, alive, code }`. |
-| `SpawnUnserve(key)` | Stop it: SIGTERM, then SIGKILL after a five-second grace. |
+| `SpawnServe(json)` | Start a long-lived process: `{ key, program, args, cwd, env, mode }`. `{ pid }` or `{ error }`; a live `key` served twice returns the first pid. |
+| `SpawnOutput(key, since)` | `{ lines, next, alive, code }` since your cursor. In `bytes` mode, `{ chunks, next, stderr, alive, code }`. |
+| `SpawnUnserve(key)` | SIGTERM, then SIGKILL after a five-second grace. |
 | `SpawnWrite(key, base64)` | Write bytes to a `bytes`-mode process's stdin. |
 | `SpawnRun(json)` | A one-shot: `{ program, args, cwd, env, stdin }`. Returns `{ job }`. |
 | `SpawnJob(id)` | `{ state, code, stdout, stderr, error }`. Reading a finished job forgets it. |
-| `SpawnCancel(id)` | Kill a one-shot that is still running. |
-| `SpawnList()` | What is running and for whom, for diagnostics. |
+| `SpawnCancel(id)` | Kill a running one-shot. |
+| `SpawnList()` | What is running and for whom. |
 
-`cwd` is resource-relative and must be one the catalog declares for that program; omitted, it
-is the binary's own directory. `env` names must be on the program's allowlist — this is why
-`LD_PRELOAD` cannot be set. `mode` is `lines` (default) or `bytes`, which hands stdout back
-base64 with nothing dropped and keeps stdin open; it exists for a child that exchanges binary
-frames rather than log lines, and it widens the **data** path only — the program, its path and
-its arguments go through the same gate either way.
+`cwd` is resource-relative and must be one the catalog declares for that program; omitted,
+it is the binary's own directory. `env` names must be on the program's allowlist, which is
+why `LD_PRELOAD` cannot be set. `mode` is `lines` (default) or `bytes`, which returns stdout
+base64 with nothing dropped and keeps stdin open; `bytes` widens the **data** path only.
+
+### What sits behind the one line
+
+**The caller names a program, never a path.** tLib's catalog declares which resources may
+spawn, which programs each may run, where those live and what their arguments may look like.
+It resolves the executable, checks the resolved path is inside the calling resource after
+`realpath` (so neither a `..` nor a symlink escapes), rebuilds the argv token by token from
+a declared shape, and execs with **no shell**. What tDB can run through this grant is
+`pocketbase`, from its own directory, with PocketBase's own flags.
+
+<Callout type="warning">
+This narrows what a **compromised first-party resource** can do; it is not a defence against
+a hostile one *pretending* to be one. `GetInvokingResource()` names the calling container
+honestly, but a folder named `tDB` holding someone else's code passes that check — exactly
+as it passed `add_unsafe_child_process_permission tDB` before. The caller's manifest
+`author` is read and a mismatch logged loudly, but a resource writes its own manifest, so
+nothing branches on it.
+</Callout>
 
 ### Cross-platform
 
-There is no platform branch in this surface. The catalog declares a binary per platform —
-tDB's `.runtime/pocketbase-win.exe` against `.runtime/pocketbase-linux` — and the caller never
-says which one it wants.
+No platform branch. The catalog declares a binary per platform — tDB's
+`.runtime/pocketbase-win.exe` against `.runtime/pocketbase-linux` — and the caller never
+says which it wants. Nothing shells out to PowerShell, so a minimal Linux container needs no
+extra packages.
 
 Containment compares paths **exactly**, never case-folded: `/opt/res/tdb` and `/opt/res/tDB`
-are two directories on Linux, so folding them would accept the wrong one there while weakening
-the check on Windows.
-
-Nothing here shells out to PowerShell, so a minimal Linux container needs no extra packages.
+are two directories on Linux, so folding would accept the wrong one there and weaken the
+check on Windows.
 
 ### Lifecycle
 
-A child started here belongs to **tLib's** runtime, not to the resource that asked for it, so
-it no longer dies with its owner for free. tLib reaps it instead:
+A child belongs to **tLib's** runtime, so it no longer dies with its owner for free. tLib
+reaps it when the owning resource stops (including the stop half of a restart), when the
+owner calls `SpawnUnserve`, and when tLib stops — a restart leaving them up would find its
+own ports held by its own children.
 
-- when the owning resource stops — including the stop half of a restart;
-- when the owner calls `SpawnUnserve`;
-- when tLib itself stops, because a restart that left them running would find its own ports
-  held by its own children.
+A caller restarting is **kill-and-respawn, not reuse**: `onResourceStop` fires before the
+restarted copy starts, so the old engine is signalled and waited for. Expect a fresh
+process, since a restarted resource may want a different model, context size or port.
 
-A caller restarting is **kill-and-respawn, not reuse**. `onResourceStop` fires before the
-restarted copy starts, so the old engine is signalled and waited for before a new one is asked
-for. Expect a fresh process: a restarted resource may want a different model, context size or
-port, and none of those would reach an adopted one.
-
-Watch for orphans. A leftover PocketBase holds its HTTP port and locks its SQLite directory,
-and the next start then fails as a bind error that reads like misconfiguration. Keep your own
-PID file too — it is the only thing that covers the *unclean* case, since `kill -9` and txAdmin
-give neither resource a chance to run a handler.
+<Callout type="warning">
+**Watch for orphans.** A leftover PocketBase holds its HTTP port and locks its SQLite
+directory, and the next start fails as a bind error that reads like misconfiguration. Keep
+your own PID file: it is the only thing covering the *unclean* case, since `kill -9` and
+txAdmin run no handler.
+</Callout>
 
 ### Binary integrity
 
-The spawn catalog supports a `sha256` list per program, and nothing uses it today. These
-binaries are verified where they are fetched, not where they are run:
-
-- PocketBase **updates itself**, so its hash changes underneath any pin tLib could ship.
-- `llama-server`, `whisper-server`, `piper` and the vendored Node are fetched per platform and
-  per upstream release by each resource's own setup script, which verifies them against the
-  publisher's checksums *at fetch time*.
-
-What this gate adds on top is containment and argument shape, not integrity.
+The catalog supports a `sha256` list per program and nothing uses it. These binaries are
+verified where they are fetched, not where they are run: PocketBase **updates itself**, so
+its hash moves underneath any pin tLib could ship, and `llama-server`, `whisper-server`,
+`piper` and the vendored Node are checked against the publisher's checksums at fetch time by
+each resource's setup script. This gate adds containment and argument shape, not integrity.
 
 ---
 
@@ -708,73 +668,61 @@ What this gate adds on top is containment and argument shape, not integrity.
 
 | Export | Side | Description |
 | --- | --- | --- |
-| `GenerateId()` | Both | A unique id string, the same generator tLib uses for dialogs and toasts. |
-| `Platform()` | Client | tLib's platform adapter, as a table of callable references. |
-| `CreateDiscovery(opts)` | Server | Scan resources for tagged config files, load and save them, and pick up resources that start late. |
+| `GenerateId()` | Both | A unique id string; the generator behind dialogs and toasts. |
+| `Platform()` | Client | tLib's platform adapter as a table of callable references. |
+| `CreateDiscovery(opts)` | Server | Scan resources for tagged config files, load and save them, and pick up late starters. |
 | `CreateServerSettings(opts)` | Server | Admin-configurable settings for one resource, persisted to a JSON file inside it. |
-| `CommunityConfigsImport(...)` / `CommunityConfigsUpload(...)` | Server | Proxy for the community configs API, so a consumer neither repeats the HTTP boilerplate nor sees the server hash. |
-| `CommunityConfigsPeek(id, cb)` | Server | The same config payload `CommunityConfigsImport` returns, but it does **not** increment the config's import counter. Use it to render or preview a listing; use `CommunityConfigsImport` only when a player actually installs one. |
-| `CommunityConfigsList(opts, cb)` | Server | Browse published configs. `opts` is `{ script, configType, key?, limit? }` — the first two are required, `limit` defaults to `30`. `cb(ok, items, err)` with `items` already decoded. |
-| `CommunityConfigsMatch(opts, cb)` | Server | **Candidates** for a vehicle, by model fingerprint. `opts` is `{ fp, script?, configType?, key?, limit? }`; `fp` is required, `configType` defaults to `led_layout`, `limit` to `30`. Same `cb(ok, items, err)`. |
+| `CommunityConfigsImport(...)` / `CommunityConfigsUpload(...)` | Server | Community configs API proxy; the consumer repeats no HTTP boilerplate and never sees the server hash. |
+| `CommunityConfigsPeek(id, cb)` | Server | `Import`'s payload without incrementing the import counter. Use it to render a listing. |
+| `CommunityConfigsList(opts, cb)` | Server | Browse published configs. `{ script, configType, key?, limit? }`; first two required, `limit` default `30`. `cb(ok, items, err)`, `items` decoded. |
+| `CommunityConfigsMatch(opts, cb)` | Server | **Candidates** by model fingerprint. `{ fp, script?, configType?, key?, limit? }`; `fp` required, `configType` default `led_layout`. Each item carries the publisher's own `fp` — comparing it is yours to do. |
 | `IsDemoMode()` | Server | `true` while `tlib_demo` is on. The export behind `tlib.demo.active()`. |
 
-`CommunityConfigsMatch` returns **candidates, not matches**. Each item carries the
-publisher's own fingerprint in `fp`; comparing it is yours to do.
+<Callout type="warning">
+**Call the community-config exports from the game server, never from your NUI.** `/api/v1`
+sends no `Access-Control-Allow-Origin`, so a `fetch` from `cfx-nui-<resource>` is refused by
+the browser *after* the request already succeeded.
+</Callout>
 
-Call both from the game server, never from your NUI. `/api/v1` sends no
-`Access-Control-Allow-Origin`, so a `fetch` from `cfx-nui-<resource>` is refused by the browser
-*after* the request has already succeeded.
-
-`CreateDiscovery` must be given `resourceName = GetCurrentResourceName()` when it is called at
-module init time: `GetInvokingResource()` returns `nil` during top-level script execution, and
-without the name the file I/O targets tLib instead of the caller.
+`CreateDiscovery` needs `resourceName = GetCurrentResourceName()` when called at module init
+time: `GetInvokingResource()` is `nil` during top-level execution, and without the name the
+file I/O targets tLib instead of you.
 
 ---
 
 ## Exporting a config into another resource
 
-Discovery can move a config out of your resource's `data.json` and into the resource that owns
-the model — a vehicle pack ships `tels.json` beside its `.yft`, declares it in its own
-`fxmanifest.lua`, and the config travels with the vehicle instead of living in a server-specific
-data file.
-
-That write crosses a resource boundary, which FiveM constrains — but does not forbid.
+Discovery can move a config out of your `data.json` and into the resource that owns the
+model — a vehicle pack ships `tels.json` beside its `.yft`, declares it in its own
+`fxmanifest.lua`, and the config travels with the vehicle.
 
 <Callout type="warning">
-FiveM sandboxes a write to the resource it **originates in**, not to the one it lands in. From
-one resource's runtime, `SaveResourceFile` into your **own** resource returns `1`, into
-**another** started resource returns `false`, and into a resource that does not exist **raises**.
-Node's `fs` behaves the same way. Reads are not restricted — `LoadResourceFile` works everywhere.
+**FiveM sandboxes a write to the resource it originates in, not the one it lands in.**
+`SaveResourceFile` into your **own** resource returns `1`, into **another** started resource
+returns `false`, and into a resource that does not exist **raises**. Node's `fs` behaves the
+same. Reads are unrestricted.
 </Callout>
 
-So the write has to be performed *by the destination*. Every resource that bundles tLib's
-`shared/ts` registers its own `WriteResourceFile` export, and a FiveM export is callable across
-resources, so tLib asks the target to write its own file. Nothing is ever reported as exported
-unless the file actually landed.
+So the destination performs the write. Every resource bundling tLib's `shared/ts` registers
+its own `WriteResourceFile` export, and a FiveM export is callable across resources, so tLib
+asks the target to write its own file. Nothing is reported as exported unless the file
+landed.
 
 <Callout type="warning">
 **No `server.cfg` line changes this — do not add one.** `add_filesystem_permission tLib
-write *` looks like the fix and does nothing: the sandbox is not asking about permission, it is
-asking which resource is writing. `--allow-fs-write` is a server *launch argument*, so it is
-not open to you either. If that line is already in your config, delete it.
+write *` looks like the fix and does nothing: the sandbox is not asking about permission, it
+is asking which resource is writing. `--allow-fs-write` is a server *launch argument*. If
+that line is in your config, delete it.
 </Callout>
 
-Which of the two paths below you get is decided by the target, not by your configuration.
+The target decides which path you get:
 
-### When the target runs its own code
-
-Any resource with a server bundle that calls `registerWriteResourceFile()` from
-`tLib/shared/ts/fs/server.ts` accepts the export directly.
-tLib writes the JSON into it and adds the metadata line to its `fxmanifest.lua` for you. One
-click, nothing to copy.
-
-### When the target is a plain asset pack
-
-A vehicle pack is usually just models and a `tels.json` — no scripts, no bundle, so there is no
-runtime inside it to perform the write. That case cannot be configured away. tLib writes the
-**finished file** into its own directory instead and tells you exactly what to do with it. The
-player sees the
-steps in chat and the server console logs the same three lines:
+- **It runs its own code.** Any resource whose server bundle calls
+  `registerWriteResourceFile()` from `tLib/shared/ts/fs/server.ts` accepts the export
+  directly. tLib writes the JSON in and adds the metadata line to its `fxmanifest.lua`.
+- **It is a plain asset pack.** No scripts, no bundle, no runtime to write with. tLib writes
+  the **finished file** into its own directory and prints these steps to the player in chat
+  and to the server console:
 
 ```
 1. Copy tLib/export-staging/<target-resource>/<file>.json  ->  <target-resource>/<file>.json
@@ -782,20 +730,12 @@ steps in chat and the server console logs the same three lines:
 3. Restart <target-resource> (or the server).
 ```
 
-The staged file is not a fragment — it is the target's existing config file with your model
-merged into it, so it can be dropped straight in. Until you do, nothing has changed: the config
-is still local, still served to clients, and the picker still shows it as local.
+The staged file is the target's existing config with your model merged in, so it drops
+straight in. Until you copy it nothing has changed: the config is still local and still
+served to clients.
 
-### What the metadata line looks like
-
-The key is whatever the consuming resource declares — `tels_config` for tELS, `tradio_config`
-for tRadio — and the value is the file name relative to the resource root:
-
-```lua
--- fxmanifest.lua, in the vehicle resource
-tels_config 'tels.json'
-```
-
+The metadata key is whatever the consuming resource declares — `tels_config` for tELS,
+`tradio_config` for tRadio — and the value is the file name relative to the resource root.
 Without that line the file is never read, however it got there.
 
 ---
