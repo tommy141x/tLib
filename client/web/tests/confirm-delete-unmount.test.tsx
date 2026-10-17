@@ -1,7 +1,7 @@
 /**
  * `ConfirmDelete`: what survives the control leaving the tree.
  *
- * ── ⚠️ What this file deliberately does NOT test, and why ───────────────────
+ * What this file deliberately does NOT test, and why.
  *
  * The defect that prompted it was `onCleanup(disarm)`, which called
  * `setArmed(false)` from inside the disposal pass. Solid 2 answers a reactive

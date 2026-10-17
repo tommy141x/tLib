@@ -96,7 +96,13 @@ export function NuiField(props: {
       invalid={!!props.error}
       disabled={props.field.disabled}
     >
-      <Show when={props.field.type !== "button" && props.field.type !== "checkbox"}>
+      <Show
+        when={
+          props.field.type !== "button" &&
+          props.field.type !== "checkbox" &&
+          props.field.type !== "display"
+        }
+      >
         <Field.Label id={label} class="tlib-nui-label">
           {props.field.label}
           <Show when={props.field.required}>
@@ -273,11 +279,20 @@ export function NuiField(props: {
             </div>
           </Slider.Root>
         </Match>
+        {/*
+          Text, not a control — no input, no disabled styling, full opacity.
+          The label is the text itself, which is why the caption above is
+          suppressed for this type; `description` is the second line.
+        */}
+        <Match when={props.field.type === "display"}>
+          <p class="tlib-nui-display">{props.field.label}</p>
+        </Match>
         <Match when={props.field.type === "textarea"}>
           <Field.Textarea
             value={String(props.value ?? "")}
             class={`${inputClass} tlib-nui-textarea`}
-            rows={3}
+            rows={props.field.rows ?? 3}
+            maxlength={props.field.maxLength}
             required={props.field.required}
             placeholder={props.field.placeholder}
             disabled={props.field.disabled}
@@ -293,6 +308,7 @@ export function NuiField(props: {
             required={props.field.required}
             placeholder={props.field.placeholder}
             disabled={props.field.disabled}
+            maxlength={props.field.maxLength}
             min={props.field.min}
             max={props.field.max}
             step="any"

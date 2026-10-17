@@ -122,14 +122,17 @@ function SoundFields.append(fields, opts)
     drawnKeys = keys
 
     if #keys == 0 then
-        -- A disabled control rather than no tab: an empty panel under a tab the
-        -- player just clicked reads as a broken menu, not as "nothing to map".
+        -- Something rather than no tab: an empty panel under a tab the player
+        -- just clicked reads as a broken menu, not as "nothing to map".
+        --
+        -- It used to be a `disabled` TEXT INPUT, which drew an empty greyed-out
+        -- box with the whole message relegated to helper text beneath it. That
+        -- was the only shape available before `display` existed, and this is the
+        -- case the new type's docblock cites by name.
         fields[#fields + 1] = {
             id          = 'soundsEmpty',
-            type        = 'text',
-            label       = 'Sound Mappings',
-            description = 'No sound keys are configured on this server yet.',
-            disabled    = true,
+            type        = 'display',
+            label       = 'No sound keys are configured on this server yet.',
             tab         = tab,
         }
         return keys

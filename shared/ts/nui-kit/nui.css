@@ -219,6 +219,23 @@
   margin-left: 4px;
   color: var(--nui-muted);
 }
+/*
+ * A `display` field: text, not a control.
+ *
+ * Full opacity and normal text colour on purpose. Every substitute this type
+ * replaced was a `disabled` button or input, which `.tlib-nui-control:disabled`
+ * draws at `opacity: 0.5` with `cursor: not-allowed` -- correct for a control
+ * the player may not use, and exactly wrong for the readout a screen exists to
+ * show. `line-height` matches `.tlib-nui-helper` so a label-plus-description
+ * pair sets as one block.
+ */
+.tlib-nui-display {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--nui-text);
+  white-space: pre-wrap;
+}
 .tlib-nui-helper,
 .tlib-nui-error {
   font-size: 12px;

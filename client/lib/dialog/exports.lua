@@ -13,6 +13,17 @@ local VALID_FIELD_TYPES = {
     checkbox = true,
     radio    = true,
     button   = true,
+    -- Text, not a control. Added 2026-10-16 after five resources each invented
+    -- their own way to show a sentence in a dialog, because there was no type
+    -- for it: tChirp drew SEVEN of its ten rows as disabled buttons, tAFK drew
+    -- its section headings the same way, tRadar put its manual chapters in a
+    -- disabled textarea, tDetector's empty state (in this repo's own
+    -- shared/imports/soundfields) was a disabled and empty text input, and tUnit
+    -- concatenated a status note onto a live field's label. Every one of those
+    -- renders at `opacity: 0.5` with `cursor: not-allowed` -- the stack's
+    -- language for "you may not touch this" -- on content that is the whole
+    -- point of the screen.
+    display  = true,
 }
 
 local function validateOptions(f)
@@ -59,9 +70,22 @@ local function serialiseField(f)
         fieldType == 'password' or fieldType == 'textarea' then
         s.placeholder  = type(f.placeholder) == 'string' and f.placeholder or nil
         s.defaultValue = type(f.defaultValue) == 'string' and f.defaultValue or nil
+        -- A cap the PAGE enforces, not only the server. tUnit set this and it
+        -- never arrived, because this serialiser is a whitelist and nothing
+        -- named it: the player typed past the limit, pressed Apply, and
+        -- server/sv_sources.lua dropped the value and returned without a reply.
+        s.maxLength    = type(f.maxLength) == 'number' and f.maxLength > 0
+            and math.floor(f.maxLength) or nil
         if fieldType == 'number' then
             s.min = type(f.min) == 'number' and f.min or nil
             s.max = type(f.max) == 'number' and f.max or nil
+        end
+        if fieldType == 'textarea' then
+            -- Was hard-coded to 3 in nui-field.tsx with no way through. tRadar's
+            -- manual chapters are 20-40 lines and rendered in a ~90px box inside
+            -- an xl dialog whose panel floor is 360px.
+            s.rows = type(f.rows) == 'number' and f.rows >= 1
+                and math.min(math.floor(f.rows), 40) or nil
         end
     elseif fieldType == 'dropdown' or fieldType == 'select' or fieldType == 'radio' then
         s.options      = validateOptions(f)

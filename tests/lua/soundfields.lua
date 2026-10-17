@@ -138,7 +138,7 @@ SoundFields.append(dupes, {
 })
 sameList(optionValues(dupes[1]), { '', 'a.wav' }, 'the options list was not deduplicated')
 
--- No keys: a disabled control, not an empty tab
+-- No keys: a line of text, not an empty tab
 
 local empty = {}
 local emptyDrawn = SoundFields.append(empty, { config = config({}) })
@@ -146,7 +146,10 @@ if #emptyDrawn ~= 0 then fail('append claimed to draw keys it had none of') end
 if #empty ~= 1 or empty[1].id ~= 'soundsEmpty' then
     fail('an empty sound config drew no explanation; the tab reads as a broken menu')
 end
-if not empty[1].disabled then fail('the empty-state field was editable') end
+-- `display`, not a disabled input. The old shape drew an empty greyed-out box
+-- and put the sentence in helper text under it; this asserts it cannot go back.
+if empty[1].type ~= 'display' then fail('the empty state was drawn as a control, not as text') end
+if empty[1].disabled then fail('a display field must not be marked disabled') end
 
 -- A missing config is the same case, not a crash: the client may open the
 -- dialog before the server's sound config has arrived.

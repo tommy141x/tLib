@@ -12,7 +12,17 @@ export interface DialogField {
     | "radio"
     | "slider"
     | "checkbox"
-    | "button";
+    | "button"
+    /**
+     * Text, not a control. Carries no value, is never submitted, and is the
+     * only type that renders at full opacity with no input beside it.
+     *
+     * It exists because five resources had each invented a substitute — see the
+     * note on `VALID_FIELD_TYPES` in `client/lib/dialog/exports.lua`. A
+     * `disabled` button or input is the stack's visual language for "you may
+     * not touch this", which is the wrong thing to say about a readout.
+     */
+    | "display";
   label: string;
   description?: string;
   required?: boolean;
@@ -22,6 +32,10 @@ export interface DialogField {
   min?: number;
   max?: number;
   step?: number;
+  /** Text-ish fields only: the cap the page enforces, so a server-side limit is visible. */
+  maxLength?: number;
+  /** `textarea` only. Was hard-coded to 3 with no way through. */
+  rows?: number;
   options?: { value: string; label: string }[];
   variant?: "default" | "primary" | "destructive";
   /**
@@ -95,7 +109,7 @@ export function matchesDialog(dialog: DialogData | null, id: string, instance?: 
 export function initialValues(fields: DialogField[], previous: DialogValues = {}): DialogValues {
   return Object.fromEntries(
     fields
-      .filter((field) => field.type !== "button")
+      .filter((field) => field.type !== "button" && field.type !== "display")
       .map((field) => {
         const value = Object.hasOwn(previous, field.id)
           ? previous[field.id]
@@ -107,7 +121,7 @@ export function initialValues(fields: DialogField[], previous: DialogValues = {}
   );
 }
 export function fieldError(field: DialogField, value: DialogValue | undefined): string | undefined {
-  if (field.disabled || field.type === "button") return;
+  if (field.disabled || field.type === "button" || field.type === "display") return;
   const empty = value === undefined || value === "";
   if (empty) return field.required ? `${field.label || "This field"} is required.` : undefined;
   if (field.type === "checkbox")
