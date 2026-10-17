@@ -18,11 +18,14 @@ local log = Logger.create('tLib/marketplace')
 -- browser in a dialog tab and the standalone modal are the same component, so
 -- anything that reached one and not the other -- previewState most of all --
 -- would break previewing a layout before installing it in exactly one of them.
+local MARKETPLACE_TABS = { uis = true, sounds = true, installed = true }
+
 local function buildPayload(opts)
     local baseUrl = StudioApi.baseUrl()
     return {
         resource         = type(opts.resource)         == 'string' and opts.resource         or nil,
-        initialTab       = type(opts.initialTab)       == 'string' and opts.initialTab       or nil,
+        -- Unknown tab = every render branch skipped = blank panel. Both ends clamp.
+        initialTab       = MARKETPLACE_TABS[opts.initialTab] and opts.initialTab or nil,
         baseUrl          = baseUrl,
         installedSlugs   = type(opts.installedSlugs)   == 'table'  and opts.installedSlugs   or nil,
         installedLayouts = type(opts.installedLayouts) == 'table'  and opts.installedLayouts or nil,

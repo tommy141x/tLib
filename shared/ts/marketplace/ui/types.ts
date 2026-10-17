@@ -63,8 +63,13 @@ export interface OpenData {
   installedSounds?: InstalledSound[];
   /** Filter results to a specific resource name. */
   resource?: string;
-  /** Which tab to open on. Defaults to "uis". */
-  initialTab?: "uis" | "sounds";
+  /**
+   * Which tab to open on. Defaults to "uis".
+   *
+   * Anything else is clamped back to "uis" by the browser, because this value
+   * crosses NUI from a host and the Lua side does not constrain it.
+   */
+  initialTab?: "uis" | "sounds" | "installed";
   /** Name of the global update function the preview iframe should call (e.g. "__tdetLayoutUpdate"). */
   previewFn?: string;
   /** Dummy state to feed into the preview update function so the UI renders non-empty. */

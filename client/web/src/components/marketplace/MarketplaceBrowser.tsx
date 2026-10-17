@@ -332,7 +332,20 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     setSearch("");
     setOperationError(null);
     setSort("downloads");
-    setTab(data.initialTab ?? "uis");
+    // CLAMPED, BECAUSE THE TYPE IS A PROMISE LUA CANNOT KEEP. `initialTab` is
+    // typed `"uis" | "sounds"`, but it arrives over NUI from a host, and
+    // cl_marketplace.lua accepts any string for it. An unrecognised value used
+    // to land in this signal and skip EVERY render branch — no grid, no
+    // toolbar, no spinner, no empty state, no error pane, just the category
+    // buttons over nothing. Two of the four consumers shipped `"layouts"` and
+    // both panels were silently blank; one of them went unreported entirely
+    // because nobody had opened it.
+    //
+    // Falling back to "uis" rather than refusing: a host asking for a tab that
+    // does not exist still wants the marketplace, and a wrong-but-populated tab
+    // is recoverable by one click where a blank panel is not.
+    const wanted = data.initialTab;
+    setTab(wanted === "sounds" || wanted === "installed" ? wanted : "uis");
     // THE HOST'S SNAPSHOT, PATCHED WITH WHAT THIS SESSION WATCHED HAPPEN.
     //
     // `data` is sent once per open and the signal holding it keeps that object,

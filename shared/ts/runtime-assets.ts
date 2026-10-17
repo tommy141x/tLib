@@ -61,8 +61,13 @@ export interface RuntimeAssetCacheOptions {
   timeoutMs?: number;
   /** Injected by the suite. Defaults to the global `fetch`. */
   fetchImpl?: FetchLike;
-  /** Injected by the suite. Defaults to the global `console`. */
-  logger?: Pick<Console, "log" | "warn">;
+  /**
+   * Injected by the suite. Defaults to the global `console`.
+   *
+   * `debug` is OPTIONAL and call sites use `?.`: the suite injects `log`/`warn`
+   * only, and a consumer typechecks this file in its own build.
+   */
+  logger?: Pick<Console, "log" | "warn"> & Partial<Pick<Console, "debug">>;
   /**
    * How a bundle's files are addressed once extracted.
    *
@@ -426,11 +431,9 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
       for (const probe of bundleProbes) {
         if (!(await servedByResource(bundleBase(key) + probe))) continue;
         bundleLocal.add(key);
-        // Silent, because this is the ordinary outcome. Every shipped layout is
-        // served by its own resource, so this printed once PER LAYOUT on every
-        // boot — five lines across tRadar, tDetector and tELS announcing that
-        // nothing had been downloaded. The download path still logs, and so does
-        // every failure; an uneventful hit does not need to.
+        // Debug, because this is the ordinary outcome: it printed once per layout
+        // on every boot, announcing that nothing had been downloaded. Downloads
+        // and failures still log.
         log.debug?.(
           `[${tag}] runtime bundle: "${key}" is served by the resource (${probe}) — not downloading`
         );
