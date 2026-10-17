@@ -35,53 +35,60 @@ export async function request(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  // `.then(onOk, onErr)`, NOT `try { await fetch(...) } catch`.
+  // One try/catch over the fetch AND the body read, because both race the
+  // timeout.
   //
-  // Those are equivalent in Node and are NOT equivalent here. A try/catch
-  // around an `await` attaches its rejection handler a turn too late for
-  // FiveM's reporting, so an aborted fetch is caught correctly AND still
-  // printed as an unhandled rejection:
+  // This was `fetch(...).then(onOk, onErr)`, on the theory that the
+  // two-argument form suppressed a recurring runtime log line:
   //
   //   [js] Unhandled promise rejection in resource tLib
   //   [js] Uncaught TypeError: Invalid state: Reader released
   //         node:internal/webstreams/readablestream(159,19): lazyReadableReleasedError
-  //         ... readableStreamDefaultReaderRead / pullWithDefaultReader ...
   //
-  // That is the stream being torn down mid-read when the timeout aborts it:
-  // the body reader is released while a pull is still in flight. It repeated
-  // six times in one evening on 305RP2 while the marketplace host was
-  // unreachable, and it is pure noise — the error IS handled and the caller
-  // does get `request_timed_out`.
+  // IT DID NOT, AND NO SHAPE OF THIS FUNCTION CAN. That promise is created
+  // inside Node — `readablestream.js:2316` rejects it and `:2321` hands it to
+  // `setPromiseHandled` five lines later — and we never hold it, so there is
+  // nothing of ours to attach a handler to. Every frame in the quoted stack is
+  // one of those internals calling the next, line for line.
   //
-  // Settling with the two-argument form owns the rejection in the turn it is
-  // created, which is what stops the runtime also claiming it. This is the
-  // same fix tDB applied to its PocketBase client for an identical double
-  // report; it is a property of this runtime, not of these two modules.
-  const settle = fetch(url, {
-    method,
-    headers,
-    body: method === "GET" ? undefined : body,
-    signal: controller.signal,
-  }).then(
-    async (res) => {
-      // Read the body inside the same chain. `res.text()` is the half that
-      // actually races the abort — headers can arrive well before a stalled
-      // body does — so it must not be awaited outside this handler.
-      const text = await res.text();
-      return { ok: res.ok, status: res.status, body: text };
-    },
-    (e: unknown) => {
-      // An abort is a timeout; say so rather than surfacing "This operation
-      // was aborted", which reads like a bug to whoever sees it in game.
-      if (e instanceof Error && (e.name === "AbortError" || controller.signal.aborted)) {
-        throw new MarketplaceError("request_timed_out", 0);
-      }
-      throw e;
-    }
-  );
-
+  // It is also not the timeout, which is what the old note claimed. The trigger
+  // is a REQUEST BODY, on the success path, with no abort and no error: undici
+  // sends the body as `for await (const bytes of request.body.stream)` and
+  // ending that loop releases the reader. Measured here with a v8 promise hook
+  // (one such promise per body-carrying fetch, none without a body) and
+  // independently in tDB, whose `server/utils/http-transport.js` header records
+  // the same result from `tests/dev/snippets/probe-bodytypes.js`: every body
+  // type does it, no body is clean, node:http with the same body is clean. So
+  // the browse and preview paths, which send no body, never could have been the
+  // source — only the four community-configs POSTs can be.
+  //
+  // tDB did NOT fix this with `.then(ok, err)`; the old note conflated two
+  // separate things. tDB replaced `fetch` with a node:http transport, which is
+  // the only remedy that works, and its `.then(ok, err)` at `client.js:382` is
+  // about a different symptom (a handled error being reported twice). A
+  // `process.on("unhandledRejection")` filter is not an option either: Node's
+  // own event provably does not fire for this, so the line comes from the
+  // host's reporter and a listener here would be dead code.
+  //
+  // What the old shape did cost is real: `onErr` hung off `fetch(...)`, so it
+  // never saw `res.text()` reject. Headers arrive long before a stalled body
+  // does, so an abort during the body read reached the caller as a raw
+  // `AbortError: This operation was aborted` rather than `request_timed_out`.
   try {
-    return await settle;
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: method === "GET" ? undefined : body,
+      signal: controller.signal,
+    });
+    return { ok: res.ok, status: res.status, body: await res.text() };
+  } catch (e: unknown) {
+    // An abort is a timeout; say so rather than surfacing "This operation was
+    // aborted", which reads like a bug to whoever sees it in game.
+    if (e instanceof Error && (e.name === "AbortError" || controller.signal.aborted)) {
+      throw new MarketplaceError("request_timed_out", 0);
+    }
+    throw e;
   } finally {
     clearTimeout(timer);
   }
