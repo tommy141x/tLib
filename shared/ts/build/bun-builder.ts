@@ -64,9 +64,27 @@ export async function bunBuild(
   }
 }
 
+/**
+ * `env` is spread explicitly, and it is load-bearing. Measured on Bun
+ * 1.4.4-canary.1: with `env` omitted, a variable ASSIGNED at runtime
+ * (`process.env.X = "1"`) does not reach the child — a spawned
+ * `bun -e 'console.log(process.env.X)'` printed `undefined`. Only the
+ * environment the parent process started with crosses. Spreading materialises
+ * the current values.
+ *
+ * What that cost: tRadio's prod.ts sets `TRADIO_RELEASE_BUILD=1` before
+ * `buildAll()`, and both Vite configs turn it into
+ * `__TRADIO_DEV_CODECS__: JSON.stringify(process.env.TRADIO_RELEASE_BUILD !== "1")`.
+ * The var never arrived, so the define was replaced with `true` instead of
+ * `false` and the dev-only AMBE descriptor survived into both Vite bundles —
+ * asset names for a patent-encumbered vocoder, in a customer release. It failed
+ * silently in the sense that mattered: the define DID apply, so no identifier
+ * was left to grep for, and only prod.ts's `assertNoDevCodecStaged` caught it.
+ */
 export async function viteBuild(cwd: string): Promise<boolean> {
   const proc = Bun.spawn(["bunx", "vp", "build"], {
     cwd,
+    env: { ...process.env },
     stdio: ["inherit", "inherit", "inherit"],
   });
   return (await proc.exited) === 0;
