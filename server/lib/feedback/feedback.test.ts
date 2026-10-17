@@ -6,14 +6,7 @@
 // answers "" — the same answer a host whose data.json cannot be read gives.
 
 import { describe, expect, test } from "bun:test";
-import {
-  buildBody,
-  classify,
-  endpointFor,
-  type FeedbackResult,
-  MESSAGE_MAX,
-  submit,
-} from "./index";
+import { buildBody, classify, endpointFor, MESSAGE_MAX } from "./index";
 
 describe("feedback body", () => {
   test("carries the message, claims source=game, and slugs the context", () => {
@@ -166,50 +159,42 @@ describe("endpoint and status", () => {
   });
 });
 
-describe("submit", () => {
-  const run = (over: Record<string, unknown>, status = 201) => {
-    let sentTo = "";
-    let sentBody = "";
-    let result!: FeedbackResult;
-    submit(
-      {
-        baseUrl: "https://timmygstudios.com",
-        message: "hi",
-        resource: "tCAD",
-        resourceVersion: "1.0.0",
-        ...over,
-      },
-      (r) => {
-        result = r;
-      },
-      (url, body, done) => {
-        sentTo = url;
-        sentBody = body;
-        done(status);
-      }
-    );
-    return { sentTo, sentBody, result };
+/**
+ * What `fbPrepare` composes, tested through its three pure parts.
+ *
+ * It replaced `submit`, which owned the transport as well. That transport could
+ * never run: `PerformHttpRequest` is not a global in FXServer's server JS
+ * runtime (measured 2026-10-16), so the suite below was the ONLY place the old
+ * `submit` ever worked — it passed because the test injected its own `post`.
+ * A green suite over an injected seam said nothing about the one real caller.
+ * The request is Lua's now; see the note in index.ts.
+ */
+describe("prepare", () => {
+  const prepare = (over: Record<string, unknown>) => {
+    const input = {
+      baseUrl: "https://timmygstudios.com",
+      message: "hi",
+      resource: "tCAD",
+      resourceVersion: "1.0.0",
+      ...over,
+    };
+    return { url: endpointFor(input.baseUrl), body: buildBody(input) };
   };
 
-  test("posts JSON to /api/feedback and reports the verdict", () => {
-    const { sentTo, sentBody, result } = run({});
-    expect(sentTo).toBe("https://timmygstudios.com/api/feedback");
-    expect(JSON.parse(sentBody)).toMatchObject({ source: "game", message: "hi" });
-    expect(result).toEqual({ ok: true });
-  });
-
-  test("a 429 answers `rate-limited`, which is what keeps the player's text", () => {
-    expect(run({}, 429).result).toEqual({ ok: false, reason: "rate-limited" });
+  test("addresses /api/feedback and marks the message as coming from the game", () => {
+    const { url, body } = prepare({});
+    expect(url).toBe("https://timmygstudios.com/api/feedback");
+    expect(body).toMatchObject({ source: "game", message: "hi" });
   });
 
   // `invalid` and not `refused`: nothing left this server, so there is nothing
-  // for the player to retry.
-  test("nothing is sent when there is no endpoint or no message", () => {
-    const noUrl = run({ baseUrl: "ftp://nope" });
-    expect(noUrl.sentTo).toBe("");
-    expect(noUrl.result).toEqual({ ok: false, reason: "invalid" });
-    const noMessage = run({ message: " " });
-    expect(noMessage.sentTo).toBe("");
-    expect(noMessage.result).toEqual({ ok: false, reason: "invalid" });
+  // for the player to retry. Either half being null is what produces it.
+  test("there is nothing to send without an endpoint or without a message", () => {
+    expect(prepare({ baseUrl: "ftp://nope" }).url).toBeNull();
+    expect(prepare({ message: " " }).body).toBeNull();
+  });
+
+  test("a 429 is `rate-limited`, which is what keeps the player's text", () => {
+    expect(classify(429)).toEqual({ ok: false, reason: "rate-limited" });
   });
 });

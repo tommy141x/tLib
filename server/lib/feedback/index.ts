@@ -20,21 +20,10 @@
 import { INSTALL_ID_HEADER } from "../../../shared/ts/install-id";
 import { DIMENSION_CAPS, slug, versionSlug } from "../../../shared/ts/telemetry/payload";
 import { installId } from "../install-id";
-import { fExports, fPerformHttpRequest } from "./fivem";
+import { fExports } from "./fivem";
 
 /** tWeb's `SUPPORT_MESSAGE_MAX`. A longer body is a 400, so it is trimmed here. */
 export const MESSAGE_MAX = 2000;
-
-/**
- * `PerformHttpRequest` HAS NO TIMEOUT. Without this the Lua callback never
- * fires, the player's dialog sits on "Sending…" forever and their text is
- * stranded in a box that will not answer. It also has to stay UNDER the menu
- * channel's own timeout (`tlib_menu_request_timeout_ms`, 10s default): a slower
- * transport answers after the channel has told the player "timed out" about a
- * message that may well have been delivered. 8s here, 9s for the Lua backstop,
- * 10s for the channel.
- */
-const REQUEST_TIMEOUT_MS = 8_000;
 
 /**
  * Why a send failed, in the vocabulary the dialog can act on. `rate-limited` is
@@ -100,8 +89,6 @@ export function classify(status: number): FeedbackResult {
   return { ok: false, reason: "unreachable" };
 }
 
-type PostFn = (url: string, body: string, done: (status: number) => void) => void;
-
 /**
  * NOT `studioHeaders()`, and this is the one place in tLib that is not.
  * `/api/feedback` takes no `x-resource-secret` and no `x-fivem-server`. What it
@@ -115,85 +102,66 @@ function headers(): Record<string, string> {
   };
 }
 
-const performPost: PostFn = (url, body, done) => {
-  let settled = false;
-  const finish = (status: number) => {
-    if (settled) return;
-    settled = true;
-    done(status);
-  };
-  const timer = setTimeout(() => finish(0), REQUEST_TIMEOUT_MS);
-  try {
-    fPerformHttpRequest(
-      url,
-      (status) => {
-        clearTimeout(timer);
-        finish(status);
-      },
-      "POST",
-      body,
-      headers()
-    );
-  } catch {
-    clearTimeout(timer);
-    finish(0);
-  }
-};
-
-/** The whole send, with the transport substitutable for a suite. */
-export function submit(
-  input: FeedbackInput,
-  done: (result: FeedbackResult) => void,
-  post: PostFn = performPost
-): void {
-  const url = endpointFor(input.baseUrl);
-  const body = buildBody(input);
-  // `invalid` rather than `refused`: nothing left this server, so there is
-  // nothing for the player to retry and the dialog says so.
-  if (!url || !body) {
-    done({ ok: false, reason: "invalid" });
-    return;
-  }
-  post(url, JSON.stringify(body), (status) => done(classify(status)));
-}
+/**
+ * THE POST IS DONE IN LUA, AND THAT IS NOT WHERE IT STARTED.
+ *
+ * This module used to call `PerformHttpRequest` itself. MEASURED on a live
+ * server 2026-10-16: `globalThis.PerformHttpRequest` is **undefined** in
+ * FXServer's server JS runtime. `Citizen`, `setTick`, `onNet`, `emitNet`,
+ * `exports` and `GetConvar` are all there -- 626 globals -- and that one is
+ * not. So the captured handle was `undefined`, calling it threw, the catch
+ * mapped it to status `0`, and `classify(0)` answered `unreachable` in **zero
+ * milliseconds**. Every feedback message this server ever sent failed that way,
+ * from the menu as well as from a dialog, and the 8s timeout that used to be
+ * documented here never once had anything to time out.
+ *
+ * The same native from the Lua VM returns 201. So the split moves: Lua performs
+ * the request, and this module keeps the two pure halves that have tests --
+ * what to send (`buildBody`, `endpointFor`, `headers`) and what the answer
+ * means (`classify`).
+ *
+ * `server/lib/telemetry/fivem.ts` and `server/lib/marketplace/fivem.ts`
+ * reach for the same global. Telemetry already tolerates its absence with an
+ * explicit fallback; marketplace captures it the way this module did. Neither
+ * is verified end to end and neither is changed here.
+ */
 
 let installed = false;
 
 /**
- * The one export, for `server/sv_feedback.lua`.
- *
- *   exports['tLib']:fbSubmit(payloadJson, function(ok, reason) end)
+ * Two exports, both for `server/sv_feedback.lua`: what to send, and what the
+ * answer meant. Neither performs the request — see the note above.
  */
 export function installFeedback(): void {
   if (installed) return;
   installed = true;
 
-  fExports("fbSubmit", (payloadJson: unknown, cb: unknown) => {
-    if (typeof cb !== "function") return;
-    const done = cb as (ok: boolean, reason: string | null) => void;
-    const answer = (result: FeedbackResult) => {
-      try {
-        done(result.ok, result.ok ? null : result.reason);
-      } catch {
-        // A throwing Lua callback is the caller's problem and must not take the
-        // Node runtime's event loop with it.
-      }
-    };
+  /**
+   * What to send, for `server/sv_feedback.lua` to actually send.
+   *
+   *   local prepared = exports['tLib']:fbPrepare(payloadJson)
+   *   -> '{"url":"...","body":"...","headers":{...}}' or '{"error":"invalid"}'
+   */
+  fExports("fbPrepare", (payloadJson: unknown): string => {
+    let input: unknown;
     try {
-      let input: unknown;
-      try {
-        input = JSON.parse(typeof payloadJson === "string" ? payloadJson : "null");
-      } catch {
-        answer({ ok: false, reason: "invalid" });
-        return;
-      }
-      if (!input || typeof input !== "object") {
-        answer({ ok: false, reason: "invalid" });
-        return;
-      }
-      submit(input as FeedbackInput, answer);
+      input = JSON.parse(typeof payloadJson === "string" ? payloadJson : "null");
     } catch {
-      answer({ ok: false, reason: "unreachable" });
+      return JSON.stringify({ error: "invalid" });
     }
+    if (!input || typeof input !== "object") return JSON.stringify({ error: "invalid" });
+    const typed = input as FeedbackInput;
+    const url = endpointFor(typed.baseUrl);
+    const body = buildBody(typed);
+    // `invalid` rather than `refused`: nothing left this server, so there is
+    // nothing for the player to retry and the dialog says so.
+    if (!url || !body) return JSON.stringify({ error: "invalid" });
+    return JSON.stringify({ url, body: JSON.stringify(body), headers: headers() });
+  });
+
+  /** What one HTTP status means, in the dialog's vocabulary. */
+  fExports("fbClassify", (status: unknown): string | null => {
+    const result = classify(typeof status === "number" ? status : 0);
+    return result.ok ? null : result.reason;
   });
 }

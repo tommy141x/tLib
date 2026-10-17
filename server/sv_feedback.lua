@@ -11,8 +11,11 @@
 -- IT REGISTERS NO NET EVENT OF ITS OWN. The request arrives through the
 -- menu's existing request channel (`kind = 'feedback'` in sv_menu.lua), which
 -- already carries correlation ids, a rate limiter, a timeout and a player
--- drop sweep. A second channel would have had to re-derive all four, and the
--- menu is the only surface this is reachable from.
+-- drop sweep. A second channel would have had to re-derive all four.
+--
+-- That is still true now that the menu is no longer the only surface: the
+-- `SubmitFeedback` export (client/cl_menu.lua) exists for resources whose
+-- settings live in a tLib dialog, and it sends down this same channel.
 
 if _TLIB_SIDE ~= 'server' then return end
 
@@ -49,19 +52,26 @@ end)
 
 --- Which resource a message is about.
 ---
---- THE CLIENT'S CLAIM IS CHECKED, NOT TRUSTED. The dialog is only ever opened
---- from a page a resource owns, so the only legitimate value is a resource that
---- has declared a menu namespace — checked against the registry rather than
---- against `GetResourceState`, which would also accept any unrelated resource on
---- the server. An unrecognised name is DROPPED rather than refused: the message
---- is the product and the attribution is the aid, so a forged name costs the row
---- its resource column and nothing else. That is also tWeb's own stance — the
---- three context fields are optional even when `source` is `game`.
+--- THE CLIENT'S CLAIM IS CHECKED, NOT TRUSTED. Neither test is
+--- `GetResourceState`, which would accept any unrelated resource on the server.
+--- An unrecognised name is DROPPED rather than refused: the message is the
+--- product and the attribution is the aid, so a forged name costs the row its
+--- resource column and nothing else. That is also tWeb's own stance — the three
+--- context fields are optional even when `source` is `game`.
+---
+--- Two tests, because there are two surfaces. A menu form is opened from a page
+--- a resource owns, so its name is in the menu registry. A DIALOG form has no
+--- page and no namespace — tRadio is the first — so the second test is the
+--- manifest key every consumer already declares, read off the named resource's
+--- own manifest. A forged name can therefore still only name another tLib
+--- consumer, which is the exposure the paragraph above already accepts.
 local function attributedResource(claimed)
     if type(claimed) ~= 'string' or claimed == '' then return nil end
     local registry = MenuEngine and MenuEngine.registry
-    if not registry or not registry.namespaces[claimed] then return nil end
-    return claimed
+    if registry and registry.namespaces[claimed] then return claimed end
+    local ok, pinned = pcall(GetResourceMetadata, claimed, 'tlib_min_version', 0)
+    if ok and type(pinned) == 'string' and pinned ~= '' then return claimed end
+    return nil
 end
 
 local function versionOf(resource)
@@ -124,23 +134,35 @@ function F.submit(src, body, finish)
         answered = true
         finish(result)
     end
-    -- A backstop between the bundle's 8s and the menu channel's 10s: a callback
-    -- that never arrives would otherwise leave the player's dialog waiting on
-    -- nothing, and answering before the channel gives up is what makes the
-    -- reason the player reads the feedback vocabulary rather than the channel's
-    -- own 'Server request timed out'.
+    -- `PerformHttpRequest` HAS NO TIMEOUT, so without this the player's dialog
+    -- waits on nothing. It also has to stay UNDER the menu channel's own
+    -- timeout (`tlib_menu_request_timeout_ms`, 10s default), or the channel
+    -- says "timed out" about a message that may well have been delivered.
     Platform.setTimeout(function() answer({ ok = false, error = 'unreachable' }) end, 9000)
 
+    -- THE REQUEST IS MADE HERE, NOT IN THE BUNDLE, AND THAT IS THE WHOLE
+    -- REASON THIS FILE GREW. It used to hand the payload to `fbSubmit` and let
+    -- the Node side post it. MEASURED 2026-10-16: `PerformHttpRequest` is not a
+    -- global in FXServer's server JS runtime -- `Citizen`, `setTick`, `onNet`,
+    -- `emitNet`, `exports` and `GetConvar` all are, that one is not -- so the
+    -- bundle's captured handle was nil, calling it threw, and every message
+    -- failed as `unreachable` in zero milliseconds. From this VM the same
+    -- native returns 201. The bundle still owns what to send and what the
+    -- answer meant; it no longer owns the sending.
     local ok, err = pcall(function()
-        exports['tLib']:fbSubmit(payload, function(sent, failure)
-            if sent then answer({ ok = true }); return end
-            answer({ ok = false, error = type(failure) == 'string' and failure or 'unreachable' })
-        end)
+        local prepared = json.decode(exports['tLib']:fbPrepare(payload))
+        if type(prepared) ~= 'table' or type(prepared.url) ~= 'string' then
+            answer({ ok = false, error = type(prepared) == 'table' and prepared.error or 'invalid' })
+            return
+        end
+        PerformHttpRequest(prepared.url, function(status)
+            local reason = exports['tLib']:fbClassify(status)
+            if reason == nil then answer({ ok = true }); return end
+            answer({ ok = false, error = reason })
+        end, 'POST', prepared.body, prepared.headers)
     end)
     if not ok then
         log('feedback could not be submitted: ' .. tostring(err), 4)
         answer({ ok = false, error = 'unreachable' })
     end
 end
-
-return MenuFeedback

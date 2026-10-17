@@ -55,7 +55,6 @@ local EVENTS = {
     closed    = 'tlib:menu:closed',
     highlight = 'tlib:menu:highlight',
 }
-MC.events = EVENTS
 
 -- Runs the body on the current frame instead of queueing it for the scheduler's
 -- next pass. Used only on the two paths that owe the browser an answer (navigate
@@ -1496,6 +1495,14 @@ end
 -- rather than mutating one, the catalog provider returning a catalog rather than
 -- filling one in, and rows being patched by name.
 
+--- True for a plain function and for the callable table a function becomes once
+--- it has crossed an export boundary. See the note in `SubmitFeedback` below.
+local function isCallable(value)
+    if type(value) == 'function' then return true end
+    local mt = getmetatable(value)
+    return type(mt) == 'table' and mt.__call ~= nil
+end
+
 local function ownerOf(declared)
     local invoking = Platform.getInvokingResource and Platform.getInvokingResource()
     if invoking then
@@ -1632,6 +1639,35 @@ function MC.registerApi()
         local owner, err = ownerOf(declaredOwner)
         if not owner then return false, err end
         return MC.bindKey(owner, menuId)
+    end)
+
+    -- For a resource whose settings live in a tLib DIALOG rather than a menu, and
+    -- which therefore never gets the row the menu injects into an owner's root
+    -- page. tRadio's /tradio is the first.
+    --
+    -- IT GOES THROUGH THE MENU'S CHANNEL ON PURPOSE. That channel already carries
+    -- the correlation id, the rate limiter, the timeout and the drop sweep, and
+    -- re-deriving all four behind a second net event is exactly what
+    -- server/sv_feedback.lua's header declines to do. `request` has never been
+    -- gated on the menu being visible -- the visibility check lives in the NUI
+    -- callback, not here -- so nothing had to be loosened for this.
+    --
+    -- The owner is the CALLING resource, not an argument, so a message cannot be
+    -- attributed to a resource that did not ask for it.
+    api('SubmitFeedback', function(message, callback, declaredOwner)
+        local owner, err = ownerOf(declaredOwner)
+        if not owner then return false, err end
+        if type(message) ~= 'string' or message == '' then return false, 'A message is required' end
+        -- NOT `type(callback) == 'function'`. MEASURED on a live server: a
+        -- function passed across a FiveM export boundary arrives as a callable
+        -- TABLE with a `__call` metamethod, not as a function, so that test
+        -- rejected every real caller while the value was perfectly callable --
+        -- and the caller got a refusal it had no reason to expect. The paragraph
+        -- above says functions cross "by reference", which is true and is not
+        -- the same as crossing as a `function`.
+        if not isCallable(callback) then return false, 'A callback is required' end
+        request({ kind = 'feedback', message = message, resource = owner }, callback)
+        return true
     end)
 
     -- Unscoped: these act on the screen, which belongs to the player, and none can
