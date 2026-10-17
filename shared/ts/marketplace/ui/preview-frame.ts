@@ -17,7 +17,7 @@ export { parsePreviewCanvasSize };
  * `thumbFailed` is a parameter because only the host knows its `<img>` errored;
  * passing `true` falls through and keeps a dead URL from collapsing the slot.
  *
- * ── ⚠️ `panel` PRECEDES `thumbnail`, AND THAT ORDERING IS THE CONTRACT ──────
+ * `panel` PRECEDES `thumbnail`, AND THAT ORDERING IS THE CONTRACT.
  *
  * The thumbnail branch used to be taken before everything but `sound`, so a
  * dispatch-panel theme that shipped a screenshot showed the picture instead of
@@ -271,7 +271,7 @@ function isStringMap(value: unknown): value is Record<string, string> {
 /**
  * Is this the frame announcing it has mounted and is ready for a theme?
  *
- * ⚠️ The CALLER must also check `event.source` against the frame's own
+ * The CALLER must also check `event.source` against the frame's own
  * `contentWindow`, and `event.origin` cannot do that job: the frame is sandboxed
  * without `allow-same-origin`, so it posts from origin `"null"` — which every
  * other opaque frame on the page also posts from. In a grid of tiles, window

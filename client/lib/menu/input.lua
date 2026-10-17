@@ -74,8 +74,6 @@ local function suspend(active)
     if active and typing then I.text(false) end
     emit('hidden', active)
 end
-function I.isSuspended() return suspended end
-
 function I.text(active)
     if active and (not visible or modal or (not typing and _TLIB_IS_FIVEM
         and type(IsNuiFocused) == 'function' and yes(IsNuiFocused()))) then return false end

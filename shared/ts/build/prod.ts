@@ -132,7 +132,6 @@ export class ProductionStager {
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
 
-      // Skip config lines
       if (mod.removeConfigLines.some((c) => trimmed.startsWith(c))) {
         console.log(`Removing config line: ${trimmed}`);
         continue;

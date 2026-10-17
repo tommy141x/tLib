@@ -12,8 +12,6 @@ const g = globalThis as unknown as {
   exports: ExportsFn;
   on: OnFn;
   GetInvokingResource?: GetInvokingResourceFn;
-  GetResourcePath?: (resourceName: string) => string | null;
-  GetCurrentResourceName?: () => string;
 };
 
 export const fExports: ExportsFn = g.exports;
@@ -34,19 +32,3 @@ export function invokingResource(): string {
   }
 }
 
-/** Where a resource's files are, for deciding what it is allowed to launch. */
-export function resourcePath(resourceName: string): string {
-  try {
-    return g.GetResourcePath?.(resourceName) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-export function currentResource(): string {
-  try {
-    return g.GetCurrentResourceName?.() ?? "tLib";
-  } catch {
-    return "tLib";
-  }
-}

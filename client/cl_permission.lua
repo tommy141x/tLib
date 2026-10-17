@@ -25,10 +25,6 @@ AddEventHandler("onClientResourceStart", function(resourceName)
     end
 end)
 
-function Permission_IsAdmin()
-    return isAdmin
-end
-
 function Permission_registerClientExports()
     Platform.export('tLib', 'IsAdmin', function()
         return isAdmin

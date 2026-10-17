@@ -35,14 +35,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const REPO = join(import.meta.dirname, "..");
-// Directories, and `scripts/deck-publish.ts` — a single file, which the two
-// places that read this list already handle: the skip test below is
-// `p === d || p.startsWith(`${d}/`)`, and the removal is an existsSync plus a
-// recursive rmSync, both of which are true of a file as well as of a directory.
-// It is here rather than guarded like the other sibling-aware scripts because
-// it is referenced by nothing — no package.json entry, no import — and its own
-// header documents it being run from a sibling. There is no dangling reference
-// to leave behind, which is the only reason the other scripts stay.
+// Directories, plus the single file `scripts/deck-publish.ts`. Both readers of
+// this list cope with a file: the skip test is `p === d || p.startsWith(`${d}/`)`
+// and the removal is an existsSync plus a recursive rmSync. It is listed
+// unguarded, unlike the other sibling-aware scripts, because nothing references
+// it — no package.json entry, no import — so no dangling reference is left.
 const PRIVATE = ["internal", ".gitea", "scripts/deck-publish.ts"];
 const SOURCE = "internal";
 const PUBLISHED = "main";
@@ -70,7 +67,6 @@ function refuse(message: string): never {
   process.exit(2);
 }
 
-// The assumptions, checked rather than trusted.
 if (git(["rev-parse", "--abbrev-ref", "HEAD"]) !== SOURCE) {
   refuse(`run this from the ${SOURCE} branch — it is the one that has every path.`);
 }
@@ -87,8 +83,8 @@ for (const path of PRIVATE) {
   }
 }
 
-// Everything on `internal` since the last publish. The mark is the source-side
-// sha, so this stays correct even though the published shas differ.
+// The mark is the source-side sha, so the range stays correct even though the
+// published shas differ.
 const mark = tryGit(["rev-parse", "--verify", `${MARK}^{commit}`]);
 const range = mark ? `${mark}..${SOURCE}` : `${PUBLISHED}..${SOURCE}`;
 // --first-parent is load-bearing. internal/ arrived by `git subtree`, and the
@@ -174,15 +170,17 @@ try {
       }
     }
 
-    // A commit that only touched private paths leaves nothing to say.
+    // Nothing staged: the public half of this change is already on the branch,
+    // or every path that survived the pick was stripped as private above. A
+    // commit touching ONLY private paths never reaches here — it is skipped
+    // before the pick.
     if (git(["diff", "--cached", "--name-only"], work) === "") {
       tryGit(["reset", "--hard", "--quiet"], work);
       skipped++;
       continue;
     }
 
-    // Author, date and message carried over: the public commit IS this change,
-    // not a report about it.
+    // The public commit IS this change, not a report about it.
     const author = git(["log", "-1", "--format=%an <%ae>", sha]);
     const date = git(["log", "-1", "--format=%aI", sha]);
     git(["commit", "--quiet", "--no-verify", "-C", sha, "--author", author, "--date", date], work);

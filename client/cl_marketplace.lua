@@ -14,11 +14,6 @@
 
 local log = Logger.create('tLib/marketplace')
 
--- No /api/v1 suffix and no subdomain: the NUI appends `/api/v1/items...` itself.
--- Overridable for local dev with tlib_api_base_url; the default and the
--- trailing-slash/`/api` trimming both live in shared/sh_api.lua so this VM, the
--- server VM and a consumer's versioncheck cannot drift apart.
-
 -- The payload both entry points send. Identical on purpose: the embedded
 -- browser in a dialog tab and the standalone modal are the same component, so
 -- anything that reached one and not the other -- previewState most of all --
@@ -84,11 +79,10 @@ RegisterNUICallback('marketplaceInstall', function(data, cb)
     cb(1)
     if type(data) ~= 'table' then return end
     if type(data.resource) ~= 'string' or type(data.type) ~= 'string' or type(data.slug) ~= 'string' then
-        print('[tLib/marketplace] marketplaceInstall NUI callback: bad data - ' .. json.encode(data or {}))
+        log(('marketplaceInstall: bad data - %s'):format(json.encode(data or {})), 3)
         return
     end
     local version = type(data.version) == 'string' and data.version or ''
-    print('[tLib/marketplace] marketplaceInstall NUI callback: firing server event type=' .. data.type .. ' slug=' .. data.slug .. ' version=' .. version)
     TriggerServerEvent('tlib:marketplace:install', data.resource or '', data.type, data.slug, version)
 end)
 
@@ -204,8 +198,4 @@ RegisterNetEvent('tlib:marketplace:uninstallResult', function(result)
     end
 end)
 
-function MarketplaceClient_Init()
-    registerExports()
-end
-
-MarketplaceClient_Init()
+registerExports()

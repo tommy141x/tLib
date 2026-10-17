@@ -99,7 +99,6 @@ export {
   SearchX,
   Send,
   ShieldAlert,
-  TriangleAlert,
   X,
 };
 

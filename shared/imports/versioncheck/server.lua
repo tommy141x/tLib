@@ -211,7 +211,6 @@ local BOX_V  = '\xe2\x94\x82'
 
 local GREY = '\x1b[37m'
 local TEAL = '\x1b[38;2;0;180;210m'
-local RESET = '\x1b[0m'
 
 -- Width of a banner line, with colour codes removed.
 --

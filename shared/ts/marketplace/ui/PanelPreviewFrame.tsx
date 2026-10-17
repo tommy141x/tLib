@@ -10,7 +10,7 @@ import {
 /**
  * A dispatch-panel theme, shown on the REAL dispatch panel.
  *
- * ── Why there is no drawing of a panel anywhere in here ─────────────────────
+ * Why there is no drawing of a panel anywhere in here.
  *
  * Because a theme is not a picture. It is a set of CSS variables and — for the
  * ones that actually look different — `data-rd-*` markup that is inert until a
@@ -24,7 +24,7 @@ import {
  * protocol and nothing else: it owns no class names, no tokens and no icon pack,
  * same rule as `preview-frame.ts`.
  *
- * ── ⚠️ `sandbox="allow-scripts"` WITHOUT `allow-same-origin` ────────────────
+ * `sandbox="allow-scripts"` WITHOUT `allow-same-origin`.
  *
  * Those two together would be no sandbox at all — the frame could reach out and
  * remove its own sandbox attribute. The omission is the point: the panel must run
@@ -33,7 +33,7 @@ import {
  * session. The in-game NUI makes that bite harder than the web does: the embedder
  * there is `cfx-nui-tLib`, which holds the player's open admin panel.
  *
- * ── ⚠️ The frame is sized at the layout size and SCALED ─────────────────────
+ * The frame is sized at the layout size and SCALED.
  *
  * Never sized to the box. `PANEL_PREVIEW_LAYOUT` is a desk monitor's worth of
  * board; letting it reflow into a 16:9 tile would collapse every column into a

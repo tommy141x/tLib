@@ -811,5 +811,3 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     </div>
   );
 }
-
-export default MarketplaceBrowser;

@@ -33,8 +33,7 @@ local S = MenuSchema
 
 local presenters = {}
 
---
--- Presenters ask the game the same questions repeatedly within a pass and again
+-- Presenters ask the game the same questions repeatedly within a pass.
 local cache, cacheKey, cacheSize = {}, nil, 0
 
 function C.invalidate()
@@ -44,7 +43,8 @@ function C.invalidate()
     end
 end
 
---- Memoize one question about the current world. The 512 cap is a ceiling, not a
+--- Memoize one question about the current world. The 512 cap is a ceiling, not
+--- an LRU: at 512 the whole cache is dropped rather than evicted entry by entry.
 function C.cached(key, fn)
     if cache[key] == nil then
         local result = fn() -- an exception never reaches the cache
@@ -89,7 +89,6 @@ C.equal = equal
 --- Register one resource's presentation logic. Every field is optional -- a
 --- resource that only wants its own stored state on its rows registers nothing,
 --- because MenuActions already does that.
----
 function C.register(owner, presenter)
     if type(owner) ~= 'string' or owner == '' then return false, 'A presenter needs an owner' end
     if type(presenter) ~= 'table' then return false, 'A presenter must be a table' end

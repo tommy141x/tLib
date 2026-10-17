@@ -12,12 +12,12 @@
  *   deck--mini--<state>.png   the device, rendered on a transparent ground
  *   keys/<name>--<state>.png  one key face, square, also transparent
  *
- * ⚠️ The Elgato mark is a third-party logo used to name the integration. It lives at
+ * The Elgato mark is a third-party logo used to name the integration. It lives at
  * `internal/tWeb/assets/brand/stream-deck.png` — `assets/`, not `public/`, because it is a
  * build input and nothing should start serving it from timmygstudios.com as a side effect of
  * being here. The artwork is black, so it is inverted to white for this dark frame.
  *
- * ⚠️ The browser is the NUI Chromium (revision 103). No `oklch()` or `color-mix()` — they
+ * The browser is the NUI Chromium (revision 103). No `oklch()` or `color-mix()` — they
  * arrived in 111 and fail silently there.
  */
 

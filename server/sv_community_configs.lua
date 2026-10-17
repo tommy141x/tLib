@@ -1,25 +1,16 @@
 -- Server-side proxy for the community configs API, so a consuming resource
 -- neither repeats the HTTP boilerplate nor sees the server hash.
 --
--- This file no longer performs HTTP
+-- No HTTP happens here: every export below is a thin wrapper over the `cc*`
+-- exports registered by server/community-configs/bridge.ts, which holds the
+-- credential. The two original exports keep their names and their exact
+-- callback signatures, because tELS calls them.
 --
--- It used to call PerformHttpRequest directly and send no credential. The
--- publish endpoint now requires X-Resource-Secret, whose value is the baked-in
--- TLIB_PUBLIC_KEY (defined once in shared/ts/marketplace/catalogue.ts). The
--- header name is unchanged and must stay so: every shipped copy sends it, and
--- only the constant behind it was renamed.
---
--- NOT a convar. This comment used to name `tmarketplace_resource_secret`,
--- which was never true and is the misreading that got the key turned into
--- required operator config once already.
---
--- Handing it to this VM through an export would let any third-party script on
--- a customer's server read it without console or file access. So the request
--- moved to the secret.
---
--- Everything here is now a thin wrapper over the `cc*` exports registered by
--- server/community-configs/bridge.ts. The two original exports keep their
--- names and their exact callback signatures, because tELS calls them.
+-- The publish endpoint requires `X-Resource-Secret`, carrying the baked-in
+-- TLIB_PUBLIC_KEY from shared/ts/marketplace/catalogue.ts. The header name must
+-- not change -- every shipped copy sends it. It is NOT a convar, and it is not
+-- handed to this VM through an export: either would let any third-party script
+-- on a customer's server read it without console or file access.
 
 local log = Logger.create('tLib/community-configs')
 
@@ -249,8 +240,4 @@ local function registerExports()
     end)
 end
 
-function CommunityConfigsServer_Init()
-    registerExports()
-end
-
-CommunityConfigsServer_Init()
+registerExports()

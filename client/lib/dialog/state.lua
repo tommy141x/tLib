@@ -1,12 +1,8 @@
--- tLib/client/lib/dialog/state.lua
-
 DialogState      = {}
 
 local ui         = nil
 local _dialogs   = {}
 local _idCounter = 0
-
--- UI injection
 
 function DialogState.setUI(webui)
     ui = webui
@@ -15,8 +11,6 @@ end
 function DialogState.getUI()
     return ui
 end
-
--- Id generation
 
 function DialogState.generateId()
     _idCounter = _idCounter + 1

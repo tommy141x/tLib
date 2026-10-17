@@ -4,7 +4,7 @@
  * Nothing to do with `hero.ts`'s dark product cards — a billboard is read at 80mph from 200
  * metres through GTA's haze. It borrows only the capture-with-guards from `hero.ts`.
  *
- * ── What a GTA billboard actually is ────────────────────────────────────────
+ * What a GTA billboard actually is.
  *
  * The first version of this was a headline, a subhead and a URL bar on a gradient, and it
  * looked like a slide deck bolted to a frame. Pulling apart the game's own boards (Burger Shot,
@@ -62,7 +62,7 @@ export type BillboardLayout = "product" | "split" | "pattern" | "showcase" | "no
  * Every board up to now set one of two faces, which is most of why a wall of them read as one
  * campaign rather than a city's worth of advertisers. Type is the cheapest variety there is.
  *
- * ⚠️ Half of these are SYSTEM fonts, named rather than embedded. That is fine and deliberate
+ * Half of these are SYSTEM fonts, named rather than embedded. That is fine and deliberate
  * here — this is build-time art rendered on one machine — but it is the opposite of the rule
  * for anything shipped into NUI, where a named system font is a silent fallback. A board set
  * in a face the machine lacks falls back to Arial and still renders, so the `--audit` flag
@@ -465,7 +465,7 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
 
   ${
     layout === "notice"
-      ? `/* ── Notice ───────────────────────────────────────────────────────────
+      ? `/* Notice.
      A citation nailed to a board. No photograph, no product: the joke is the
      form itself, so the whole design is rules, centred serif and a stamp. */
   .b { background: ${spec.bg}; }
@@ -496,7 +496,7 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
 
   ${
     layout === "spec"
-      ? `/* ── Spec ─────────────────────────────────────────────────────────────
+      ? `/* Spec.
      A datasheet, not an advert. Mono type on a faint grid, the hardware on the
      right, and the numbers along the bottom where a spec sheet puts them. */
   .grid {
@@ -527,7 +527,7 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
   ${layout === "showcase" ? LIGHT_RIG_CSS : ""}
   ${
     layout === "showcase"
-      ? `/* ── Showcase ─────────────────────────────────────────────────────────
+      ? `/* Showcase.
      The store art's look, over a photograph. Three things make it that rather
      than "a screenshot with words on": the scrim, so type sits on something
      dark enough to read at distance; tLib's light rig, which is the same rig

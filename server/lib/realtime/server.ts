@@ -14,6 +14,7 @@ import {
   OP,
   ProtocolError,
   TEXT_TYPE,
+  WIRE_VERSION,
 } from "./protocol";
 import { RoomManager } from "./rooms";
 import { type PlayerId, type Session, type SessionId, SessionManager } from "./sessions";
@@ -177,7 +178,7 @@ export class RealtimeServer {
   private attach(session: Session, ws: WebSocket): void {
     // HELLO goes out at once; the client has authTimeoutMs to answer with AUTH.
     this.sendText(session, TEXT_TYPE.HELLO, {
-      v: 1,
+      v: WIRE_VERSION,
       sessionId: session.id,
       now: Date.now(),
     });

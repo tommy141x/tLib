@@ -82,11 +82,6 @@ function load(): Record<string, string> {
   return cache;
 }
 
-/** Test seam: the set is cached for the process, so a test must clear it. */
-export function resetIconCacheForTests(): void {
-  cache = null;
-}
-
 /** Names are kebab-case ASCII; anything else is rejected before the lookup. */
 export function isKnownIcon(name: unknown): name is string {
   if (typeof name !== "string" || !/^[a-z0-9-]{1,64}$/.test(name)) return false;

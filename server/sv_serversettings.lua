@@ -75,7 +75,6 @@ function ServerSettings.create(opts)
     local reqEvent    = opts.requestEvent
     local updEvent    = opts.updateEvent
     local saveEvent   = opts.saveEvent
-    local logTag      = opts.logTag or resName
     local onRequest   = opts.onRequest
     local onAfterSave = opts.onAfterSave
 

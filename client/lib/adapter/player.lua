@@ -2,8 +2,6 @@
 
 _TLIB_NUI_FOCUSED = false
 
-local log       = Logger.create('tLib/adapter/player')
-
 -- cb is either a function, fired on eventType ('Pressed' unless 'Released' is
 -- asked for), or a { press, release } pair sharing one key mapping.
 local function _normalizePair(cb, eventType)

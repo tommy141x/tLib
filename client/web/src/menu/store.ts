@@ -1,5 +1,5 @@
 import { createSignal, createStore, reconcile } from "solid-js";
-import { locale, setLocale } from "./i18n";
+import { setLocale } from "./i18n";
 import { isItem, normalizeAnchor, withinPresentationBudget } from "./protocol";
 import type { Anchor, Branding, Menu, NuiMessage, SearchEntry, Snapshot } from "./types";
 
@@ -106,7 +106,6 @@ export function createMenuStore() {
         break;
       // Held by i18n.ts, not the store: nothing reconciles against a locale, and
       // every component down to MenuRow reads it without being passed a prop.
-      // Re-exported below so the store's surface still answers for it.
       case "menu:locale":
         setLocale(message.data);
         break;
@@ -155,5 +154,5 @@ export function createMenuStore() {
       }
     }
   }
-  return { state, locale, searchIndex, snapshot, receive, updateMenus };
+  return { state, searchIndex, snapshot, receive, updateMenus };
 }

@@ -1,9 +1,4 @@
--- tLib/client/lib/adapter/vehicle.lua
 -- vehicle platform abstractions (FiveM)
-
-
-local log = Logger.create('tLib/adapter/vehicle')
-
 
 if _TLIB_IS_FIVEM then
     function Platform.getPlayerVehicle()

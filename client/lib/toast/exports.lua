@@ -1,5 +1,3 @@
--- tLib/client/lib/toast/exports.lua
-
 ToastExports = {}
 local log = Logger.create('tLib/toast')
 local ui, stopped = nil, false
