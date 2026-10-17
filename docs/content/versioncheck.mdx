@@ -6,8 +6,7 @@ group: "tLib"
 published: true
 ---
 
-Call `tlib.versioncheck` on the server. The call is itself the load; nothing needs
-declaring.
+Call `tlib.versioncheck` on the server. Nothing needs declaring.
 
 ```lua
 local current = GetResourceMetadata(GetCurrentResourceName(), 'version', 0)
@@ -50,14 +49,11 @@ plain-name status box with version, diagnostics and update links.
 
 <Callout type="warning" title="This is a branding convention, not proof of authenticity">
 A manifest is editable, so nothing downstream may use this rule to decide who is *allowed*
-to do something — that is what ACEs are for. The menu registry's matching exemption grants a
-studio resource room against the per-owner registration counts and never grants authority:
-every schema check, duplicate refusal and ACE check behaves identically.
+to do something — that is what ACEs are for.
 </Callout>
 
-The rule lives in `shared/sh_branding.lua`, read from disk by the banner and by the menu
-registry. List it in **both** `shared_scripts` and `files` in `fxmanifest.lua`; with only
-one, one of the callers silently loses the rule.
+The rule lives in `shared/sh_branding.lua`. List it in **both** `shared_scripts` and `files`
+in `fxmanifest.lua`; with only one, one of its callers silently loses the rule.
 
 ## Display titles
 
@@ -70,17 +66,15 @@ name 'Tommy\'s ELS'      -- shown to people
 
 The resource, the folder, the slug, the event prefixes and every ACE object stay `tELS`.
 `StudioBranding.displayName(resource)` reads the title, falling back to the resource name
-when the manifest declares nothing, declares it empty, or the metadata natives cannot answer
-— so a caller only ever gets a label, never a failure it could mistake for identity.
+when the manifest declares nothing, declares it empty, or the metadata natives cannot
+answer.
 
-It is text and only text. A display title is never a slug, ACE object, event name, command,
-statebag or KVP key, filename, cache key, wire field or lookup index. The update check's
-request URL is keyed on the product slug, which is the technical name.
+A display title is never a slug, ACE object, event name, command, statebag or KVP key,
+filename, cache key, wire field or lookup index. The update check's request URL is keyed on
+the product slug, which is the technical name.
 
-The banner prints the title as a **text line** under the wordmark rather than as art. The
-figlet font has glyphs for letters and digits only — no space, no apostrophe — so
-`Tommy's Radar Detector` renders as `TommysRadarDetector`, measured at 173 columns against
-`tDetector`'s 74, which wraps and destroys the box:
+The banner prints the title as a **text line** under the wordmark rather than as art,
+because the figlet font has no glyph for a space or an apostrophe:
 
 ```
      _/     _/_/_/_/ _/         _/_/_/
@@ -93,31 +87,7 @@ figlet font has glyphs for letters and digits only — no space, no apostrophe �
            By TIMMYG Studios
 ```
 
-Leave `name` as the technical name and the title line is omitted — which is what a developer
-library wants: the name a developer types is the name they get back.
-
-## Running the suites
-
-From the tLib resource root:
-
-```sh
-bun run test:lua                                          # every Lua suite, discovered off disk
-bun test tests/integration/versioncheck-provider.test.ts
-bun run check:regression                                  # the complete gate
-```
-
-The suites run the real Lua checker in a Lua VM with mocked FiveM metadata, events, HTTP
-callbacks and scheduling. No live server and no credentials are needed.
-
-<Callout type="warning" title="Do not hand a suite to fengari yourself">
-Fengari's CLI can print an unhandled Lua error and still exit **0**, so a suite that blew up
-on its first line reads as a pass. `scripts/run-lua-suite.lua` turns that into a non-zero
-exit, so go through it even for a single suite:
-
-```sh
-bunx --bun --package fengari-node-cli fengari scripts/run-lua-suite.lua tests/lua/versioncheck.lua
-```
-</Callout>
+Leave `name` as the technical name and the title line is omitted.
 
 ---
 

@@ -14,9 +14,8 @@ A consumer declares pages on the server and handles rows on the client.
 | Consumer | Feature behaviour, menu declarations, configuration, commands, its own state. |
 | Optional host | Public slots, placement policy, allowlists, ordering. Hosting does not make it the engine. |
 
-Do not call another consumer's private functions, inject its actions, or configure the
-shared screen from every plugin. `ConfigureMenuInterface` is shared player-UI policy, not
-plugin branding; use namespace or page themes for a consumer's visual identity.
+`ConfigureMenuInterface` is shared player-UI policy, not plugin branding; use namespace or
+page themes for a consumer's visual identity.
 
 ## A minimal consumer
 
@@ -69,9 +68,8 @@ end, false)
 ```
 
 Grant `mytools.use` to the group that should have it. The server still checks the
-namespace, page and action ACE — a command or keybinding opens a page, it does not
-authorize one. Decode data into locals before passing it as an export's last argument: a
-multi-return Lua function can fill the optional `declaredOwner` parameter.
+namespace, page and action ACE. Decode data into locals before passing it as an export's
+last argument: a multi-return Lua function can fill the optional `declaredOwner` parameter.
 
 ## Shared lifecycle adapter (API v1)
 
@@ -85,10 +83,9 @@ VM, so its subscriptions survive a dependency restart.
 | `invalidate()` | Cancel pending work, clear step checkpoints, invoke `cleanup`. |
 | `dispose()` | Invalidate and release event subscriptions. Idempotent. |
 
-It watches the correct server/client resource events, waits a scheduler tick before
-registering, retries up to 300 times 100 ms apart, and reports the real last error. There is
-no indefinite idle loop and no network event is registered. A supplied `readyEvent` must
-carry the dependency's resource name as its first argument; unrelated events are ignored.
+It retries up to 300 times 100 ms apart and reports the real last error. A supplied
+`readyEvent` must carry the dependency's resource name as its first argument; unrelated
+events are ignored.
 
 `install(ctx)` should throw on failure. `ctx.once(name, fn)` requires `fn` to return `true`
 (or `false, reason` to fail) and skips successful steps on later attempts in the same
@@ -107,10 +104,8 @@ Avoid native gameplay effects in registration; use authorized actions and `SetMe
 for ongoing behaviour and revocation cleanup. An exhausted registration can retry on a later
 readiness event or an explicit `retry()`.
 
-Assert the **import** version — `lifecycle.version`, `menuhost.version` — as both examples
-do. The resource's own `version` in `fxmanifest.lua` moves for any change, so it cannot tell
-you which local API additions a checkout has. These are Lua APIs and need no UI build, but
-reload the resource to run changed Lua.
+Assert the **import** version — `lifecycle.version`, `menuhost.version` — not the
+resource's `fxmanifest.lua` `version`.
 
 ## Optional host (API v1)
 
@@ -130,9 +125,8 @@ host.install({
 ```
 
 Install once, after declaring the host's pages. It exposes the host-scoped server exports
-`RegisterPluginMenu({ id, slot, menu, label, description? })` and `UnregisterPluginMenu(id)`,
-calling tLib's owner-only `SetMenuLinks` from the host VM. It never grants another resource
-authority to replace host actions. Readiness is `tlib:menu:hostReady(hostResource)`.
+`RegisterPluginMenu({ id, slot, menu, label, description? })` and
+`UnregisterPluginMenu(id)`. Readiness is `tlib:menu:hostReady(hostResource)`.
 
 A plugin watches its configured host with the lifecycle adapter and calls
 `RegisterPluginMenu` in a checkpointed step after registering its own target page. The same
@@ -157,27 +151,21 @@ that host's ancestor permissions mandatory, including for direct command access.
 ## The shared "Send feedback" row
 
 tLib adds one row of its own to **every namespace's entry page** — the page whose `parent`
-is `main` or absent. You do not register it and cannot: the row and its dialog live in
-tLib's own browser bundle, which every menu renders through.
+is `main` or absent. You do not register it and cannot.
 
 <Callout type="warning">
-**It is not one of your rows.** It is a client-side synthetic row, like a cross-menu search
-hit: no ACE, no action handler, no item id in your catalog, and it never reaches
-`resolveAction`. A parity test counting rows on an entry page sees one more than it
-registered; a snapshot assertion does not, because the row is added in the browser, after
-the wire.
+**It is not one of your rows.** It is a client-side synthetic row: no ACE, no action
+handler, no item id in your catalog, and it never reaches `resolveAction`. A parity test
+counting rows on an entry page sees one more than it registered.
 </Callout>
 
 The dialog sends the player's message to TIMMYG Studios with the resource name, its manifest
 `version`, and tLib's random per-install id. Nothing else — no player name, licence, Steam
 or Discord id, no server name, no IP.
 
-- **It does not need telemetry consent** and is unaffected by `tlib_telemetry`. The
-  per-install id is sent either way, because it accompanies every request tLib makes to
-  timmygstudios.com, so a message is attributable to an install but never to a person. See
+- **It does not need telemetry consent** and is unaffected by `tlib_telemetry`. See
   [Convars](/docs/tLib/convars#diagnostics).
-- **It is not permission-gated**, and no ACE hides it. Feedback is about the software, not
-  about the server.
+- **It is not permission-gated**, and no ACE hides it.
 
 It appears only on an entry page, is hidden while the player is filtering, and a page with
 no `owner:` prefix — the shared `main` root — gets no row.
@@ -185,9 +173,8 @@ no `owner:` prefix — the shared `main` root — gets no row.
 ## Verifying a consumer
 
 In-game checks must cover initial startup, dependency restarts, late host availability,
-permission loss, direct access, root-hidden navigation and NUI focus. Mocked tests cover
-native state cleanup and lifecycle transitions and never visual correctness, so do not infer
-live success from them. Refresh resource discovery before an authorized reload or start —
+permission loss, direct access, root-hidden navigation and NUI focus. Mocked tests never
+cover visual correctness. Refresh resource discovery before an authorized reload or start —
 source edits alone do not update a running resource.
 
 ---

@@ -25,13 +25,12 @@ exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctl
 
 ## What it is not
 
-- **Not a framework.** tLib answers nothing about jobs, money or inventories. It detects the
-  framework you already run and normalises what it reports — see
-  [`access`](/docs/tLib/import-modules#access).
+- **Not a framework.** It detects the framework you already run and normalises what it
+  reports — see [`access`](/docs/tLib/import-modules#access).
 - **Not configured in a file.** There is no `config.lua`. Owners set convars in `server.cfg`
   — see [Convars](/docs/tLib/convars).
-- **Not invisible when it stops.** tLib owns the screen its consumers draw on, so a restart
-  takes their menus with it. They re-register when it returns — see the
+- **Not invisible when it stops.** A tLib restart takes its consumers' menus with it; they
+  re-register when it returns — see the
   [lifecycle adapter](/docs/tLib/menu-consumers#shared-lifecycle-adapter-api-v1).
 
 ## Requirements
@@ -43,29 +42,6 @@ exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctl
 | Load order | `ensure tLib` **before** any resource that depends on it |
 | Framework | None. tLib detects yours; it does not replace it |
 | Port | One, `tlib_http_port`, default `7777`. Every app tLib serves is a mount on it |
-
-## Where to go next
-
-<DocCards>
-  <DocCard href="/docs/tLib/installation" title="Installation">
-    Install tLib and depend on it from your own resource.
-  </DocCard>
-  <DocCard href="/docs/tLib/exports" title="Exports">
-    Every export, and which side it lives on.
-  </DocCard>
-  <DocCard href="/docs/tLib/import-modules" title="Import Modules">
-    The 40 modules behind the `tlib` global.
-  </DocCard>
-  <DocCard href="/docs/tLib/menu-consumers" title="Menu Consumers">
-    Build a standalone resource on the shared menu.
-  </DocCard>
-  <DocCard href="/docs/tLib/versioncheck" title="Version Check">
-    Startup banner, version comparison and changelog.
-  </DocCard>
-  <DocCard href="/docs/tLib/convars" title="Convars">
-    Everything an owner sets in `server.cfg`.
-  </DocCard>
-</DocCards>
 
 ## Licence
 

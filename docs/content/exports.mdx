@@ -7,7 +7,7 @@ published: true
 ---
 
 Call every export as `exports['tLib']:FunctionName(...)`. Each section says which side it is
-registered on: menu pages and permissions on the server, everything that draws on the client.
+registered on.
 
 ---
 
@@ -16,10 +16,10 @@ registered on: menu pages and permissions on the server, everything that draws o
 **Client and server.** One NUI menu shared by every resource. tLib owns the screen, the
 keyboard and the permission check; you declare pages and handle rows.
 
-Pages register on the **server** — what a player may see is a server decision, and every
-open is answered with that player's ACE-filtered tree. Handlers, presenters and hooks
-register on the **client**. Menu IDs are namespaced `owner:name`. Every export takes an
-optional trailing `declaredOwner`, used only where the platform cannot identify the caller.
+Pages register on the **server**, and every open is answered with that player's
+ACE-filtered tree. Handlers, presenters and hooks register on the **client**. Menu IDs are
+namespaced `owner:name`. Every export takes an optional trailing `declaredOwner`, used only
+where the platform cannot identify the caller.
 
 <Callout type="warning">
 Pass `declaredOwner` as its own argument, never as a call in the last slot.
@@ -89,7 +89,7 @@ Unscoped: the screen belongs to the player.
 #### `SubmitFeedback`
 
 For a resource whose settings live in a tLib **dialog**. A menu already grows a "Send
-feedback" row on its owner's root page and needs none of this.
+feedback" row on its owner's root page.
 
 ```lua
 local sent = exports['tLib']:SubmitFeedback(message, function(result)
@@ -132,7 +132,7 @@ Every `kind` on one page, in that order:
   src="/assets/tLib/menu--controls.png"
   width={1600}
   height={900}
-  alt="A Vehicle page: Repair highlighted, Clean marked free, Engine checked, Doors unchecked, Livery on Police, Dirt level 40, Plate, Performance, Delete"
+  alt="A menu page with one row of every kind"
 />
 
 A namespace or page `theme` reskins the same definition:
@@ -141,7 +141,7 @@ A namespace or page `theme` reskins the same definition:
   src="/assets/tLib/menu--controls-vmenu.png"
   width={1600}
   height={900}
-  alt="The same Vehicle page in a wider skin with a large centred title and triple chevrons on the submenu row; values and rows are unchanged"
+  alt="The same menu page under a different theme"
 />
 
 ---
@@ -173,15 +173,15 @@ callbacks — additive, not alternatives.
 | `fields` | `table[]` | — | Field definitions. |
 
 A dialog reopens **where the player left it** — selected tab, scroll position, dragged panel
-position — per dialog id, for every consumer, no opt-in. Values and validation state are
-never kept, a missing remembered tab falls back to the first, and the state is in-memory in
-the NUI page, so a tLib restart or a reconnect forgets it.
+position — per dialog id. Values and validation state are never kept, and a tLib restart or
+a reconnect forgets the rest. `resetState = true` opts out.
 
 ### Field types
 
 | Type | Extra keys |
 | --- | --- |
-| `text`, `number`, `password`, `textarea` | `placeholder`, `defaultValue`, `min`/`max` (number only) |
+| `text`, `number`, `password` | `placeholder`, `defaultValue`, `maxLength`, `min`/`max` (number only) |
+| `textarea` | `placeholder`, `defaultValue`, `maxLength`, `rows` (default `3`) |
 | `select`, `dropdown`, `radio` | `options` (`{ value, label }[]`), `placeholder`, `defaultValue` |
 | `slider` | `min`, `max`, `step`, `defaultValue` |
 | `checkbox` | `defaultValue` (boolean) |
@@ -190,6 +190,9 @@ the NUI page, so a tLib restart or a reconnect forgets it.
 
 All share `id` (required), `type`, `label`, `description`, `required`, `disabled`. An
 unknown `type` logs a warning and falls back to `text`.
+
+`maxLength` is enforced by the page, so a server-side cap is visible while typing rather
+than on submit.
 
 #### `display`
 
@@ -209,9 +212,8 @@ the wrong thing to say about a readout.
 
 A `button` fires `onButtonClick` on press. Give it a `confirm` string and the press asks
 that question first; only an explicit **Confirm** fires the callback. Escape and **Cancel**
-answer it without firing, and the dialog stays open either way. It is the same key, with the
-same meaning, as a menu row's `confirm`. `variant = 'destructive'` is colour and nothing
-else, so a button that cannot be undone wants both:
+answer it without firing, and the dialog stays open either way. `variant = 'destructive'`
+is colour only, so a button that cannot be undone wants both:
 
 ```lua
 {
@@ -230,7 +232,7 @@ control:
   src="/assets/tLib/dialog--every-field.png"
   width={1600}
   height={1018}
-  alt="Dialog with text, number 12, masked password, notes textarea, a Tow/Release segmented select, a Mission Row dropdown, Day/Night, a Tint slider at 35 and a checkbox"
+  alt="A dialog showing one of every field type"
 />
 
 ### Events
@@ -269,10 +271,9 @@ end)
 | `DismissToast(id)` | Dismiss one before it expires. |
 | `DismissAll()` | Dismiss this resource's visible toasts. |
 
-IDs are local to the producing resource, so you cannot alter another producer's toasts, and
-stopping a producer removes its persistent cards. A type change or `duration = 0` restarts
-the type default; text- or theme-only updates keep the deadline. Limits: 32 active per
-producer, 256 total.
+IDs are local to the producing resource, and stopping a producer removes its persistent
+cards. A type change or `duration = 0` restarts the type default; text- or theme-only
+updates keep the deadline. Limits: 32 active per producer, 256 total.
 
 | Type | Duration |
 | --- | --- |
@@ -282,14 +283,13 @@ producer, 256 total.
 | `info` | 4000 ms |
 | `loading` | Until dismissed or updated |
 
-Each type carries its own icon and colour, so the type is what a player reads before the
-words. Newest sits at the bottom:
+Each type carries its own icon and colour. Newest sits at the bottom:
 
 <ZoomableImage
   src="/assets/tLib/toast--stack.png"
   width={1600}
   height={900}
-  alt="Five stacked toasts: green Vehicle stored, red Not enough cash, amber Engine damaged, blue Shift starts in 5 minutes, and a spinning Installing layout"
+  alt="Five stacked toasts, one of each type"
 />
 
 Events: `tLib:toast:shown` `(id, toastType, title, owner)` · `tLib:toast:updated`
@@ -358,12 +358,11 @@ One editor, not one per resource:
   src="/assets/tLib/layout--editor.png"
   width={1600}
   height={900}
-  alt="The HUD layout editor listing Lightbar HUD from tELS, Radio from tRadio and Radar from tRadar, with all three drag frames outlined inside a safe-area border"
+  alt="The shared HUD layout editor with three registered components"
 />
 
 <Callout type="warning">
-**Registration and `SetHudLayout` are both refused while the editor is open** — it is one
-transaction over every component, and **Cancel** would discard your write with the rest.
+**Registration and `SetHudLayout` are both refused while the editor is open.**
 `SetHudLayout` answers `false, 'Close the layout editor first'`; handle it, never retry in a
 loop. `RegisterHudComponent` you *must* come back from, or a resource starting mid-edit
 never registers. Retry on close, or register through `@tLib/shared/imports/hud/client.lua`,
@@ -383,27 +382,24 @@ exports['tLib']:RegisterHudComponent('radio', {
 }, onLayout)
 ```
 
-They coincide only for a component with nowhere else to keep its placement. With
-`persist = false` you own the storage, and passing the saved position as `defaults` makes
-Reset restore the placement the player is escaping — a widget draggable somewhere it cannot
-be dragged back from. There is no capability to probe and no `GetHudLayoutCapabilities()`:
-pin `tlib_min_version '1.0'`, the first release carrying `layout`.
+With `persist = false` you own the storage, and passing the saved position as `defaults`
+makes Reset restore the placement the player is escaping. Pin `tlib_min_version '1.0'`, the
+first release carrying `layout`.
 
 Every layout tLib is handed — saved record, `layout`, `defaults` — is validated
 independently and falls through to the next when unusable, then clamped against the live
 resolution so at least `minVisiblePixels` (96) or `minVisibleFraction` (0.4) stays on
-screen. That runs on **registration**, so a record written at another resolution heals on
-the way in.
+screen. That runs on **registration**.
 
 ### Units
 
 `x` and `y` are a ratio of a **1080px-tall reference screen on both axes**, the same unit
-the widget's size scales by, so a corner inset looks constant from 16:9 to 32:9.
-Centre-anchored `x` is the exception and stays proportional to width.
+the widget's size scales by. Centre-anchored `x` is the exception and stays proportional to
+width.
 
 <Callout type="warning">
-Dividing `x` by the viewport *width* is the v1 rule and is wrong. At 3440x1440 it places the
-widget 2.39x further from the anchor than the editor's outline, and drags stop being 1:1.
+Dividing `x` by the viewport *width* is wrong. At 3440x1440 it places the widget 2.39x
+further from the anchor than the editor's outline, and drags stop being 1:1.
 </Callout>
 
 If a player loses their HUD, `/tlibhud reset` restores every component to its factory
@@ -413,9 +409,8 @@ placement and clears the saved layout — editor open or shut, whichever resourc
 
 ## Keybind registry
 
-**Client.** The only place two *different* resources' bindings are visible at once. A
-resource's own `tlib.platform.keybindConflicts()` runs in its own VM, so it cannot see the
-collision players hit: two resources both defaulting to `B`.
+**Client.** The only place two *different* resources' bindings are visible at once — a
+resource's own `tlib.platform.keybindConflicts()` sees only its own VM.
 
 | Export | Description |
 | --- | --- |
@@ -424,14 +419,13 @@ collision players hit: two resources both defaulting to `B`.
 | `GetKeybindConflicts()` | `{ { group, key, claims = { … } }, … }`. |
 
 Only `token` is required; `resource` defaults to `?`, `label` to the token, `group` to
-`keyboard`. A malformed entry is dropped rather than raised, so a bad call cannot break your
-startup — and a typo is silent, the bind never appearing in `GetKeybinds()`. An entry with
-no `default` never counts as a collision, and a conflict needs **more than one resource**.
+`keyboard`. A malformed entry is dropped silently rather than raised, so a typo shows up as
+a bind missing from `GetKeybinds()`. An entry with no `default` never counts as a collision,
+and a conflict needs **more than one resource**.
 
 tLib prints its report ten seconds after start, once; a bind reported later is recorded but
 misses it, so call `GetKeybindConflicts()` yourself after that. Nothing here reassigns a
-key: FiveM stores a rebind against the command token, so act on a conflict by changing a
-**default** and shipping it.
+key — act on a conflict by changing a **default** and shipping it.
 
 ---
 
@@ -446,9 +440,9 @@ key: FiveM stores a rebind against the command token, so act on a conflict by ch
 | `ProvideMarketplaceData(opts)` | Client | Same payload into a tab of a dialog you already opened. Takes no NUI focus. |
 | `CloseMarketplace()` | Client | Close the standalone panel. |
 
-`ProvideMarketplaceData` is the integrated path: give your dialog a tab with
-`view = "marketplace"` and call it when the server answers with what is installed.
-`OpenMarketplace` is for places with no host dialog to embed in.
+For `ProvideMarketplaceData`, give your dialog a tab with `view = "marketplace"` and call
+it when the server answers with what is installed. Use `OpenMarketplace` where there is no
+host dialog to embed in.
 
 ---
 
@@ -477,8 +471,8 @@ if line then print(line) end
 
 ## HTTP Helper
 
-**Server.** Non-blocking requests through FiveM's `PerformHttpRequest`. Separate from tLib's
-public HTTP routing hub, which the README covers.
+**Server.** Non-blocking requests through FiveM's `PerformHttpRequest`. Not related to
+tLib's public HTTP routing hub.
 
 | Export | Description |
 | --- | --- |
@@ -491,10 +485,9 @@ public HTTP routing hub, which the README covers.
 | `headers` | `table` | Key/value table. |
 | `body` | `string` | Request body. |
 
-Redirects are followed. There are no timeout or TLS-verification options; the native's
-behaviour is used as-is. `callback` is `function(statusCode, body, headers, errorData)` —
-the native's arguments, unchanged. An HTTP error status is still a delivered response, so
-check the status.
+Redirects are followed. There are no timeout or TLS-verification options. `callback` is
+`function(statusCode, body, headers, errorData)`. An HTTP error status is still a delivered
+response, so check the status.
 
 ```lua
 exports['tLib']:Fetch({ url = 'https://example.com/api', method = 'GET' },
@@ -527,9 +520,8 @@ exports['tLib']:Fetch({ url = 'https://example.com/api', method = 'GET' },
 
 ## Diagnostics consent
 
-**Server.** Both exports cross as a JSON string, so a caller never branches on a type. See
-`tlib_telemetry` in [Convars](/docs/tLib/convars#what-is-deliberately-not) for what is
-collected.
+**Server.** Both exports cross as a JSON string. See `tlib_telemetry` in
+[Convars](/docs/tLib/convars#diagnostics) for what is collected.
 
 | Export | Description |
 | --- | --- |
@@ -553,11 +545,10 @@ and nobody else, which reads as "the switch does nothing". It refuses with
 `reason = 'locked'` while the convar has decided.
 </Callout>
 
-- There is **no `provisioned` field**; never render a "cannot transmit" state. The ingest
-  uses the same public key every studio API call uses, so there is no credential to resolve.
+- There is **no `provisioned` field**; never render a "cannot transmit" state.
 - It is **not permission-gated**. Gate it at your own call site.
 - **Never put it on an unauthenticated surface.** tLib's hub binds `0.0.0.0` with no auth on
-  its index, so it calls neither export and shows no diagnostics state.
+  its index, so it calls neither export.
 
 `tlib_telemetry_status` in the server console prints the same answer plus the queue depth
 and whether the transport has given up.
@@ -588,8 +579,7 @@ Starting those engines is a separate, gated surface — see [Child processes](#c
 add_unsafe_child_process_permission tLib
 ```
 
-FXServer attributes the check to whichever resource's runtime made the call. tLib makes it,
-so no other resource needs its own grant.
+tLib makes the call, so no other resource needs its own grant.
 
 | Export | Description |
 | --- | --- |
@@ -603,64 +593,40 @@ so no other resource needs its own grant.
 | `SpawnList()` | What is running and for whom. |
 
 `cwd` is resource-relative and must be one the catalog declares for that program; omitted,
-it is the binary's own directory. `env` names must be on the program's allowlist, which is
-why `LD_PRELOAD` cannot be set. `mode` is `lines` (default) or `bytes`, which returns stdout
-base64 with nothing dropped and keeps stdin open; `bytes` widens the **data** path only.
-
-### What sits behind the one line
+it is the binary's own directory. `env` names must be on the program's allowlist, so
+`LD_PRELOAD` cannot be set. `mode` is `lines` (default) or `bytes`, which returns stdout
+base64 with nothing dropped and keeps stdin open.
 
 **The caller names a program, never a path.** tLib's catalog declares which resources may
 spawn, which programs each may run, where those live and what their arguments may look like.
-It resolves the executable, checks the resolved path is inside the calling resource after
-`realpath` (so neither a `..` nor a symlink escapes), rebuilds the argv token by token from
-a declared shape, and execs with **no shell**. What tDB can run through this grant is
-`pocketbase`, from its own directory, with PocketBase's own flags.
+It resolves the executable inside the calling resource, rebuilds the argv from a declared
+shape, and execs with **no shell**. The catalog declares a binary per platform, so the
+caller never says which it wants and nothing shells out to PowerShell.
 
 <Callout type="warning">
 This narrows what a **compromised first-party resource** can do; it is not a defence against
-a hostile one *pretending* to be one. `GetInvokingResource()` names the calling container
-honestly, but a folder named `tDB` holding someone else's code passes that check — exactly
-as it passed `add_unsafe_child_process_permission tDB` before. The caller's manifest
-`author` is read and a mismatch logged loudly, but a resource writes its own manifest, so
+a hostile one *pretending* to be one. A folder named `tDB` holding someone else's code
+passes `GetInvokingResource()`. The caller's manifest `author` is logged on a mismatch, and
 nothing branches on it.
 </Callout>
 
-### Cross-platform
-
-No platform branch. The catalog declares a binary per platform — tDB's
-`.runtime/pocketbase-win.exe` against `.runtime/pocketbase-linux` — and the caller never
-says which it wants. Nothing shells out to PowerShell, so a minimal Linux container needs no
-extra packages.
-
-Containment compares paths **exactly**, never case-folded: `/opt/res/tdb` and `/opt/res/tDB`
-are two directories on Linux, so folding would accept the wrong one there and weaken the
-check on Windows.
-
 ### Lifecycle
 
-A child belongs to **tLib's** runtime, so it no longer dies with its owner for free. tLib
-reaps it when the owning resource stops (including the stop half of a restart), when the
-owner calls `SpawnUnserve`, and when tLib stops — a restart leaving them up would find its
-own ports held by its own children.
-
-A caller restarting is **kill-and-respawn, not reuse**: `onResourceStop` fires before the
-restarted copy starts, so the old engine is signalled and waited for. Expect a fresh
-process, since a restarted resource may want a different model, context size or port.
+A child belongs to **tLib's** runtime, not its owner's. tLib reaps it when the owning
+resource stops (including the stop half of a restart), when the owner calls `SpawnUnserve`,
+and when tLib stops. A caller restarting is **kill-and-respawn, not reuse**.
 
 <Callout type="warning">
 **Watch for orphans.** A leftover PocketBase holds its HTTP port and locks its SQLite
 directory, and the next start fails as a bind error that reads like misconfiguration. Keep
-your own PID file: it is the only thing covering the *unclean* case, since `kill -9` and
-txAdmin run no handler.
+your own PID file: `kill -9` and txAdmin run no handler.
 </Callout>
 
 ### Binary integrity
 
 The catalog supports a `sha256` list per program and nothing uses it. These binaries are
-verified where they are fetched, not where they are run: PocketBase **updates itself**, so
-its hash moves underneath any pin tLib could ship, and `llama-server`, `whisper-server`,
-`piper` and the vendored Node are checked against the publisher's checksums at fetch time by
-each resource's setup script. This gate adds containment and argument shape, not integrity.
+verified where they are fetched, not where they are run. This gate adds containment and
+argument shape, not integrity.
 
 ---
 
@@ -703,10 +669,8 @@ returns `false`, and into a resource that does not exist **raises**. Node's `fs`
 same. Reads are unrestricted.
 </Callout>
 
-So the destination performs the write. Every resource bundling tLib's `shared/ts` registers
-its own `WriteResourceFile` export, and a FiveM export is callable across resources, so tLib
-asks the target to write its own file. Nothing is reported as exported unless the file
-landed.
+So the destination performs the write: tLib calls the target's own `WriteResourceFile`
+export. Nothing is reported as exported unless the file landed.
 
 <Callout type="warning">
 **No `server.cfg` line changes this — do not add one.** `add_filesystem_permission tLib
@@ -730,13 +694,12 @@ The target decides which path you get:
 3. Restart <target-resource> (or the server).
 ```
 
-The staged file is the target's existing config with your model merged in, so it drops
-straight in. Until you copy it nothing has changed: the config is still local and still
-served to clients.
+The staged file is the target's existing config with your model merged in. Until you copy
+it the config is still local and still served to clients.
 
 The metadata key is whatever the consuming resource declares — `tels_config` for tELS,
 `tradio_config` for tRadio — and the value is the file name relative to the resource root.
-Without that line the file is never read, however it got there.
+Without that line the file is never read.
 
 ---
 

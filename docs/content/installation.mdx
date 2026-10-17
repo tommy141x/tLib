@@ -34,8 +34,7 @@ tDB's admin panel and tRadio's dispatch panel. Until the port is open, those res
 installed and are unreachable.
 
 Open `7777/tcp` **on the machine**: the host firewall, plus NAT port-forwarding if the
-server is behind a router. Nothing tLib does can open it for you. Then visit
-`http://<your-server-ip>:7777`.
+server is behind a router. Then visit `http://<your-server-ip>:7777`.
 
 For a different port, set it above `ensure tLib` and open that one instead:
 
@@ -64,8 +63,8 @@ exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctl
 The menu is declared, not built imperatively — pages on the server, handlers on the client.
 See [Exports](/docs/tLib/exports) and [Menu Consumers](/docs/tLib/menu-consumers).
 
-The import modules need `@tLib/imports.lua` and nothing else. You declare no module names;
-each one loads the first time you touch it:
+The import modules need `@tLib/imports.lua` and nothing else. Each one loads the first time
+you touch it:
 
 ```lua
 local value = tlib.kvp.getString('my_key', 'default')

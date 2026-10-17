@@ -13,16 +13,16 @@ Every duration carries its unit in the name (`_ms`); there are no unit-less alia
 ## `set` vs `setr`
 
 `set` defines a convar the **server** can read. `setr` also replicates it to every connected
-**game client**. The rule is mechanical: a convar read by client Lua or by the NUI needs
-`setr`; one read only by the server bundle uses `set`.
+**game client**. A convar read by client Lua or by the NUI needs `setr`; one read only by
+the server bundle uses `set`.
 
-Getting it wrong fails *quietly*, which is why the Command column is not decorative:
+Getting it wrong fails *quietly*:
 
 - A `setr` convar written with `set` makes the client read the built-in default. Point
   `tlib_api_base_url` at your own host with `set` and the server talks to your host while
   the in-game panel keeps talking to ours.
-- A `set` convar written with `setr` works, but ships your server's networking details to
-  everyone who joins. Never do it for a secret.
+- A `set` convar written with `setr` works, but ships the value to everyone who joins.
+  Never do it for a secret.
 
 ## Demo mode
 
@@ -30,8 +30,7 @@ Getting it wrong fails *quietly*, which is why the Command column is not decorat
 | --- | --- | --- | --- | --- |
 | `tlib_demo` | `set` | boolean — `1`, `true`, `yes`, `on` | *(off)* | Turns the server into a self-resetting showroom. **Every player becomes a superadmin and every access gate opens**, no resource writes its data file, and marketplace installs are swept at the next start. |
 
-`setr` also works and does no harm: the server pushes the state to clients, so a client
-never reads the convar itself.
+`setr` also works and does no harm.
 
 <Callout type="warning">
 **Demo mode is fail-open, and it is the only thing in tLib that is.** Anyone who connects
@@ -40,67 +39,49 @@ Never set it on a server whose data you care about or whose players you do not. 
 a red banner at boot for as long as it is on.
 </Callout>
 
-It exists for a public demo box that cleans itself on `ensure <resource>`, and for a test
-server running the same artifact you ship. A convar cannot travel inside a release, so the
-demo box keeps demo mode across every update with no per-release edit and no build flag.
-
 | | In demo mode |
 | --- | --- |
 | Server settings, layouts, codeplugs, vehicle configs — anything in a `data.json` | Held in memory for the session, never written. Back to the shipped file on restart. |
 | Marketplace items a visitor installs | Really installed, so they work; swept at that resource's next start. |
-| **Preinstalled** marketplace content shipped in the zip | **Untouched.** It is covered by the release's protected inventory and never receipt-owned, so the sweep cannot see it. |
-| Per-player client storage (HUD placement, menu preferences) | **Untouched.** It lives on the player's machine and is not server state. |
+| **Preinstalled** marketplace content shipped in the zip | **Untouched.** |
+| Per-player client storage (HUD placement, menu preferences) | **Untouched.** It lives on the player's machine. |
 
 Nothing is deleted — writes are dropped, not rolled back — so removing the convar and
 restarting brings the server back exactly as it was.
 
 `tlib_demo [on|off|convar]` (console, or `tlib.admin`) changes it live and reports the new
 state; `convar` stops overriding and follows `server.cfg` again. Access and permission
-changes take effect immediately. The **data reset and the marketplace sweep cannot** — both
-happen when a resource starts — so the command says so every time. To test that a
-marketplace install survives a restart, turn demo mode off and restart the resource.
+changes take effect immediately; the **data reset and the marketplace sweep** happen when a
+resource starts.
 
 ## Diagnostics
 
 | Convar | Command | Type / unit | Default | What it does |
 | --- | --- | --- | --- | --- |
 | `tlib_telemetry` | `set` | boolean — `1`, `true`, `yes`, `on`, `enabled` / `0`, `false`, `no`, `off`, `disabled` | *(unset — off)* | Opt in to **diagnostics events**: errors, warnings, renderer crashes and slow-operation outliers from our own code, with machine context. This convar is the only control. |
-| `tlib_telemetry_key` | `set` | string | *(empty)* | Dev only: points the transport at a local ingest credential. There is nothing for an operator to supply — the shipped build authenticates with the same public key every other studio API call uses. |
+| `tlib_telemetry_key` | `set` | string | *(empty)* | Dev only: points the transport at a local ingest credential. There is nothing for an operator to supply. |
 
-**`tlib_telemetry` is the only way to turn diagnostics on or off.** Set, that is the answer
-— even an unreadable value (`maybe`) counts as a decision, leaving diagnostics **off** with
-the value reported back to you. Unset is **off**: nothing is collected and nothing is sent.
-A consumer resource can store an answer of its own with `SetTelemetryConsent` (see
+**`tlib_telemetry` is the only way to turn diagnostics on or off.** An unreadable value
+(`maybe`) still counts as a decision, leaving diagnostics **off**. Unset is **off**. A
+consumer resource can store an answer of its own with `SetTelemetryConsent` (see
 [Exports](/docs/tLib/exports)), and this convar, once set, overrides it.
-
-`set`, not `setr`: the server decides, re-checks before every outbound request, and pushes
-the answer to clients so they stop collecting. A client never reads it.
 
 ### What this convar does *not* cover: the per-install id
 
 Marketplace browse, installs and previews, community configs and the startup update check
-all run **regardless of this setting** — they are things your server asked for, not
-diagnostics. Every one of them, and the diagnostics ingest, carries a random per-install id
-(`x-install-id`) so one server can be rate-limited or blocked without affecting anybody
-else.
+all run **regardless of this setting**. Every one of them, and the diagnostics ingest,
+carries a random per-install id (`x-install-id`) so one server can be rate-limited or
+blocked on its own.
 
-So an install that never turns diagnostics on is still identifiable *as an install* on the
-requests it chooses to make. The id is random, generated on your own server from no input,
-and is never an IP, a licence key, a server name or a player identifier. It lives in tLib's
-`data.json`; deleting it only mints a new one, which is not an opt-out.
+The id is random, generated on your own server from no input, and is never an IP, a licence
+key, a server name or a player identifier. It lives in tLib's `data.json`; deleting it only
+mints a new one, which is not an opt-out.
 
 ### Where to see the current state
 
-`tlib_telemetry_status` in the server console. It is the only place and the authoritative
-answer: what is enabled, what decided it, how much is queued, and whether the transport has
-given up for this session.
-
-<Callout type="warning">
-**tLib's hub does not show this and does not change it.** The page at
-`http://<server>:7777/` is app discovery and nothing else: no form, no button, no
-JavaScript, and `POST /` is rejected outright. The hub binds `0.0.0.0` with no auth on its
-index, so a control there would be one anybody reaching the port could use.
-</Callout>
+`tlib_telemetry_status` in the server console: what is enabled, what decided it, how much
+is queued, and whether the transport has given up for this session. tLib's hub at
+`http://<server>:7777/` neither shows nor changes it.
 
 ### What is collected
 
@@ -122,67 +103,51 @@ above.
 
 Before anything is sent: home-directory paths lose the account name, credential-shaped
 values are blanked, and anything shaped like a FiveM player identifier (`steam:`,
-`license:`, `discord:`, a bare Steam id or snowflake, an IP address) is removed. The store's
-own character set *allows* those values; they are stripped on the way out regardless.
+`license:`, `discord:`, a bare Steam id or snowflake, an IP address) is removed.
 
-Four things that **could** be collected are not, because the store has no column for them:
-the CEF build, the screen size, the device pixel ratio and the JS heap limit. They are still
-in the F8 console if you need them for a report.
+The RAM bucket caps at 8 GB, so it says "under 8 GB" or "cannot tell" and nothing between.
 
-The RAM bucket is honest rather than precise: the browser API behind it caps at 8 GB, so it
-says "under 8 GB" or "cannot tell" and nothing between. A 64 GB machine reports `unknown`
-rather than a wrong bucket.
-
-`<resource>_diag` output is **not** routed into this. Those are operator-error reports — a
-bad config key, a missing file — and they stay in your console.
+`<resource>_diag` output is **not** routed into this. Those stay in your console.
 
 ## Marketplace
 
 | Convar | Command | Type / unit | Default | What it does |
 | --- | --- | --- | --- | --- |
-| `tlib_api_base_url` | `setr` | URL, no trailing slash, no `/api` suffix | `https://timmygstudios.com` | **Where the TIMMYG Studios API lives**, not just the marketplace: browse, preview, install downloads, community configs **and** the startup version check with its changelog all follow it. Point it at a local `wrangler dev` worker for integration testing. Read by the server bundle **and** by client Lua, so `set` alone leaves the in-game panel on the default host. |
+| `tlib_api_base_url` | `setr` | URL, no trailing slash, no `/api` suffix | `https://timmygstudios.com` | **Where the TIMMYG Studios API lives**: browse, preview, install downloads, community configs and the startup version check all follow it. Read by the server bundle **and** by client Lua, so `set` alone leaves the in-game panel on the default host. |
 
 <Callout type="info">
-**It covers version checks and changelogs too** — marketplace traffic and the startup update
-check are the same host and the same API surface (`/api/v1`, `/api/v2`, `/api/products`).
-The GitHub release check some resources use instead is **not** affected.
+**It covers version checks and changelogs too.** The GitHub release check some resources
+use instead is **not** affected.
 </Callout>
 
 <Callout type="info">
 **The value is normalised and takes effect immediately.** A trailing slash is stripped, and
-so is a trailing `/api`, `/api/v1`, `/api/v2` or `/api/v2/marketplace` — callers append
-those themselves, so a literal value would build `.../api/v1/api/v1/items`, a 404 that reads
-as a broken dev server. A one-line warning prints when that happens, and an empty value
-falls back to the default. Nothing caches the resolved value on either side, so a `setr`
-from the console applies with no restart.
+so is a trailing `/api`, `/api/v1`, `/api/v2` or `/api/v2/marketplace`; a one-line warning
+prints when that happens, and an empty value falls back to the default. A `setr` from the
+console applies with no restart.
 </Callout>
 
 <Callout>
 **The marketplace needs no credential and no setup.** Browse, preview, install and
-community-config publish all work on a fresh install with nothing in your `server.cfg`. The
-`X-Resource-Secret` the server presents is compiled in rather than configured: a **public
-key**, shared by every install, authenticating every timmygstudios.com API tLib calls. What
-tells one server from another is the per-install id in [Diagnostics](#diagnostics).
+community-config publish all work on a fresh install with nothing in your `server.cfg`.
 </Callout>
 
 ## HTTP router
 
-All server-read — the resolved public URL is sent to clients over the wire, so none of these
-needs replicating. The listener starts on `7777` with no configuration; opening that port on
-the host and in NAT is the operator's job and the step most often missed, so see
+All server-read; none needs replicating. The listener starts on `7777` with no
+configuration. Opening that port on the host and in NAT is the step most often missed — see
 [Installation](/docs/tLib/installation#open-port-7777).
 
 | Convar | Command | Type / unit | Default | What it does |
 | --- | --- | --- | --- | --- |
 | `tlib_http_port` | `set` | integer, 1–65535 | `7777` | The one external listen port. |
 | `tlib_http_host` | `set` | bind address | `0.0.0.0` | Interface the listener binds. |
-| `tlib_http_public_url` | `set` | host, `host:port` or full URL | *(empty — auto-detect)* | The address clients are told to use. A bare IP or localhost implies HTTP and the listener port; a bare domain implies `https://`. An advertised address, not a bind address, and not proof of reachability. |
+| `tlib_http_public_url` | `set` | host, `host:port` or full URL | *(empty — auto-detect)* | The address clients are told to use. A bare IP or localhost implies HTTP and the listener port; a bare domain implies `https://`. Advertised, not bound. |
 | `tlib_realtime_public_url` | `set` | `ws://` / `wss://` URL | *(empty — derived)* | Overrides the realtime WebSocket URL handed to clients. Realtime is a mount on the router at `/rt`; the removed `tlib_realtime_port` and `tlib_realtime_host` do nothing. |
 
 ## Menu
 
-All read by client Lua, so all need `setr`. `tlib_menu_key` and `tlib_menu_pad_key` are read
-during resource start because `RegisterKeyMapping` only takes effect then — changing them
+All read by client Lua, so all need `setr`. Changing `tlib_menu_key` or `tlib_menu_pad_key`
 needs a restart, not a reload. Out-of-range or non-numeric values fall back to the default
 rather than erroring.
 

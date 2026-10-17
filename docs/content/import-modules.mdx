@@ -18,7 +18,7 @@ shared_scripts {
 local kvp = tlib.kvp
 ```
 
-That is the whole setup. Modules load on first access, so **you declare nothing**.
+Modules load on first access, so **you declare nothing**.
 
 ## Declaring modules
 
@@ -38,9 +38,8 @@ proxy throwing `attempt to index a function value` wherever it is used. Pin
 | `marketplace` | Required to register content types. Otherwise `registerType` returns `false` and warns; the resource starts, its types never register. |
 | `menu` | Needed when loading the module **is** the wiring — it defines the globals `MenuSchema` and `MenuCatalog`, which shared files may read with no `tlib.menu` access to trigger the load. |
 
-`occupancy` and `telemetry` are in `AUTOLOAD` and load themselves in every consumer, because
-their wiring happens as the file loads. `telemetry` defaults to studio-authored resources;
-declare it to opt in.
+`occupancy` and `telemetry` are in `AUTOLOAD` and load themselves in every consumer.
+`telemetry` defaults to studio-authored resources; declare it to opt in.
 
 ---
 
@@ -115,14 +114,13 @@ written a suggestion, not a gate.
 | Inventory (`item`) | `ox_inventory`, `qs-inventory`, `codem-inventory`, `origen_inventory`, `core_inventory`, `tgiann-inventory`, `qb-inventory`, `ps-inventory`, `jpr-inventory` |
 
 - The axes are independent, so nat2k15 for jobs beside ox_inventory for items works, as does
-  an item gate with no framework. `qbx_core` precedes `qb-core` because QBox registers the
-  `qb-core` export names and the legacy path silently returns a deprecated shim.
+  an item gate with no framework.
 - Detection needs the resource **started**, not present, and reruns whenever any resource
   starts.
 - Grades are normalised across qb, ESX and ND. A framework with no grade concept reports
   `0`, so `job = { LSPD = 3 }` **denies** rather than ignoring the `3`.
-- **vRP** has no adapter, because vRP2 registers no exports. Load a script with
-  `vRP.loadScript`, call `registerFramework`, and report grade `0`.
+- **vRP** has no adapter. Load a script with `vRP.loadScript`, call `registerFramework`,
+  and report grade `0`.
 
 ---
 
@@ -192,9 +190,8 @@ Reports whether the server runs in demo mode — the `tlib_demo` convar, see
 | `demo.active()` | both | `true` while demo mode is on. Cheap enough for a hot path. |
 | `demo.dropWrite(what)` | server | `true` when the caller must skip a write. Prints one notice per target. |
 
-A resource on the normal primitives needs **nothing**: access gates pass, `permission`
-reports superadmin, `tlib.fs` drops writes, and the marketplace agent sweeps its installs.
-Your own writer that bypasses `tlib.fs` needs one line:
+A resource on the normal primitives needs **nothing**. Your own writer that bypasses
+`tlib.fs` needs one line:
 
 ```lua
 local function saveData(json)
@@ -210,8 +207,8 @@ write-behind.
 </Callout>
 
 Never let `demo.active()` decide something a player benefits from being wrong about on the
-client; demo mode's real effects are all server-side. The client value is pushed by tLib, so
-it is correct whether the owner wrote `set` or `setr`.
+client. The client value is pushed by tLib, so it is correct whether the owner wrote `set`
+or `setr`.
 
 ---
 
@@ -229,8 +226,8 @@ if isInternal() then
 end
 ```
 
-- Your resource names its own convar, which is what lets the name be encrypted. Put the call
-  in a script **not** in `escrow_ignore`, or there is a string a customer can read.
+- Put the call in a script **not** in `escrow_ignore`, or there is a convar name a customer
+  can read.
 - **Gate registration, not behaviour.** No command, keybind, menu row, panel or export
   should exist at all — one that exists and refuses advertises the feature in `cmdlist`.
 - Read per call, so a replicated convar flipped mid-session applies at once. Where
@@ -242,8 +239,8 @@ end
 
 ## diag
 
-Console blocks for the things an operator must go and fix. You write prose; `diag` does the
-wrapping, dashed rules, `^colour` codes and the `[resource]` prefix.
+Console blocks for the things an operator must go and fix. You write the prose; `diag` does
+the wrapping, dashed rules, `^colour` codes and the `[resource]` prefix.
 
 | Function | Description |
 | --- | --- |
@@ -264,8 +261,7 @@ tlib.diag.fatal('Config does not exist. tRadio cannot start.', {
 ```
 
 `opts` is `{ cause, fix, detail, scope, once }`, all optional. A `fix` list renders as "Fix
-it one of these ways", so an operator does not think they need all of them. It prints and
-never logs, so there is nothing to route.
+it one of these ways". It prints and never logs.
 
 <Callout type="info">
 Put these blocks in files customers receive on every update, not in `escrow_ignore`'d config
@@ -402,9 +398,9 @@ net event re-resolves the ace server-side.
 
 A net event with its guard built into the registration.
 
-**`net.fromServer` (client).** A server-triggered event arrives with `source == 65535`; a
-local `TriggerEvent` from another resource or a cheat menu does not, and only the former
-runs your handler. A rejection is reported once per event name, never per call.
+**`net.fromServer` (client).** Runs the handler only for an event that really came from the
+server (`source == 65535`), not a local `TriggerEvent` from another resource or a cheat
+menu. A rejection is reported once per event name, never per call.
 
 ```lua
 tlib.net.fromServer('myres:serverDefaults', function(defaults)
@@ -460,9 +456,8 @@ tlib.opengate.serve({
 | `payload` | *none* | `fn(src) -> table`, travelling with the reply. Draw hints only. |
 | `rateLimit` | `1000` | Passed through to `net.fromClient`. |
 
-Checks run rate limit, `configOk`, then `allow`: a broken config is not a permissions
-problem, and "you are not allowed" sends a player on a misconfigured server to the wrong
-person. A panel open to everyone writes `allow = function() return true end`.
+Checks run in order: rate limit, `configOk`, then `allow`. A panel open to everyone writes
+`allow = function() return true end`.
 
 ```lua
 local panel = tlib.opengate.panel({
@@ -482,15 +477,13 @@ local panel = tlib.opengate.panel({
 | `onBroken` | Optional, but omitting it means a broken-config reply says nothing. |
 
 All three replies register through `net.fromServer`, so a local `TriggerEvent` can neither
-open the panel nor fake a denial. `reopen()` exists for a feature that closed the panel to
-use the game view and must put the player back; it replays a grant and cannot create one.
+open the panel nor fake a denial. `reopen()` replays a grant and cannot create one.
 
 ---
 
 ## platform
 
-The FiveM native adapter, inside **your** VM — a parallel copy of tLib's adapter, because a
-consumer's natives must be invoked from its own runtime.
+The FiveM native adapter, inside **your** VM.
 
 | Server function | Description |
 | --- | --- |
@@ -546,10 +539,7 @@ new bind, and run any `when = false` gate *before* registration — a `RegisterK
 seen once is in that player's settings forever.
 </Callout>
 
-- `releaseNuiFocus` is three calls, not two, and the third is empirical. Do not shorten it
-  without an in-game measurement against `IsNuiFocusKeepingInput()`.
-- `MAX_SEAT_INDEX` is `16`, measured across 394 Enhanced vehicle layouts. Counting seat
-  *bones* gives 17 and is wrong.
+`MAX_SEAT_INDEX` is `16`.
 
 ---
 
@@ -557,7 +547,7 @@ seen once is in that player's settings forever.
 
 One shared answer to who is aboard a vehicle, in which tier, and which of them may act on
 it. **The controller is the driver if one is seated, otherwise the front passenger.** In
-`AUTOLOAD`, because its server file scope registers the handlers keeping the cache honest.
+`AUTOLOAD`.
 
 | Client function | Description |
 | --- | --- |
@@ -623,13 +613,12 @@ reason is logged once; `store:locked()` is how you ask.
 </Callout>
 
 - **Migrations must be idempotent.** A `write` can report success without the bytes landing,
-  so the store re-probes and falls back to an in-memory mirror; the next start migrates
-  again.
+  so the next start migrates again.
 - A migration dropping a top-level key not listed in `allowRemove` is refused and nothing is
   written. Write a rename as a copy plus an `allowRemove`.
-- A malformed *schema* raises rather than locking, so you find it on your own machine.
-- `__schema` is keyed by **owner**, since a document can be co-owned. Never stamp a version
-  when applying defaults, or your migrations will skip it.
+- A malformed *schema* raises rather than locking.
+- `__schema` is keyed by **owner**. Never stamp a version when applying defaults, or your
+  migrations will skip it.
 
 ---
 
@@ -644,10 +633,10 @@ local ok, err = tlib.fs.writeResourceFile('data.json', encoded)
 if not ok then log('could not write data.json — ' .. err, tlib.logger.ERROR) end
 ```
 
-`SaveResourceFile` is tried first. When Enhanced refuses it, the write falls back to the
-**calling resource's own** Node bridge, which exists only if that resource calls
-`registerWriteResourceFile()` from `tLib/shared/ts/fs/server.ts` and rebuilds its bundle;
-otherwise `err` says so by name. No `server.cfg` line changes this.
+`SaveResourceFile` is tried first, falling back to the **calling resource's own** Node
+bridge, which exists only if that resource calls `registerWriteResourceFile()` from
+`tLib/shared/ts/fs/server.ts` and rebuilds its bundle; otherwise `err` says so by name. No
+`server.cfg` line changes this.
 
 <Callout type="warning">
 **In demo mode the write is dropped and this still returns `true`** (see [demo](#demo)).
@@ -681,17 +670,15 @@ a scan failure.
 </Callout>
 
 `changed` reports **membership**, not length, so a one-in-one-out swap reports `true`.
-Retained records come back byte-identical, so fields you added survive. `scan` needs tLib's
-Node bundle (`ScanResourceFiles`); a missing export reads back as `"unavailable"` rather
-than throwing.
+Retained records come back byte-identical. `scan` needs tLib's Node bundle
+(`ScanResourceFiles`); a missing export reads back as `"unavailable"` rather than throwing.
 
 ---
 
 ## audio3d
 
 Positional device audio: the server decides who is near enough to hear a vehicle-mounted
-device, the client resolves each emitter's position and pushes one batched frame per tick
-into the consumer's own NUI.
+device, and the client pushes one batched frame per tick into the consumer's own NUI.
 
 ```lua
 local bus = tlib.audio3d.createBus({
@@ -739,7 +726,7 @@ comb-filter.
 ## framerelay
 
 Publishes the device picture computed by the occupant who owns it onto the vehicle's
-statebag, so every other client in scope can read it.
+statebag, for every other client in scope to read.
 
 | Member | Description |
 | --- | --- |
@@ -768,9 +755,9 @@ last heard and never lets go.
 </Callout>
 
 `seq` and `netId` are written by the relay and `powered` is read by it, so those names are
-reserved; `powered = false` publishes nothing. `staleMs` is what clears a crashed driver's
-last frame, since a statebag is not withdrawn on disconnect. `publishTick` reads
-`occupancy.isController()` live, so the occupancy sweep must be running.
+reserved; `powered = false` publishes nothing. `staleMs` clears a crashed driver's last
+frame. `publishTick` reads `occupancy.isController()` live, so the occupancy sweep must be
+running.
 
 ---
 
@@ -792,13 +779,13 @@ it when a prop needs a non-unit scale: scale lives in the basis-vector lengths o
 | `drivenprop.hasMoved(last, basis)` | Whether a rewrite is needed. |
 
 - `add` **detaches, freezes and disables collision**, then writes the matrix. Undo any of
-  the three for a specific failure: attached loses the scale, unfrozen falls through the
-  world, collision-enabled bounces off the vehicle.
+  the three and it breaks: attached loses the scale, unfrozen falls through the world,
+  collision-enabled bounces off the vehicle.
 - `remove` and `clear` neither delete the prop nor re-attach it; re-attaching discards the
   scale.
-- `transform` raises on a left-handed basis — the only warning you get for a mesh rendered
-  inside-out — and returns the native's `(forward, right, up, at)` ordering, not the
-  `(right, forward, up)` the rest of the module takes.
+- `transform` raises on a left-handed basis, and returns the native's
+  `(forward, right, up, at)` ordering, not the `(right, forward, up)` the rest of the
+  module takes.
 - `create` starts a per-frame thread and an `onResourceStop` handler; importing does not.
   Share one driver per resource.
 
@@ -851,8 +838,8 @@ Loads tLib's menu validators into your VM: `tlib.menu.schema` is `MenuSchema`,
 `tlib.menu.catalog` is `MenuCatalog`.
 
 Loading it also **defines the bare globals `MenuSchema` and `MenuCatalog`**. If your shared
-files read those globals, declare `tlib_module { 'menu' }` — otherwise the lazy load has not
-run and they are `nil`. A missing file raises at import rather than at first use.
+files read those globals, declare `tlib_module { 'menu' }`, or the lazy load has not run and
+they are `nil`.
 
 ---
 
@@ -893,8 +880,7 @@ swatch strip. Only tRadio publishes one.
 <Callout type="warning">
 **The third argument is sounds, and `installedSlugs` carries sounds only.** A layout's
 *folder name* (`QRX-720`) is never a marketplace slug (`tradio-qrx-720`), so a layout passed
-there reads as not-installed — layouts are answered from `installedLayouts`. The parameter
-is still spelled `layoutSlugs` in the source and the four callers pass it positionally.
+there reads as not-installed — layouts are answered from `installedLayouts`.
 </Callout>
 
 | Server function | Description |
@@ -917,8 +903,7 @@ tlib.marketplace.standardTypes(GetCurrentResourceName(), {
 
 Paths default to `layouts` and `layouts/sounds`; `layouts = false` or `sounds = false` skips
 a type. `note` and `warn` take **one argument**, a message — not a logger plus a level.
-`meta.src` is `nil` when the installing admin disconnected mid-install, so guard before
-messaging them.
+`meta.src` is `nil` when the installing admin disconnected mid-install.
 
 ---
 
@@ -978,11 +963,10 @@ end)
 Writing `if not gate(src) then return end` disables the handler rather than the rate limit.
 </Callout>
 
-`gate(nil)` answers `false`, so a missing source is not silently a denial. Names are scoped
-to your own VM; the same name twice hands back two closures over **one** timestamp table and
-the last `intervalMs` wins. Disconnected players are swept for you. Use this directly only
-for something that is not a net event, or to put several events on one budget —
-`net.fromClient` already applies one.
+`gate(nil)` answers `false`. Names are scoped to your own VM; the same name twice hands back
+two closures over **one** timestamp table and the last `intervalMs` wins. Disconnected
+players are swept for you. `net.fromClient` already applies a rate limit, so use this
+directly only for something that is not a net event, or to put several events on one budget.
 
 ---
 
@@ -1019,8 +1003,7 @@ tlib.realtime:onEvent('ptt', function(playerId, sessionId, payload) end)
 ```
 
 Handler lists are per consumer VM, so two resources can subscribe to one event. A handler
-that throws is caught and printed, not propagated — check the console before concluding an
-event never arrived. Audio frames do not come through here.
+that throws is caught and printed, not propagated. Audio frames do not come through here.
 
 ---
 
@@ -1085,8 +1068,8 @@ case-insensitive on Windows and case-sensitive on Linux, so a capitalised defaul
 on a dev box and silently does not on a Linux server. Fix the filename, not the comparison.
 </Callout>
 
-An empty directory scan counts as a **failed** scan, so an unreadable directory leaves your
-mappings alone. The store shares your resource's `jsonstore` object.
+An empty directory scan counts as a **failed** scan. The store shares your resource's
+`jsonstore` object.
 
 ---
 
@@ -1104,9 +1087,9 @@ so the tracked config file ships blank. Server-only.
 Precedence is **convar, then `config.local.lua`, then `config.lua`**. A convar is named
 `<prefix>_<dotted_path_with_underscores>`. `opts.convarPrefix` defaults to the resource name
 lowercased, `opts.resource` to `GetCurrentResourceName()`, and `opts.quiet` is falsy, so it
-prints what it applied. The sidecar loads into an **empty** environment: it must `return` a plain table
-and can call nothing, not even `print`. A list in the sidecar **replaces** the one in
-`config.lua` rather than appending.
+prints what it applied. The sidecar loads into an **empty** environment: it must `return` a
+plain table and can call nothing, not even `print`. A list in the sidecar **replaces** the
+one in `config.lua` rather than appending.
 
 <Callout type="warning">
 If `tlib.diag` is unreachable, `credentialPaths` returns `{}` and the convar pass silently
@@ -1134,8 +1117,8 @@ then returns `{}` with no error — which reads as "nobody is nearby" rather tha
 is not running". Call it once the first tick has passed. The client half has no such gate.
 </Callout>
 
-The two halves are separate indexes with separate clocks, and `setRefreshRate` applies to
-the whole VM.
+The two halves are separate indexes with separate clocks. `setRefreshRate` applies to the
+whole VM.
 
 ---
 
@@ -1164,16 +1147,15 @@ is *collected* is the `tlib_telemetry` convar — see
 
 While consent is off, events are dropped rather than queued, so turning diagnostics on sends
 no backlog. With it on, the queue caps at 32 and discards oldest first. A fault is deduped
-for 120 seconds per fingerprint. `registerScrubValue` refuses values under three characters,
-since a player named `Al` would turn every `Already` into `[redacted]ready`.
+for 120 seconds per fingerprint.
 
 ---
 
 ## screentarget
 
-Picks the **one** vehicle whose device screen this client renders, because
-`AddReplaceTexture` is keyed on the texture name and so is global to the archetype. Your own
-vehicle always wins, otherwise the nearest in range, with hysteresis.
+Picks the **one** vehicle whose device screen this client renders — `AddReplaceTexture` is
+keyed on the texture name, so there can only be one. Your own vehicle always wins,
+otherwise the nearest in range, with hysteresis.
 
 | Member | Description |
 | --- | --- |
@@ -1214,9 +1196,9 @@ local name = txds.textureName('tdet_screen', serial)
 ```
 
 Budget one permanently pinned streaming slot per resource load: the engine frees neither a
-runtime txd nor a runtime texture, so repeated restarts accumulate them. That is the price
-of the tag — reuse a name across a restart instead and `AddReplaceTexture` resolves against
-the previous load's dictionary and silently does nothing.
+runtime txd nor a runtime texture, so repeated restarts accumulate them. Reusing a name
+across a restart instead makes `AddReplaceTexture` resolve against the previous load's
+dictionary and silently do nothing.
 
 ---
 
@@ -1240,8 +1222,7 @@ that is not open.
 
 The remembered list is module-level, so keep one dialog open at a time per resource.
 `refresh` patches what was **drawn**, not the current config, so a sound key added
-server-side after the dialog opened appears only at the next open. It returns `0` rather
-than erroring.
+server-side after the dialog opened appears only at the next open.
 
 ---
 
@@ -1281,8 +1262,7 @@ handlers. Create one per resource, at load, and share `instance.editor.driver`.
   attached" to decide whether a prop is live — ask the tracking table.
 - **`CreateObject` signals failure with `0`, which Lua treats as true.** `if not prop then`
   never catches it, and the prop simply never appears.
-- **The placement, attached and model tables are emptied in place, never replaced**, because
-  consumers alias them.
+- **The placement, attached and model tables are emptied in place, never replaced.**
 - A record the editor did not change round-trips byte-identical. `receiveEvent` accepts
   server-triggered events only (`source == 65535`).
 
