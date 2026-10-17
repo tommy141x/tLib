@@ -188,7 +188,20 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     setInstallStates((prev) => ({ ...prev, [slug]: next }));
   }
 
-  async function fetchItems(offset = 0) {
+  /**
+   * `forTab` exists because a Solid 2 signal write is NOT readable through the
+   * signal in the tick that wrote it. `handleTabSwitch` did `setTab(next)` and
+   * then called this, which re-read `tab()` and got the tab the player had just
+   * LEFT — so every browse fetched the wrong type. It was invisible in tRadio,
+   * which has 50 items under both `ui` and `sound`; tRadar has 5 and 0, so its
+   * UIs tab fetched sounds and came back empty while its Sounds tab showed the
+   * UIs. Measured against the live catalogue, not inferred.
+   */
+  async function fetchItems(
+    offset = 0,
+    forTab?: "uis" | "sounds" | "installed",
+    forSort?: "downloads" | "created_at"
+  ) {
     const base = baseUrl();
     if (!base || !props.active) {
       // Kept after `handleSearchInput` stopped pre-lighting the spinner: a tab
@@ -207,13 +220,13 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     setLoading(true);
     setError(null);
     try {
-      const activeTab = tab();
+      const activeTab = forTab ?? tab();
       const page = await browseMarketplace(
         {
           type: activeTab === "uis" ? "ui" : activeTab === "sounds" ? "sound" : undefined,
           resource: resourceFilter() ?? undefined,
           search: search() || undefined,
-          sort: sort(),
+          sort: forSort ?? sort(),
           limit: pageSize,
           cursor: offset,
         },
@@ -345,7 +358,10 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     // does not exist still wants the marketplace, and a wrong-but-populated tab
     // is recoverable by one click where a blank panel is not.
     const wanted = data.initialTab;
-    setTab(wanted === "sounds" || wanted === "installed" ? wanted : "uis");
+    // Held in a local and passed on, for the same reason `fetchItems` takes
+    // `forTab`: the read at the end of this function cannot see this write.
+    const opening = wanted === "sounds" || wanted === "installed" ? wanted : "uis";
+    setTab(opening);
     // THE HOST'S SNAPSHOT, PATCHED WITH WHAT THIS SESSION WATCHED HAPPEN.
     //
     // `data` is sent once per open and the signal holding it keeps that object,
@@ -392,8 +408,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     }
     setInstallStates(seed);
 
-    if (tab() === "installed") void fetchInstalledItems();
-    else void fetchItems();
+    if (opening === "installed") void fetchInstalledItems();
+    else void fetchItems(0, opening);
   }
 
   // The only entry point. `applied` is identity, not a deep compare: every
@@ -511,7 +527,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     if (next === "installed") {
       void fetchInstalledItems();
     } else {
-      void fetchItems();
+      void fetchItems(0, next);
     }
   }
 
@@ -708,7 +724,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
               onChange={(value) => {
                 invalidateRequests();
                 setSort(value);
-                void fetchItems();
+                // Passed, not re-read: same tick, same trap as the tab.
+                void fetchItems(0, undefined, value);
               }}
             />
           </div>
