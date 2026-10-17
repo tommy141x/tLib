@@ -16,11 +16,21 @@ import {
   type PublishPayload,
   peekConfig,
   publishConfig,
+  type UpdatePayload,
+  updateConfig,
+  withdrawConfig,
 } from "./api";
 
 let installed = false;
 
-type LuaCallback = (ok: boolean, err: string | null, value?: unknown) => void;
+// `extra` is how `ccPublish` returns the edit token alongside the id without
+// changing the third argument every shipped consumer already reads.
+type LuaCallback = (
+  ok: boolean,
+  err: string | null,
+  value?: unknown,
+  ...extra: unknown[]
+) => void;
 
 function isCallback(fn: unknown): fn is LuaCallback {
   return typeof fn === "function";
@@ -68,7 +78,51 @@ export function registerCommunityConfigsBridge(): void {
       cb(false, "payload is not valid JSON");
       return;
     }
-    settle(publishConfig(payload), cb);
+    // Not `settle`: this one answers with a FOURTH argument, the edit token.
+    //
+    // Appending rather than changing the third keeps every shipped consumer
+    // working — Lua ignores arguments it does not name, so a caller written
+    // against `(ok, err, id)` is unaffected — and a caller that does want the
+    // token gets `null` from a Worker too old to mint one, which is the same
+    // "cannot be edited from in game" as any other absent token.
+    void publishConfig(payload).then(
+      (result) => cb(true, null, result.id, result.editToken),
+      (e: unknown) => cb(false, errText(e))
+    );
+  });
+
+  //   exports.tLib:ccUpdate(id, editToken, payloadJson, function(ok, err, id) end)
+  //
+  // JSON for the payload for the same marshalling reason as `ccPublish`.
+  fExports("ccUpdate", (id: unknown, editToken: unknown, payloadJson: unknown, cb: unknown) => {
+    if (!isCallback(cb)) return;
+    if (typeof id !== "string" || !id || typeof editToken !== "string" || !editToken) {
+      cb(false, "id and editToken required");
+      return;
+    }
+    if (typeof payloadJson !== "string" || !payloadJson) {
+      cb(false, "payload required");
+      return;
+    }
+
+    let payload: UpdatePayload;
+    try {
+      payload = JSON.parse(payloadJson) as UpdatePayload;
+    } catch {
+      cb(false, "payload is not valid JSON");
+      return;
+    }
+    settle(updateConfig(id, editToken, payload), cb);
+  });
+
+  //   exports.tLib:ccWithdraw(id, editToken, function(ok, err, status) end)
+  fExports("ccWithdraw", (id: unknown, editToken: unknown, cb: unknown) => {
+    if (!isCallback(cb)) return;
+    if (typeof id !== "string" || !id || typeof editToken !== "string" || !editToken) {
+      cb(false, "id and editToken required");
+      return;
+    }
+    settle(withdrawConfig(id, editToken), cb);
   });
 
   //   exports.tLib:ccList(script, configType, key, limit, function(ok, err, itemsJson) end)

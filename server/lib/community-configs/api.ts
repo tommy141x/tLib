@@ -50,8 +50,28 @@ export interface PublishPayload {
   publisher?: { name?: string; identifiers?: string[] };
 }
 
-/** Resolves to the new config's id. */
-export async function publishConfig(payload: PublishPayload): Promise<string> {
+/**
+ * A listing, and the capability to edit it.
+ *
+ * `editToken` is `HMAC-SHA256(TELS_CONFIG_EDIT_SECRET, id)`, minted by the
+ * Worker at publish and required by `updateConfig` and `withdrawConfig`.
+ *
+ * Optional, and every caller must treat it as such: a host running a build
+ * from before the endpoint existed answers `{ id }` with no token, which is a
+ * listing that cannot be edited from in game rather than an error. Demanding
+ * one breaks publishing against every such host.
+ *
+ * It is a capability — whoever holds it can overwrite or withdraw the listing
+ * — so it stays in server-side storage, never anywhere a game client can read.
+ * tELS keeps it out of the broadcast `serverDefaults` for that reason.
+ */
+export interface PublishResult {
+  id: string;
+  editToken: string | null;
+}
+
+/** Resolves to the new config's id and, when the Worker mints one, its token. */
+export async function publishConfig(payload: PublishPayload): Promise<PublishResult> {
   const resp = await request(
     endpoint(),
     "POST",
@@ -61,11 +81,83 @@ export async function publishConfig(payload: PublishPayload): Promise<string> {
   );
   if (!resp.ok) throw toError(resp);
 
-  const parsed = parseJson<{ id?: string }>(resp);
+  const parsed = parseJson<{ id?: string; editToken?: string }>(resp);
   if (typeof parsed.id !== "string" || !parsed.id) {
     throw new MarketplaceError("unexpected_response", resp.status);
   }
-  return parsed.id;
+  return {
+    id: parsed.id,
+    editToken: typeof parsed.editToken === "string" && parsed.editToken ? parsed.editToken : null,
+  };
+}
+
+// Edits
+//
+// Both of these send the resource secret AND the per-listing edit token. The
+// secret alone proves "somebody running tLib", which is every deployment and
+// therefore nobody; the token is what proves "the publisher of THIS listing".
+//
+// Neither takes the publisher identity. `(server_hash, publisher_license)` was
+// considered and rejected as the credential: a license is known to every server
+// the player has ever joined, and the server hash is a header the caller sets.
+
+/** The editable half of a listing. Same validation as publish, on the Worker. */
+export interface UpdatePayload {
+  configJson: string;
+  name?: string;
+  description?: string;
+  key?: string;
+  keyLabel?: string;
+  fp?: unknown;
+}
+
+/**
+ * Replace a listing's payload in place.
+ *
+ * The Worker re-derives `led_names_json` and the fingerprint columns from
+ * `configJson` in the same write, so the listing and the data it is matched by
+ * cannot drift apart. It does not touch the publisher, the server, the import
+ * count or the status.
+ */
+export async function updateConfig(
+  id: string,
+  editToken: string,
+  payload: UpdatePayload
+): Promise<string> {
+  const resp = await request(
+    endpoint(`/${encodeURIComponent(id)}`),
+    "PATCH",
+    JSON.stringify(payload),
+    studioHeaders({
+      "Content-Type": "application/json",
+      "X-Resource-Secret": TLIB_PUBLIC_KEY,
+      "X-Edit-Token": editToken,
+    })
+  );
+  if (!resp.ok) throw toError(resp);
+  return parseJson<{ id?: string }>(resp).id ?? id;
+}
+
+/**
+ * Take a listing out of the catalogue.
+ *
+ * `POST .../withdraw`, not `DELETE`, because it is not a delete: the Worker
+ * sets `status = 'unlisted'`. Rows in `tels_community_config_imports` point at
+ * it and `import_count` is derived from them, and a server that already
+ * imported it has done nothing wrong. Every public read gates on
+ * `status = 'published'`, so the withdrawal is immediate.
+ *
+ * There is no un-withdraw. Publishing again mints a new id and a new token.
+ */
+export async function withdrawConfig(id: string, editToken: string): Promise<string> {
+  const resp = await request(
+    endpoint(`/${encodeURIComponent(id)}/withdraw`),
+    "POST",
+    "",
+    studioHeaders({ "X-Resource-Secret": TLIB_PUBLIC_KEY, "X-Edit-Token": editToken })
+  );
+  if (!resp.ok) throw toError(resp);
+  return parseJson<{ status?: string }>(resp).status ?? "unlisted";
 }
 
 // Reads

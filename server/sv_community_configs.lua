@@ -91,7 +91,15 @@ local function registerExports()
         if type(opts.fp) == 'table' then payload.fp = opts.fp end
         if type(opts.publisher) == 'table' then payload.publisher = opts.publisher end
 
-        exports['tLib']:ccPublish(json.encode(payload), function(ok, err, id)
+        -- `editToken` is a FOURTH argument, appended rather than folded into
+        -- the third: a consumer written against `(ok, err, id)` keeps working
+        -- untouched. It is nil against a Worker that does not mint one, which
+        -- is not an error — it is a listing that cannot be edited from in game.
+        --
+        -- IT IS A CREDENTIAL. Whoever holds it can overwrite or withdraw
+        -- that listing. It is never logged here, and a consumer must keep it
+        -- server-side; see the note in tELS's `sv_configs.lua`.
+        exports['tLib']:ccPublish(json.encode(payload), function(ok, err, id, editToken)
             if not ok or type(id) ~= 'string' or id == '' then
                 local errMsg = tostring(err or 'unexpected response')
                 log(('upload failed for %s/%s/%s: %s'):format(script, configType, key, errMsg), 3)
@@ -99,7 +107,80 @@ local function registerExports()
                 return
             end
             log(('uploaded config for %s/%s/%s → id=%s'):format(script, configType, key, id), 2)
+            callback(true, nil, id, type(editToken) == 'string' and editToken or nil)
+        end)
+    end)
+
+    --- Replace a published config's payload. callback(ok, err, id).
+    ---
+    --- The token is the capability minted at publish — see
+    --- `CommunityConfigsUpload`. The Worker re-derives the fingerprint columns
+    --- and the LED-name index from `configJson` in the same write, so a
+    --- listing cannot end up matched by data describing its previous contents.
+    Platform.export('tLib', 'CommunityConfigsUpdate', function(opts, callback)
+        if type(opts) ~= 'table' then
+            if isCallable(callback) then callback(false, 'invalid opts') end
+            return
+        end
+        callback = guardCallback(callback, 'CommunityConfigsUpdate')
+        if not callback then return end
+
+        local id         = type(opts.id)         == 'string' and opts.id         or ''
+        local editToken  = type(opts.editToken)  == 'string' and opts.editToken  or ''
+        local configJson = type(opts.configJson) == 'string' and opts.configJson or ''
+        if id == '' or editToken == '' or configJson == '' then
+            callback(false, 'missing required fields')
+            return
+        end
+
+        local payload = { configJson = configJson }
+        if type(opts.name)        == 'string' then payload.name        = opts.name        end
+        if type(opts.description) == 'string' then payload.description = opts.description end
+        if type(opts.key)         == 'string' then payload.key         = opts.key         end
+        if type(opts.keyLabel)    == 'string' then payload.keyLabel    = opts.keyLabel    end
+        if type(opts.fp)          == 'table'  then payload.fp          = opts.fp          end
+
+        exports['tLib']:ccUpdate(id, editToken, json.encode(payload), function(ok, err)
+            if not ok then
+                local errMsg = tostring(err or 'unexpected response')
+                log(('update failed for %s: %s'):format(id, errMsg), 3)
+                callback(false, errMsg)
+                return
+            end
+            log(('updated config %s'):format(id), 2)
             callback(true, nil, id)
+        end)
+    end)
+
+    --- Take a published config out of the catalogue. callback(ok, err, status).
+    ---
+    --- Not a delete: the Worker sets `status = 'unlisted'`, which every public
+    --- read already filters on. Imports that already happened keep pointing at
+    --- it. There is no un-withdraw — publishing again mints a new id.
+    Platform.export('tLib', 'CommunityConfigsWithdraw', function(opts, callback)
+        if type(opts) ~= 'table' then
+            if isCallable(callback) then callback(false, 'invalid opts') end
+            return
+        end
+        callback = guardCallback(callback, 'CommunityConfigsWithdraw')
+        if not callback then return end
+
+        local id        = type(opts.id)        == 'string' and opts.id        or ''
+        local editToken = type(opts.editToken) == 'string' and opts.editToken or ''
+        if id == '' or editToken == '' then
+            callback(false, 'missing required fields')
+            return
+        end
+
+        exports['tLib']:ccWithdraw(id, editToken, function(ok, err, status)
+            if not ok then
+                local errMsg = tostring(err or 'unexpected response')
+                log(('withdraw failed for %s: %s'):format(id, errMsg), 3)
+                callback(false, errMsg)
+                return
+            end
+            log(('withdrew config %s'):format(id), 2)
+            callback(true, nil, type(status) == 'string' and status or 'unlisted')
         end)
     end)
 
