@@ -45,8 +45,11 @@ local REPORT_DELAY_MS = 10000
 
 local reported = false
 
+--- Upper-cased, because FiveM accepts either case and a consumer that writes
+--- `'q'` would otherwise never match a consumer that writes `'Q'` — a collision
+--- the registry reports as two separate, uncontested keys.
 local function keyOf(entry)
-    return tostring(entry.group or 'keyboard') .. '\1' .. tostring(entry.default or '')
+    return tostring(entry.group or 'keyboard') .. '\1' .. tostring(entry.default or ''):upper()
 end
 
 --- Record one bind. Called by `platform.bindKey` in every consumer VM.
