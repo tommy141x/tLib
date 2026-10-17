@@ -6,7 +6,15 @@ group: "tLib"
 published: true
 ---
 
-A consumer declares pages on the server and handles rows on the client.
+A consumer declares pages on the server and handles rows on the client. The screen, the
+keyboard hints and the breadcrumb are tLib's; the page, its rows and what they do are yours.
+
+<ZoomableImage
+  src="/assets/tLib/menu--list.png"
+  width={1600}
+  height={900}
+  alt="A consumer page on the shared menu, with a selector open and tLib's keyboard hint bar below it"
+/>
 
 | Owner | Owns |
 | --- | --- |
@@ -172,15 +180,6 @@ no `owner:` prefix — the shared `main` root — gets no row.
 
 ## Verifying a consumer
 
-In-game checks must cover initial startup, dependency restarts, late host availability,
-permission loss, direct access, root-hidden navigation and NUI focus. Mocked tests never
-cover visual correctness. Refresh resource discovery before an authorized reload or start —
-source edits alone do not update a running resource.
-
----
-
-## Next steps
-
-- The lifecycle, menuhost and menu modules as reference: [Import Modules](/docs/tLib/import-modules#lifecycle)
-- Every menu export, and the row and page shapes: [Exports](/docs/tLib/exports#menu-system)
-- The keybinding and locale convars a player sees: [Convars](/docs/tLib/convars#menu)
+Test in game against a tLib restart, a permission revocation, a direct `OpenMenu` on a
+root-hidden page, and a host that starts after you. Refresh resource discovery before a
+reload — source edits alone do not update a running resource.

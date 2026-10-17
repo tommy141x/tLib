@@ -158,6 +158,16 @@ callbacks — additive, not alternatives.
 | `UpdateDialogField(id, fieldId, changes)` | Patch one field of a live dialog. |
 | `UpdateDialogFields(id, changes)` | Patch several at once. |
 
+A default `md` dialog, with a required `text`, a two-option `select` as a segmented control
+and a `checkbox`:
+
+<ZoomableImage
+  src="/assets/tLib/dialog--standard.png"
+  width={1600}
+  height={900}
+  alt="A medium dialog with a required text field, a segmented select and a checkbox"
+/>
+
 ### ShowDialog options
 
 | Key | Type | Default | Description |
@@ -224,6 +234,13 @@ is colour only, so a button that cannot be undone wants both:
     confirm = 'Every pattern on this vehicle is deleted. This cannot be undone.',
 }
 ```
+
+<ZoomableImage
+  src="/assets/tLib/dialog--button-confirm.png"
+  width={1600}
+  height={900}
+  alt="The confirm question raised by that button, with Confirm and Cancel"
+/>
 
 One of each type in an `lg` dialog. A `select` with two options renders as a segmented
 control:
@@ -624,9 +641,8 @@ your own PID file: `kill -9` and txAdmin run no handler.
 
 ### Binary integrity
 
-The catalog supports a `sha256` list per program and nothing uses it. These binaries are
-verified where they are fetched, not where they are run. This gate adds containment and
-argument shape, not integrity.
+These binaries are verified where they are fetched, not where they are run. This gate adds
+containment and argument shape, not integrity.
 
 ---
 
@@ -700,11 +716,3 @@ it the config is still local and still served to clients.
 The metadata key is whatever the consuming resource declares — `tels_config` for tELS,
 `tradio_config` for tRadio — and the value is the file name relative to the resource root.
 Without that line the file is never read.
-
----
-
-## Next steps
-
-- The Lua modules behind most of this: [Import Modules](/docs/tLib/import-modules)
-- A complete standalone menu resource: [Menu Consumers](/docs/tLib/menu-consumers)
-- What an owner sets in `server.cfg`: [Convars](/docs/tLib/convars)
