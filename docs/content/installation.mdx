@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "Install tLib, open its port, and depend on it from your own resource."
+description: "Install tLib, depend on it from your own resource, and optionally open its port for browser access."
 order: 1
 group: "tLib"
 published: true
@@ -27,22 +27,28 @@ Add this to `server.cfg`, **above** every resource that depends on tLib:
 ensure tLib
 ```
 
-### Open port 7777
+</Steps>
 
-tLib serves the hub — one page linking every tLib resource with a web surface, including
-tDB's admin panel and tRadio's dispatch panel. Until the port is open, those resources look
-installed and are unreachable.
+## Opening the port, if you want browser access
 
-Open `7777/tcp` **on the machine**: the host firewall, plus NAT port-forwarding if the
-server is behind a router. Then visit `http://<your-server-ip>:7777`.
+**Optional, and nothing needs it.** Every tLib resource is fully working at this point:
+tRadio runs over the connection players already have, tDB serves its database, and all of
+it is reached in game. No port is involved in any of that.
+
+What the port adds is the **hub** — one page linking every tLib resource that has a web
+surface, so you can reach them from a browser instead of from inside the game. Today that
+is tDB's admin panel and tRadio's dispatch panel, which a desktop app can also connect to.
+Leave the port closed and those surfaces are simply not reachable from a browser; the
+resources behind them are unaffected.
+
+If you want it: open `7777/tcp` **on the machine** — the host firewall, plus NAT
+port-forwarding if the server is behind a router — then visit `http://<your-server-ip>:7777`.
 
 For a different port, set it above `ensure tLib` and open that one instead:
 
 ```txt title="server.cfg"
 set tlib_http_port 8080
 ```
-
-</Steps>
 
 ## Depend on tLib
 
