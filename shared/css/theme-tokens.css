@@ -10,6 +10,37 @@
    even if the consumer also imports it directly. */
 @import "./surface.css";
 
+/* THE INTERFACE FACE, SHIPPED WITH THE TOKENS THAT ASSUME IT.
+
+   It used to live only in tLib's own app, which overrode --font-sans to name
+   it. This sheet is the one every consumer imports, and it said nothing — so
+   every tLib dialog, menu and toast drew Hanken Grotesk while every resource's
+   own NUI drew whatever it had, and the typeface changed the moment a player
+   went from /tels to the LED editor or /tafk to the sequence editor. Eight
+   resources were on the wrong side of that; the one that was not had been fixed
+   by hand, which is the tell.
+
+   Here and not in fonts.css because fonts.css is imported by tLib alone —
+   consumers import THIS file. Same bargain surface.css is imported on above:
+   adopting the tokens adopts what they assume.
+
+   ~35 KB per consumer bundle. Only this face, not Inter or JetBrains Mono from
+   fonts.css, because a resource that self-hosts those already would otherwise
+   ship them twice.
+
+   Outside @layer base on purpose: @font-face carries no specificity, but a
+   layered one is only honoured while that layer applies, and this face has to
+   exist unconditionally. */
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 100 900;
+  /* block, not swap: the block period cannot be reached from local disk, and
+     swap would flash an Arial-metric first paint. */
+  font-display: block;
+  src: url("./fonts/hanken-grotesk-latin.woff2") format("woff2");
+}
+
 /* Override a token in a BARE `:root` after the import. Inside `@layer base` it is
    silently ignored: this file is unlayered, and unlayered beats layered regardless of
    source order. */
@@ -86,6 +117,10 @@
      root — `exports.tLib:GetReduceMotion()` and the `tlib:reduceMotion` event
      are how it reads it. See docs/internal/theming-tokens.md. */
   --motion: 1;
+
+  /* The face above. Consumers inherit it by importing this sheet; tLib's own
+     global.css no longer needs to say it. */
+  --font-sans: "Hanken Grotesk", Inter, "Segoe UI", Arial, sans-serif;
 }
 
 /* The elevation ladder: --background ≤ --card < --input = --popover < --border. Every
