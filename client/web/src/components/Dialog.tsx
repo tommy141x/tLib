@@ -255,6 +255,43 @@ function DialogSession(props: {
     }
     fire(fieldId);
   }
+  /**
+   * Enter inside a text field fires the button sharing its row, if there is one.
+   *
+   * WITHOUT THIS, ENTER SILENTLY THREW THE TYPED VALUE AWAY. A staged text field
+   * paired with its own commit button is an established shape in this estate —
+   * tRadio's Callsign is "type, then press Set", with empty + Set to clear — and
+   * `NuiButton` defaults to `type="button"` while the footer is `type="submit"`.
+   * So Enter took the implicit form submission, closed the dialog, and never
+   * reached the handler that would have saved anything.
+   *
+   * Keyed on the row rather than on "the next button": a row is the schema's own
+   * statement that these controls belong together, which is exactly the
+   * relationship being honoured. A text field with no button in its row still
+   * submits, which is the correct default for a single-field form.
+   *
+   * Routed through `action`, not `fire`, so a commit button carrying `confirm`
+   * asks its question on Enter exactly as it does on click.
+   */
+  function enterFiresRowButton(event: KeyboardEvent) {
+    if (event.key !== "Enter" || event.defaultPrevented) return;
+    const target = event.target as HTMLElement | null;
+    // Textareas own Enter — it inserts a newline. Anything that is not a
+    // single-line text entry keeps whatever Enter already did for it.
+    if (!target || target.tagName !== "INPUT") return;
+    const type = (target as HTMLInputElement).type;
+    if (type !== "text" && type !== "search" && type !== "password") return;
+    const id = target.closest<HTMLElement>("[data-field-id]")?.dataset.fieldId;
+    if (!id) return;
+    const field = fieldById().get(id);
+    if (!field?.row) return;
+    const button = dialog().fields.find(
+      (entry) => entry.row === field.row && entry.type === "button" && !entry.disabled
+    );
+    if (!button) return;
+    event.preventDefault();
+    action(button.id);
+  }
   function cancel() {
     if (!alive || !props.open) return;
     const d = dialog();
@@ -478,6 +515,7 @@ function DialogSession(props: {
             class="flex min-h-0 flex-col"
             novalidate
             onSubmit={submit}
+            onKeyDown={enterFiresRowButton}
             /* The question is modal WITHIN the dialog — no stacked dialogs, a
                feature reached from an open UI renders inside it. `inert` is what
                keeps the form behind it off the Tab ring and out of reach of a

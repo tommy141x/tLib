@@ -213,10 +213,21 @@ function platform.triggerEvent(event, ...)
     TriggerEvent(event, ...)
 end
 
--- `resource` is accepted for signature symmetry and ignored: `exports(name, fn)`
--- always registers under the calling resource.
+-- IT NOW ACTUALLY WRAPS. IT DID NOT, AND THE NAME SAID IT DID. The full
+-- account is on the client twin; in short, a throw inside an export body does
+-- not cross the FiveM boundary, so ~40 call sites that adopted this as a guard
+-- never had one. `resource` is still ignored for registration and used only in
+-- the error line. `table.pack`/`unpack` because `ok, reason` is the house shape.
 function platform.wrapExport(resource, name, fn)
-    exports(name, fn)
+    exports(name, function(...)
+        local result = table.pack(pcall(fn, ...))
+        if result[1] then return table.unpack(result, 2, result.n) end
+        -- Printed, not re-raised. Re-raising puts it back where it came from:
+        -- invisible to the caller. The caller still gets nil, which is what it
+        -- got before — the change is that the reason now exists somewhere.
+        print(("^1[%s] export '%s' threw: %s^7"):format(resource or "?", name, tostring(result[2])))
+        return nil
+    end)
 end
 
 return platform

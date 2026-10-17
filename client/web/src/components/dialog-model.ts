@@ -132,11 +132,23 @@ export function fieldError(field: DialogField, value: DialogValue | undefined): 
     if (field.min !== undefined && number < field.min) return `Minimum: ${field.min}.`;
     if (field.max !== undefined && number > field.max) return `Maximum: ${field.max}.`;
   }
-  if (
-    ["select", "dropdown", "radio"].includes(field.type) &&
-    !field.options?.some((option) => option.value === value)
-  ) {
-    return "Choose an available option.";
+  if (["select", "dropdown", "radio"].includes(field.type)) {
+    // A CHOICE FIELD WITH NO OPTIONS IS NOT A USER ERROR, AND REPORTING IT AS
+    // ONE LOCKS THE DIALOG.
+    //
+    // `errors` gates submission, so "Choose an available option." on a list with
+    // nothing in it is a demand the player cannot satisfy — and tRadio's `/tradio`
+    // made that reachable: its microphone dropdown renders from a cache that is
+    // empty until enumeration answers, so the first open of a session, and EVERY
+    // open for a player who denied microphone permission, met a blocked footer
+    // button labelled "Close". X and Escape were the only ways out.
+    //
+    // A value that is not among options that EXIST is still a real error and is
+    // still reported — that case the player can act on, by picking another row.
+    const options = field.options;
+    if (options?.length && !options.some((option) => option.value === value)) {
+      return "Choose an available option.";
+    }
   }
 }
 export function validationErrors(

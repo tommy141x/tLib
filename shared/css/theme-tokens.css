@@ -15,24 +15,46 @@
    source order. */
 
 :root {
-  --background: 0 0% 6.67%;
-  --foreground: 0 0% 93.33%;
-  --card: 0 0% 6.67%;
-  --card-foreground: 0 0% 93.33%;
-  --popover: 0 0% 9.8%;
-  --popover-foreground: 0 0% 93.33%;
+  /* THE NEUTRALS CARRY A HUE. They were `0 0%` across the board — a pure
+     achromatic ramp, which is the single most-cited tell of a UI nobody chose
+     the colours for, and it sat under all eight products at once. Worse, it was
+     not even consistent: `--muted-foreground` alone drifted to hue 214, so seven
+     rungs were untinted and the eighth was blue against them.
+
+     Hue 214 for all of them, which is where that one rung already was and one
+     degree off `--primary`/`--ring`/`--accent` at 211 — so the greys now sit on
+     the same axis as the accent instead of beside it. Saturation stays in the
+     6-10% band: this is a tint, not a colour cast, and a surface that reads as
+     blue rather than as dark grey would be a different and worse mistake.
+
+     EVERY LIGHTNESS IS UNCHANGED, to the digit. The elevation ladder
+     (background <= card < input = popover < border) is what every control in
+     internal/shared-ts/ui/* is drawn against and what tests/unit/theme-ladder.test.ts
+     enforces; touching only H and S means this change cannot move it.
+
+     The guide this came from asks for OKLCH. CEF 103 drops `oklch()` entirely
+     — the whole declaration, not just the function — so the achievable version
+     is to pick in a perceptual space and ship the HSL triplets, which is what
+     these are. `--primary-foreground` and friends stay `0 0% 100%`: at 100%
+     lightness every hue is the same white, so a hue there would be noise. */
+  --background: 214 6% 6.67%;
+  --foreground: 214 9% 93.33%;
+  --card: 214 6% 6.67%;
+  --card-foreground: 214 9% 93.33%;
+  --popover: 214 7% 9.8%;
+  --popover-foreground: 214 9% 93.33%;
   --primary: 211 80% 55%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 0 0% 15%;
-  --secondary-foreground: 0 0% 93.33%;
-  --muted: 0 0% 12%;
-  --muted-foreground: 214.3 13.7% 70%;
+  --secondary: 214 7% 15%;
+  --secondary-foreground: 214 9% 93.33%;
+  --muted: 214 7% 12%;
+  --muted-foreground: 214 10% 70%;
   --accent: 211 80% 55%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 62% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 20.39%;
-  --input: 0 0% 9.8%;
+  --border: 214 8% 20.39%;
+  --input: 214 7% 9.8%;
   --ring: 211 80% 55%;
 
   /* One knob; the rest derive from it so a control, a popover and a panel stay in
@@ -41,6 +63,29 @@
   --radius-control: calc(var(--radius) * 0.8);
   --radius-surface: calc(var(--radius) * 1.4);
   --radius-tight: calc(var(--radius) * 0.4);
+
+  /* THE REDUCED-MOTION SWITCH, AND IT IS A TOKEN BECAUSE THE MEDIA QUERY DOES
+     NOT WORK HERE. CEF reports `prefers-reduced-motion: no-preference` whatever
+     the host OS is set to — measured — so `@media (prefers-reduced-motion:
+     reduce)` is not a weaker option in a FiveM NUI, it is a dead one. Every such
+     block in this estate was coverage that could never fire.
+
+     Set to 0 for a zero-motion build. Every animation and transition duration in
+     the shared sheets multiplies through it, so one write disables all of them
+     without any rule needing a second spelling.
+
+     It lives here, on :root in the sheet every consumer's NUI imports, and NOT
+     on `.tlib-menu` where it started: declared on a subtree it governs only that
+     subtree, and a menu-scoped copy would have SHADOWED a root value for the one
+     surface that already had the mechanism. Dialog, toast and marketplace had no
+     escape hatch at all.
+
+     The writer is `UIEffects.setReduceMotion` on the Lua side, fed by the
+     `tlib_reduce_motion` convar and by a per-player toggle. A consumer with its
+     own ui_page owns its own document, so it applies the same answer to its own
+     root — `exports.tLib:GetReduceMotion()` and the `tlib:reduceMotion` event
+     are how it reads it. See docs/internal/theming-tokens.md. */
+  --motion: 1;
 }
 
 /* The elevation ladder: --background ≤ --card < --input = --popover < --border. Every
@@ -51,13 +96,17 @@
 /* For a transparent overlay page, where --background is never painted and a --card panel
    would read flat. Shifts the whole ladder up one step instead of raising --card. */
 .tlib-overlay {
-  --background: 0 0% 7%;
-  --card: 0 0% 10.5%;
-  --card-foreground: 0 0% 93.33%;
-  --input: 0 0% 14%;
-  --popover: 0 0% 14%;
-  --popover-foreground: 0 0% 93.33%;
-  --secondary: 0 0% 18.5%;
-  --muted: 0 0% 16%;
-  --border: 0 0% 27%;
+  /* Same hue and the same lightnesses as :root above — an overlay palette that
+     stayed achromatic while the base one gained a tint would read as a colder
+     panel floating on a warmer page, which is the exact inconsistency the
+     change was for. */
+  --background: 214 6% 7%;
+  --card: 214 6% 10.5%;
+  --card-foreground: 214 9% 93.33%;
+  --input: 214 7% 14%;
+  --popover: 214 7% 14%;
+  --popover-foreground: 214 9% 93.33%;
+  --secondary: 214 7% 18.5%;
+  --muted: 214 7% 16%;
+  --border: 214 8% 27%;
 }

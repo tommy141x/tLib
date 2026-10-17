@@ -6,6 +6,8 @@ import Menu from "@/menu/Menu";
 
 // Theme store initializes its NUI listeners on import
 import "@/stores/theme-store";
+// Same: motion-store listens for `setMotion` and writes `--motion` to :root.
+import "@/stores/motion-store";
 
 export default function App() {
   return (

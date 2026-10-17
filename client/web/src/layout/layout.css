@@ -304,7 +304,10 @@
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--nui-accent);
-  color: #1a1a17;
+  /* `--nui-accent-text` exists for exactly this pairing. A hard-coded ink
+     over a themeable fill is invisible on the stock palette and unreadable
+     the moment a server owner registers a dark accent. */
+  color: var(--nui-accent-text);
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -320,7 +323,7 @@
   position: absolute;
   inset: 4px;
   background: var(--nui-accent);
-  border: 1px solid #33332e;
+  border: 1px solid var(--nui-accent-text);
   border-radius: 1px;
 }
 .tlib-layout__handle--nw {

@@ -191,9 +191,9 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   async function fetchItems(offset = 0) {
     const base = baseUrl();
     if (!base || !props.active) {
-      // `handleSearchInput` turns the spinner on BEFORE its debounce fires, so
-      // bailing out silently here leaves the grid saying "Loading items…" with
-      // nothing in flight and no way back except another keystroke.
+      // Kept after `handleSearchInput` stopped pre-lighting the spinner: a tab
+      // switch or a reopen can still bail here with `loading` already true, and
+      // the grid would sit on "Loading items…" with nothing in flight.
       setLoading(false);
       return;
     }
@@ -203,6 +203,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     browseAbort = controller;
     const timeout = window.setTimeout(() => controller.abort(), 15000);
     setPageOffset(offset);
+    const shownAt = Date.now();
     setLoading(true);
     setError(null);
     try {
@@ -237,7 +238,17 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
       setHasNextPage(false);
     } finally {
       window.clearTimeout(timeout);
-      if (request === browseRequest) setLoading(false);
+      // A MINIMUM VISIBLE TIME, not a delay before showing. A spinner that
+      // appears and vanishes inside ~100ms reads as a glitch rather than as
+      // work, which is worse than never having shown one. The request is
+      // already finished and the data already applied; only the indicator
+      // waits, so nothing is slower than it was.
+      const held = Math.max(0, 300 - (Date.now() - shownAt));
+      const settle = () => {
+        if (request === browseRequest) setLoading(false);
+      };
+      if (held === 0) settle();
+      else window.setTimeout(settle, held);
     }
   }
 
@@ -470,7 +481,11 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   function handleSearchInput(value: string) {
     invalidateRequests();
     setSearch(value.slice(0, 200));
-    setLoading(true);
+    // NO `setLoading(true)` HERE, AND THAT IS THE FIX. It used to fire on the
+    // keystroke, 250ms before the request it was reporting even started, and the
+    // grid is swapped wholesale for a centred spinner while `loading` is true —
+    // so every character typed replaced the results with a spinner and back. The
+    // debounce below is already the show-delay the spinner wanted.
     searchDebounce = window.setTimeout(() => void fetchItems(), 250);
   }
 

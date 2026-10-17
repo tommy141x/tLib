@@ -133,16 +133,22 @@ function colorTree(syntax: "hsl-triplet" | "value"): Record<string, TColorValue>
 }
 
 /**
- * nui gets the three shadcn steps; web gets the full scale keyed off `--radius`, so
- * one token moves every corner. `full` is absent from both on purpose: a pill is a
- * shape, not a radius.
+ * nui gets the three shadcn steps plus the two that close the ladder; web gets the
+ * full scale keyed off `--radius`, so one token moves every corner. `full` is absent
+ * from both on purpose: a pill is a shape, not a radius.
+ *
+ * DEFAULT AND `xl` CLOSE A HOLE: anything the three steps did not name fell through
+ * to presetWind3's fixed pixels, so `rounded`/`rounded-xl` were deaf to `--radius`
+ * and the toast and dialog had different corners on screen together.
  */
 function radiusSteps(target: TPresetTarget): Record<string, string> {
   if (target === "nui") {
     return {
+      DEFAULT: "calc(var(--radius) - 4px)",
       lg: "var(--radius)",
       md: "calc(var(--radius) - 2px)",
       sm: "calc(var(--radius) - 4px)",
+      xl: "calc(var(--radius) + 2px)",
     };
   }
   return {

@@ -13,9 +13,11 @@
      override — written to both --font-sans and --font as inline styles on this
      element — reaches the menu under either name. */
   --font: var(--font-sans, "Hanken Grotesk", Inter, "Segoe UI", Arial, sans-serif);
-  /* Set to 0 for a zero-animation build. Needed because CEF reports
-     prefers-reduced-motion as no-preference whatever the host OS says. */
-  --motion: 1;
+  /* `--motion` IS NOT DECLARED HERE ANY MORE, AND MUST NOT COME BACK.
+     It moved to :root in shared/css/theme-tokens.css so dialog, toast and
+     marketplace get the same kill switch — and a copy on this element would
+     shadow the root value, leaving the menu the one surface that ignored it.
+     The `var(--motion, 1)` reads below are unchanged and still correct. */
   /* `#3089e8` is `hsl(211 80% 55%)` — `--primary` in theme-tokens.css, `--ring`
      in every component in `internal/shared-ts/ui/*`, and `--nui-accent` in nui-kit as of
      the same change. One affirmative/selected/focus colour across all seven
@@ -170,4 +172,11 @@
      back to an undefined token. */
   --nui-control-h: 34px;
   --nui-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* The entrance curve, restated into the menu scope so the three enter
+     animations in menu.css can name it. They were a literal
+     `cubic-bezier(0.2, 0, 0, 1)`, whose first control point sits at y=0 — zero
+     velocity at t=0, i.e. the ease-IN-out family. That delays the movement at
+     the exact moment the player is looking at it, and it meant a tLib dialog
+     rose on ease-out while the menu behind it rose on something else. */
+  --nui-ease-entrance: cubic-bezier(0.22, 1, 0.36, 1);
 }

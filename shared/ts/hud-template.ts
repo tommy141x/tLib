@@ -124,6 +124,37 @@ export class HudBinder {
           },
           { signal: controller.signal }
         );
+        // A `click` LISTENER ALONE DOES NOT IMPLEMENT `role="button"`.
+        //
+        // Every shipped faceplate declares `role="button" tabindex="0"` on its
+        // keys — 65 of them across tRadar's five heads and tDetector's three —
+        // so they are all reachable by Tab specifically so they can be operated.
+        // They could not be: Tab to the KBX-2200's PWR key, press Enter, and the
+        // radar did not power on and nothing logged. A `<div role="button">` gets
+        // none of a real `<button>`'s key handling for free; that is the whole
+        // cost of not using one, and the faceplates cannot use one because they
+        // are absolutely-positioned transparent rects over a chassis render.
+        //
+        // Attached here rather than in each layout because this is the only
+        // place the `data-hud-*` grammar is implemented — so it reaches every
+        // THIRD-PARTY marketplace skin that already writes `tabindex="0"`, with
+        // no markup change and nothing for a skin author to opt into.
+        //
+        // Space is prevented because its default action scrolls; Enter's is not,
+        // because on these overlays there is no form to submit and no anchor to
+        // follow. Both go through `click` rather than calling `onAction`, so a
+        // key press and a pointer press stay one code path.
+        btn.addEventListener(
+          "keydown",
+          (e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            if (e.repeat) return;
+            if (e.key === " ") e.preventDefault();
+            e.stopPropagation();
+            btn.click();
+          },
+          { signal: controller.signal }
+        );
       }
     }
 

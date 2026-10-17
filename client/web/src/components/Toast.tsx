@@ -144,7 +144,7 @@ export default function Toast() {
           }
           data-toast-id={toast().id}
           tabindex={-1}
-          class="tlib-nui-surface tlib-nui-toast flex shrink-0 items-start gap-3 rounded-xl border border-[var(--nui-border)] bg-[var(--nui-surface)] px-4 py-3 text-[var(--nui-text)]"
+          class="tlib-nui-surface tlib-nui-toast tlib-nui-lit flex shrink-0 items-start gap-3 rounded-xl border border-[var(--nui-border)] bg-[var(--nui-surface)] px-4 py-3 text-[var(--nui-text)]"
           style={{
             position: "relative",
             inset: "auto",

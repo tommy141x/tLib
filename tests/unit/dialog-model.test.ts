@@ -42,6 +42,32 @@ describe("dialog schema and Lua wire contract", () => {
       )
     ).toBe("Choose an available option.");
   });
+  test("a choice field with no options to choose from does not block the dialog", () => {
+    // THE REGRESSION. `errors` gates submission, so reporting an error on a
+    // list with nothing in it is a demand the player cannot satisfy. tRadio's
+    // `/tradio` reached it: the microphone dropdown renders from a cache that is
+    // empty until enumeration answers, and permanently empty for a player who
+    // denied microphone permission — so the footer button, labelled "Close",
+    // refused to close. Escape and X were the only exits.
+    for (const options of [undefined, []]) {
+      expect(
+        fieldError({ id: "mic", type: "dropdown", label: "Microphone", options }, "default")
+      ).toBeUndefined();
+    }
+    // The distinction being drawn: a value absent from options that EXIST is
+    // still an error, because picking another row is an action the player can
+    // actually take.
+    expect(
+      fieldError(
+        { id: "mic", type: "dropdown", label: "Microphone", options: [{ value: "a", label: "A" }] },
+        "default"
+      )
+    ).toBe("Choose an available option.");
+    // …and `required` is still enforced on an empty value, independently.
+    expect(
+      fieldError({ id: "mic", type: "dropdown", label: "Microphone", options: [], required: true }, "")
+    ).toBe("Microphone is required.");
+  });
   test("schema reconciliation keeps edited values, drops removed fields and initializes added fields", () => {
     const changed = [
       fields[0],

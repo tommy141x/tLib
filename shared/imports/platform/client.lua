@@ -472,10 +472,35 @@ function platform.getResourceId()
     return GetCurrentResourceName()
 end
 
--- `resource` is accepted for signature symmetry and ignored: `exports(name, fn)`
--- always registers under the calling resource.
+-- IT NOW ACTUALLY WRAPS. IT DID NOT, AND THE NAME SAID IT DID.
+--
+-- This was a bare `exports(name, fn)` with a comment explaining only why the
+-- `resource` argument is ignored. Roughly 40 call sites across tRadio, tRadar,
+-- tAFK and tChirp adopted it as a throw guard, because that is what it is
+-- called; none of them got one. A Lua error inside an export body does not
+-- propagate to the caller across the FiveM export boundary — the call returns
+-- `undefined`, the real message is lost, and it resurfaces somewhere unrelated
+-- as `"undefined" is not valid JSON`. That is the single most expensive failure
+-- shape in this estate to debug, and the guard that was supposed to prevent it
+-- was a rename of the thing it was guarding against.
+--
+-- `resource` is still accepted for signature symmetry and still ignored:
+-- `exports(name, fn)` always registers under the calling resource. It IS used
+-- in the error line, which is the first thing a reader needs.
+--
+-- `table.pack`/`unpack` rather than a plain `return fn(...)`: several exports
+-- return more than one value (`ok, reason` is the house shape) and a guard that
+-- silently truncated them to the first would be a new bug in place of the old.
 function platform.wrapExport(resource, name, fn)
-    exports(name, fn)
+    exports(name, function(...)
+        local result = table.pack(pcall(fn, ...))
+        if result[1] then return table.unpack(result, 2, result.n) end
+        -- Printed, not re-raised. Re-raising puts it back where it came from:
+        -- invisible to the caller. The caller still gets nil, which is what it
+        -- got before — the change is that the reason now exists somewhere.
+        print(("^1[%s] export '%s' threw: %s^7"):format(resource or "?", name, tostring(result[2])))
+        return nil
+    end)
 end
 
 -- Thin FiveM wrapper over RegisterCommand + RegisterKeyMapping.

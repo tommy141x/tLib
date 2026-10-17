@@ -95,6 +95,22 @@ export interface UndoHistoryOptions {
   limit?: number;
   /** Shown in `diagnostics()` and by the keyboard registry. Not behavioural. */
   label?: string;
+  /**
+   * Drain the host framework's pending writes, so a snapshot taken right after a
+   * mutation observes the mutation.
+   *
+   * WITHOUT THIS, REDO SILENTLY RESTORES THE PRE-EDIT STATE. A Solid 2 store
+   * write is not readable through the proxy in the tick it was made, and `with()`
+   * is push -> mutate -> commit in ONE tick — so every entry it recorded had an
+   * `after` equal to its `before`. Undo (which applies `before`) and the dirty
+   * flag were unaffected, which is why it survived: only redo was wrong, and it
+   * was wrong everywhere at once. Batches spanning ticks — push on pointerdown,
+   * commit on pointerup — were always correct; the flush had already happened.
+   *
+   * Injected rather than imported so this module stays framework-agnostic.
+   * Pinned by tELS's `tests/undo-redo-roundtrip.test.ts`, control included.
+   */
+  settle?: () => void;
 }
 
 interface PendingBatch {
@@ -112,6 +128,7 @@ export class UndoHistory {
 
   private readonly registry = new Map<string, Registered>();
   private readonly listeners = new Set<UndoListener>();
+  private readonly settle: () => void;
   private past: UndoEntry[] = [];
   private future: UndoEntry[] = [];
   private pending: PendingBatch | null = null;
@@ -119,6 +136,7 @@ export class UndoHistory {
   constructor(options: UndoHistoryOptions = {}) {
     this.limit = Math.max(1, options.limit ?? UNDO_LIMIT_DEFAULT);
     this.label = options.label ?? "undo";
+    this.settle = options.settle ?? (() => {});
   }
 
   // Registration
@@ -159,6 +177,10 @@ export class UndoHistory {
    * label or key closes the open batch first.
    */
   push(label: string, tags: string[], key?: string): void {
+    // Before `before` is captured, for the same reason `commit()` settles before
+    // `after`: an unflushed write made outside this history would otherwise be
+    // read as part of the batch about to open.
+    this.settle();
     const open = this.pending;
     if (open && open.label === label && open.key === key) {
       for (const tag of tags) {
@@ -176,6 +198,11 @@ export class UndoHistory {
 
   /** Close the open batch, pushing one entry — unless nothing changed. */
   commit(): void {
+    if (!this.pending) return;
+    // BEFORE `after` IS CAPTURED, AND THIS IS THE WHOLE POINT OF `settle`.
+    // See UndoHistoryOptions.settle: without it every `with()` entry records an
+    // `after` identical to its `before`, and redo restores the pre-edit state.
+    this.settle();
     const open = this.pending;
     if (!open) return;
     this.pending = null;

@@ -195,6 +195,12 @@
     color: hsl(var(--primary));
     border-color: hsl(var(--primary) / 0.4);
   }
+  /* Positive offset unlike the controls above: on a row packed against its
+     siblings an inset ring reads as a border change rather than as focus. */
+  .list-row:focus-visible {
+    outline: 2px solid hsl(var(--ring) / 0.6);
+    outline-offset: 2px;
+  }
 
   /* A row's inline action — usually the destructive one. A class and not five
      utilities because it shipped as a 12px glyph in a 20px box at a fractional

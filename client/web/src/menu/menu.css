@@ -919,19 +919,19 @@
 /* Enter only: the panel unmounts synchronously on hide, and holding it mounted
    for an exit animation would leave the menu on screen after it is gone. */
 :where(.tlib-menu) .menu-panel {
-  animation: tlibmenu-in-down calc(120ms * var(--motion, 1)) cubic-bezier(0.2, 0, 0, 1) both;
+  animation: tlibmenu-in-down calc(120ms * var(--motion, 1)) var(--nui-ease-entrance) both;
 }
 /* Mounted once per confirmation, so neither can re-trigger under rapid input. */
 :where(.tlib-menu) .confirmation-shade {
   animation: tlibmenu-fade calc(100ms * var(--motion, 1)) linear both;
 }
 :where(.tlib-menu) .confirmation {
-  animation: tlibmenu-in-up calc(140ms * var(--motion, 1)) cubic-bezier(0.2, 0, 0, 1) both;
+  animation: tlibmenu-in-up calc(140ms * var(--motion, 1)) var(--nui-ease-entrance) both;
 }
 /* The notice appears unannounced near the panel's bottom edge and self-dismisses
    on a timer; it is at its final height from the first frame. */
 :where(.tlib-menu) .notice {
-  animation: tlibmenu-in-down calc(120ms * var(--motion, 1)) cubic-bezier(0.2, 0, 0, 1) both;
+  animation: tlibmenu-in-down calc(120ms * var(--motion, 1)) var(--nui-ease-entrance) both;
 }
 /* Runs only while that row's own request is genuinely in flight. */
 :where(.tlib-menu) .is-pending .action-mark svg {
@@ -951,7 +951,9 @@
   inset: 0 auto 0 0;
   width: 25%;
   background: var(--accent);
-  animation: tlibmenu-sweep calc(900ms * var(--motion, 1)) ease-in-out infinite;
+  /* `linear`, not `ease-in-out`: this loops, and a symmetric curve makes the
+     bar hesitate at both ends of every pass. */
+  animation: tlibmenu-sweep calc(900ms * var(--motion, 1)) linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -21,7 +21,7 @@
   border: 1px solid var(--nui-border);
   border-radius: var(--radius-surface, 0.875rem);
   line-height: 1.5;
-  animation: mp-enter 140ms ease-out;
+  animation: mp-enter calc(140ms * var(--motion, 1)) ease-out;
 }
 /* The browsing UI's own root. It has two hosts — the .mp-panel modal above and
    the .mp-embed dialog tab below — so every rule that scopes a control to "the
@@ -399,6 +399,9 @@
     max-width: 140px;
   }
 }
+/* Never fires in a FiveM NUI — CEF reports `no-preference` whatever the host
+   OS says. Kept for the browser preview harness. The switch that reaches a
+   player is `--motion` on :root (shared/css/theme-tokens.css). */
 @media (prefers-reduced-motion: reduce) {
   .mp-root,
   .mp-root * {

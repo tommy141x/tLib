@@ -185,9 +185,9 @@
   outline: 2px solid transparent;
   outline-offset: -1px;
   transition:
-    background-color 100ms ease-out,
-    border-color 100ms ease-out,
-    outline-color 100ms ease-out;
+    background-color calc(100ms * var(--motion, 1)) ease-out,
+    border-color calc(100ms * var(--motion, 1)) ease-out,
+    outline-color calc(100ms * var(--motion, 1)) ease-out;
 }
 .tlib-nui-control:focus-visible,
 .tlib-nui-control[data-focus-visible] {
@@ -402,7 +402,7 @@
 }
 .tlib-nui-select-indicator {
   color: var(--nui-muted);
-  transition: rotate 120ms var(--nui-ease);
+  transition: rotate calc(120ms * var(--motion, 1)) var(--nui-ease);
 }
 .tlib-nui-select-indicator[data-state="open"] {
   rotate: 180deg;
@@ -424,10 +424,10 @@
   transform-origin: var(--transform-origin);
 }
 .tlib-nui-select-content[data-state="open"] {
-  animation: tlib-nui-enter 120ms var(--nui-ease);
+  animation: tlib-nui-enter calc(120ms * var(--motion, 1)) var(--nui-ease);
 }
 .tlib-nui-select-content[data-state="closed"] {
-  animation: tlib-nui-exit 80ms ease-in;
+  animation: tlib-nui-exit calc(80ms * var(--motion, 1)) ease-in;
   pointer-events: none;
 }
 /* Item highlighting is immediate: no transition trail while scanning options. */
@@ -485,8 +485,8 @@
   outline: 2px solid transparent;
   outline-offset: 2px;
   transition:
-    outline-color 100ms ease-out,
-    scale 100ms ease-out;
+    outline-color calc(100ms * var(--motion, 1)) ease-out,
+    scale calc(100ms * var(--motion, 1)) ease-out;
 }
 .tlib-nui-slider-thumb[data-dragging] {
   scale: 1.1;
@@ -601,10 +601,10 @@
   background: var(--nui-rule-y);
 }
 .tlib-nui-dialog[data-state="open"] {
-  animation: tlib-nui-rise 180ms var(--nui-ease-entrance);
+  animation: tlib-nui-rise calc(180ms * var(--motion, 1)) var(--nui-ease-entrance);
 }
 .tlib-nui-dialog[data-state="closed"] {
-  animation: tlib-nui-exit 100ms ease-in;
+  animation: tlib-nui-exit calc(100ms * var(--motion, 1)) ease-in;
 }
 .tlib-nui-dialog[inert],
 .tlib-nui-dialog-positioner[data-state="closed"] {
@@ -635,7 +635,7 @@
   align-items: center;
   padding: 20px;
   background: var(--nui-surface);
-  animation: tlib-nui-rise 140ms var(--nui-ease-entrance);
+  animation: tlib-nui-rise calc(140ms * var(--motion, 1)) var(--nui-ease-entrance);
 }
 .tlib-nui-confirm {
   width: 100%;
@@ -760,6 +760,11 @@
     outline-color: Highlight;
   }
 }
+/* THIS BLOCK CANNOT FIRE IN A FiveM NUI, and is kept only for the browser
+   preview harness. CEF reports `prefers-reduced-motion: no-preference` whatever
+   the host OS says — measured — so in game this is coverage that is never
+   reached. The switch that DOES reach a player is `--motion` on :root (see
+   shared/css/theme-tokens.css); every duration above multiplies through it. */
 @media (prefers-reduced-motion: reduce) {
   .tlib-nui-surface,
   .tlib-nui-surface *,

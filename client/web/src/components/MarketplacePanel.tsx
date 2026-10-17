@@ -69,7 +69,7 @@ export default function MarketplacePanel() {
         }}
       >
         <div
-          class="tlib-nui-surface mp-panel"
+          class="tlib-nui-surface mp-panel tlib-nui-lit"
           role="dialog"
           aria-label="Marketplace"
           onClick={(e) => e.stopPropagation()}

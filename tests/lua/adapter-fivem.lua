@@ -98,7 +98,19 @@ for _, side in ipairs({'client', 'server'}) do
     check(not pcall(p._stub('missing')), 'unsupported capability raises an error')
     local fn = function() return 7 end
     p.export('tLib', 'Probe', fn)
-    check(env.exported.Probe == fn and p.storeCallback(fn) == fn, 'native funcref identity is preserved')
+    -- `storeCallback` ONLY. This used to also assert `env.exported.Probe == fn`,
+    -- which encoded `wrapExport` being a bare `exports(name, fn)` — and that was
+    -- the bug: the function named after guarding an export body did not guard it,
+    -- so ~40 call sites across the estate had a throw silently become `undefined`.
+    -- `wrapExport` now installs a pcall, so the registered value is deliberately
+    -- NOT the same reference, and nothing can observe that: a consumer only ever
+    -- calls an export. See tests/lua/wrap-export.lua.
+    --
+    -- The funcref identity that IS a contract is `storeCallback`'s — FiveM carries
+    -- a function reference across VMs natively, and the callback-key shim that
+    -- tokenised them is what the next line exists to keep deleted.
+    check(p.storeCallback(fn) == fn, 'native funcref identity is preserved')
+    check(env.exported.Probe ~= nil and env.exported.Probe() == 7, 'export is registered and transparent')
     check(p.releaseCallback == nil and env._unwrapValue == nil, 'no callback-key shim APIs')
 
     p.createThreadNow(function() env.ranNow = true end)

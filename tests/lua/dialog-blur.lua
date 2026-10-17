@@ -10,7 +10,7 @@ local function host(fivem)
     _TLIB_SHUTDOWN_REGISTERED, _TLIB_RESOURCE_STOP_REGISTERED = nil, nil
     _TLIB_NUI_FOCUSED, _TLIB_UI_FOCUSED = false, false
     Logger = { create = function() return function() end end }
-    local h = { events = {}, exports = {}, fades = {}, timers = {}, messages = {}, notifications = {}, owner = 'consumer', focused = false }
+    local h = { events = {}, exports = {}, fades = {}, timers = {}, messages = {}, notifications = {}, commands = {}, owner = 'consumer', focused = false }
     function AddEventHandler(name, fn)
         h.events[name] = h.events[name] or {}
         table.insert(h.events[name], fn)
@@ -31,11 +31,21 @@ local function host(fivem)
         table.insert(h.fades, { 'in', ms })
     end
     function TriggerScreenblurFadeOut(ms) table.insert(h.fades, { 'out', ms }) end
+    -- cl_ui_effects.lua also owns the reduced-motion preference, which reads a
+    -- convar and a KVP and registers a command. Stubbed rather than exercised:
+    -- this suite is about blur leases, and tests/lua/ui-motion.lua covers the rest.
+    function GetConvar(_, fallback) return fallback end
+    function GetResourceKvpString() return h.motionKvp end
+    function SetResourceKvp(_, value) h.motionKvp = value end
+    function DeleteResourceKvp() h.motionKvp = nil end
+    function RegisterCommand(name, fn) h.commands[name] = fn end
     Platform = {
         _stub = function() return function() end end,
         setIgnoreMoveInput = function(state) h.moveLocked = state end,
         setIgnoreLookInput = function(state) h.lookLocked = state end,
         export = function(_, name, fn) h.exports[name] = fn end,
+        wrapExport = function(_, name, fn) h.exports[name] = fn end,
+        createThread = function(fn) fn() end,
         TriggerEvent = function(name, ...)
             h.notifications[#h.notifications + 1] = { name, ... }
             if h.notify then h.notify(name, ...) end

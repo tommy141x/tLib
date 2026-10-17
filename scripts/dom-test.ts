@@ -50,6 +50,12 @@ const WEB = resolve(ROOT, "client", "web");
  * RE-MEASURED 2026-10-15 when `layout-editor-dirty.test.tsx` landed with the
  * synchronous placement mirror: 7 tests.
  *
+ * RE-MEASURED 2026-10-17 when `hud-binder-keyboard.test.tsx` landed with the
+ * HudBinder Enter/Space fix: 7 tests, suite 122 -> 129. The floor was 115,
+ * a margin of 7 against a stated allowance of 3 -- so it is now 126, which is
+ * the loosest this file's own rule permits. That file is NOT internal-only:
+ * it covers `shared/ts/hud-template.ts`, which a public clone ships.
+ *
  * RE-MEASURED 2026-10-07 TWICE. First when `lucide-spread-arity.test.tsx`
  * landed and `layout-editor-discard.test.tsx` dropped its `lucide-solid` stub:
  * the floor was 64 against a real count of 72. Then when `export-badge.test.tsx`
@@ -80,7 +86,7 @@ const INTERNAL_ONLY_TESTS = 24 + 31 + 16 + 3 + 1;
 const HAS_INTERNAL =
   existsSync(resolve(ROOT, "internal", "shared-ts", "prop-editor", "PropEditor.tsx")) &&
   existsSync(resolve(ROOT, "internal", "shared-ts", "ui", "undo-redo.tsx"));
-const DEFAULT_MINIMUM_TESTS = HAS_INTERNAL ? 115 : 115 - INTERNAL_ONLY_TESTS;
+const DEFAULT_MINIMUM_TESTS = HAS_INTERNAL ? 126 : 126 - INTERNAL_ONLY_TESTS;
 
 const raw = process.env.TLIB_DOM_TEST_MIN;
 let MINIMUM_TESTS = DEFAULT_MINIMUM_TESTS;
