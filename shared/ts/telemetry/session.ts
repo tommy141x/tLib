@@ -249,12 +249,30 @@ export function startSessionLog(opts: SessionLogOptions): SessionHandle {
       const { verdict, notes } = readTrend(trend);
       const allNotes = [...notes, ...(opts.extraNotes?.(trend) ?? [])];
 
+      // NOTHING IS PRINTED FOR A SESSION THAT ENDED THE WAY SESSIONS END.
+      //
+      // This used to print the verdict line, a JSON state dump and up to 30
+      // trend samples on EVERY boot, in both branches. Six resources carry this
+      // ledger, so an ordinary restart put about forty lines of heap readings
+      // and six JSON blobs into F8 before the player had done anything — and a
+      // console that is noisy when nothing is wrong is one nobody reads when
+      // something is. The crash REPORT was already gated on `!orderly` a few
+      // lines below; the console output simply never followed it.
+      if (orderly) return;
+
+      // IT DOES NOT SAY "CRASHED", AND THAT IS A CORRECTION, NOT A HEDGE.
+      //
+      // The only thing observed here is the absence of a clean-exit marker. A
+      // renderer kill produces that — and so does the player quitting the game,
+      // because CEF tears the page down without running `beforeunload` and Lua
+      // is not around to confirm anything either. The two are indistinguishable
+      // by construction, and quitting is overwhelmingly the common one. Calling
+      // every one of them a crash meant six red lines after every normal exit,
+      // which is how a real crash gets scrolled past.
       banner(
-        `previous session #${prev.n} ${
-          orderly
-            ? "ended cleanly (resource stop/restart)"
-            : "^1ENDED UNEXPECTEDLY^7 (renderer killed / crashed)"
-        } after ${human(prev.lastUptimeMs ?? 0)}`
+        `previous session #${prev.n} did not record a clean exit after ${human(
+          prev.lastUptimeMs ?? 0
+        )} — normal if the game was closed; worth reading below if it was not`
       );
       if (prev.lastState) banner(`state at that point: ${JSON.stringify(prev.lastState)}`);
       // The trajectory, not just the final reading. A heap climbing toward the

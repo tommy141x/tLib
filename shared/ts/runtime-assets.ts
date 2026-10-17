@@ -426,7 +426,12 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
       for (const probe of bundleProbes) {
         if (!(await servedByResource(bundleBase(key) + probe))) continue;
         bundleLocal.add(key);
-        log.log(
+        // Silent, because this is the ordinary outcome. Every shipped layout is
+        // served by its own resource, so this printed once PER LAYOUT on every
+        // boot — five lines across tRadar, tDetector and tELS announcing that
+        // nothing had been downloaded. The download path still logs, and so does
+        // every failure; an uneventful hit does not need to.
+        log.debug?.(
           `[${tag}] runtime bundle: "${key}" is served by the resource (${probe}) — not downloading`
         );
         return;

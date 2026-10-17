@@ -108,12 +108,16 @@ describe("the session counter", () => {
 });
 
 describe("the clean-exit marker", () => {
-  test("a previous session with the marker is reported as clean and NOT crash-reported", () => {
+  test("a previous session with the marker says nothing and is NOT crash-reported", () => {
     plantPrevious({ n: 7, startedAt: 0, clean: true, lastUptimeMs: 90_000 });
     const b = boot();
-    expect(b.banner.join("\n")).toContain("ended cleanly");
-    // The important half. A `restart tRadio` is not a crash, and reporting
-    // one would make every developer reload in this estate a data point.
+    // SILENCE IS THE ASSERTION. This expected "ended cleanly", and the trend
+    // dump that followed printed on this branch too — about forty heap lines
+    // across the six resources carrying this ledger, every ordinary boot. The
+    // only line a healthy session may print is its own number.
+    expect(b.banner).toEqual(["session #8"]);
+    // The important half, unchanged. A `restart tRadio` is not a crash, and
+    // reporting one would make every developer reload in this estate a data point.
     expect(b.crashes).toHaveLength(0);
     b.handle.stop();
   });
@@ -145,7 +149,8 @@ describe("the clean-exit marker", () => {
     const b = boot();
     b.handle.noteOrderlyStop(true);
     expect(b.crashes).toHaveLength(0);
-    expect(b.banner.join("\n")).toContain("resource stop/restart");
+    // Resolved clean by Lua prints nothing either — same rule as the marker.
+    expect(b.banner).toEqual(["session #8"]);
     expect(b.handle.info().previousEndedCleanly).toBe(true);
     b.handle.stop();
   });
@@ -157,7 +162,12 @@ describe("the clean-exit marker", () => {
     expect(b.crashes).toHaveLength(1);
     expect(b.crashes[0]?.session).toBe(7);
     expect(b.crashes[0]?.uptimeMs).toBe(4000);
-    expect(b.banner.join("\n")).toContain("ENDED UNEXPECTEDLY");
+    // IT NO LONGER CLAIMS A CRASH. Absence of a clean-exit marker is all that
+    // is observed, and closing the game produces exactly that — CEF kills the
+    // page without `beforeunload` and Lua is gone too. The wording says what
+    // is known; the trend under it is what tells the two apart.
+    expect(b.banner.join("\n")).toContain("did not record a clean exit");
+    expect(b.banner.join("\n")).not.toContain("crashed");
     b.handle.stop();
   });
 
