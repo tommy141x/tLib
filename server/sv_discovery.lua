@@ -575,15 +575,17 @@ function Discovery.create(opts)
                             .. "' ships, delete the '" .. tostring(model) .. "' entry from " .. shadowPath
                             .. " and restart the server.", 3)
                     else
-                        -- Transient: saveLocal drops the entry on the next
-                        -- write, so this is below WARN and is kept to ONE
-                        -- line. It used to carry the same four-sentence
-                        -- explanation as the permanent case above, per model,
-                        -- on every boot -- and unlike that case the operator's
-                        -- correct response here is to do nothing.
+                        -- DEBUG, not INFO, and that follows from the sentence
+                        -- below: the operator's correct response here is to do
+                        -- nothing, because saveLocal drops the entry on the
+                        -- next write. One line per shadowed model on every
+                        -- boot, with no action attached, is noise that pushes
+                        -- the permanent case above out of view. Kept, because
+                        -- it is still the only way to see why a shipped config
+                        -- is not the one in use while the state lasts.
                         log("[" .. tag .. "] '" .. tostring(model) .. "' from '" .. resName
                             .. "' is shadowed by an older copy in " .. shadowPath
-                            .. "; it takes over when that config is next saved.", 2)
+                            .. "; it takes over when that config is next saved.", 1)
                     end
                 end
             end
@@ -616,9 +618,15 @@ function Discovery.create(opts)
                         configs[canonical] = configs[model]
                         configs[canonical]._local = true
                         externalSources[canonical] = nil
-                        log("[" .. tag .. "] Local hash '" .. model .. "' promoted to '" .. canonical .. "'", 2)
+                        -- Both DEBUG: hash-vs-spawn-name collapsing is internal
+                        -- bookkeeping in a vocabulary that exists only in this
+                        -- file, it runs at every boot, and it is one line per
+                        -- affected model -- so it scales with how many configs
+                        -- the server ships. Nothing for an operator to do
+                        -- either way.
+                        log("[" .. tag .. "] Local hash '" .. model .. "' promoted to '" .. canonical .. "'", 1)
                     else
-                        log("[" .. tag .. "] Removed duplicate hash '" .. model .. "' (canonical: " .. canonical .. ")", 2)
+                        log("[" .. tag .. "] Removed duplicate hash '" .. model .. "' (canonical: " .. canonical .. ")", 1)
                     end
                     configs[model] = nil
                     dirty = true
@@ -701,14 +709,17 @@ function Discovery.create(opts)
                 -- not something this function may claim.
                 return false, err, kind
             end
-            log("[" .. tag .. "] Saved '" .. model .. "' → " .. ext.resource .. "/" .. ext.filePath, 2)
+            -- DEBUG. Every way this write can fail already reports itself at
+            -- WARN or ERROR just above, so the success line adds nothing an
+            -- operator can act on -- and it fires on every lightbar save.
+            log("[" .. tag .. "] Saved '" .. model .. "' → " .. ext.resource .. "/" .. ext.filePath, 1)
         else
             config._local = true
             local ok, err, kind = persistLocal("saveModelConfig ('" .. tostring(model) .. "')")
             if not ok and kind ~= 'skipped' then
                 return false, err, kind
             end
-            log("[" .. tag .. "] Saved '" .. model .. "' → local", 2)
+            log("[" .. tag .. "] Saved '" .. model .. "' → local", 1)
         end
         return true
     end
@@ -937,7 +948,11 @@ function Discovery.create(opts)
 
         -- committed from here: the destination has the config
         info.status = 'exported'
-        log("[" .. tag .. "] Wrote '" .. tostring(model) .. "' → " .. targetResource .. "/" .. targetPath, 2)
+        -- DEBUG because the handler at the bottom of this file logs the same
+        -- export at INFO with the player who asked for it, which is the version
+        -- worth keeping: an audit line names who did what. Two lines per click
+        -- for one event is the duplication, not the level.
+        log("[" .. tag .. "] Wrote '" .. tostring(model) .. "' → " .. targetResource .. "/" .. targetPath, 1)
 
         local oldExt = externalSources[model]
         if oldExt and not (oldExt.resource == targetResource and oldExt.filePath == targetPath) then
@@ -969,7 +984,7 @@ function Discovery.create(opts)
 
         if appendToManifest(targetResource, metadataKey, targetPath) then
             info.manifestOk = true
-            log("[" .. tag .. "] Ensured " .. metadataKey .. " in " .. targetResource .. "/fxmanifest.lua", 2)
+            log("[" .. tag .. "] Ensured " .. metadataKey .. " in " .. targetResource .. "/fxmanifest.lua", 1)
         else
             info.manifestOk = false
             local warning = "Could not edit " .. targetResource .. "/fxmanifest.lua. Add this line to it by hand,"

@@ -24,7 +24,8 @@ local function _extractLevel(args, n)
     return lvl, n
 end
 
--- Produces "[side][LEVEL] message", or nil when the body is empty.
+-- Produces "[source][LEVEL] message" -- or "[side]..." when unpinned -- or nil
+-- when the body is empty.
 local function _format(source, lvl, args, n)
     local parts = {}
     for i = 1, n do
@@ -36,8 +37,13 @@ local function _format(source, lvl, args, n)
     -- empty labelled line.
     if text == '' then return nil end
 
+    -- `source` when the caller pinned one, `_side` otherwise. It was taken and
+    -- then dropped: every `Logger.create('tLib/menu')` line printed `[server]`,
+    -- so thirty-odd modules were indistinguishable in the console and the
+    -- docstring on `create` described behaviour that did not happen.
+    -- `Logger.log` passes nil and still reads `[server]` / `[client]`.
     local label = _labels[lvl] or 'INFO'
-    return string.format('[%s][%s] %s', _side, label, text)
+    return string.format('[%s][%s] %s', source or _side, label, text)
 end
 
 local function _emit(source, ...)

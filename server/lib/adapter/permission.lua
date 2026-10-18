@@ -37,7 +37,10 @@ local function decidePermission(source, key, demoActive, resolver)
     if resolver then
         local ok, allowed = pcall(resolver, source, key)
         if not ok then
-            log(('resolver errored for key %q: %s'):format(key, tostring(allowed)), 2)
+            -- WARN, not INFO. A throwing resolver denies the key, so the
+            -- operator sees players locked out of a feature with no other
+            -- indication of why -- and the fix is in their framework bridge.
+            log(('resolver errored for key %q: %s'):format(key, tostring(allowed)), 3)
             return false
         end
         return allowed == true

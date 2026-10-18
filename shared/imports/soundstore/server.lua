@@ -217,7 +217,8 @@ function soundstore.open(opts)
             if present then
                 self.toneWavMap[key] = filename
                 dirty = true
-                log("re-seeded missing default sound mapping " .. key .. " -> " .. filename, levels.INFO)
+                -- DEBUG: one line per tone, and a first boot re-seeds them all.
+                log("re-seeded missing default sound mapping " .. key .. " -> " .. filename, levels.DEBUG)
             end
         end
     end

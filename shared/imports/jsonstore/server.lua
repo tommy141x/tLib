@@ -351,8 +351,13 @@ function Store:_ensure(schema, owner)
         end
 
         self:_mirrorIfDropped(seed, owner, target)
+        -- DEBUG, unlike the migration line further down. A store that did not
+        -- exist yet being created is the expected outcome of installing the
+        -- resource, and it prints under the CONSUMER's scope -- so at INFO it
+        -- is a first-boot line in five resources' consoles that nobody can act
+        -- on. The branch above, where creation failed, stays at ERROR.
         self._log(('jsonstore: created %s at schema v%d for "%s"')
-            :format(self.file, target, owner), self._levels.INFO)
+            :format(self.file, target, owner), self._levels.DEBUG)
         local result = { action = 'seeded', owner = owner, to = target }
         return result
     end
