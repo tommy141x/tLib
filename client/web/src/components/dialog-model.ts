@@ -168,6 +168,23 @@ export function effectiveTabs(dialog: DialogData): DialogTab[] {
     (id) => ({ id, label: id })
   );
 }
+/**
+ * Whether a click on `fieldId` should be sent to Lua at all.
+ *
+ * An ACTION TAB owns no field by design -- a sidebar row that opens something
+ * rather than switching panel -- and `client/lib/dialog/exports.lua` allows a
+ * `dialogButtonClick` naming one. The NUI required a matching enabled `button`
+ * field and returned before sending, so every action row in the estate was
+ * inert and silent: tRadio's two panels, the prop editors in tRadar and
+ * tDetector, tELS's LED editor, tUnit's element editor.
+ */
+export function clickIsSendable(dialog: DialogData, fieldId: string): boolean {
+  const field = dialog.fields.find((entry) => entry.id === fieldId);
+  if (field) return field.type === "button" && !field.disabled;
+  // No field: allowed only when the id names an action tab. An unknown id is
+  // still refused, exactly as the Lua guard refuses one.
+  return effectiveTabs(dialog).some((tab) => tab.id === fieldId && tab.action);
+}
 export function groupFieldsByRow(fields: DialogField[]): DialogField[][] {
   const groups: DialogField[][] = [];
   for (const field of fields) {

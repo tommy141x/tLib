@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   type DialogData,
   type DialogField,
+  clickIsSendable,
   effectiveTabs,
   fieldError,
   initialValues,
@@ -95,5 +96,37 @@ describe("dialog schema and Lua wire contract", () => {
     expect(effectiveTabs({ ...dialog, fields: [{ ...fields[0], tab: "general" }] })).toEqual([
       { id: "general", label: "general" },
     ]);
+  });
+});
+
+describe("which clicks reach Lua", () => {
+  const base: DialogData = { id: "settings", title: "Settings", size: "md", fields };
+
+  test("an action tab is sendable even though it owns no field", () => {
+    // The regression. Every sidebar action row in the estate was inert because
+    // `fire()` demanded a matching button field and returned before sending.
+    const d: DialogData = {
+      ...base,
+      tabs: [
+        { id: "quick", label: "Quick" },
+        { id: "openAdminPanel", label: "Admin Panel", action: true },
+      ],
+    };
+    expect(clickIsSendable(d, "openAdminPanel")).toBe(true);
+    // A plain tab is not a button: clicking it switches panel, it does not fire.
+    expect(clickIsSendable(d, "quick")).toBe(false);
+    // An id that names neither is still refused, as the Lua guard refuses it.
+    expect(clickIsSendable(d, "nosuchthing")).toBe(false);
+  });
+
+  test("a button field still decides on its own type and disabled state", () => {
+    expect(clickIsSendable(base, "action")).toBe(true);
+    expect(clickIsSendable(base, "person.name")).toBe(false);
+    expect(
+      clickIsSendable(
+        { ...base, fields: [{ id: "action", type: "button", label: "Action", disabled: true }] },
+        "action"
+      )
+    ).toBe(false);
   });
 });

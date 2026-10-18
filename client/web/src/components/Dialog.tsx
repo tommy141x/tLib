@@ -18,6 +18,7 @@ import {
   type DialogField,
   type DialogValue,
   type DialogValues,
+  clickIsSendable,
   effectiveTabs,
   groupFieldsByRow,
   initialValues,
@@ -240,10 +241,9 @@ function DialogSession(props: {
   function fire(fieldId: string) {
     if (!alive || !props.open) return;
     const d = dialog();
-    const field = d.fields.find((entry) => entry.id === fieldId);
     // Re-checked here and not only at the click: the schema can be replaced, or
     // the button disabled, between the question being asked and answered.
-    if (!field || field.type !== "button" || field.disabled) return;
+    if (!clickIsSendable(d, fieldId)) return;
     void fetchNui("dialogButtonClick", { id: d.id, instance: d.instance, fieldId });
   }
   function action(fieldId: string) {
