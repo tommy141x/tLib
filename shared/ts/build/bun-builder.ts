@@ -91,7 +91,20 @@ export async function viteBuild(cwd: string): Promise<boolean> {
 }
 
 export const DEFAULT_HTML_MINIFY_OPTS = {
-  removeAttributeQuotes: true,
+  // `removeAttributeQuotes` is OFF, and it must stay off.
+  //
+  // It rewrote `data-radio-width="209.5"` as `data-radio-width=209.5`, which is
+  // valid HTML and unreadable to every parser in this estate: they all anchor on
+  // quotes. The attribute was still in the file, so an inspection said "present"
+  // while the runtime said "missing" -- tRadio fell back to a 300x406 radio and
+  // stopped saving positions, and HUD layouts lost bindings.
+  //
+  // It only ever broke a RELEASE build, because dev serves unminified source,
+  // and no gate caught it because the layout fixtures are all hand-written with
+  // quotes -- the one form a release never ships. The parsers are quote-optional
+  // now as well, but the saving is a few bytes and the failure is silent, so
+  // this does not come back on.
+  removeAttributeQuotes: false,
   removeComments: true,
   removeEmptyAttributes: true,
   removeRedundantAttributes: true,

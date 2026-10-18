@@ -86,10 +86,17 @@ export function stripProse(html: string): string {
 
 function attributes(tag: string): Map<string, string> {
   const out = new Map<string, string>();
-  const attr = /([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+  // The unquoted alternative is not cosmetic. A minifier may emit
+  // `data-hud-text=btn01`, which is valid HTML, and a quote-only pattern reads
+  // that element as having no bindings at all -- silently, because a missing
+  // attribute and an unreadable one look identical here. That shipped: a
+  // release build lost its softkey labels while the attributes were plainly in
+  // the file. Unquoted values cannot contain whitespace, `"`, `'`, `=`, `<`,
+  // `>` or a backtick, which is what the final branch encodes.
+  const attr = /([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
   let match = attr.exec(tag);
   while (match !== null) {
-    out.set(match[1]!.toLowerCase(), match[2] ?? match[3] ?? "");
+    out.set(match[1]!.toLowerCase(), match[2] ?? match[3] ?? match[4] ?? "");
     match = attr.exec(tag);
   }
   return out;
