@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { describeSanitize, sanitizeStagedSecrets } from "../secrets/release.ts";
+import { stageFontLicences } from "./font-licences.ts";
 import { assertManifestStaged } from "./manifest-coverage.ts";
 
 export function step(label: string) {
@@ -144,6 +145,12 @@ export interface ProdConfig {
    * that found nothing to sanitize prints the same tick as one that worked.
    */
   expectConfig?: boolean;
+  /**
+   * Extra directories to find `OFL-<Family>.txt` in, relative to `root`, for a
+   * resource that ships a face of its own. tLib's own font directory is always
+   * searched and does not need listing.
+   */
+  fontLicenceDirs?: string[];
 }
 
 export function assertProductionFiles(root: string, files: string[]) {
@@ -188,6 +195,28 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
   // rule and a new artifact can never reach a release by being forgotten.
   const dist = join(root, ".build", "dist");
   stageFiles(root, dist, include);
+
+  // A licence beside every staged webfont, or refuse to build. After staging and
+  // before zipping, deliberately: it has to read the tree that is about to be
+  // shipped, because the two previous versions of this rule in the estate both
+  // watched the build output instead and were green while the zip went out with
+  // the fonts and none of their licences. See stageFontLicences.
+  //
+  // tLib's own font directory is always searched, since that is where Hanken
+  // Grotesk, Inter and JetBrains Mono now come from for every consumer; a
+  // resource adds its own via `fontLicenceDirs` when it ships a face of its own.
+  const licences = stageFontLicences(dist, [
+    ...(config.fontLicenceDirs ?? []).map((d) => join(root, d)),
+    join(import.meta.dir, "..", "..", "css", "fonts"),
+  ]);
+  if (licences.copied.length > 0 || licences.satisfied.length > 0) {
+    step("Font licences");
+    for (const line of licences.copied) console.log(`  + ${line}`);
+    console.log(
+      `  ${licences.copied.length} copied, ${licences.satisfied.length} already covered`
+    );
+  }
+
   createZip(new AdmZipClass(), dist, join(root, ".build", `${name}.zip`), name, {
     expectConfig: config.expectConfig,
   });

@@ -87,6 +87,8 @@ export {
   renderHudGallery,
   statesFromManifest,
 } from "./hud-gallery.ts";
+export type { FontLicenceResult } from "./font-licences.ts";
+export { stageFontLicences } from "./font-licences.ts";
 export { checkLicenseCompliance } from "./license.ts";
 export type { ManifestCoverage } from "./manifest-coverage.ts";
 export {
