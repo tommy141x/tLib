@@ -25,17 +25,20 @@
 // filter has already had its say.
 //
 // ⛔ IT SEES `.woff2` AND NOTHING ELSE, which is narrower than "every font in
-// the release" and must not be read as that. Measured 2026-10-18: tRadio's
-// layouts ship `CreatoDisplay.otf` (seven copies), `Mustica.otf` and
-// `Charmset.ttf`, all commercial retail faces, none with a licence in the zip —
-// and this gate is green on that tree. The scope is deliberate: those are not
-// OFL families, so there is no `OFL-<Family>.txt` that would ever satisfy them,
-// and widening the scan would only convert "unlicensed" into "unbuildable"
-// without answering the question of what licence is actually held. That
-// question is the owner's to answer; when it is, either the files go and this
-// stays as it is, or they stay and the terms get documented beside them the way
-// tUnit's `LICENSES.md` does — at which point the `LICENSES.md` branch below
-// already covers them and the scan can widen.
+// the release" and must not be read as that. tRadio's layouts ship
+// `CreatoDisplay.otf` (seven copies), `Mustica.otf` and `Charmset.ttf`, and
+// this gate is green on all three.
+//
+// That is settled rather than overlooked: asked on 2026-10-18, the owner
+// confirmed Creato Display is licensed free for commercial use, and the other
+// two on the same footing. They are not OFL families, so no `OFL-<Family>.txt`
+// could ever satisfy them, and widening the scan would turn a licensing
+// question into an unbuildable release without answering anything.
+//
+// So do not "fix" this by making the scan read `.otf`/`.ttf`. If a face is ever
+// added whose terms DO need to travel with it, the `LICENSES.md` branch below
+// already covers that case — document it beside the fonts the way tUnit's
+// `web/fonts/LICENSES.md` does, and it is satisfied without touching the scan.
 //
 // ── Why it throws ──────────────────────────────────────────────────────────
 //
