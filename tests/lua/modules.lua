@@ -203,6 +203,21 @@ test('a layout folder literally named "themes" is not discovered as a layout', f
         'a reserved name must be skipped before it is read, not read and then complained about')
 end)
 
+test('a manifest-less directory is skipped quietly but leaves a trace', function()
+    reset()
+    place('layouts', 'QRX-720', LAYOUT)
+    -- A marketplace bundle: real files, no module.json. This is the shape that
+    -- made a layout look installed and absent at the same time -- the panel
+    -- counted it, this scan skipped it, and nothing anywhere said so. The skip
+    -- is correct; the silence was not.
+    dirs['layouts'] = { 'QRX-720', 'apx-8000h-r', 'themes' }
+    modules.scan('layouts', 'layout')
+    assert(#refusals == 0, 'a missing manifest is not a refusal and must stay quiet: ' .. #refusals)
+    local trace = table.concat(modules.skipped('layouts', 'layout'), ',')
+    assert(trace == 'apx-8000h-r',
+        'the skipped directory must be recoverable for whoever is debugging, got: ' .. trace)
+end)
+
 test('the real themes category directory is skipped silently, not reported as broken', function()
     reset()
     place('layouts', 'QRX-720', LAYOUT)

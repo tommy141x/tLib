@@ -317,6 +317,21 @@ end
 --- Every usable module of `kind` under basePath, as `{ id = , manifest = }`.
 ---
 --- A folder that is on disk but unusable — reserved name, no manifest, wrong
+--- Directory names the last `list` of this path skipped for having no manifest.
+---
+--- Exists because that skip is otherwise invisible, and its invisibility is what
+--- made a marketplace layout look installed and absent at the same time. Keyed
+--- the same way as the cache, so a caller asks about the scan it just ran.
+---
+--- @param basePath string
+--- @param kind string
+--- @param resourceName string|nil
+--- @return table ids, sorted
+function modules.skipped(basePath, kind, resourceName)
+    local key = (resourceName or GetCurrentResourceName()) .. ':' .. basePath .. ':' .. kind
+    return (modules._skipped or {})[key] or {}
+end
+
 function modules.list(basePath, kind, resourceName)
     resourceName = resourceName or GetCurrentResourceName()
 
@@ -330,7 +345,7 @@ function modules.list(basePath, kind, resourceName)
     local cached = modules._cache[cacheKey]
     if cached then return cached end
 
-    local found = {}
+    local found, skipped = {}, {}
     for _, name in ipairs(listDirs(resourceName, basePath)) do
         local id = tostring(name):match('^%s*(.-)%s*$')
         if id ~= '' and not modules.RESERVED[id] then
@@ -339,11 +354,32 @@ function modules.list(basePath, kind, resourceName)
                 found[#found + 1] = { id = id, manifest = manifest }
             elseif err ~= 'no ' .. modules.MANIFEST then
                 modules.onRefusal(basePath, id, err)
+            else
+                -- A directory with no manifest is not an error: this scan asks a
+                -- manifest question, and plenty of folders are not modules.
+                --
+                -- ⚠️ BUT IT MUST LEAVE A TRACE. It is the one refusal that printed
+                -- nothing, and that silence cost three operator reports: a
+                -- marketplace layout bundle carries no `module.json`, so it was
+                -- skipped here without a word while the admin panel counted it as
+                -- installed. The operator saw "installed" and an empty in-game
+                -- picker with nothing connecting the two, and reinstalled it again
+                -- and again. tRadio fixed its own side by not asking a manifest
+                -- question about a manifest-less artifact; this is so the next
+                -- person looking has something to find.
+                --
+                -- Recorded, not printed. A scan runs over every folder on disk and
+                -- a line each would be noise on every boot — `modules.skipped()`
+                -- is there for whoever is actually debugging.
+                skipped[#skipped + 1] = id
             end
         end
     end
 
     table.sort(found, function(a, b) return a.id < b.id end)
+    table.sort(skipped)
+    modules._skipped = modules._skipped or {}
+    modules._skipped[cacheKey] = skipped
     if #found > 0 then modules._cache[cacheKey] = found end
     return found
 end
