@@ -92,3 +92,46 @@ test("invalid layout messages and duplicate mounts are rejected", () => {
   expect(el.style.transform).toBe("translate3d(1647.6px, 946.8px, 0) scale(1)");
   detach();
 });
+
+/**
+ * A saved placement must not arrive as a visible jump.
+ *
+ * `apply` needs a binding AND a pushed update, and the element is already in the
+ * DOM painting from the consumer's own CSS before that update lands. A player
+ * with a saved position watched the widget appear where the author put it and
+ * then teleport to where they had put it — reported across the t* resources,
+ * tRadar most visibly.
+ */
+test("a widget stays hidden until it has a real placement", () => {
+  const el = element();
+  el.style.visibility = "";
+  const detach = sdk.attach("late", el);
+  expect(el.style.visibility).toBe("hidden");
+  send(update("late"));
+  expect(el.style.visibility).toBe("");
+  expect(el.style.transform).toContain("translate3d(");
+  detach();
+});
+
+test("a widget that is never placed is revealed anyway", async () => {
+  // ⚠️ The failure mode this guards is worse than the jump it replaces: with no
+  // update ever arriving — tLib absent, a failed handshake, an id nothing pushes
+  // — a permanently invisible widget would be unrecoverable for the player.
+  const el = element();
+  el.style.visibility = "";
+  const detach = sdk.attach("orphan", el);
+  expect(el.style.visibility).toBe("hidden");
+  await new Promise((resolve) => setTimeout(resolve, 1_100));
+  expect(el.style.visibility).toBe("");
+  detach();
+});
+
+test("an existing visibility is restored, not assumed empty", () => {
+  const el = element();
+  el.style.visibility = "collapse";
+  const detach = sdk.attach("preset", el);
+  expect(el.style.visibility).toBe("hidden");
+  send(update("preset"));
+  expect(el.style.visibility).toBe("collapse");
+  detach();
+});

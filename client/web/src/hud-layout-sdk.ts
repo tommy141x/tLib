@@ -5,8 +5,23 @@ type Binding = {
   element: HTMLElement;
   previousStyle: string | null;
   previousHidden: boolean;
+  /** The element's own `style.visibility`, restored rather than assumed empty. */
+  previousVisibility: string;
+  /** True once a real placement has been written, which is when it may paint. */
+  placed: boolean;
+  revealTimer?: ReturnType<typeof setTimeout>;
   onEdit?: (editing: boolean) => void;
 };
+
+/**
+ * How long an unplaced widget stays hidden before it is shown anyway.
+ *
+ * A placement normally lands in the same frame or the next one. This only runs
+ * when none ever arrives, and it exists so the worst case is the old visible
+ * jump rather than a widget nobody can see. Short enough not to read as a
+ * loading delay, long enough to cover a slow consumer handshake.
+ */
+const REVEAL_FAILSAFE_MS = 1_000;
 const bindings = new Map<string, Binding>();
 const latest = new Map<string, Update>();
 const anchors = new Set(["top-left", "top-right", "bottom-left", "bottom-right", "center"]);
@@ -54,6 +69,15 @@ function apply(id: string) {
     pointerEvents: update.editing ? "none" : "",
   });
   binding.element.hidden = !update.layout.visible;
+  // The placement is on the element now, so it is safe to paint. See `attach`.
+  if (!binding.placed) {
+    binding.placed = true;
+    if (binding.revealTimer !== undefined) {
+      clearTimeout(binding.revealTimer);
+      binding.revealTimer = undefined;
+    }
+    binding.element.style.visibility = binding.previousVisibility ?? "";
+  }
   binding.onEdit?.(update.editing);
 }
 window.addEventListener("message", (event: MessageEvent) => {
@@ -103,18 +127,44 @@ const api: HudLayoutClient = {
     if (bindings.has(id)) throw new Error(`HUD component already attached: ${id}`);
     if (!/^[\w-]{1,80}$/.test(id) || bindings.size >= 16)
       throw new Error("Invalid HUD component ID or limit reached");
-    const binding = {
+    // ⚠️ HIDDEN UNTIL PLACED, so a saved layout does not arrive as a visible jump.
+    //
+    // `apply` needs a binding AND a pushed update. The element is in the DOM and
+    // painted from the consumer's own CSS before that update lands, so a player
+    // with a saved position watched the widget appear at its authored spot and
+    // then teleport to where they had put it -- reported across the t* resources,
+    // tRadar most visibly. Nothing was wrong with the placement; it was simply
+    // applied a frame or more after the thing was already on screen.
+    //
+    // `visibility` rather than `hidden` or `display`: it suppresses paint without
+    // disturbing the consumer's own layout or its `hidden` bookkeeping, and the
+    // element's prior value is restored rather than assumed to be the default.
+    //
+    // ⚠️ THE TIMER IS NOT OPTIONAL. If no update ever arrives -- tLib not loaded,
+    // a handshake that fails, a consumer that binds an id nothing pushes -- a
+    // permanently invisible widget is far worse than the jump this removes. The
+    // failsafe reveals it anyway, unplaced, which is exactly the old behaviour.
+    const binding: Binding = {
       element,
       previousStyle: element.getAttribute("style"),
       previousHidden: element.hidden,
+      previousVisibility: element.style.visibility,
+      placed: false,
       onEdit,
     };
+    element.style.visibility = "hidden";
+    binding.revealTimer = setTimeout(() => {
+      binding.revealTimer = undefined;
+      if (binding.placed) return;
+      binding.element.style.visibility = binding.previousVisibility ?? "";
+    }, REVEAL_FAILSAFE_MS);
     bindings.set(id, binding);
     apply(id);
     void ready();
     return () => {
       if (bindings.get(id) !== binding) return;
       bindings.delete(id);
+      if (binding.revealTimer !== undefined) clearTimeout(binding.revealTimer);
       if (binding.previousStyle === null) element.removeAttribute("style");
       else element.setAttribute("style", binding.previousStyle);
       element.hidden = binding.previousHidden;
