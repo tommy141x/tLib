@@ -57,8 +57,33 @@ export function installHttp(): void {
     // around it at boot. A failure still logs loudly -- an operator who cannot
     // reach the hub needs the reason in front of them, and a banner row that
     // silently reads nothing is not that.
-    if (status.ready) fEmit("tlib:vcInfo:hub", status.publicUrl);
-    else if (status.publicUrlState === "failed") log("warn", status.error!);
+    // ⚠️ A DETECTED ADDRESS SAYS SO, AND NAMES THE CONVAR. The row used to
+    // print the URL bare, which reads as a statement of fact whether tLib was
+    // told the address or guessed it -- and those are very different things to
+    // an operator.
+    //
+    // When it is guessed and wrong, nothing says so here. It surfaces later as
+    // a CORS refusal or an OAuth redirect to an address nobody can reach, far
+    // from the cause. Three tickets on 2026-10-19 were that exact shape: a
+    // panel reached by hostname through the host's reverse proxy while tLib
+    // published the detected IP. One of them had read the docs and still could
+    // not find the setting, because v7 moved public routing off a config key
+    // and onto convars that are documented in a code comment and a README
+    // table -- so they were searching config.lua for a key that no longer
+    // exists.
+    //
+    // Naming `tlib_http_public_url` in the row is the cheap half of the fix:
+    // the operator sees the guess and the remedy together, at boot, before a
+    // player ever hits it. A configured address prints bare, because there is
+    // nothing to act on.
+    if (status.ready) {
+      fEmit(
+        "tlib:vcInfo:hub",
+        status.publicUrlDetected
+          ? `${status.publicUrl} (detected — set tlib_http_public_url if players reach you another way)`
+          : status.publicUrl
+      );
+    } else if (status.publicUrlState === "failed") log("warn", status.error!);
     fEmit("tLib:http:status", status);
   });
   registerBridge(() => readiness.snapshot(), log);

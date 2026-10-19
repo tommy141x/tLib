@@ -148,3 +148,48 @@ describe("HTTP publication readiness", () => {
     expect(old.call("GetHubUrl")).toBe("");
   });
 });
+
+/**
+ * Whether the published address was CONFIGURED or GUESSED.
+ *
+ * Not cosmetic, and not a log-string test. The banner row is the only place an
+ * operator sees the address at a moment they can still act on it, and a guessed
+ * address that is wrong does not announce itself — it surfaces later as a CORS
+ * refusal or an OAuth redirect nobody can reach, far from the cause. Three
+ * tickets on 2026-10-19 were that shape. `publicUrlDetected` is what lets the
+ * row name `tlib_http_public_url` exactly when there is something to act on.
+ */
+describe("the published address knows whether it was configured", () => {
+  test("an override is not detected, at construction", () => {
+    const state = new HttpReadiness("http://ij1.de:6310", 7777, () => {});
+    const snap = state.snapshot();
+    expect(snap.publicUrl).toBe("http://ij1.de:6310");
+    expect(snap.publicUrlDetected).toBe(false);
+  });
+
+  test("an IP discovered at runtime IS detected", () => {
+    const state = new HttpReadiness(null, 7777, () => {});
+    state.resolveAddress("203.0.113.9");
+    const snap = state.snapshot();
+    expect(snap.publicUrl).toBe("http://203.0.113.9:7777");
+    expect(snap.publicUrlDetected).toBe(true);
+  });
+
+  test("an override still wins when discovery lands after it", () => {
+    // The ordering that matters: discovery is async, so a configured address
+    // must not be relabelled as a guess by a result that arrives later.
+    const state = new HttpReadiness("http://ij1.de:6310", 7777, () => {});
+    state.resolveAddress("203.0.113.9");
+    const snap = state.snapshot();
+    expect(snap.publicUrl).toBe("http://ij1.de:6310");
+    expect(snap.publicUrlDetected).toBe(false);
+  });
+
+  test("failed discovery reports detected, so the row can still name the convar", () => {
+    const state = new HttpReadiness(null, 7777, () => {});
+    state.resolveAddress(null);
+    const snap = state.snapshot();
+    expect(snap.publicUrlState).toBe("failed");
+    expect(snap.publicUrlDetected).toBe(true);
+  });
+});

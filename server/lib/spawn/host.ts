@@ -63,6 +63,36 @@ const DUPLEX_BACKLOG_LIMIT = 32 * 1024 * 1024;
 /** SIGTERM, then this long, then SIGKILL. */
 const KILL_GRACE_MS = 5_000;
 
+/**
+ * A plain-English tail for the exit codes an operator is likely to paste.
+ *
+ * Windows reports a fatal exception as the NTSTATUS value reinterpreted as a
+ * signed-ish exit code, so a crash arrives as `3221225477` — ten digits that
+ * look like a tLib error number and are not. A customer pasted exactly that
+ * (2026-10-19, ticket `ja-tradio`): llama-server taking an access violation,
+ * reported as if tLib had produced a code of its own.
+ *
+ * Only the handful worth naming are here, and anything unrecognised adds
+ * nothing rather than guessing. The raw code is still printed first and
+ * unchanged — it is what gets searched for, and this only follows it.
+ */
+const EXIT_MEANINGS: Record<number, string> = {
+  3221225477: "0xC0000005 ACCESS_VIOLATION — the program crashed, not a tLib error",
+  3221225781: "0xC0000135 DLL_NOT_FOUND — a runtime dependency is missing",
+  3221225786: "0xC000013A — interrupted (Ctrl+C or the console closed)",
+  3221226505: "0xC0000409 STACK_BUFFER_OVERRUN — the program aborted itself",
+  3221225595: "0xC000007B INVALID_IMAGE_FORMAT — 32/64-bit mismatch",
+  127: "command not found — check the binary is present and executable",
+  126: "not executable — check the file mode",
+  137: "SIGKILL — killed, commonly the OOM killer",
+  139: "SIGSEGV — the program crashed",
+};
+
+function explainExit(code: number): string {
+  const meaning = EXIT_MEANINGS[code];
+  return meaning ? ` (${meaning})` : "";
+}
+
 interface Served {
   resource: string;
   program: string;
@@ -242,7 +272,9 @@ export class SpawnHost {
     // caller notices something is wrong. Cleared by the next serve of this key.
     started.child.on("exit", (code) => {
       entry.exit = code ?? 0;
-      if (code) this.log(`[tLib] spawn: ${resource}'s ${key} exited with code ${code}`);
+      if (code) {
+        this.log(`[tLib] spawn: ${resource}'s ${key} exited with code ${code}${explainExit(code)}`);
+      }
     });
     started.child.on("error", (err) => {
       entry.exit = -1;

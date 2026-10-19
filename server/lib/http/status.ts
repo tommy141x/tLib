@@ -9,6 +9,20 @@ export interface HttpStatus {
   listenerState: ListenerState;
   publicUrlState: "resolving" | "ready" | "failed";
   publicUrl: string | null;
+  /**
+   * True when `publicUrl` came from IP detection rather than
+   * `tlib_http_public_url`.
+   *
+   * Carried out to consumers because a guessed address and a configured one are
+   * different facts to an operator, and the banner is the only place either is
+   * seen in time to act. Three tickets in one day on 2026-10-19 were the same
+   * shape: the panel is reached by hostname through a proxy, tLib published the
+   * detected IP, and the browser's origin stopped matching — which surfaces as
+   * a CORS refusal much later, far from the cause. The convar exists for this
+   * and was documented only in a code comment and a README table, so operators
+   * were searching a config file for a key that no longer exists.
+   */
+  publicUrlDetected: boolean;
   localUrl: string | null;
   error: string | null;
 }
@@ -19,6 +33,9 @@ export class HttpReadiness {
   private listenerError: string | null = null;
   private publicUrl: string | null = null;
   private publicUrlState: HttpStatus["publicUrlState"] = "resolving";
+  // Starts true: until an override is accepted below, any address this ends
+  // up publishing is a detected one.
+  private publicUrlDetected = true;
 
   constructor(
     private readonly override: string | null,
@@ -31,6 +48,7 @@ export class HttpReadiness {
     if (!resolved.detected) {
       this.publicUrl = resolved.base;
       this.publicUrlState = "ready";
+      this.publicUrlDetected = false;
     }
   }
 
@@ -43,6 +61,7 @@ export class HttpReadiness {
       listenerState: this.listenerState,
       publicUrlState: this.publicUrlState,
       publicUrl: this.publicUrl,
+      publicUrlDetected: this.publicUrlDetected,
       localUrl: this.localUrl,
       error:
         this.listenerError ??
@@ -67,7 +86,9 @@ export class HttpReadiness {
     // A late discovery result from a stopped lifetime must not notify consumers
     // or resurrect publication after tLib has been restarted.
     if (this.listenerState === "stopped" || this.publicUrlState === "ready") return;
-    this.publicUrl = ip ? resolvePublicUrl(this.override, ip, this.port).base : null;
+    const resolved = ip ? resolvePublicUrl(this.override, ip, this.port) : null;
+    this.publicUrl = resolved?.base ?? null;
+    this.publicUrlDetected = resolved?.detected ?? true;
     this.publicUrlState = this.publicUrl ? "ready" : "failed";
     this.changed(this.snapshot());
   }
