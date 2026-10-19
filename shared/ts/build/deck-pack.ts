@@ -307,7 +307,16 @@ export function packDeckPlugin(
     );
   }
 
-  const previous = existsSync(paths.published) ? sha256File(paths.published) : null;
+  // The PREVIOUS SOURCE HASH, not the previous artifact's bytes.
+  //
+  // `streamdeck pack` is Elgato's CLI and it embeds entry timestamps, so two
+  // packs of an identical tree are never byte-identical and we have no flag to
+  // pin them. Comparing artifact bytes therefore reported CHANGED on every
+  // single run: measured across three packs of one unchanged tree, `sourceHash`
+  // held at ea93c94… while the artifact sha came out 1b688404…, ca43bdbf… and
+  // 39dbf5e9…. That asked a human to commit a new binary each time, and twice
+  // in one day it was read as something writing files behind our back.
+  const previousSource = readDeckStamp(cfg)?.sourceHash ?? null;
 
   if (cfg.install !== false) installDeps(paths.pluginRoot);
   execute("bun", ["run", "build"], paths.pluginRoot);
@@ -342,15 +351,15 @@ export function packDeckPlugin(
   };
   writeFileSync(paths.stamp, `${JSON.stringify(stamp, null, 2)}\n`);
 
-  const changed = previous !== sha256;
+  const changed = previousSource !== scan.hash;
   console.log(`  → ${stamp.artifact} — ${(bytes / 1024).toFixed(1)} KiB`);
   console.log(`     ${scan.files.length} source files, hash ${scan.hash.slice(0, 16)}…`);
   console.log(
     changed
-      ? previous === null
+      ? previousSource === null
         ? "     NEW: there was no published artifact before this run."
-        : "     CHANGED: the published download differs from the committed one — commit it."
-      : "     unchanged (a zip carries entry timestamps, so identical bytes means identical input)."
+        : "     CHANGED: the plugin sources moved — commit the download and the stamp."
+      : "     unchanged (the artifact bytes differ every pack; the sources did not)."
   );
 
   return { published: paths.published, bytes, sha256, changed };
