@@ -16,6 +16,8 @@ local function competingInput()
         or (MenuInput and MenuInput.isTyping()) or dialogActive()
 end
 local rendererId
+-- An interrupted draft, waiting for the next open. See the watchdog.
+local recovered
 local log = Logger.create('tLib/layout')
 local function callable(fn)
     if type(fn) == 'function' then return true end
@@ -243,6 +245,15 @@ local function open(name)
     active = { id = generation, owner = name, draft = {}, pending = {}, revisions = {}, touched = Platform.now(), focused = false }
     -- Re-heal on open: the resolution may have changed since registration.
     for _, component in ipairs(list) do active.draft[component.key] = heal(component.layout, component) end
+    -- Carry over work the watchdog interrupted, once. Healed the same way as a
+    -- fresh draft, because the resolution may have changed in between, and
+    -- dropped after use so a stale draft cannot resurface a third time.
+    if recovered then
+        for key, value in pairs(recovered.draft) do
+            if components[key] then active.draft[key] = heal(value, components[key]) end
+        end
+        recovered = nil
+    end
     local safezone = type(GetSafeZoneSize) == 'function' and GetSafeZoneSize() or 1
     Platform.sendUIEvent(ui, 'layoutOpen', { session = active.id, components = list,
         safezone = S.finite(safezone, 0.5, 1) and safezone or 1 })
@@ -445,7 +456,22 @@ function H.init(webui)
                         end
                     end
                     if reason and active == session then
-                        log('HUD editor discarded: ' .. reason .. '. Reopen with /tlibhud.', 3)
+                        -- ⚠️ THE DRAFT SURVIVES AN INVOLUNTARY CLOSE. It used to be
+                        -- thrown away, which made a momentary focus blip cost a player
+                        -- every adjustment they had made -- and `IsNuiFocused()` is a
+                        -- GLOBAL signal, so any other resource clearing NUI focus trips
+                        -- it. Reported 2026-10-19 against ZSX UI V2: "position is
+                        -- buggy", "says the UI isn't in focus when it is", "you have to
+                        -- reset the position" were all this, at a 1.5s grace.
+                        --
+                        -- Closing is still right and must stay: the watchdog exists so
+                        -- a player who cannot interact is not left holding a cursor
+                        -- they cannot use, which `tests/lua/hud-layout.lua` pins. What
+                        -- was never right is answering an AMBIGUOUS signal by deleting
+                        -- work. Reopening restores it.
+                        recovered = { owner = session.owner, draft = S.copy(session.draft) }
+                        log('HUD editor closed: ' .. reason
+                            .. '. Your changes were kept -- reopen with /tlibhud to carry on.', 3)
                         close(false)
                     end
                 end
