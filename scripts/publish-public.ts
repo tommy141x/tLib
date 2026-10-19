@@ -192,7 +192,17 @@ try {
     `publish-public: ${published} published, ${skipped} private-only skipped. ` +
       `${PUBLISHED} is now ${git(["rev-parse", "--short", PUBLISHED])}.`
   );
-  console.log("  Push it with:  git push origin main");
+  // BOTH REMOTES, AND GITEA IS THE ONE THAT GETS FORGOTTEN. This line used to
+  // name `origin` alone, which publishes the code to GitHub and leaves the
+  // documentation frozen: `.gitea/workflows/docs.yml` triggers on a push to
+  // `main` ON GITEA, and that is what copies docs/** into tWeb.
+  //
+  // Nothing fails when it is missed. The release is out, GitHub is correct, and
+  // the site quietly keeps serving the previous docs. Measured 2026-10-19:
+  // gitea/main was 25 commits behind origin/main, which is why a page added to
+  // docs/content never appeared on the site until the branch was pushed by hand.
+  console.log("  Push it with:  git push origin main && git push gitea main");
+  console.log("  Both: origin publishes the code, gitea's main is what syncs docs/ to the site.");
 } finally {
   tryGit(["worktree", "remove", "--force", work]);
   tryGit(["worktree", "prune"]);
