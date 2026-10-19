@@ -1,0 +1,113 @@
+---
+title: "Diagnostics"
+description: "Opt in to send us the faults in our own code — what we see, what we never see, and the one line that turns it on or off."
+order: 7
+group: "tLib"
+published: true
+---
+
+When one of our resources throws on your server, we do not find out. There is no crash
+reporter running, nothing phones home, and the error sits in your console until you open a
+ticket about it.
+
+That works for the faults someone reports. It does nothing for the ones nobody does — the
+warning that only appears on Windows Server 2019, the renderer that dies for one player in
+fifty, the operation that is fine on our hardware and slow on yours. Those are invisible to
+us, and they are usually the ones worth fixing.
+
+Diagnostics is how you can change that. It is **off** unless you turn it on.
+
+## Turning it on
+
+```txt title="server.cfg"
+set tlib_telemetry 1
+```
+
+Above `ensure tLib`, like every tLib convar. Accepted: `1`, `true`, `yes`, `on`, `enabled`
+— and their opposites to turn it off.
+
+To see where it stands, in the server console:
+
+```txt
+tlib_telemetry_status
+```
+
+That reports what is enabled, what decided it, how much is queued, and whether the
+transport has given up for this session.
+
+## Turning it off
+
+The same convar, set to `0` — or removed, because unset is off. A value we cannot read
+(`maybe`) is also treated as off rather than guessed at.
+
+<Callout type="info">
+A resource can record an answer of its own through `SetTelemetryConsent`, but
+`tlib_telemetry` wins wherever it is set. One convar decides it for the whole server.
+</Callout>
+
+## What we receive
+
+Faults in **our** code and how it performs on real machines. Five kinds of event, and
+nothing else:
+
+| Event | What it carries |
+| --- | --- |
+| `tlib.error_reported` | the resource and version, which VM the fault was in, an error kind and name, a file-and-line location, and the scrubbed stack — stored once per stack per day, so a loop does not become a thousand reports |
+| `tlib.warning_reported` | the same context, plus a warning kind and code. **Not the message text** |
+| `tlib.crash_reported` | a crash kind and how long the session survived. Sent on the *next* start, because a renderer that has died cannot send anything |
+| `tlib.slow_operation` | which operation, how long it took, and the budget it crossed. **Outliers only** — never a row per call |
+| `tlib.environment_reported` | once per boot: OS, a RAM bucket, GPU vendor and model, CPU thread count |
+
+## What we never receive
+
+This is the part worth reading before you decide.
+
+- **No IP address.** Not yours, not a player's.
+- **No `sv_licenseKey`.**
+- **No server name and no server endpoint.** We cannot tell which server a report came from,
+  only that it came from one install.
+- **No player names, and no player identifiers** — no licence, Steam, Discord or FiveM id.
+- **No player count.**
+
+Before anything leaves your machine: home-directory paths lose the account name, anything
+credential-shaped is blanked, and anything matching a FiveM player identifier (`steam:`,
+`license:`, `discord:`, a bare Steam id or snowflake, an IP address) is stripped out.
+
+The RAM bucket is deliberately coarse. It caps at 8 GB, so it reports "under 8 GB" or
+"cannot tell" and nothing in between.
+
+**`<resource>_diag` output is never sent.** Those commands stay in your console and go
+nowhere, by design — they are the richest thing we could ask for and they are not ours to
+take.
+
+<Callout type="warning">
+**One thing this convar does not control: the per-install id.**
+
+Marketplace browse, installs and previews, community configs and the startup version check
+all run whatever you decide here, and each carries a random per-install id (`x-install-id`)
+so a single server can be rate-limited or blocked on its own.
+
+That id is generated on your own server from no input. It is not an IP, a licence key, or
+anything derived from them. Deleting it mints a new one, which is not an opt-out — the
+requests themselves are what the marketplace is made of.
+</Callout>
+
+## Why you might say yes
+
+We cannot promise a fix in exchange, and we are not going to pretend otherwise. What
+changes is what we can see:
+
+- A stack that appears on forty installs and in no ticket gets found and fixed.
+- A slow operation on hardware we do not own stops being a theory.
+- A renderer crash that only happens mid-session gets reported at all, because it is sent
+  on the next start rather than by the process that died.
+
+If that is not a trade you want to make, leave it off. Nothing else in tLib behaves
+differently either way, and no feature is gated behind it.
+
+## Where to go next
+
+- [Convars](/docs/tLib/convars) — the full reference, including `tlib_telemetry_key`, which
+  is a development setting with nothing for an operator to supply.
+- [Exports](/docs/tLib/exports) — `SetTelemetryConsent`, for a resource that wants to ask
+  its own operator instead.
