@@ -44,11 +44,57 @@ resources behind them are unaffected.
 If you want it: open `7777/tcp` **on the machine** — the host firewall, plus NAT
 port-forwarding if the server is behind a router — then visit `http://<your-server-ip>:7777`.
 
-For a different port, set it above `ensure tLib` and open that one instead:
+### The whole thing, to paste
+
+Both lines go **above** `ensure tLib`. They are read once, when the resource starts, so a
+`set` below it is read on the next restart and not before:
 
 ```txt title="server.cfg"
-set tlib_http_port 8080
+# tLib's web listener. Optional — leave this block out and everything still
+# works in game; you just cannot reach the hub from a browser.
+set tlib_http_port 7777
+set tlib_http_public_url "http://123.45.67.89:7777"
+
+ensure tLib
+# ...then everything that depends on it
+ensure tRadio
 ```
+
+Use `set`, not `setr`. Only the server reads these.
+
+### What to put in `tlib_http_public_url`
+
+It is the address **you type in a browser**, not the address tLib listens on. The listener is
+`tlib_http_port` on every interface; this line only decides what tLib *tells* clients to use.
+Leave it out and tLib detects your public IP, which is right for a bare IP on a home
+connection and wrong for a hostname, a reverse proxy, a game-panel host or a tunnel.
+
+The scheme and port are inferred from the shape of what you write:
+
+| You set | tLib advertises |
+| --- | --- |
+| *(nothing)* | `http://<detected-ip>:7777` |
+| `localhost` | `http://localhost:7777` |
+| `123.45.67.89` | `http://123.45.67.89:7777` |
+| `123.45.67.89:8080` | `http://123.45.67.89:8080` |
+| `radio.example.com` | `https://radio.example.com` — no port |
+| `http://radio.example.com` | `http://radio.example.com` |
+| `https://example.com/radio` | `https://example.com/radio` |
+
+A bare **domain** becomes `https` with no port, because a name only reaches your server if
+DNS points at it — which means a proxy or tunnel terminating TLS on 443, where `:7777` would
+be wrong. A bare **IP** stays on the port, because no certificate fits a bare IP.
+
+<Callout type="warning">
+  **A wrong value here does not look like an address problem.** The page loads and then every
+  request it makes is refused, which reads as a broken backend. A value tLib cannot parse at
+  all is worse: it silently falls back to IP detection rather than erroring, so a typo looks
+  like detection misbehaving.
+
+  tLib prints the address it resolved on startup and says which it did. If the line ends in
+  `(detected — set tlib_http_public_url if players reach you another way)`, your convar was
+  not used. Check that line before changing anything else.
+</Callout>
 
 ## Depend on tLib
 
