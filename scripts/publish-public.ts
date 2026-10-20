@@ -204,7 +204,8 @@ try {
   // half lives. Nothing fails when a push is missed -- the release is out,
   // GitHub is correct -- which is exactly why it is worth saying out loud.
   console.log("  Push it with:  git push origin main && git push gitea main");
-  console.log("  Both: origin publishes the code, gitea's main is what syncs docs/ to the site.");
+  console.log("  origin is what the website reads: tWeb pulls docs/ from GitHub on a schedule.");
+  console.log("  gitea is where CI runs and where the private half lives.");
 } finally {
   tryGit(["worktree", "remove", "--force", work]);
   tryGit(["worktree", "prune"]);
