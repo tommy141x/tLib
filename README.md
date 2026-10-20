@@ -73,7 +73,6 @@ lands in `declaredOwner`).
 - `OpenMenu(menuId?)` — Re-checks the page against a fresh permission-filtered snapshot.
 - `CloseMenu()` — The same teardown the close key runs. Does not toggle: closing a menu that is not open answers `false, 'Menu is not open'`, so a caller that meant to close one is never the reason a fresh one appeared. Needed before `OpenMenu`, which refuses while a menu is already up.
 - `IsMenuVisible()`, `GetMenuStackIds()`, `NavigateMenu(menuId)`, `InvalidateMenuContext()`
-- `BindMenuKey(menuId)` — Claim a key-binding slot for a page; returns the command it runs under.
 - `SetMenuLocale(tag)` / `GetMenuLocale()`, `SetMenuAnchor(anchor)`, `SetMenuPalettes(value)`
 - `PromptMenuText(title, initial, maximum, context)` — The game's own onscreen keyboard. Only from inside an action handler, whose `context` it needs.
 

@@ -76,11 +76,10 @@ Unscoped: the screen belongs to the player.
 
 | Export | Description |
 | --- | --- |
-| `OpenMenu(menuId?)` | Re-checks against a fresh snapshot. Refuses while a menu is up. |
+| `OpenMenu(menuId?)` | Re-checks against a fresh snapshot. Refuses while a menu is up. tLib binds no key to this — your resource registers its own `RegisterKeyMapping` at start-up and calls it. |
 | `CloseMenu()` | The close key's teardown. No toggle: closing nothing answers `false, 'Menu is not open'`. |
 | `IsMenuVisible()`, `GetMenuStackIds()` | Current state. |
 | `NavigateMenu(menuId)`, `InvalidateMenuContext()` | Move within the open tree. |
-| `BindMenuKey(menuId)` | Claim a key-binding slot; returns the command it runs under. |
 | `SetMenuLocale(tag)` / `GetMenuLocale()` | Row translation locale. |
 | `SetMenuAnchor(anchor)`, `SetMenuPalettes(value)` | Placement and colour. |
 | `PromptMenuText(title, initial, maximum, context)` | The game's onscreen keyboard. Only inside an action handler, whose `context` it needs. |

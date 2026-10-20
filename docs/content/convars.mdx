@@ -150,18 +150,24 @@ configuration. Opening that port on the host and in NAT is the step most often m
 
 ## Menu
 
-All read by client Lua, so all need `setr`. Changing `tlib_menu_key` or `tlib_menu_pad_key`
-needs a restart, not a reload. Out-of-range or non-numeric values fall back to the default
-rather than erroring.
+All read by client Lua, so all need `setr`. Changing `tlib_menu_search_key` needs a restart,
+not a reload. Out-of-range or non-numeric values fall back to the default rather than erroring.
+
+<Callout type="warning">
+  **tLib does not bind a key that opens a menu, and has no command that opens one.** Whichever
+  resource registers the menu owns that — it calls `RegisterKeyMapping` in its own start-up and
+  then `OpenMenu`. Until 1.1 tLib bound `F1` itself, on every server that installed it, menu or
+  no menu; `F1` is the framework menu key on ESX and QB, and FiveM runs *every* command bound to
+  a key, so one press opened the framework's menu and an empty tLib one on top of it.
+
+  `tlib_menu_command`, `tlib_menu_key`, `tlib_menu_pad_key`, `tlib_menu_label` and
+  `tlib_menu_key_slots` are gone with it. If your `server.cfg` still sets them they do nothing —
+  set the key in the menu resource's own config instead (in tMenu that is `Config.MenuKey`).
+</Callout>
 
 | Convar | Command | Type / unit | Default | What it does |
 | --- | --- | --- | --- | --- |
-| `tlib_menu_command` | `setr` | string | `tlibmenu` | Chat/console command that opens the menu. |
-| `tlib_menu_key` | `setr` | key name | `F1` | Default keyboard binding. |
-| `tlib_menu_pad_key` | `setr` | pad control name | `start_index` | Default controller binding. |
-| `tlib_menu_search_key` | `setr` | key name | `F3` | Opens search. |
-| `tlib_menu_label` | `setr` | string | `Open Menu` | Label shown in FiveM's key-binding settings. |
-| `tlib_menu_key_slots` | `setr` | integer, 0–16 | `8` | Per-item quick-bind slots offered. `0` disables them. |
+| `tlib_menu_search_key` | `setr` | key name | `F3` | Toggles search **inside an open menu**. The one key tLib owns, so it is the same in every menu built on it; it does nothing while no menu is open. |
 | `tlib_menu_locale` | `setr` | locale code | `en` | UI language. |
 | `tlib_menu_request_timeout_ms` | `setr` | ms, 1000–60000 | `10000` | How long a snapshot/action request waits before failing. |
 | `tlib_menu_permission_refresh_ms` | `setr` | ms, 1000–60000 | `5000` | How often permission-filtered menus are re-pushed. |

@@ -89,13 +89,23 @@ end
 -- purely to smooth an unreleased rename, and its own message said it went in the
 -- next major version — 1.0.0 is that version.
 
+-- NO OPEN KEY AND NO OPEN COMMAND. A library does not get to take a key off
+-- every server that installs it: `RegisterKeyMapping` is immediate, so a tLib
+-- that bound one was reaching the player before any resource had registered a
+-- menu for them to see. It bound F1 by default, which is the framework menu key
+-- on ESX and QB -- and FiveM runs every command bound to a key, so one press
+-- opened the framework's menu AND an empty tLib one on top of it. Reported as
+-- "F1 opens some weird menu".
+--
+-- Opening is the consuming resource's job and it already has what it needs:
+-- `RegisterKeyMapping` in its own startup, then `exports.tLib:OpenMenu(id)`.
+--
+-- `searchKey` stays, and that is not an inconsistency. It acts only while a menu
+-- is already open (see `MenuInput.bindSearchKey`), so it is part of how this
+-- widget behaves rather than how it is reached, and it should be the same key in
+-- every menu built on tLib.
 local settings = {
-    command          = convar('tlib_menu_command', 'tlibmenu'),
-    key              = convar('tlib_menu_key', 'F1'),
-    padKey           = convar('tlib_menu_pad_key', 'start_index'),
-    label            = convar('tlib_menu_label', 'Open Menu'),
     searchKey        = convar('tlib_menu_search_key', 'F3'),
-    keySlots         = convarNumber('tlib_menu_key_slots', 8, 0, 16),
     locale           = convar('tlib_menu_locale', 'en'),
     requestTimeoutMs = convarNumber('tlib_menu_request_timeout_ms', 10000, 1000, 60000),
     refreshMs        = convarNumber('tlib_menu_permission_refresh_ms', 5000, 1000, 60000),
@@ -1072,59 +1082,17 @@ openMenu = function(menuId, onResult)
     return true
 end
 
--- Per-page keybinds ("F6 opens Vehicle Options"). Because RegisterKeyMapping only
--- takes effect while the resource is starting, a binding cannot be created on
--- demand: every slot is declared here at load with an empty default key, and
--- BindMenuKey assigns only its target afterwards. Labels are fixed at start for the
--- same reason, so a claimed slot reads as a numbered slot.
+-- The one key tLib still owns. It toggles the search field of a menu that is
+-- ALREADY open and does nothing otherwise, so it is the widget's behaviour and
+-- belongs here rather than in each consumer.
 --
--- The target is an id, not a grant: pressing the key runs openMenu, which re-checks
--- against a fresh ACE-filtered snapshot.
-
-local menuKeySlots = {}
+-- The command token stays `tlibmenu_search` even though nothing is called
+-- `tlibmenu` any more: it is a RegisterKeyMapping token, and renaming one
+-- silently discards every player's rebind of it.
 
 local function installCommands()
     if not _TLIB_IS_FIVEM then return end
-    RegisterCommand(settings.command, function()
-        -- The interface may refuse an open without saying why; only the configuring
-        -- resource can judge which binding fired.
-        if not visible and S.callable(interface.canOpen) then
-            local ok, allowed = pcall(interface.canOpen)
-            if ok and allowed == false then return end
-        end
-        openMenu()
-    end, false)
-    RegisterKeyMapping(settings.command, settings.label, 'keyboard', settings.key)
-    -- Without a pad mapping a controller player cannot open the menu at all.
-    RegisterKeyMapping(settings.command, settings.label .. ' (Controller)', 'pad_digitalbuttonany', settings.padKey)
-    MenuInput.bindSearchKey(settings.command .. '_search', settings.searchKey, 'Search the open menu')
-
-    for slot = 1, settings.keySlots do
-        menuKeySlots[slot] = false
-        local command = ('%s_page%d'):format(settings.command, slot)
-        RegisterCommand(command, function()
-            local target = menuKeySlots[slot]
-            -- An unclaimed slot does nothing rather than falling back to the root
-            -- menu, which would make every spare slot a second open key.
-            if target then openMenu(target.menu) end
-        end, false)
-        RegisterKeyMapping(command, ('Open a menu page (slot %d)'):format(slot), 'keyboard', '')
-    end
-end
-
-function MC.bindKey(owner, menuId)
-    if not S.id(menuId) then return false, 'Invalid menu ID' end
-    for slot = 1, #menuKeySlots do
-        local target = menuKeySlots[slot]
-        if target and target.menu == menuId then return false, 'Menu is already bound' end
-    end
-    for slot = 1, #menuKeySlots do
-        if not menuKeySlots[slot] then
-            menuKeySlots[slot] = { menu = menuId, owner = owner }
-            return true, ('%s_page%d'):format(settings.command, slot)
-        end
-    end
-    return false, 'No spare key binding slots'
+    MenuInput.bindSearchKey('tlibmenu_search', settings.searchKey, 'Search the open menu')
 end
 
 -- Walks every authorized page through the real entry and presentation path, then
@@ -1304,7 +1272,6 @@ function MC.configure(owner, spec)
     if root.title ~= nil and not S.text(root.title, 128) then return false, 'Invalid root title' end
     if root.description ~= nil and not S.text(root.description, 512) then return false, 'Invalid root description' end
     if spec.locale ~= nil and not localeTag(spec.locale) then return false, 'Invalid locale tag' end
-    if spec.canOpen ~= nil and not S.callable(spec.canOpen) then return false, 'canOpen must be a function' end
     if spec.branding ~= nil and type(spec.branding) ~= 'table' then return false, 'Branding must be a table' end
     local previousRoot = interface.root.id
     interface = {
@@ -1312,7 +1279,6 @@ function MC.configure(owner, spec)
         root = { id = root.id or 'main', title = root.title or 'Menu', description = root.description },
         locale = spec.locale,
         branding = spec.branding,
-        canOpen = spec.canOpen,
     }
     -- The empty tree is built from the root, so a rename with no snapshot in hand
     -- has to move the placeholder the client currently holds.
@@ -1413,14 +1379,10 @@ function MC.close()
     return true
 end
 
---- Release a stopped resource's slot, hooks, catalog, presenter and dispatcher.
---- Without this, reloading one during development consumes a key slot each time and
---- leaves its effects ticking against handlers that no longer exist.
+--- Release a stopped resource's hooks, catalog, presenter and dispatcher.
+--- Without this, reloading one during development leaves its effects ticking
+--- against handlers that no longer exist.
 function MC.dropOwner(name)
-    for slot = 1, #menuKeySlots do
-        local target = menuKeySlots[slot]
-        if target and target.owner == name then menuKeySlots[slot] = false end
-    end
     hooks[name], providers[name], catalogs[name] = nil, nil, nil
     forgetManifest()
     if strings[name] then
@@ -1631,14 +1593,6 @@ function MC.registerApi()
         if not S.callable(fn) then return false, 'A persist handler must be a function' end
         MC.actions(owner):onPersist(fn)
         return true
-    end)
-
-    --- Claim a spare key-binding slot for a page. Returns the command name the slot
-    --- runs under, which is how the player's keybind list shows it.
-    api('BindMenuKey', function(menuId, declaredOwner)
-        local owner, err = ownerOf(declaredOwner)
-        if not owner then return false, err end
-        return MC.bindKey(owner, menuId)
     end)
 
     -- For a resource whose settings live in a tLib DIALOG rather than a menu, and

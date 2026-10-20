@@ -9,16 +9,22 @@ author 'Tommy Johnston'
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM)'
 
--- 0.6 is the only tLib ever released, so a pin below `1.0` is meaningless and
--- every consumer pins `tlib_min_version '1.0'`. Nothing between the two was
--- tagged: 0.6.0, 0.12.0 through 0.17.0 and this 1.0.0 exist only as values on
--- this line, which is why a consumer installed against the public v0.6 zip
--- fails the gate in imports.lua rather than running degraded.
+-- 0.6 and 1.0 are the only tLib releases, so a pin below `1.0` is meaningless
+-- and every consumer pins `tlib_min_version '1.0'`. Nothing between them was
+-- tagged: 0.6.0 and 0.12.0 through 0.17.0 exist only as values on this line,
+-- which is why a consumer installed against the public v0.6 zip fails the gate
+-- in imports.lua rather than running degraded.
+--
+-- 1.1 REMOVES `BindMenuKey` and the five `tlib_menu_*` open-key convars. The
+-- existing `1.0` pins stay valid on purpose: nothing a customer ships called
+-- either, so raising seventeen pins would be churn. tMenu pins `1.1` because it
+-- is the one consumer that must not run against 1.0 -- it registers its own F1
+-- now, and 1.0 also bound one, so both would fire.
 --
 -- Release notes live in the GitHub release and the tWeb changelog feed. The
 -- retired CHANGELOG.md held the per-module rationale for 0.7-0.17; recover it
 -- for the 1.0.0 notes with `git show 858f933:CHANGELOG.md`.
-version '1.0.0'
+version '1.1.0'
 
 -- The top-level folder is the VM a file is loaded into. A module spanning VMs
 -- keeps its own name under each tree's lib/, so the blocks below stay the single

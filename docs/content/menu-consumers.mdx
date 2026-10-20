@@ -73,6 +73,10 @@ RegisterCommand('mytools', function()
     local ok, reason = menu:OpenMenu(owner .. ':tools')
     if not ok then print(reason) end
 end, false)
+-- tLib binds NO key that opens a menu -- yours is the resource that knows which
+-- key means your page. RegisterKeyMapping only counts while a resource is
+-- STARTING, so declare it at load like this; '' ships it unbound instead.
+RegisterKeyMapping('mytools', 'Open My Tools', 'keyboard', 'F7')
 ```
 
 Grant `mytools.use` to the group that should have it. The server still checks the
