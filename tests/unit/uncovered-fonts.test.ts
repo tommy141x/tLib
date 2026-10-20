@@ -102,6 +102,30 @@ test("the matcher is a prefix match, so a short family cannot swallow a longer o
   expect(uncoveredFonts(dist, [licences])).toEqual([]);
 });
 
+// ── The shape the only consumer actually calls ──────────────────────────────
+//
+// tRadio's release gate passes NO licence directories: `uncoveredFonts(dir, [])`.
+// Coverage then comes purely from a licence sitting beside the font in the
+// shipped output, which is the question a customer's unzipped copy answers --
+// independent of what tLib carries or where the build ran. Pinned here because
+// every other test in this file passes a source directory, so without these two
+// the one call shape in production would be the untested one.
+
+test("with no licence directories, a licence beside the font still covers it", () => {
+  writeFileSync(join(dist, "hanken-grotesk-latin-CaVRRdDk.woff2"), "font");
+  writeFileSync(join(dist, "OFL-HankenGrotesk.txt"), "licence text\n");
+
+  expect(uncoveredFonts(dist, [])).toEqual([]);
+});
+
+test("with no licence directories, a bare font is uncovered and names itself", () => {
+  writeFileSync(join(dist, "hanken-grotesk-latin-CaVRRdDk.woff2"), "font");
+
+  // Deliberately NOT rescued by `licences` holding OFL-HankenGrotesk: an empty
+  // list means the output has to stand on its own.
+  expect(uncoveredFonts(dist, [])).toEqual(["hanken-grotesk-latin-CaVRRdDk.woff2"]);
+});
+
 test("the stager and the gate cannot disagree: stage, then ask, and nothing is uncovered", () => {
   writeFileSync(join(dist, "hanken-grotesk-latin-CaVRRdDk.woff2"), "font");
   writeFileSync(join(dist, "inter-100-900-latin-Dx4kXJAl.woff2"), "font");
