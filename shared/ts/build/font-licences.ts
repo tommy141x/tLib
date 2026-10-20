@@ -112,7 +112,37 @@ export interface FontLicenceResult {
  * display faces are documented together with their copyright lines and links --
  * a better artifact than three more OFL dumps, and not one to break.
  */
-export function stageFontLicences(distDir: string, licenceDirs: string[]): FontLicenceResult {
+/**
+ * Which staged fonts have no licence available to them. READS ONLY.
+ *
+ * Split out of `stageFontLicences` so a release gate can ask the question
+ * without answering it. The stager copies, so a test that called it would
+ * REPAIR the tree it was checking: a missing licence gets copied in by the act
+ * of testing and the run reports success. That is a gate that cannot fail, and
+ * it would also be a test writing into the artifact.
+ *
+ * Exported so there is exactly one matcher in the estate. tRadio had a second
+ * one -- its release test re-derived the family as the first hyphen-separated
+ * token, so `hanken-grotesk-latin.woff2` yielded `hanken`, matched no licence,
+ * and needed a hand-kept alias table to paper over it. Every alias in such a
+ * table is a family this normalisation already handles; the table only exists
+ * because the derivation was wrong. A caller that wants to assert on the
+ * shipped files should walk them with this, not re-implement it.
+ *
+ * @returns basenames of staged woff2 files with no licence beside them and
+ *          none available to copy. Empty means covered.
+ */
+export function uncoveredFonts(distDir: string, licenceDirs: string[]): string[] {
+  const available = availableLicences(licenceDirs);
+  const uncovered: string[] = [];
+  for (const font of woff2Under(distDir)) {
+    if (coverageFor(font, available) === null) uncovered.push(basename(font));
+  }
+  return [...new Set(uncovered)];
+}
+
+/** `OFL-*.txt` by normalised family, earlier directories winning. */
+function availableLicences(licenceDirs: string[]): Map<string, string> {
   const available = new Map<string, string>();
   // Later directories must not shadow earlier ones: the resource's own copy of a
   // licence wins over tLib's, so a resource pinning an older version of a face
@@ -125,34 +155,63 @@ export function stageFontLicences(distDir: string, licenceDirs: string[]): FontL
       if (!available.has(key)) available.set(key, join(dir, entry));
     }
   }
+  return available;
+}
+
+/** Whether an `OFL-*.txt` in the font's own directory matches its family. */
+function licenceBesideFont(font: string): boolean {
+  const here = dirname(font);
+  const key = fontKey(font);
+  if (!existsSync(here)) return false;
+  return readdirSync(here).some(
+    (entry) => /^OFL-.*\.txt$/i.test(entry) && key.startsWith(licenceKey(entry))
+  );
+}
+
+/**
+ * How this font is covered: `"satisfied"` if a licence already sits beside it,
+ * the source path of the licence to copy, or `null` for uncovered.
+ */
+function coverageFor(font: string, available: Map<string, string>): "satisfied" | string | null {
+  const here = dirname(font);
+  if (existsSync(join(here, "LICENSES.md"))) return "satisfied";
+
+  // A licence ALREADY beside the font covers it, whether or not the family is
+  // also in a source directory. The stager never needed this -- it only ever
+  // asked "what should I copy here" -- but the gate asks a different question:
+  // is what a customer receives covered. A face vendored straight into a
+  // resource's output, with its licence, is covered and must not be reported
+  // as a violation because tLib happens not to carry that family.
+  if (licenceBesideFont(font)) return "satisfied";
+
+  const key = fontKey(font);
+  const match = [...available.entries()]
+    .filter(([family]) => key.startsWith(family))
+    // Longest family first, so `jetbrainsmono` is preferred over a
+    // hypothetical `jetbrains` rather than chosen by map order.
+    .sort((a, b) => b[0].length - a[0].length)[0];
+  if (match === undefined) return null;
+  return existsSync(join(here, basename(match[1]))) ? "satisfied" : match[1];
+}
+
+export function stageFontLicences(distDir: string, licenceDirs: string[]): FontLicenceResult {
+  const available = availableLicences(licenceDirs);
 
   const copied: string[] = [];
   const satisfied: string[] = [];
   const uncovered: string[] = [];
 
   for (const font of woff2Under(distDir)) {
-    const here = dirname(font);
-    if (existsSync(join(here, "LICENSES.md"))) {
-      satisfied.push(basename(font));
-      continue;
-    }
-    const key = fontKey(font);
-    const match = [...available.entries()]
-      .filter(([family]) => key.startsWith(family))
-      // Longest family first, so `jetbrainsmono` is preferred over a
-      // hypothetical `jetbrains` rather than chosen by map order.
-      .sort((a, b) => b[0].length - a[0].length)[0];
-    if (match === undefined) {
+    const coverage = coverageFor(font, available);
+    if (coverage === null) {
       uncovered.push(basename(font));
-      continue;
-    }
-    const dest = join(here, basename(match[1]));
-    if (existsSync(dest)) {
+    } else if (coverage === "satisfied") {
       satisfied.push(basename(font));
-      continue;
+    } else {
+      const dest = join(dirname(font), basename(coverage));
+      copyFileSync(coverage, dest);
+      copied.push(`${basename(dest)} -> ${dirname(font)}`);
     }
-    copyFileSync(match[1], dest);
-    copied.push(`${basename(dest)} -> ${here}`);
   }
 
   if (uncovered.length > 0) {

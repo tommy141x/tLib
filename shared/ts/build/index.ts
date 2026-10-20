@@ -73,7 +73,10 @@ export {
 export type { DevConfig, WatcherDef } from "./dev.ts";
 export { startDevMode } from "./dev.ts";
 export type { FontLicenceResult } from "./font-licences.ts";
-export { stageFontLicences } from "./font-licences.ts";
+// `uncoveredFonts` is the read-only half: a release gate asks it, rather than
+// calling the stager, which would copy the licence in and report success on the
+// very tree it was meant to fail.
+export { stageFontLicences, uncoveredFonts } from "./font-licences.ts";
 export type {
   GalleryCli,
   GalleryResult,
