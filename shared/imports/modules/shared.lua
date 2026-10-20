@@ -64,6 +64,19 @@ local function listDirs(resourceName, basePath)
         if type(decoded) == "table" then return decoded end
     end
 
+    -- NEVER ON A LIVE SERVER. The branch below shells out to cmd.exe, and the
+    -- header above records the measurement that makes it pointless here: io.popen
+    -- is nil in FiveM's server sandbox, so `pcall(io.popen, cmd)` has only ever
+    -- returned false. It is kept for a test harness or a runtime with no export,
+    -- and it is gated so that is all it can be.
+    --
+    -- Gated rather than deleted because the cost of leaving it ungated is not
+    -- theoretical: a server SIGSEGV during tRadio's start was being investigated
+    -- against this line for exactly as long as it took to find that comment --
+    -- the only Windows-specific, consumer-triggered code reachable at resource
+    -- start, and dead the whole time.
+    if _TLIB_IS_FIVEM then return {} end
+
     local resourcePath = GetResourcePath(resourceName)
     if not resourcePath then return {} end
     local fullPath = resourcePath .. "/" .. basePath
