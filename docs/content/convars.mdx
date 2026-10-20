@@ -156,7 +156,7 @@ not a reload. Out-of-range or non-numeric values fall back to the default rather
 <Callout type="warning">
   **tLib does not bind a key that opens a menu, and has no command that opens one.** Whichever
   resource registers the menu owns that — it calls `RegisterKeyMapping` in its own start-up and
-  then `OpenMenu`. Until 1.1 tLib bound `F1` itself, on every server that installed it, menu or
+  then `OpenMenu`. tLib used to bind `F1` itself, on every server that installed it, menu or
   no menu; `F1` is the framework menu key on ESX and QB, and FiveM runs *every* command bound to
   a key, so one press opened the framework's menu and an empty tLib one on top of it.
 
