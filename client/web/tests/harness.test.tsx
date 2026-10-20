@@ -10,17 +10,17 @@
  * Read `_setup.ts` for the mechanisms. This file is the evidence that they fired.
  */
 
-import { existsSync } from "node:fs";
 import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { cleanup, render } from "@solidjs/testing-library";
+import { Anchor } from "lucide-solid";
 import { createSignal, flush } from "solid-js";
-import { UndoHistory } from "../../../shared/ts/undo";
-import { undoKeyDiagnostics } from "../../../shared/ts/undo-keys";
 // The subjects of the two rewrite-counter cases below, named here rather than
 // borrowed from whichever file happened to load first. Both are in the
 // PUBLISHED half deliberately -- see the note on those cases.
 import { NuiButton } from "../../../shared/ts/nui-kit/NuiButton";
-import { Anchor } from "lucide-solid";
+import { UndoHistory } from "../../../shared/ts/undo";
+import { undoKeyDiagnostics } from "../../../shared/ts/undo-keys";
 
 // One case below needs a component from a SECOND package tree with its own
 // node_modules, which is the whole point of it -- that is the arrangement the
@@ -30,7 +30,9 @@ import { Anchor } from "lucide-solid";
 //
 // It lives in `internal/`, which publish-public.ts strips, so a public clone
 // skips that one case instead of failing at module load.
-const HAS_UI_KIT = existsSync(new URL("../../../internal/shared-ts/ui/undo-redo.tsx", import.meta.url));
+const HAS_UI_KIT = existsSync(
+  new URL("../../../internal/shared-ts/ui/undo-redo.tsx", import.meta.url)
+);
 const testWithUiKit = HAS_UI_KIT ? test : test.skip;
 const { UndoRedo } = HAS_UI_KIT
   ? await import("../../../internal/shared-ts/ui/undo-redo")

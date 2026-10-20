@@ -25,12 +25,7 @@ let installed = false;
 
 // `extra` is how `ccPublish` returns the edit token alongside the id without
 // changing the third argument every shipped consumer already reads.
-type LuaCallback = (
-  ok: boolean,
-  err: string | null,
-  value?: unknown,
-  ...extra: unknown[]
-) => void;
+type LuaCallback = (ok: boolean, err: string | null, value?: unknown, ...extra: unknown[]) => void;
 
 function isCallback(fn: unknown): fn is LuaCallback {
   return typeof fn === "function";

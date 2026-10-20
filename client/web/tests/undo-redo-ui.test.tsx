@@ -24,8 +24,8 @@
  * actually been.
  */
 
-import { existsSync } from "node:fs";
 import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { cleanup, render } from "@solidjs/testing-library";
 import { flush } from "solid-js";
 import { UndoHistory } from "../../../shared/ts/undo";
@@ -39,7 +39,9 @@ import { UndoHistory } from "../../../shared/ts/undo";
 //
 // A STATIC import fails at module load in a public clone and takes the whole
 // file with it, so the kit is awaited below.
-const HAS_UI_KIT = existsSync(new URL("../../../internal/shared-ts/ui/undo-redo.tsx", import.meta.url));
+const HAS_UI_KIT = existsSync(
+  new URL("../../../internal/shared-ts/ui/undo-redo.tsx", import.meta.url)
+);
 const describeWithUiKit = HAS_UI_KIT ? describe : describe.skip;
 const { UndoDirty, UndoHint, UndoRedo, useUndoState } = HAS_UI_KIT
   ? await import("../../../internal/shared-ts/ui/undo-redo")

@@ -23,11 +23,7 @@ import {
 /** A PUBLISH frame: op, roomId length, roomId, then `payloadBytes` of payload. */
 function publishFrame(roomId: string, payloadBytes: number): Buffer {
   const room = Buffer.from(roomId, "utf8");
-  return Buffer.concat([
-    Buffer.from([OP.PUBLISH, room.length]),
-    room,
-    Buffer.alloc(payloadBytes),
-  ]);
+  return Buffer.concat([Buffer.from([OP.PUBLISH, room.length]), room, Buffer.alloc(payloadBytes)]);
 }
 
 describe("binary frame cap", () => {

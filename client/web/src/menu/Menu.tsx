@@ -619,9 +619,9 @@ export default function Menu() {
     // the CURRENT menuId -- so flushing after the page changed would address the
     // request to the wrong page and lose it.
     flushChange();
-    const serial = ++navigationSerial,
-      from = menuId(),
-      contextKey = menu()?.contextKey;
+    const serial = ++navigationSerial;
+    const from = menuId();
+    const contextKey = menu()?.contextKey;
     // A page whose rows are already here is painted now and confirmed afterwards.
     // The game answers in about 19ms, and the rows in that reply are the rows
     // already in the store -- either prefetched while the cursor rested on the row

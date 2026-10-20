@@ -48,9 +48,9 @@ export function NuiField(props: {
   onAction: () => void;
 }) {
   const uid = createUniqueId();
-  const label = `${uid}-label`,
-    helper = `${uid}-helper`,
-    error = `${uid}-error`;
+  const label = `${uid}-label`;
+  const helper = `${uid}-helper`;
+  const error = `${uid}-error`;
   const describedBy = () =>
     [props.field.description && helper, props.error && error].filter(Boolean).join(" ") ||
     undefined;

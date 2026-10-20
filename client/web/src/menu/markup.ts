@@ -28,8 +28,8 @@ export function plainText(text: string | undefined): string {
 
 export function formattedParts(text: string | undefined) {
   let color: string | undefined;
-  let bold = false,
-    italic = false;
+  let bold = false;
+  let italic = false;
   const parts: { text: string; color?: string; bold: boolean; italic: boolean }[] = [];
   for (const part of (text ?? "").split(/(~[^~\r\n]+~)/g)) {
     if (part.startsWith("~") && part.endsWith("~") && part.length > 2) {

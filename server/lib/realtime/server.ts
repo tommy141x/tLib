@@ -150,7 +150,7 @@ export class RealtimeServer {
     let count = 0;
     this.rooms.forEachMember(roomId, null, (sid) => {
       const s = this.sessions.get(sid);
-      if (!s || s.state !== "authed") return;
+      if (s?.state !== "authed") return;
       if (excludePlayerId != null && s.playerId === excludePlayerId) return;
       this.sendText(s, TEXT_TYPE.EVENT, { type, payload });
       count++;
@@ -302,7 +302,7 @@ export class RealtimeServer {
     let delivered = 0;
     this.rooms.forEachMember(roomId, fromSession, (sid) => {
       const s = this.sessions.get(sid);
-      if (!s || s.state !== "authed") return;
+      if (s?.state !== "authed") return;
       try {
         s.ws.send(out, { binary: true });
         delivered++;

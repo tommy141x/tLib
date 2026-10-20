@@ -212,9 +212,7 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
   if (licences.copied.length > 0 || licences.satisfied.length > 0) {
     step("Font licences");
     for (const line of licences.copied) console.log(`  + ${line}`);
-    console.log(
-      `  ${licences.copied.length} copied, ${licences.satisfied.length} already covered`
-    );
+    console.log(`  ${licences.copied.length} copied, ${licences.satisfied.length} already covered`);
   }
 
   createZip(new AdmZipClass(), dist, join(root, ".build", `${name}.zip`), name, {

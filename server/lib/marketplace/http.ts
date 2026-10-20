@@ -27,7 +27,7 @@ export interface RawResponse {
 
 export async function request(
   url: string,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH",
   body: string,
   headers: Record<string, string>,
   timeoutMs: number = TIMEOUT_MS

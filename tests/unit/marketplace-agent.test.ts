@@ -14,9 +14,9 @@ const source = readFileSync(
 const js = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
 function fixture(protectedInventory?: ProtectedBuiltinInventory) {
   const events: Record<string, (...args: any[]) => void> = {};
-  const results: any[] = [],
-    writes: any[] = [],
-    inspections: any[] = [];
+  const results: any[] = [];
+  const writes: any[] = [];
+  const inspections: any[] = [];
   let finish!: (data: any) => void;
   const pending = new Promise((resolve) => {
     finish = resolve;

@@ -9,9 +9,9 @@ if (!url) throw Error("Set MARKETPLACE_PREVIEW_URL to a dev server (no productio
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-const errors: string[] = [],
-  queries: URL[] = [],
-  calls: { event: string; data: any }[] = [];
+const errors: string[] = [];
+const queries: URL[] = [];
+const calls: { event: string; data: any }[] = [];
 const directory = process.env.MARKETPLACE_SCREENSHOT_DIR;
 const screenshot = async (name: string) => {
   if (!directory) return;

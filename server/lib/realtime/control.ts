@@ -332,4 +332,3 @@ export function stopControl(): void {
 export function getControl(): ControlClient | null {
   return singleton;
 }
-

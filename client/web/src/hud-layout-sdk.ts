@@ -27,8 +27,8 @@ const latest = new Map<string, Update>();
 const anchors = new Set(["top-left", "top-right", "bottom-left", "bottom-right", "center"]);
 function valid(data: unknown): data is Update {
   if (!data || typeof data !== "object") return false;
-  const d = data as Update,
-    l = d.layout;
+  const d = data as Update;
+  const l = d.layout;
   return (
     typeof d.id === "string" &&
     d.id.length <= 80 &&
@@ -48,8 +48,8 @@ function valid(data: unknown): data is Update {
   );
 }
 function apply(id: string) {
-  const binding = bindings.get(id),
-    update = latest.get(id);
+  const binding = bindings.get(id);
+  const update = latest.get(id);
   if (!binding || !update) return;
   const rect = layoutRect(update, update.layout, { width: innerWidth, height: innerHeight });
   // Use a dedicated wrapper: the widget's own transforms and contextual visibility stay untouched.

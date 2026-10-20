@@ -9,10 +9,10 @@ if (!url) throw Error("Set MARKETPLACE_PREVIEW_URL");
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-const errors: string[] = [],
-  calls: { event: string; data: any }[] = [];
-let failTransport = false,
-  holdNextAck = false;
+const errors: string[] = [];
+const calls: { event: string; data: any }[] = [];
+let failTransport = false;
+let holdNextAck = false;
 let heldAck: any;
 const send = (name: string, data: unknown) =>
   page.evaluate(({ name, data }: any) => window.postMessage({ name, args: [data] }, "*"), {

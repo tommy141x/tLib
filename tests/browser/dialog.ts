@@ -49,8 +49,8 @@ const measure = async (name: string) => {
         .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
         .reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0);
     const contrast = (fg: string, bg: string) => {
-      const a = luminance(color(fg)),
-        b = luminance(color(bg));
+      const a = luminance(color(fg));
+      const b = luminance(color(bg));
       return Number(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toFixed(2));
     };
     const measureElement = (selector: string) => {

@@ -8,8 +8,8 @@ import {
 } from "../../client/web/src/lib/toast-lifetime";
 
 function harness() {
-  let now = 0,
-    next = 0;
+  let now = 0;
+  let next = 0;
   const timers = new Map<number, { at: number; callback: () => void }>();
   const rendered = new Map<string, ToastData>();
   const stale: (() => void)[] = [];

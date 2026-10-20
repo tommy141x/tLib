@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  clickIsSendable,
   type DialogData,
   type DialogField,
-  clickIsSendable,
   effectiveTabs,
   fieldError,
   initialValues,
@@ -66,7 +66,10 @@ describe("dialog schema and Lua wire contract", () => {
     ).toBe("Choose an available option.");
     // …and `required` is still enforced on an empty value, independently.
     expect(
-      fieldError({ id: "mic", type: "dropdown", label: "Microphone", options: [], required: true }, "")
+      fieldError(
+        { id: "mic", type: "dropdown", label: "Microphone", options: [], required: true },
+        ""
+      )
     ).toBe("Microphone is required.");
   });
   test("schema reconciliation keeps edited values, drops removed fields and initializes added fields", () => {

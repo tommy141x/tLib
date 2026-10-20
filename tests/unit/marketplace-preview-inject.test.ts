@@ -27,10 +27,13 @@ describe("injectBeforeBodyEnd", () => {
 
   test("ignores a closing body tag inside a script comment", () => {
     // The exact shape that broke: a comment mentioning </body> inside a script.
-    const injected = ["<script>", "// injected before </body> by the panel.", "var S = 1;", "</scr" + "ipt>"].join(
-      "\n"
-    );
-    const doc = injected + '<div class="radio"></div>';
+    const injected = [
+      "<script>",
+      "// injected before </body> by the panel.",
+      "var S = 1;",
+      "</scr" + "ipt>",
+    ].join("\n");
+    const doc = `${injected}<div class="radio"></div>`;
     const out = injectBeforeBodyEnd(doc, BINDER);
 
     expect(out).toBe(doc + BINDER);
@@ -47,9 +50,7 @@ describe("injectBeforeBodyEnd", () => {
 
   test("prefers the real body tag over one quoted in a script", () => {
     const doc =
-      "<html><body><script>var s = '</bo" +
-      "dy>';</scr" +
-      "ipt><div>x</div></body></html>";
+      "<html><body><script>var s = '</bo" + "dy>';</scr" + "ipt><div>x</div></body></html>";
     const out = injectBeforeBodyEnd(doc, BINDER);
     // Spliced at the real tag, so exactly one `</body>` follows the binder.
     expect(out.slice(out.indexOf(BINDER)).match(/<\/body>/gi)?.length).toBe(1);

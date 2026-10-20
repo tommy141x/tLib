@@ -40,9 +40,7 @@ const describeWithUiKit = existsSync(join(root, UI, "tabs.tsx")) ? describe : de
 /** The body of one top-level `.<name> { … }` rule, comments stripped. */
 function rule(css: string, selector: string): string {
   const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  const m = stripped.match(
-    new RegExp(`(^|[\\s,])\\${selector}\\s*\\{([^{}]*)\\}`, "m")
-  );
+  const m = stripped.match(new RegExp(`(^|[\\s,])\\${selector}\\s*\\{([^{}]*)\\}`, "m"));
   if (!m) throw new Error(`no rule for ${selector} in surface.css`);
   return m[2];
 }

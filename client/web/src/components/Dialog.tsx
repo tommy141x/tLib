@@ -14,11 +14,11 @@ import {
 } from "solid-js";
 import { fetchNui, onNuiEvent } from "@/lib/nui";
 import {
+  clickIsSendable,
   type DialogData,
   type DialogField,
   type DialogValue,
   type DialogValues,
-  clickIsSendable,
   effectiveTabs,
   groupFieldsByRow,
   initialValues,
@@ -278,7 +278,7 @@ function DialogSession(props: {
     const target = event.target as HTMLElement | null;
     // Textareas own Enter — it inserts a newline. Anything that is not a
     // single-line text entry keeps whatever Enter already did for it.
-    if (!target || target.tagName !== "INPUT") return;
+    if (target?.tagName !== "INPUT") return;
     const type = (target as HTMLInputElement).type;
     if (type !== "text" && type !== "search" && type !== "password") return;
     const id = target.closest<HTMLElement>("[data-field-id]")?.dataset.fieldId;

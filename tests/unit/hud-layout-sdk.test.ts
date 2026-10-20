@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 
 const priorWindow = globalThis.window;
-const priorWidth = globalThis.innerWidth,
-  priorHeight = globalThis.innerHeight;
+const priorWidth = globalThis.innerWidth;
+const priorHeight = globalThis.innerHeight;
 const listeners = new Map<string, (event: any) => void>();
 let sdk: { attach(id: string, element: any, onEdit?: (editing: boolean) => void): () => void };
 beforeAll(async () => {
@@ -62,8 +62,8 @@ test("consumer wrapper uses the editor geometry without touching child content",
 });
 test("updates received before mount restore on attach; editing suppresses pointer events", () => {
   send(update("status", { editing: true }));
-  const el = element(),
-    edits: boolean[] = [];
+  const el = element();
+  const edits: boolean[] = [];
   const detach = sdk.attach("status", el, (value) => edits.push(value));
   expect(el.style.pointerEvents).toBe("none");
   expect(edits).toEqual([true]);
@@ -77,8 +77,8 @@ test("updates received before mount restore on attach; editing suppresses pointe
   expect(edits.at(-1)).toBe(false);
 });
 test("invalid layout messages and duplicate mounts are rejected", () => {
-  const el = element(),
-    detach = sdk.attach("detector", el);
+  const el = element();
+  const detach = sdk.attach("detector", el);
   expect(() => sdk.attach("detector", element())).toThrow();
   send(update("detector", { width: Infinity }));
   expect(el.style.transform).toBeUndefined();

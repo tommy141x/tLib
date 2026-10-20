@@ -32,8 +32,8 @@
  * control.
  */
 
-import { existsSync } from "node:fs";
 import { afterEach, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { cleanup, render } from "@solidjs/testing-library";
 import { flush } from "solid-js";
 
@@ -46,7 +46,9 @@ import { flush } from "solid-js";
 //
 // A STATIC import fails at module load in a public clone and takes the whole
 // file with it, so the control is awaited below.
-const HAS_UI_KIT = existsSync(new URL("../../../internal/shared-ts/ui/confirm-delete.tsx", import.meta.url));
+const HAS_UI_KIT = existsSync(
+  new URL("../../../internal/shared-ts/ui/confirm-delete.tsx", import.meta.url)
+);
 const testWithUiKit = HAS_UI_KIT ? test : test.skip;
 const { ConfirmDelete } = HAS_UI_KIT
   ? await import("../../../internal/shared-ts/ui/confirm-delete")

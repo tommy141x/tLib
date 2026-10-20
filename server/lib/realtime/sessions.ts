@@ -143,7 +143,7 @@ export class SessionManager {
 
   authenticate(sessionId: SessionId, playerId: PlayerId): Session | null {
     const s = this.sessions.get(sessionId);
-    if (!s || s.state !== "awaiting_auth") return null;
+    if (s?.state !== "awaiting_auth") return null;
 
     // enforce per-player session cap — oldest wins eviction
     const existing = this.byPlayer.get(playerId);

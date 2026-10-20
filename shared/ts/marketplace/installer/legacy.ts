@@ -248,8 +248,7 @@ export function adoptLegacyInstallationFromData(
       throw new Error("adoption requires a verified sha256 package hash");
     const digest = expectedHash.toLowerCase().replace(/^sha256:/, "");
     if (
-      !authorization ||
-      authorization.action !== "adopt-verified-legacy" ||
+      authorization?.action !== "adopt-verified-legacy" ||
       authorization.resourceName !== c.resourceName ||
       authorization.type !== c.type ||
       authorization.slug !== c.name ||

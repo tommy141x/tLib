@@ -31,15 +31,15 @@
  *    behaviour, which is what the hand-rolled copy got wrong, is driven below.
  */
 
-import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { cleanup, render } from "@solidjs/testing-library";
 import { flush } from "solid-js";
-import { createEscapeLayer, escapeLayers } from "../../../shared/ts/escape-layer";
 import type {
   ExportBadgeStringKey,
   ExportTarget,
 } from "../../../internal/shared-ts/ui/export-badge";
+import { createEscapeLayer, escapeLayers } from "../../../shared/ts/escape-layer";
 
 // The control kit moved to `internal/`, which publish-public.ts strips. This
 // file stays in the published half for the reason prop-editor-guard.test.tsx
@@ -51,7 +51,9 @@ import type {
 // A STATIC import fails at module load in a public clone and takes the whole
 // file with it, so the kit is awaited below. The `import type` beside it is
 // erased before runtime and so cannot.
-const HAS_UI_KIT = existsSync(new URL("../../../internal/shared-ts/ui/export-badge.tsx", import.meta.url));
+const HAS_UI_KIT = existsSync(
+  new URL("../../../internal/shared-ts/ui/export-badge.tsx", import.meta.url)
+);
 const describeWithUiKit = HAS_UI_KIT ? describe : describe.skip;
 const { DEFAULT_EXPORT_BADGE_STRINGS, ExportBadge } = HAS_UI_KIT
   ? await import("../../../internal/shared-ts/ui/export-badge")

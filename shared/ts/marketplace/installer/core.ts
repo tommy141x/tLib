@@ -208,8 +208,7 @@ export function owned(c: Context): Receipt | null {
       throw new Error(`unreadable marketplace ownership receipt: ${path.basename(c.receipt)}`);
     }
     if (
-      !receipt ||
-      receipt.version !== 1 ||
+      receipt?.version !== 1 ||
       receipt.resourceName !== c.resourceName ||
       receipt.type !== c.type ||
       receipt.slug !== c.name ||

@@ -88,7 +88,9 @@ function licenceKey(file: string): string {
  * otherwise match any file that happens to contain those five letters.
  */
 function fontKey(file: string): string {
-  return basename(file).toLowerCase().replace(/[^a-z]/g, "");
+  return basename(file)
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
 }
 
 export interface FontLicenceResult {

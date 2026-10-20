@@ -253,8 +253,8 @@ export function attachHudDrag(options: HudDragOptions): () => void {
     // old placement" answer that wants.
     if (!options.enabled()) return lost();
     if (!held.moved) {
-      const dx = event.clientX - held.x,
-        dy = event.clientY - held.y;
+      const dx = event.clientX - held.x;
+      const dy = event.clientY - held.y;
       if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
       held.moved = true;
     }

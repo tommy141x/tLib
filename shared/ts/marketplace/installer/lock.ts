@@ -89,8 +89,7 @@ function inspectLock(c: Context): MarketplaceLockInspection {
     return result;
   } // Partial initialization cannot establish a dead owner.
   if (
-    !owner ||
-    owner.schema !== 1 ||
+    owner?.schema !== 1 ||
     !/^[a-f0-9-]{36}$/i.test(owner.ownerId) ||
     !/^[a-f0-9-]{36}$/i.test(owner.processInstance) ||
     !Number.isSafeInteger(owner.pid) ||
@@ -161,8 +160,7 @@ export function recoverMarketplaceLock(
     const c = context(target, slug);
     const before = inspectLock(c);
     if (
-      !confirmation ||
-      confirmation.action !== "quarantine-dead-owner-lock" ||
+      confirmation?.action !== "quarantine-dead-owner-lock" ||
       confirmation.reviewedRetainedTransactions !== true ||
       before.state !== "identified" ||
       !before.owner ||

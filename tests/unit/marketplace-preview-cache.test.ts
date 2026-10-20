@@ -86,7 +86,7 @@ const { MAX_PREVIEW_BYTES } = await import("../../server/lib/marketplace/browse"
 /** A document of a given size, shaped like the real ones: mostly base64. */
 function doc(slug: string, bytes: number): string {
   const head = `<div data-radio-width="209.5" data-radio-height="426.5" id="${slug}">`;
-  return head + "A".repeat(Math.max(0, bytes - head.length - 6)) + "</div>";
+  return `${head + "A".repeat(Math.max(0, bytes - head.length - 6))}</div>`;
 }
 
 beforeEach(() => {

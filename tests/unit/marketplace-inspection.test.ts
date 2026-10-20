@@ -51,8 +51,8 @@ function snapshot(root: string): unknown[] {
     .readdirSync(root)
     .sort()
     .map((name) => {
-      const path = join(root, name),
-        s = fs.lstatSync(path);
+      const path = join(root, name);
+      const s = fs.lstatSync(path);
       return [
         name,
         s.mtimeMs,
@@ -195,8 +195,8 @@ test("lock states are sanitized and suppress classification without process prob
   );
   expect(f.inspect()).toMatchObject({ status: "unavailable", lock: "identified" });
   fs.writeFileSync(join(lock, "recovery.json"), "{}");
-  const before = snapshot(f.root),
-    result = f.inspect();
+  const before = snapshot(f.root);
+  const result = f.inspect();
   expect(result.lock).toBe("recovery-pending");
   expect(snapshot(f.root)).toEqual(before);
   expect(Object.keys(result).sort()).toEqual(
@@ -209,8 +209,8 @@ test("payload growth during an open read is bounded and returns unavailable", ()
   f.file("item/ui.html");
   f.receipt();
   const read = fs.readSync;
-  let changed = false,
-    payloadRead = 0;
+  let changed = false;
+  let payloadRead = 0;
   const mocked = spyOn(fs, "readSync").mockImplementation(((...args: any[]) => {
     const count = (read as any)(...args);
     if (args[1].length === 8) {

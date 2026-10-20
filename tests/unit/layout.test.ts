@@ -112,8 +112,8 @@ describe("HUD geometry (no DOM)", () => {
         expect(roundtrip.x).toBeCloseTo(layout.x, 12);
         expect(roundtrip.y).toBeCloseTo(layout.y, 12);
         const changed = changeAnchor(component, layout, vp, "center");
-        const before = layoutRect(component, layout, vp),
-          after = layoutRect(component, changed, vp);
+        const before = layoutRect(component, layout, vp);
+        const after = layoutRect(component, changed, vp);
         expect(after.left).toBeCloseTo(before.left, 10);
         expect(after.top).toBeCloseTo(before.top, 10);
       }
@@ -217,8 +217,8 @@ describe("HUD geometry (no DOM)", () => {
   });
   test("all corners resize uniformly with the opposite corner fixed", () => {
     for (const corner of ["nw", "ne", "sw", "se"] as const) {
-      const sx = corner.endsWith("e") ? 1 : -1,
-        sy = corner.startsWith("s") ? 1 : -1;
+      const sx = corner.endsWith("e") ? 1 : -1;
+      const sy = corner.startsWith("s") ? 1 : -1;
       const before = layoutRect(component, base, viewport);
       const next = resizeLayout(component, base, viewport, corner, 100 * sx, 50 * sy);
       const after = layoutRect(component, next, viewport);

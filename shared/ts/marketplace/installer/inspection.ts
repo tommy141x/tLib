@@ -213,8 +213,7 @@ export function inspectInstallation(
         inspectionUnsafe();
       }
       if (
-        !receipt ||
-        receipt.version !== 1 ||
+        receipt?.version !== 1 ||
         receipt.resourceName !== c.resourceName ||
         receipt.type !== c.type ||
         receipt.slug !== c.name ||
@@ -247,8 +246,8 @@ export function inspectInstallation(
       return { ok: true, inspection };
     }
     const actual: Record<string, string> = Object.create(null);
-    let count = 0,
-      bytes = 0;
+    let count = 0;
+    let bytes = 0;
     const walk = (file: string, rel: string): void => {
       if (++count > MAX_ENTRIES) inspectionUnavailable();
       const before = stat(file);

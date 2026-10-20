@@ -22,9 +22,8 @@
 // 200 and then has the body withheld. Every read here runs server-side.
 //
 
-import { TLIB_PUBLIC_KEY } from "../../../shared/ts/marketplace/catalogue";
+import { studioHeaders, TLIB_PUBLIC_KEY } from "../../../shared/ts/marketplace/catalogue";
 import { MarketplaceError } from "../marketplace/api";
-import { studioHeaders } from "../../../shared/ts/marketplace/catalogue";
 import { resolveConfig } from "../marketplace/config";
 import { parseJson, request, toError } from "../marketplace/http";
 

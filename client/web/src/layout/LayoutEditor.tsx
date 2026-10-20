@@ -517,8 +517,8 @@ export default function LayoutEditor() {
     if (!move || !held || finishing()) return;
     const component = index().get(held.key);
     if (!component) return;
-    const dx = move.x - held.x,
-      dy = move.y - held.y;
+    const dx = move.x - held.x;
+    const dy = move.y - held.y;
     const corner = held.corner;
     if (corner) {
       update(component.key, resizeLayout(component, held.before, viewport(), corner, dx, dy));
@@ -526,8 +526,8 @@ export default function LayoutEditor() {
       return;
     }
     const start = layoutRect(component, held.before, viewport());
-    let left = start.left + dx,
-      top = start.top + dy;
+    let left = start.left + dx;
+    let top = start.top + dy;
     // Alt suspends snapping for the frames it is held, rather than being a mode.
     let snapGuides: { x?: number; y?: number } = {};
     if (!move.alt && snapTargets) {
@@ -701,8 +701,8 @@ export default function LayoutEditor() {
      * primitive is for; tRadio's settings app hosts tLib's shared PropEditor
      * inside itself, and two raw listeners means one press undoes in both.
      */
-    const direction = arrows[event.key],
-      component = active();
+    const direction = arrows[event.key];
+    const component = active();
     // The panel's own drag handle owns arrows while it is focused.
     if (!direction || !component || gesture?.pointer !== undefined) return;
     if ((event.target as HTMLElement | null)?.closest(".tlib-layout__drag")) return;

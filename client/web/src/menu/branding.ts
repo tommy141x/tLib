@@ -279,8 +279,8 @@ export function shade(hex: string, amount: number): string {
 // transparent corners as black would put white ink on a white logo. Undefined when
 // nothing is opaque enough to judge, so the caller falls back to the accent.
 export function averageLuminance(pixels: ArrayLike<number>): number | undefined {
-  let total = 0,
-    weight = 0;
+  let total = 0;
+  let weight = 0;
   for (let index = 0; index + 3 < pixels.length; index += 4) {
     const alpha = pixels[index + 3]! / 255;
     if (alpha <= 0) continue;

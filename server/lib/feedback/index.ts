@@ -43,7 +43,6 @@ export interface FeedbackInput {
 
 export type FeedbackResult = { ok: true } | { ok: false; reason: FeedbackFailure };
 
-
 /**
  * The request body, or `null` when there is nothing worth sending. `resource` and
  * `resourceVersion` go through the TELEMETRY module's own `slug`/`versionSlug`

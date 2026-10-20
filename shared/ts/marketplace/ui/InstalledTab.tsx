@@ -89,7 +89,7 @@ export function InstalledTab(props: {
       .filter((s) => {
         if (!s.slug) return true;
         const st = states[s.slug];
-        return !st || st.state !== "idle";
+        return st?.state !== "idle";
       })
       .map((s) => ({
         key: s.filename,

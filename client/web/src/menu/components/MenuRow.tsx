@@ -52,8 +52,8 @@ export function MenuRow(props: Props) {
   // gradient: the shared slider takes a token. A row with no bounds (or with
   // min == max) has nothing to fill, and 0 is the only honest answer.
   const sliderFill = () => {
-    const min = props.item.min ?? 0,
-      span = (props.item.max ?? 100) - min;
+    const min = props.item.min ?? 0;
+    const span = (props.item.max ?? 100) - min;
     return span > 0 ? ((props.sliderValue ?? min) - min) / span : 0;
   };
   // MenuAPI lets a row colour its own bar. One token now, rather than the whole

@@ -66,7 +66,7 @@ for (const [event, installed] of [
   ["marketplaceUninstallResult", false],
 ] as const) {
   onNuiEvent<OutcomeReply>(event, (data) => {
-    if (!data || data.ok !== true) return;
+    if (data?.ok !== true) return;
     if (typeof data.slug !== "string" || !data.slug) return;
     // Keyed LOWERCASE, which is also the on-disk name: `context()` in
     // `../installer/core.ts` writes `slug.toLowerCase()`, and the coordinator's

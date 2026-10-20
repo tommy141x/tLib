@@ -41,8 +41,8 @@
  *    defect would silently change.
  */
 
-import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { cleanup, render } from "@solidjs/testing-library";
 import { flush } from "solid-js";
 import { UndoHistory } from "../../../shared/ts/undo";
@@ -67,9 +67,9 @@ const describeWithPropEditor = HAS_PROP_EDITOR ? describe : describe.skip;
 // `mock.module` registers an override in the module registry, and a static
 // import of `PropEditor` would already have pulled the real viewport in.
 if (HAS_PROP_EDITOR) {
-mock.module("../../../internal/shared-ts/prop-editor/PropEditorViewport", () => ({
-  PropEditorViewport: () => null,
-}));
+  mock.module("../../../internal/shared-ts/prop-editor/PropEditorViewport", () => ({
+    PropEditorViewport: () => null,
+  }));
 }
 const { PropEditor } = HAS_PROP_EDITOR
   ? await import("../../../internal/shared-ts/prop-editor/PropEditor")
@@ -357,66 +357,69 @@ describeWithPropEditor("the guard: Escape while the question is up", () => {
   });
 });
 
-describeWithPropEditor("isDirty counts an OPEN batch, so the guard must settle before asking", () => {
-  test("mid-gesture, with the batch still open, the session is dirty", async () => {
-    // A bare `change` with no blur leaves the batch open. `canUndo()` includes
-    // `pending`, which is what makes a field still focused count as something to
-    // lose.
-    const { container } = await openEditor();
-    typeInto(field(container, "X"), "3", { blur: false });
-    pressEscape();
-    expect(prompt(container)).not.toBeNull();
-  });
+describeWithPropEditor(
+  "isDirty counts an OPEN batch, so the guard must settle before asking",
+  () => {
+    test("mid-gesture, with the batch still open, the session is dirty", async () => {
+      // A bare `change` with no blur leaves the batch open. `canUndo()` includes
+      // `pending`, which is what makes a field still focused count as something to
+      // lose.
+      const { container } = await openEditor();
+      typeInto(field(container, "X"), "3", { blur: false });
+      pressEscape();
+      expect(prompt(container)).not.toBeNull();
+    });
 
-  test("after a NO-OP gesture settles, the session is clean again", async () => {
-    // THIS IS THE SUBTLE ONE. A gesture that resolves to the value that was
-    // already there opens a batch — so the editor is dirty mid-gesture — and the
-    // no-op guard discards that batch at `commit`. So the same session is dirty
-    // before the blur and clean after it, and a guard that asked before the
-    // settle would prompt over nothing.
-    const { container } = await openEditor();
-    const x = field(container, "X");
-    typeInto(x, "0", { blur: false });
-    pressEscape();
-    expect(prompt(container)).not.toBeNull();
-    keepBtn(container)!.click();
-    flush();
-    // The blur commits, and `sameTransform` finds before and after equal.
-    x.dispatchEvent(new FocusEvent("blur", { bubbles: false }));
-    flush();
-    sent = [];
-    pressEscape();
-    expect(prompt(container)).toBeNull();
-    expect(sent.map((s) => s.event)).toContain(CANCEL);
-  });
+    test("after a NO-OP gesture settles, the session is clean again", async () => {
+      // THIS IS THE SUBTLE ONE. A gesture that resolves to the value that was
+      // already there opens a batch — so the editor is dirty mid-gesture — and the
+      // no-op guard discards that batch at `commit`. So the same session is dirty
+      // before the blur and clean after it, and a guard that asked before the
+      // settle would prompt over nothing.
+      const { container } = await openEditor();
+      const x = field(container, "X");
+      typeInto(x, "0", { blur: false });
+      pressEscape();
+      expect(prompt(container)).not.toBeNull();
+      keepBtn(container)!.click();
+      flush();
+      // The blur commits, and `sameTransform` finds before and after equal.
+      x.dispatchEvent(new FocusEvent("blur", { bubbles: false }));
+      flush();
+      sent = [];
+      pressEscape();
+      expect(prompt(container)).toBeNull();
+      expect(sent.map((s) => s.event)).toContain(CANCEL);
+    });
 
-  test("a number field's blur commits its open batch", async () => {
-    // Observable as entry COUNT: with the blur closing each batch, two edits to
-    // one axis are two undo steps. Without it, `push` extends the open batch and
-    // twenty stepper ticks collapse into one — which is the behaviour the
-    // batching is FOR, and the reason the commit has to come from the blur.
-    const { container } = await openEditor();
-    const x = field(container, "X");
-    typeInto(x, "3");
-    typeInto(x, "7");
-    expect(propEditorState.propData.x).toBe(7);
-    pressUndo();
-    expect(propEditorState.propData.x).toBe(3);
-    pressUndo();
-    expect(propEditorState.propData.x).toBe(0);
-  });
+    test("a number field's blur commits its open batch", async () => {
+      // Observable as entry COUNT: with the blur closing each batch, two edits to
+      // one axis are two undo steps. Without it, `push` extends the open batch and
+      // twenty stepper ticks collapse into one — which is the behaviour the
+      // batching is FOR, and the reason the commit has to come from the blur.
+      const { container } = await openEditor();
+      const x = field(container, "X");
+      typeInto(x, "3");
+      typeInto(x, "7");
+      expect(propEditorState.propData.x).toBe(7);
+      pressUndo();
+      expect(propEditorState.propData.x).toBe(3);
+      pressUndo();
+      expect(propEditorState.propData.x).toBe(0);
+    });
 
-  test("a stepper burst under one label collapses into a single entry", async () => {
-    const { container } = await openEditor();
-    const x = field(container, "X");
-    for (const v of ["1", "2", "3", "4"]) typeInto(x, v, { blur: false });
-    x.dispatchEvent(new FocusEvent("blur", { bubbles: false }));
-    flush();
-    expect(propEditorState.propData.x).toBe(4);
-    pressUndo();
-    expect(propEditorState.propData.x).toBe(0);
-  });
-});
+    test("a stepper burst under one label collapses into a single entry", async () => {
+      const { container } = await openEditor();
+      const x = field(container, "X");
+      for (const v of ["1", "2", "3", "4"]) typeInto(x, v, { blur: false });
+      x.dispatchEvent(new FocusEvent("blur", { bubbles: false }));
+      flush();
+      expect(propEditorState.propData.x).toBe(4);
+      pressUndo();
+      expect(propEditorState.propData.x).toBe(0);
+    });
+  }
+);
 
 describeWithPropEditor("nesting against a host page", () => {
   test("depth 1 beats a host page's scope, and the host never sees the press", async () => {

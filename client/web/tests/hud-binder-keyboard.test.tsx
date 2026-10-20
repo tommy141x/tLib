@@ -1,7 +1,7 @@
 /**
  * A faceplate key must be operable by the keyboard, because it already claims to be.
  *
- *  WHAT WAS WRONG 
+ *  WHAT WAS WRONG
  *
  * `HudBinder.scan()` attached one `click` listener per `[data-hud-btn]` and
  * nothing else, while all 65 shipped keys across tRadar's five heads and
@@ -13,7 +13,7 @@
  * The faceplates cannot be real buttons: they are absolutely-positioned
  * transparent rects laid over a chassis render, sized to the silkscreen.
  *
- *  WHY THIS LIVES IN THE DOM SUITE 
+ *  WHY THIS LIVES IN THE DOM SUITE
  *
  * `tests/unit/hud-drag.test.ts` hand-rolls a `FakeElement` harness, and says so:
  * it is a harness, not a claim about a real selector engine or a real event

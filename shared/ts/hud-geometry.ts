@@ -76,8 +76,8 @@ export function layoutRect(
   viewport: Viewport
 ): Rect {
   const factor = (viewport.height / REFERENCE_HEIGHT) * layout.scale;
-  const width = component.width * factor,
-    height = component.height * factor;
+  const width = component.width * factor;
+  const height = component.height * factor;
   const pivot = anchorPoint(layout.anchor);
   const unit = offsetUnit(layout.anchor, viewport);
   return {
@@ -238,8 +238,8 @@ export function resizeLayout(
 ): Layout {
   if (!component.canScale) return layout;
   const rect = layoutRect(component, layout, viewport);
-  const sx = corner.endsWith("e") ? 1 : -1,
-    sy = corner.startsWith("s") ? 1 : -1;
+  const sx = corner.endsWith("e") ? 1 : -1;
+  const sy = corner.startsWith("s") ? 1 : -1;
   const ratio =
     1 + (sx * dx * rect.width + sy * dy * rect.height) / (rect.width ** 2 + rect.height ** 2);
   const scale = clamp(

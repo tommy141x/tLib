@@ -56,7 +56,11 @@ function git(args: string[], cwd = REPO): string {
  *  `fatal:` on a successful run reads as a failure to whoever is watching. */
 function tryGit(args: string[], cwd = REPO): string | null {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    return execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
   } catch {
     return null;
   }
