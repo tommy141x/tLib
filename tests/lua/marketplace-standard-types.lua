@@ -82,24 +82,37 @@ must(marketplace.registerType('ui', 'layouts', warn) == true,
 must(registered.ui == 'layouts', 'the install path was not passed through')
 must(#warns == 0, 'a successful registration warned anyway')
 
--- The Node bridge answers `false` rather than raising when the consumer has not
--- opted into `tlib_module { 'marketplace' }`. A `false` and a throw are the same
--- operator-visible condition and must get the same message.
+-- A `false` and a throw are the same operator-visible condition and must get the
+-- same message.
+--
+-- ⚠️ THIS ASSERTION USED TO REQUIRE THE WORD `tlib_module`, AND THAT WAS WRONG.
+-- The warning told the reader to add `tlib_module { 'marketplace' }` to their
+-- fxmanifest, which cannot fix this: imports.lua lazy-loads on first access of
+-- `tlib.<name>`, and its own comment says the eager declaration is "not
+-- load-bearing any more except for realtime". A resource reaching that line has
+-- already loaded the module -- calling this function is how.
+--
+-- The test was right that the message must name something to do, and wrong about
+-- what. Measured 2026-10-21: a session chasing why no sound installs server-side
+-- found tRadio declares no modules, matched it to this advice, and had to flag it
+-- as unverified rather than act on it. So it still asserts actionability -- now
+-- against the causes RegisterMarketplaceType actually checks.
 reset()
 registerFails.sound = 'false'
 must(marketplace.registerType('sound', 'layouts/sounds', warn) == false,
     'a refused registration reported success')
 must(#warns == 1, 'a refused registration did not warn')
-must(warns[1]:find('tlib_module', 1, true),
-    'the warning did not name the fxmanifest line to add -- two of the four '
-    .. 'hand-written copies logged a message that named nothing to do')
+must(warns[1]:find('installPath', 1, true) and warns[1]:find('Node bridge', 1, true),
+    'the warning did not name a cause the reader can act on')
+must(not warns[1]:find('add `tlib_module', 1, true),
+    'the warning still tells the reader to declare a module, which cannot fix this')
 must(warns[1]:find('sound', 1, true), 'the warning did not say which type failed')
 
 reset()
 registerFails.ui = 'throw'
 must(marketplace.registerType('ui', 'layouts', warn) == false,
     'a throwing registration was reported as success')
-must(#warns == 1 and warns[1]:find('tlib_module', 1, true),
+must(#warns == 1 and warns[1]:find('Node bridge', 1, true),
     'a throwing registration did not produce the same warning as a refused one')
 
 -- No `warn` at all must not raise: a resource with no logger still has to boot.

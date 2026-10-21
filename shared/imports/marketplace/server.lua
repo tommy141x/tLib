@@ -136,7 +136,19 @@ function marketplace.registerType(kind, installPath, warn)
     end)
     if ok and registered ~= false then return true end
     if type(warn) == 'function' then
-        warn(("marketplace type '%s' was not registered — add `tlib_module { 'marketplace' }` to this resource's fxmanifest to enable it")
+        -- NAME WHAT ACTUALLY FAILED. This used to say "add `tlib_module
+        -- { 'marketplace' }` to this resource's fxmanifest", which cannot fix it:
+        -- imports.lua lazy-loads on first access of `tlib.<name>`, and the eager
+        -- declaration is "not load-bearing any more except for realtime". A
+        -- resource reaching this line has already loaded the module -- it is how
+        -- it called this function.
+        --
+        -- Measured 2026-10-21: a session investigating why no sound ever installs
+        -- server-side found tRadio declares no modules at all, matched it against
+        -- this advice, and had to flag it as unverified rather than act on it. The
+        -- advice sent them somewhere that could not be the cause. The three things
+        -- that CAN fail are below, in the order RegisterMarketplaceType checks them.
+        warn(("marketplace type '%s' was not registered. tLib's RegisterMarketplaceType refused it, for one of: an invalid installPath, an invoking resource it could not resolve, or its Node bridge rejecting the registration. tLib's console logs which. Declaring the module does NOT affect this -- modules lazy-load on first access.")
             :format(tostring(kind)))
     end
     return false
