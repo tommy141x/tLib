@@ -234,14 +234,17 @@ try {
       });
     });
   if (reaching.length > 0) {
-    console.error(
+    // THROW, DO NOT process.exit. `finally` removes the throwaway worktree, and
+    // process.exit skips it -- which left `main` checked out in a temp dir and
+    // made the NEXT publish die with "'main' is already used by worktree at …".
+    // A guard that wedges the tool it guards gets deleted rather than obeyed.
+    throw new Error(
       "publish-public: these published files reference a path that is stripped from " +
         `${PUBLISHED}:\n` +
         reaching.map((f) => `  ${f}`).join("\n") +
         "\n\nThey resolve on `internal` and not on `main`, which is a branch that cannot " +
         "typecheck and an email on every push. Add them to PRIVATE, or stop them importing it."
     );
-    process.exit(1);
   }
 
   git(["update-ref", MARK, git(["rev-parse", SOURCE])]);
