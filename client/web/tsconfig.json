@@ -8,6 +8,15 @@
     // `solid-js`, and under Solid 2 `ComponentProps<"svg">` is `never` —
     // core's `ValidComponent` no longer admits a tag name. src/icons.d.ts
     // replaces it; no JSX augmentation can fix the shipped one.
+    // `@types/bun` is NOT listed here and does not need to be: `tests/_setup.ts`
+    // imports `bun:test` by specifier, and module resolution finds the package
+    // regardless of this array — which is why `include: ["tests"]` typechecks
+    // at all. What it DOES need is to be a declared dependency, and it was not
+    // until 2026-10-21: tsc walks parent directories for node_modules, found a
+    // stray `C:/Users/Tommy/node_modules/bun-types` on the author's machine,
+    // and so every local run was green against a package no runner has. CI
+    // failed with `Cannot find module 'bun:test'` the whole time. A local pass
+    // that depends on an ancestor directory is not a pass.
     "types": ["vite/client"],
     "moduleResolution": "bundler",
     "jsx": "preserve",
