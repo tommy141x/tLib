@@ -4,7 +4,15 @@ import type { HudLayoutClient, HudLayoutUpdate as Update } from "../../../shared
 type Binding = {
   element: HTMLElement;
   previousStyle: string | null;
-  previousHidden: boolean;
+  /**
+   * The element's own property type, not `boolean`. `hidden` is
+   * `boolean | string` -- the HTML spec admits `hidden="until-found"` -- and
+   * this field exists only to be read at bind and written back at unbind, so
+   * narrowing it would silently coerce a consumer's `until-found` to `true`.
+   * It typechecked as `boolean` only because the Bun types that widen it were
+   * never installed on a runner; see client/web/tsconfig.json.
+   */
+  previousHidden: HTMLElement["hidden"];
   /** The element's own `style.visibility`, restored rather than assumed empty. */
   previousVisibility: string;
   /** True once a real placement has been written, which is when it may paint. */
