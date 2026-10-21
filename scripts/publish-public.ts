@@ -55,6 +55,12 @@ const PRIVATE = [
   "client/web/tests/export-badge.test.tsx",
   "client/web/tests/confirm-delete-unmount.test.tsx",
   "client/web/tests/harness.test.tsx",
+  // These two were published while the guard below was throwing instead of
+  // checking, and they are on `main` now. Listing them here removes them: the
+  // strip loop deletes any PRIVATE path it finds in the worktree, so the next
+  // replayed commit carries the deletion.
+  "client/web/tests/prop-editor-guard.test.tsx",
+  "client/web/tests/undo-redo-ui.test.tsx",
 ];
 const SOURCE = "internal";
 const PUBLISHED = "main";
