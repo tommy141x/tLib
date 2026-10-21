@@ -285,6 +285,40 @@ must(marketplace.upsertSound(sounds, 'ka') == nil, 'upsertSound invented a confl
 must(#sounds == 1 and sounds[1].filename == 'ka.wav', 'upsertSound did not add the entry')
 must(marketplace.removeSound(sounds, {}, 'ka') == 'ka.wav', 'removeSound did not report the file')
 
+-- ── The extension comes from the install, not from a guess ──────────────────
+--
+-- upsertSound hardcoded `slug .. '.wav'`. The installer writes `.wav`, `.ogg` or
+-- `.mp3` from the payload's magic bytes, so a non-WAV tone was recorded under a
+-- filename that does not exist on disk -- and nothing failed, because the write
+-- had succeeded and only the bookkeeping was wrong.
+--
+-- `meta.installedAt` is the path the installer swapped into place and every
+-- `sounds.installed(slug, meta)` handler already receives it.
+
+local function filenameFor(slug, meta)
+    local list = {}
+    marketplace.upsertSound(list, slug, meta)
+    return list[1] and list[1].filename
+end
+
+must(filenameFor('horn', { installedAt = '/opt/r/tRadio/layouts/sounds/horn.mp3' }) == 'horn.mp3',
+    'an mp3 install was still recorded as .wav')
+must(filenameFor('horn', { installedAt = '/opt/r/tRadio/layouts/sounds/horn.ogg' }) == 'horn.ogg',
+    'an ogg install was still recorded as .wav')
+-- A long-bracket string, so the backslashes are literal and need no escaping —
+-- which is the trap this very assertion exists to cover.
+must(filenameFor('horn', { installedAt = [[C:\srv\resources\tRadio\layouts\sounds\horn.ogg]] }) == 'horn.ogg',
+    'a Windows path was not split on the backslash')
+must(filenameFor('horn', { installedAt = 'layouts/sounds/horn.wav' }) == 'horn.wav',
+    'a relative path did not yield its basename')
+
+-- The guess survives only where there is nothing to derive from, and it is the
+-- OLD behaviour, so a caller that cannot supply meta is no worse off than before.
+must(filenameFor('horn', nil) == 'horn.wav', 'no metadata did not fall back to the slug')
+must(filenameFor('horn', { installedAt = '' }) == 'horn.wav', 'an empty path did not fall back')
+must(filenameFor('horn', { installedAt = '/opt/r/sounds/noextension' }) == 'horn.wav',
+    'a path with no extension was taken as a filename')
+
 -- Verdict
 
 if CONTROL then

@@ -2,9 +2,57 @@
 
 local marketplace = {}
 
--- Upsert {filename, slug} in installedSounds for the given slug.
-function marketplace.upsertSound(installedSounds, slug)
-    local newFilename = tostring(slug) .. ".wav"
+--- The file an install actually wrote, from the install's own metadata.
+---
+--- `meta.installedAt` is the absolute path the installer swapped into place, and
+--- for a flat sound the destination IS the file: bundle.ts builds it as
+--- `c.name + path.extname(audioName)`, where the extension comes from the
+--- payload's magic bytes. So the truth is already in hand and nothing needs to
+--- guess it.
+---
+--- @param slug string
+--- @param meta table|nil  the second argument of a `sounds.installed` callback
+--- @return string filename, boolean derived  `derived` is false when guessed
+local function soundFilename(slug, meta)
+    local at = type(meta) == 'table' and meta.installedAt
+    if type(at) == 'string' and at ~= '' then
+        -- `\\` and not `\`: the backslash is escaped for the Lua STRING, not for
+        -- the pattern. Lua patterns escape with `%`, so a lone `\]` here is an
+        -- invalid escape sequence and the file will not load at all.
+        local base = at:match('([^/\\]+)$')
+        if base and base ~= '' and base:find('%.') then return base, true end
+    end
+    return tostring(slug) .. '.wav', false
+end
+marketplace.soundFilename = soundFilename
+
+--- Upsert {filename, slug} in installedSounds for the given slug.
+---
+--- ⚠️ `meta` IS NOT OPTIONAL IN PRACTICE, even though it is tolerated. This
+--- hardcoded `slug .. '.wav'` until 2026-10-21, while the installer writes
+--- `.wav`, `.ogg` OR `.mp3` depending on the payload's magic bytes
+--- (`soundExtension` in installer/bundle.ts). A non-WAV tone therefore installed
+--- under one name and was recorded under another, so the registry pointed at a
+--- file that was not there -- and nothing failed at install time, because the
+--- write succeeded and only the bookkeeping was wrong.
+---
+--- Derived HERE rather than in each consumer: all four call sites already
+--- receive `meta` from their `sounds.installed(slug, meta)` handler and all four
+--- were discarding it. Four copies of this derivation is how the next mismatch
+--- gets introduced.
+---
+--- @param installedSounds table
+--- @param slug string
+--- @param meta table|nil
+--- @return string|nil conflict  the slug already claiming this filename
+function marketplace.upsertSound(installedSounds, slug, meta)
+    local newFilename, derived = soundFilename(slug, meta)
+    if not derived then
+        -- Not silent: a guessed name is exactly the bug this replaced, so if it
+        -- ever happens again it says so rather than writing a plausible lie.
+        print(("[tLib/marketplace] no installedAt for sound '%s'; recording it as '%s'. If the payload was not a WAV this entry names a file that does not exist.")
+            :format(tostring(slug), newFilename))
+    end
     local conflict = nil
     for _, s in ipairs(installedSounds) do
         if s.filename == newFilename and s.slug ~= tostring(slug) then

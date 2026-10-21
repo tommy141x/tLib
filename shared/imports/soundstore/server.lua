@@ -74,8 +74,13 @@ end
 
 --- Record a marketplace-installed sound.
 --- @return string|nil the slug already claiming this filename, if any
-function Store:install(slug)
-    local conflict = tlib.marketplace.upsertSound(self.installedSounds, slug)
+--- @param slug string
+--- @param meta table|nil  the second argument of `sounds.installed(slug, meta)`.
+---        Carries `installedAt`, which is how the real filename is known -- the
+---        installer writes .wav, .ogg or .mp3 from the payload's magic bytes.
+---        Omit it and the entry is recorded as `<slug>.wav`, which is a guess.
+function Store:install(slug, meta)
+    local conflict = tlib.marketplace.upsertSound(self.installedSounds, slug, meta)
     self:save()
     return conflict
 end
