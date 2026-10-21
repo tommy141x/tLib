@@ -44,6 +44,13 @@ jobs:
       - name: Typecheck shared
         run: bun run typecheck:shared
 
+      # `typecheck:server` existed and nothing ran it, so it rotted: by the time
+      # it was tried it failed on `baseUrl`, removed in TypeScript 7. The server
+      # bundle is the half of tLib that holds the marketplace and community-config
+      # HTTP, so it is not the half to leave unchecked.
+      - name: Typecheck server
+        run: bun run typecheck:server
+
       # Catches a relative specifier left behind by a move, which only fails at
       # the moment the module is first loaded and so can pass the suite below.
       - name: Relative imports resolve

@@ -45,10 +45,14 @@
     "moduleDetection": "force",
     // Bun, for `bun:test` in the colocated `*.test.ts` files and `Bun.*` at runtime.
     "types": ["bun"],
-    "baseUrl": "..",
+    // NO `baseUrl`. TypeScript 7 removed it, and these paths were written
+    // against `baseUrl: ".."` -- i.e. relative to the repo root. Without it
+    // `paths` resolve relative to THIS file's directory, so each one gains the
+    // `../` the baseUrl used to supply. Changing one without the other
+    // silently points @tlib/shared at server/shared/ts, which does not exist.
     "paths": {
-      "@tlib/shared": ["./shared/ts/index.ts"],
-      "@tlib/shared/*": ["./shared/ts/*"]
+      "@tlib/shared": ["../shared/ts/index.ts"],
+      "@tlib/shared/*": ["../shared/ts/*"]
     }
   },
   // Tests are colocated with their subjects here and are included deliberately:
