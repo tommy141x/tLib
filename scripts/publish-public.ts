@@ -30,7 +30,7 @@
 // Exit 2 = refused: the repo is not in the state this assumes. NOT a pass.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -40,7 +40,22 @@ const REPO = join(import.meta.dirname, "..");
 // and the removal is an existsSync plus a recursive rmSync. It is listed
 // unguarded, unlike the other sibling-aware scripts, because nothing references
 // it — no package.json entry, no import — so no dangling reference is left.
-const PRIVATE = ["internal", ".gitea", "scripts/deck-publish.ts"];
+// ⚠️ A TEST OF PRIVATE CODE IS PRIVATE. The three test files below import from
+// `internal/`, which this script strips — so publishing them put a static
+// import of a path that does not exist on `main` into a tsconfig that includes
+// `tests`. `bun run typecheck` therefore failed on EVERY push to main, which
+// is an email per push and a branch nobody could get green.
+//
+// It was invisible from `internal`, where the imports resolve perfectly. The
+// `publishedEntriesAreSelfContained` check below is what stops the next one.
+const PRIVATE = [
+  "internal",
+  ".gitea",
+  "scripts/deck-publish.ts",
+  "client/web/tests/export-badge.test.tsx",
+  "client/web/tests/confirm-delete-unmount.test.tsx",
+  "client/web/tests/harness.test.tsx",
+];
 const SOURCE = "internal";
 const PUBLISHED = "main";
 const MARK = "refs/publish/last-internal";
@@ -189,6 +204,35 @@ try {
     const date = git(["log", "-1", "--format=%aI", sha]);
     git(["commit", "--quiet", "--no-verify", "-C", sha, "--author", author, "--date", date], work);
     published++;
+  }
+
+  // ── The published tree must not reach into a path we strip ───────────────
+  //
+  // Three test files imported `internal/` and were published anyway. On `main`
+  // that import resolves to nothing, `client/web/tsconfig.json` includes
+  // `tests`, and so typecheck failed on every push — a red branch and an email
+  // each time, for days, while `internal` was perfectly green.
+  //
+  // Scanned from the WORKTREE, which is the published tree itself, so this
+  // measures what a consumer gets rather than what we think we sent. Grep
+  // rather than a parse: a static import, a dynamic one and a `new URL(...)`
+  // all mention the path, and all three were present in those files.
+  const reaching = git(["ls-files"], work)
+    .split("\n")
+    .filter((f) => /\.(ts|tsx|lua|css)$/.test(f))
+    .filter((f) => {
+      const body = readFileSync(join(work, f), "utf8");
+      return PRIVATE.some((d) => d !== ".gitea" && new RegExp(`[./]${d}/`).test(body));
+    });
+  if (reaching.length > 0) {
+    console.error(
+      "publish-public: these published files reference a path that is stripped from " +
+        `${PUBLISHED}:\n` +
+        reaching.map((f) => `  ${f}`).join("\n") +
+        "\n\nThey resolve on `internal` and not on `main`, which is a branch that cannot " +
+        "typecheck and an email on every push. Add them to PRIVATE, or stop them importing it."
+    );
+    process.exit(1);
   }
 
   git(["update-ref", MARK, git(["rev-parse", SOURCE])]);
