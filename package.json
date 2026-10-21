@@ -22,7 +22,7 @@
     "publish:public": "bun run scripts/publish-public.ts",
     "gallery": "bun run scripts/gallery.ts",
     "thumb": "bun scripts/thumb.ts",
-    "setup": "bun run secrets:install-hooks && bun install && cd client/web && bun install",
+    "setup": "bun run secrets:install-hooks && bun install && cd client/web && bun install && cd ../../shared/ts && bun install",
     "docs:check": "bun scripts/check-docs.mjs",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",

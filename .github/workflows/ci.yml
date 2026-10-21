@@ -16,6 +16,18 @@ jobs:
         with:
           bun-version: latest
 
+      # `bun run setup` installs THREE trees: the root, client/web, and
+      # shared/ts. The third was missing until 2026-10-21, and shared/ts has
+      # its own package.json carrying the Solid 2 packages — `@solidjs/web`
+      # and `solid-js` at 2.0.0-rc.14. Without it the Typecheck step below
+      # reported 170 × TS7026 "no interface 'JSX.IntrinsicElements' exists",
+      # `@solidjs/web/jsx-runtime` unresolvable, and `bun:test` missing, so
+      # EVERY push to main sent a failure email while the same checks were
+      # green locally — where the directory had been installed by hand once
+      # and never thought about again.
+      #
+      # Measured by reproducing it in a worktree of main: root + client/web
+      # installs give the CI error list exactly; adding shared/ts gives zero.
       - name: Install
         run: bun run setup
 
