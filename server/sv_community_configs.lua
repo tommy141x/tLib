@@ -117,6 +117,26 @@ local function registerExports()
     --- `CommunityConfigsUpload`. The Worker re-derives the fingerprint columns
     --- and the LED-name index from `configJson` in the same write, so a
     --- listing cannot end up matched by data describing its previous contents.
+    ---
+    --- ⚠️ AN UPDATE IS A FULL REPLACEMENT, NOT A PATCH, and this export sent a
+    --- patch until 2026-10-21 — so Update answered HTTP 400 for every customer
+    --- on every press while Share worked, which is why it read as a token
+    --- problem. The Worker runs the update body through `readConfigBody`, the
+    --- SAME reader publish uses, deliberately so the two cannot drift. Its
+    --- required set is therefore identical: `configType`, `name`, `configJson`,
+    --- and `key` for everything but a pattern. This built a body with none of
+    --- the first three and got
+    ---
+    ---     configType must be led_layout, pattern or vehicle_setup (HTTP 400)
+    ---
+    --- — the first guard it tripped, which is why `name` and `key` were never
+    --- implicated.
+    ---
+    --- `description` and `keyLabel` are sent UNCONDITIONALLY for the same
+    --- reason, and that is the half with no error to show for it: the Worker
+    --- writes both columns on every update, so a body that omitted them was a
+    --- silent request to blank them. A caller that wants to keep a description
+    --- has to send it back.
     Platform.export('tLib', 'CommunityConfigsUpdate', function(opts, callback)
         if type(opts) ~= 'table' then
             if isCallable(callback) then callback(false, 'invalid opts') end
@@ -127,18 +147,33 @@ local function registerExports()
 
         local id         = type(opts.id)         == 'string' and opts.id         or ''
         local editToken  = type(opts.editToken)  == 'string' and opts.editToken  or ''
+        local configType = type(opts.configType) == 'string' and opts.configType or ''
+        local name       = type(opts.name)       == 'string' and opts.name       or ''
+        local key        = type(opts.key)        == 'string' and opts.key        or ''
+        local keyLabel   = type(opts.keyLabel)   == 'string' and opts.keyLabel   or ''
         local configJson = type(opts.configJson) == 'string' and opts.configJson or ''
-        if id == '' or editToken == '' or configJson == '' then
+
+        -- Refused HERE rather than by the Worker, so the caller gets a field
+        -- name instead of a round-trip and an enum message. Same rule as
+        -- upload: a pattern is vehicle-agnostic and is the one type with no key.
+        local needsKey = configType ~= 'pattern'
+        if id == '' or editToken == '' or configType == '' or name == ''
+            or configJson == '' or (needsKey and key == '') then
             callback(false, 'missing required fields')
             return
         end
 
-        local payload = { configJson = configJson }
-        if type(opts.name)        == 'string' then payload.name        = opts.name        end
-        if type(opts.description) == 'string' then payload.description = opts.description end
-        if type(opts.key)         == 'string' then payload.key         = opts.key         end
-        if type(opts.keyLabel)    == 'string' then payload.keyLabel    = opts.keyLabel    end
-        if type(opts.fp)          == 'table'  then payload.fp          = opts.fp          end
+        local payload = {
+            configType  = configType,
+            name        = name,
+            description = type(opts.description) == 'string' and opts.description or '',
+            configJson  = configJson,
+        }
+        if needsKey then
+            payload.key      = key
+            payload.keyLabel = keyLabel ~= '' and keyLabel or key
+        end
+        if type(opts.fp) == 'table' then payload.fp = opts.fp end
 
         exports['tLib']:ccUpdate(id, editToken, json.encode(payload), function(ok, err)
             if not ok then
