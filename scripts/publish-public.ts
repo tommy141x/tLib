@@ -229,8 +229,15 @@ try {
       // after `from`, `import(` or `new URL(`.
       return PRIVATE.some((d) => {
         if (d === ".gitea") return false;
+        // Double-escaped on purpose, and it was not: this is a TEMPLATE
+        // LITERAL, so `\b` is a backspace character and `\s` is a plain `s`
+        // before the RegExp constructor ever sees them. Written singly, the
+        // source read `(?:\bfroms*|\bimports*(s*|…` -- an unbalanced group --
+        // and the guard threw `Invalid regular expression: missing )` on every
+        // publish, wedging the tool rather than checking anything.
         const spec = `["'\`][^"'\`]*[./]${d}/`;
-        return new RegExp(`(?:\bfroms*|\bimports*(s*|\bURLs*(s*)${spec}`).test(body);
+        const lead = `(?:\\bfrom\\s*|\\bimport\\s*\\(\\s*|\\bURL\\s*\\(\\s*)`;
+        return new RegExp(`${lead}${spec}`).test(body);
       });
     });
   if (reaching.length > 0) {
