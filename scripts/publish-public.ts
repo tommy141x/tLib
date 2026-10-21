@@ -222,7 +222,16 @@ try {
     .filter((f) => /\.(ts|tsx|lua|css)$/.test(f))
     .filter((f) => {
       const body = readFileSync(join(work, f), "utf8");
-      return PRIVATE.some((d) => d !== ".gitea" && new RegExp(`[./]${d}/`).test(body));
+      // Only a MODULE SPECIFIER counts, not prose. A bare `[./]internal/` also
+      // matched "Design notes: docs/internal/…" in a comment and a quoted rule
+      // inside private-not-tracked.test.ts, neither of which breaks anything on
+      // `main`. The three forms that DO break it all put the path in quotes
+      // after `from`, `import(` or `new URL(`.
+      return PRIVATE.some((d) => {
+        if (d === ".gitea") return false;
+        const spec = `["'\`][^"'\`]*[./]${d}/`;
+        return new RegExp(`(?:\bfroms*|\bimports*(s*|\bURLs*(s*)${spec}`).test(body);
+      });
     });
   if (reaching.length > 0) {
     console.error(
