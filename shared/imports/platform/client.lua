@@ -551,19 +551,30 @@ do
     --- "LED Editor: X", and tLib's own bare "Open Menu"), so a player scanning
     --- ~70 rows cannot tell which product a row belongs to.
     ---
-    --- The unbound suffix generalises a habit only tELS had: an entry with no
-    --- default key is invisible until the player knows to go looking for it.
-    local function composeLabel(product, action, defaultKey)
-        local text
+    --- ⛔ THE LABEL MUST NOT DEPEND ON WHETHER A DEFAULT KEY EXISTS.
+    ---
+    --- This used to append " (unbound — assign a key in GTA keybinds menu)"
+    --- when `default` was empty. It was well meant — an unbound row is easy to
+    --- miss in a 70-row list — and it is wrong twice over, because the string
+    --- handed to `RegisterKeyMapping` is not a tooltip. It is the row's
+    --- identity and FiveM PERSISTS it in the player's settings:
+    ---
+    ---   1. The text is written once, at first sight, and never revisited. So
+    ---      the moment the player assigns a key the row still reads "unbound",
+    ---      permanently, and nothing in the game can correct it.
+    ---   2. Changing a registered label does not rename the row, it registers
+    ---      a SECOND one — leaving the old text behind as a dead entry the
+    ---      player cannot remove. tRadar's `tradar_keys` headstone documents
+    ---      the same trap from the other direction.
+    ---
+    --- So an unbound key is discoverable by being in the list at all, and a
+    --- consumer that wants it found gives it a default. The label stays a pure
+    --- function of product and action.
+    local function composeLabel(product, action, _defaultKey)
         if product and product ~= '' and action and action ~= '' then
-            text = ('%s: %s'):format(product, action)
-        else
-            text = action or product or ''
+            return ('%s: %s'):format(product, action)
         end
-        if (defaultKey == nil or defaultKey == '') and text ~= '' then
-            text = text .. ' (unbound — assign a key in GTA keybinds menu)'
-        end
-        return text
+        return action or product or ''
     end
 
     -- Same resolution the other shared/imports modules use: `tlib.name` when the

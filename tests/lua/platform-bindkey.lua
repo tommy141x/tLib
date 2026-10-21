@@ -193,11 +193,20 @@ test('product and action compose to one house format', function()
     assertEq(mappings[1].label, 'Radio: Push to Talk', 'composed label')
 end)
 
-test('an unbound entry says so, so it is findable in a 70-row list', function()
+test('the label does not change when a key is unbound', function()
+    -- ⛔ The inverse of what this used to assert, and the reason is that
+    -- `RegisterKeyMapping`'s description is PERSISTED by FiveM at first sight.
+    -- A label that says "unbound" still says it after the player binds a key,
+    -- and editing a registered label registers a second row rather than
+    -- renaming the first. The label must therefore be a pure function of
+    -- product and action, identical bound or not.
     local platform, mappings = fixture()
     platform.bindKey{ id = 'blackout', product = 'ELS', action = 'Toggle Blackout',
                       default = '', press = function() end }
-    assertEq(mappings[1].label:match('unbound') ~= nil, true, 'suffix present: ' .. mappings[1].label)
+    assertEq(mappings[1].label, 'ELS: Toggle Blackout', 'no suffix when unbound')
+    platform.bindKey{ id = 'blackout2', product = 'ELS', action = 'Toggle Blackout',
+                      default = 'K', press = function() end }
+    assertEq(mappings[2].label, mappings[1].label, 'bound and unbound labels match')
 end)
 
 test('an explicit label still wins over composition', function()
