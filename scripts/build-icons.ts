@@ -23,11 +23,25 @@ const PRESENTATION =
   ' fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"';
 
 type IconifySet = {
+  info?: { author?: { name?: string }; license?: { spdx?: string } };
   icons: Record<string, { body: string }>;
   aliases?: Record<string, { parent: string }>;
 };
 
 const set: IconifySet = JSON.parse(readFileSync(SRC, "utf8"));
+
+// The bodies below carry no attribution, so THIRD-PARTY-NOTICES.md is the only
+// place it survives -- and it names Lucide under ISC. Iconify ships the set's
+// own licence metadata beside the icons, so an upgrade that changes the owner
+// or swaps the set fails here instead of shipping unattributed.
+const author = set.info?.author?.name;
+const spdx = set.info?.license?.spdx;
+if (author !== "Lucide Contributors" || spdx !== "ISC") {
+  throw new Error(
+    `${SRC} now declares author "${author}" under ${spdx}, not "Lucide Contributors" under ISC. ` +
+      "Update the Lucide section of THIRD-PARTY-NOTICES.md to match before regenerating."
+  );
+}
 
 function slim(body: string): string {
   let out = body.split(PRESENTATION).join("");

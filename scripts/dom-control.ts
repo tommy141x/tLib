@@ -148,7 +148,12 @@ for (const [name, defect] of Object.entries(DOM_CONTROL_DEFECTS)) {
   if (run.failures.length !== defect.total) {
     console.error(`  all failures: ${JSON.stringify(run.failures, null, 2)}`);
   }
-  if (extra.length) console.log(`  (also red, declared blast radius: ${extra.length})`);
+  // `extra` is the tests that went red but are NOT named in `reddens` -- the complement,
+  // not the declaration. It used to print as "declared blast radius", which reads as the
+  // `total` on the line above disagreeing with itself, and sent an investigation at the
+  // wrong defect: a PASSING `export-unconfirmed` line (6 === 6) carrying "(declared blast
+  // radius: 5)" was taken for the failure, while the real one was `spread-arity-verbatim`.
+  if (extra.length) console.log(`  (also red, not named in reddens: ${extra.length})`);
 }
 
 console.log(

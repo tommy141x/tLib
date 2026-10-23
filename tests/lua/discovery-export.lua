@@ -387,3 +387,37 @@ check(joined:find("demo_config 'demo.json'", 1, true), 'and is given the exact f
 check(not joined:find('add_filesystem_permission', 1, true),
     'and is NOT told to add a server.cfg grant, which cannot lift the refusal')
 print('PASS discovery-export: the player is told the truth over the wire (' .. checks .. ' checks)')
+
+-- 12. a shipped config beats a stale UNMARKED local copy, and `_local` still wins
+--
+-- The branch this pins used to leave precedence alone and only report the shadow, on the
+-- reasoning that "saveLocal drops the entry on the next write". It does -- but only when
+-- somebody saves THAT model, so a vehicle nobody edits keeps its stale local copy forever.
+-- Measured in the field 2026-10-23: a pack shipping 30 patterns was shadowed by an 18-pattern
+-- copy in the consumer's data file, updating the pack changed nothing in game, and the only
+-- fix was hand-editing the data file -- the exact outcome the reporting existed to prevent.
+--
+-- Both arms are asserted together on purpose. "Pack wins" is only correct if the deliberate
+-- `_local` override survives it, and a test for one without the other would pass against a
+-- change that broke the other.
+files.consumer['data.json'] = env.json.encode({ vehicles = { car = { siren = { maxHz = 745 } } } })
+files.vehicle['demo.json'] = env.json.encode({ car = { siren = { maxHz = 999 } } })
+env.logs = {}
+disc = create()
+check(disc:getConfigs().car ~= nil, 'the model resolves at all')
+check(disc:getConfigs().car.siren.maxHz == 999,
+    'the SHIPPED config wins over an unmarked local copy (got '
+    .. tostring(disc:getConfigs().car.siren.maxHz) .. ')')
+check(findLog('has replaced an older copy'), 'and the console says which copy is in use')
+
+files.consumer['data.json'] = env.json.encode({
+    vehicles = { car = { _local = true, siren = { maxHz = 745 } } },
+})
+env.logs = {}
+disc = create()
+check(disc:getConfigs().car.siren.maxHz == 745,
+    'a _local entry STILL outranks the pack -- that override is deliberate (got '
+    .. tostring(disc:getConfigs().car.siren.maxHz) .. ')')
+check(findLog('is NOT being used'), 'and the permanent-shadow warning still fires for it')
+print('PASS discovery-export: a shipped config outranks a stale local copy, _local excepted ('
+    .. checks .. ' checks)')

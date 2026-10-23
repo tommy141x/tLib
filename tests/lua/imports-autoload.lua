@@ -29,7 +29,7 @@
 -- imports.lua resolves `load` as a GLOBAL, so when it compiles a chunk whose
 -- name is the telemetry path it is handed `loadfile` of the real file. Everything
 -- else about the path is real — the lazy table, the metatable, the autoload loop
--- and `loadModule`'s shared+context concatenation are the shipped code.
+-- and `loadModule`'s file resolution are the shipped code.
 --
 -- WHAT IT DOES NOT PROVE. Nothing here runs in an FXServer. It proves the
 -- registration CALL is made with the right name in a VM that declares nothing;

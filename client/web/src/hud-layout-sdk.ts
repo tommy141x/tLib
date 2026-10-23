@@ -135,7 +135,7 @@ const api: HudLayoutClient = {
     if (bindings.has(id)) throw new Error(`HUD component already attached: ${id}`);
     if (!/^[\w-]{1,80}$/.test(id) || bindings.size >= 16)
       throw new Error("Invalid HUD component ID or limit reached");
-    // ⚠️ HIDDEN UNTIL PLACED, so a saved layout does not arrive as a visible jump.
+    // WARNING: HIDDEN UNTIL PLACED, so a saved layout does not arrive as a visible jump.
     //
     // `apply` needs a binding AND a pushed update. The element is in the DOM and
     // painted from the consumer's own CSS before that update lands, so a player
@@ -148,7 +148,7 @@ const api: HudLayoutClient = {
     // disturbing the consumer's own layout or its `hidden` bookkeeping, and the
     // element's prior value is restored rather than assumed to be the default.
     //
-    // ⚠️ THE TIMER IS NOT OPTIONAL. If no update ever arrives -- tLib not loaded,
+    // WARNING: THE TIMER IS NOT OPTIONAL. If no update ever arrives -- tLib not loaded,
     // a handshake that fails, a consumer that binds an id nothing pushes -- a
     // permanently invisible widget is far worse than the jump this removes. The
     // failsafe reveals it anyway, unplaced, which is exactly the old behaviour.

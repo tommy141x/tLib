@@ -57,7 +57,7 @@ export function installHttp(): void {
     // around it at boot. A failure still logs loudly -- an operator who cannot
     // reach the hub needs the reason in front of them, and a banner row that
     // silently reads nothing is not that.
-    // ⚠️ A DETECTED ADDRESS SAYS SO, AND NAMES THE CONVAR. The row used to
+    // WARNING: A DETECTED ADDRESS SAYS SO, AND NAMES THE CONVAR. The row used to
     // print the URL bare, which reads as a statement of fact whether tLib was
     // told the address or guessed it -- and those are very different things to
     // an operator.

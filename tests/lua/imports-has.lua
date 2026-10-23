@@ -173,6 +173,36 @@ test('the documented pcall form survives a has() that is not there', function()
     assert(present ~= false, 'a throw must not be mistaken for a definitive false')
 end)
 
+-- What the loader caches
+
+test('a module with no top-level return is cached as true, not left to the proxy', function()
+    -- shared/imports/hud/client.lua ships no return: its file scope IS the
+    -- module. Cache its nil and the NEXT access misses the cache, resolves
+    -- through __index to the export proxy, and the second caller gets a
+    -- function where the first got a loaded module.
+    local tlib, exportCalls = fixture({ ['shared/imports/hud/shared.lua'] = 'local unused = 1' })
+    assert(rawget(tlib, 'hud') == nil, 'nothing should be cached before first access')
+    assert(tlib.hud == true, 'expected true for a returnless module, got ' .. tostring(tlib.hud))
+    assert(tlib.hud == true, 'and the same on the second access')
+    assert(#exportCalls == 0, 'a loaded module must not fall through to tLib exports')
+end)
+
+test('a context file and a shared.lua are alternatives, not a prelude and a body', function()
+    -- No module in the shipped tree has both, so which one wins is unobservable
+    -- in production and free to drift. Pinned because the two plausible answers
+    -- differ in whether shared.lua's SIDE EFFECTS run: concatenating the pair
+    -- would run both file scopes against one module name.
+    local tlib = fixture({
+        ['shared/imports/diag/shared.lua'] = 'RAN_SHARED = true return { from = "shared" }',
+        ['shared/imports/diag/client.lua'] = 'RAN_CLIENT = true return { from = "client" }',
+    }, 'client')
+    _ENV.RAN_SHARED, _ENV.RAN_CLIENT = nil, nil
+
+    assert(tlib.diag.from == 'client', 'the context file must win, got ' .. tostring(tlib.diag.from))
+    assert(_ENV.RAN_CLIENT == true, 'the context file body never ran')
+    assert(_ENV.RAN_SHARED == nil, 'shared.lua ran as well; the two must not both execute')
+end)
+
 test('has() is not fooled by a partial path match', function()
     local tlib = fixture(SHARED_ONLY)
     assert(tlib.has('dia') == false, 'a prefix of a real module must not report present')

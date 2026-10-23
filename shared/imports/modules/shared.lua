@@ -371,7 +371,7 @@ function modules.list(basePath, kind, resourceName)
                 -- A directory with no manifest is not an error: this scan asks a
                 -- manifest question, and plenty of folders are not modules.
                 --
-                -- ⚠️ BUT IT MUST LEAVE A TRACE. It is the one refusal that printed
+                -- WARNING: BUT IT MUST LEAVE A TRACE. It is the one refusal that printed
                 -- nothing, and that silence cost three operator reports: a
                 -- marketplace layout bundle carries no `module.json`, so it was
                 -- skipped here without a word while the admin panel counted it as

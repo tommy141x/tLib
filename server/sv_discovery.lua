@@ -556,12 +556,30 @@ function Discovery.create(opts)
                     configs[model] = cfg
                     count = count + 1
                 elseif type(existing) == "table" then
-                    -- The local copy wins by design, but silently shadowing a
-                    -- resource's config is indistinguishable from it being
-                    -- broken: the author ships an update, nothing changes in
-                    -- game, and the only fix is hand-editing a file. Reporting
-                    -- it is the whole point of this branch; precedence is
-                    -- untouched.
+                    -- WARNING: A SHIPPED CONFIG NOW WINS OVER AN UNMARKED LOCAL COPY.
+                    --
+                    -- This branch used to leave precedence alone and only REPORT the
+                    -- shadow, on the reasoning that the operator should do nothing because
+                    -- "saveLocal drops the entry on the next write". That is true and it is
+                    -- not enough: the entry is only dropped when somebody SAVES that exact
+                    -- model, so a vehicle nobody edits keeps its stale local copy forever.
+                    --
+                    -- Measured in the field 2026-10-23, on the US East test server: tELS
+                    -- data.json carried `18charger21tr` (18 patterns, the old set) while
+                    -- `timmyg_matrix_charger/tels.json` shipped 30 patterns including the
+                    -- one being looked for. Updating the pack file changed nothing in game,
+                    -- restarting changed nothing, and the only fix was deleting the entry
+                    -- from data.json by hand -- exactly the outcome the comment above says
+                    -- this branch exists to prevent, arrived at anyway because reporting a
+                    -- thing is not the same as fixing it.
+                    --
+                    -- So the pack is adopted here. A config a resource SHIPS is the author's
+                    -- current intent; an unmarked local copy is a leftover of whatever tELS
+                    -- (or tRadar, tRadio, tCAD -- every Discovery consumer) last persisted.
+                    --
+                    -- `_local` still wins, and that is the whole exception: it marks a
+                    -- config an admin DELIBERATELY took ownership of, and overriding a pack
+                    -- is its entire purpose. Only the accidental case changes.
                     local shadowPath = tostring(ownerResource) .. "/" .. tostring(localFile)
                         .. (localSection and (" (section '" .. tostring(localSection) .. "')") or "")
                     if existing._local then
@@ -575,17 +593,16 @@ function Discovery.create(opts)
                             .. "' ships, delete the '" .. tostring(model) .. "' entry from " .. shadowPath
                             .. " and restart the server.", 3)
                     else
-                        -- DEBUG, not INFO, and that follows from the sentence
-                        -- below: the operator's correct response here is to do
-                        -- nothing, because saveLocal drops the entry on the
-                        -- next write. One line per shadowed model on every
-                        -- boot, with no action attached, is noise that pushes
-                        -- the permanent case above out of view. Kept, because
-                        -- it is still the only way to see why a shipped config
-                        -- is not the one in use while the state lasts.
+                        -- The adoption itself. Still DEBUG: the operator's correct response
+                        -- is to do nothing, and now that really is true rather than true
+                        -- only if somebody saves. The line stays because "which copy am I
+                        -- running" is the question this whole branch exists to answer, and
+                        -- it is the only place the answer is visible.
+                        configs[model] = cfg
                         log("[" .. tag .. "] '" .. tostring(model) .. "' from '" .. resName
-                            .. "' is shadowed by an older copy in " .. shadowPath
-                            .. "; it takes over when that config is next saved.", 1)
+                            .. "' has replaced an older copy in " .. shadowPath
+                            .. "; the shipped config is the one in use. The stale entry is "
+                            .. "dropped from " .. shadowPath .. " on the next save.", 1)
                     end
                 end
             end

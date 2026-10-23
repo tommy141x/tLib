@@ -85,7 +85,7 @@ must(#warns == 0, 'a successful registration warned anyway')
 -- A `false` and a throw are the same operator-visible condition and must get the
 -- same message.
 --
--- ⚠️ THIS ASSERTION USED TO REQUIRE THE WORD `tlib_module`, AND THAT WAS WRONG.
+-- WARNING: THIS ASSERTION USED TO REQUIRE THE WORD `tlib_module`, AND THAT WAS WRONG.
 -- The warning told the reader to add `tlib_module { 'marketplace' }` to their
 -- fxmanifest, which cannot fix this: imports.lua lazy-loads on first access of
 -- `tlib.<name>`, and its own comment says the eager declaration is "not
@@ -285,7 +285,7 @@ must(marketplace.upsertSound(sounds, 'ka') == nil, 'upsertSound invented a confl
 must(#sounds == 1 and sounds[1].filename == 'ka.wav', 'upsertSound did not add the entry')
 must(marketplace.removeSound(sounds, {}, 'ka') == 'ka.wav', 'removeSound did not report the file')
 
--- ── The extension comes from the install, not from a guess ──────────────────
+-- -- The extension comes from the install, not from a guess ------------------
 --
 -- upsertSound hardcoded `slug .. '.wav'`. The installer writes `.wav`, `.ogg` or
 -- `.mp3` from the payload's magic bytes, so a non-WAV tone was recorded under a

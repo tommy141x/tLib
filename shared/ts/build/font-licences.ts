@@ -1,79 +1,67 @@
-// Every webfont in a staged release ships the licence that covers it.
+// Every font in a staged release ships the licence that covers it.
 //
-// ── Why this runs on the STAGED TREE and not on the build output ───────────
+// Runs on the STAGED TREE, last, because the two checks that preceded it both
+// watched the wrong object and a release still went out uncovered. tRadio's
+// `copyFontLicences` copies out of a resource's OWN font directory, so it cannot
+// see Hanken Grotesk arriving from `tLib/shared/css/fonts/`; its test asserted
+// over `client/ui/assets` in the working tree, which is build output and not the
+// artifact. tRadio stages by extension allowlist, `.txt` is not in it, and font
+// licences were not pinned by name the way codec2's and blip25's are. Measured
+// 2026-10-18: `tRadio.zip` held 15 .woff2 and 0 licence files. Reading the bytes
+// that are about to be zipped is what makes that impossible rather than unlikely.
 //
-// tRadio already had a licence copier and a test for it, and the release still
-// went out without the files. Both halves were looking at the wrong object:
+// It reads `.otf`/`.ttf` and not just `.woff2`, since 2026-10-23. The comment
+// here used to argue the layout faces were settled as "free for commercial use".
+// Their own OpenType name tables disproved it: `CreatoDisplay.otf` (7 layouts) is
+// SIL OFL -- nameID 14 `http://scripts.sil.org/OFL`, nameID 0 `Copyright (c) 2021
+// by Anugrah Pasau`; `Charmset.ttf` is CC BY-SA 3.0 per nameID 13/14, where
+// attribution is a condition; `Mustica.otf` carries no grant at all. Hence
+// `LICEN[CS]E-<Family>.txt` beside `OFL-<Family>.txt` -- a non-OFL face needs
+// somewhere to put non-OFL terms that the stager can still copy.
 //
-//   · `copyFontLicences` copies `OFL-*.txt` out of a resource's OWN font
-//     directory into its build output. Correct, and blind to a font that comes
-//     from somewhere else -- `tLib/shared/css/fonts/` now supplies Hanken
-//     Grotesk to seven resources, and its licence sits in tLib where no
-//     consumer's copier looks.
-//   · `scripts/font-licences.test.ts` asserts the invariant over
-//     `client/ui/assets` in the WORKING TREE. That is the build output, not the
-//     artifact. tRadio's packager stages by extension allowlist, `.txt` is not
-//     in it, and licences are not pinned by name the way the codec2 and blip25
-//     ones are -- so every OFL file was dropped on the way into the zip while
-//     the gate stayed green.
-//
-// Measured 2026-10-18: `tRadio.zip` contained 15 .woff2 and 0 licence files.
-//
-// Running last, over the staged tree, is what makes those two failures
-// impossible rather than unlikely: it reads the bytes that are about to be
-// zipped, and it writes the licence in beside the font after any extension
-// filter has already had its say.
-//
-// ⛔ IT SEES `.woff2` AND NOTHING ELSE, which is narrower than "every font in
-// the release" and must not be read as that. tRadio's layouts ship
-// `CreatoDisplay.otf` (seven copies), `Mustica.otf` and `Charmset.ttf`, and
-// this gate is green on all three.
-//
-// That is settled rather than overlooked: asked on 2026-10-18, the owner
-// confirmed Creato Display is licensed free for commercial use, and the other
-// two on the same footing. They are not OFL families, so no `OFL-<Family>.txt`
-// could ever satisfy them, and widening the scan would turn a licensing
-// question into an unbuildable release without answering anything.
-//
-// So do not "fix" this by making the scan read `.otf`/`.ttf`. If a face is ever
-// added whose terms DO need to travel with it, the `LICENSES.md` branch below
-// already covers that case — document it beside the fonts the way tUnit's
-// `web/fonts/LICENSES.md` does, and it is satisfied without touching the scan.
-//
-// ── Why it throws ──────────────────────────────────────────────────────────
-//
-// OFL 1.1 condition 2 requires the notice and licence to accompany the font
-// software when it is bundled or sold, which is exactly what a paid FiveM
-// resource does. A warning here would be a compliance defect that scrolls past
-// in a build log. `copyFontLicences` warns rather than fails ON PURPOSE because
-// it runs on every UI build; this runs only at package time, which is the place
-// its own comment already named as "where absence should be fatal".
+// It throws rather than warns because OFL 1.1 condition 2 binds a font that is
+// bundled or sold, which is what this zip is, and a warning is a compliance
+// defect that scrolls past in a build log. `copyFontLicences` warns deliberately:
+// it runs on every UI build, where failing would be worse. This runs only at
+// package time.
 
 import { copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
-/** Every `.woff2` under `dir`, recursively, as absolute paths. */
-function woff2Under(dir: string): string[] {
+// `.woff2` is what Vite emits; the rest are what a layout or a vendored face
+// ships as. Identical obligation, so the scan must not tell them apart.
+const FONT_EXTENSIONS = [".woff2", ".woff", ".otf", ".ttf"];
+
+/** Every font file under `dir`, recursively, as absolute paths. */
+function fontsUnder(dir: string): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...woff2Under(full));
-    else if (entry.toLowerCase().endsWith(".woff2")) out.push(full);
+    if (statSync(full).isDirectory()) out.push(...fontsUnder(full));
+    else {
+      const lower = entry.toLowerCase();
+      if (FONT_EXTENSIONS.some((ext) => lower.endsWith(ext))) out.push(full);
+    }
   }
   return out;
 }
 
 /**
- * `OFL-JetBrainsMono.txt` -> `jetbrainsmono`.
+ * `OFL-CreatoDisplay.txt`, `LICENSE-Charmset.txt`, `LICENCE-Charmset.txt`.
  *
- * Letters only, so the licence spelling and the filename spelling do not have to
- * agree on hyphens or case: `OFL-HankenGrotesk.txt` and
- * `hanken-grotesk-latin-CaVRRdDk.woff2` both reduce to a comparable `hanken…`.
+ * A bare `LICENSE.txt` deliberately does not match: the `-<Family>` part is what
+ * attributes a licence to a face rather than to a directory.
+ */
+const LICENCE_FILE = /^(?:OFL|LICEN[CS]E)-.+\.txt$/i;
+
+/**
+ * `OFL-JetBrainsMono.txt` -> `jetbrainsmono`. Letters only, so the licence
+ * spelling and the filename spelling need not agree on hyphens or case.
  */
 function licenceKey(file: string): string {
   return basename(file)
-    .replace(/^OFL-/i, "")
+    .replace(/^(?:OFL|LICEN[CS]E)-/i, "")
     .replace(/\.txt$/i, "")
     .toLowerCase()
     .replace(/[^a-z]/g, "");
@@ -82,10 +70,9 @@ function licenceKey(file: string): string {
 /**
  * `hanken-grotesk-latin-CaVRRdDk.woff2` -> `hankengroteskLatincavrrddk`-ish.
  *
- * Digits go as well as punctuation, so `inter-100-900-latin` reduces to
- * `interlatin…` and still starts with `inter`. The comparison below is a PREFIX
- * match rather than `includes`, because a short family name like `inter` would
- * otherwise match any file that happens to contain those five letters.
+ * Digits go too, so `inter-100-900-latin` still starts with `inter`. Matching is
+ * a PREFIX test rather than `includes`, because a short family name like `inter`
+ * would otherwise match any file containing those five letters.
  */
 function fontKey(file: string): string {
   return basename(file)
@@ -101,41 +88,25 @@ export interface FontLicenceResult {
 }
 
 /**
- * Put a licence beside every staged webfont, or throw naming what is uncovered.
- *
- * @param distDir     The staged tree about to be zipped.
- * @param licenceDirs Directories to look for `OFL-*.txt` in, most specific
- *                    first: the resource's own font source, then tLib's.
- *
- * A directory that already contains a `LICENSES.md` is taken as covering the
- * fonts in it and is left alone. That is tUnit's `web/fonts/`, where three
- * display faces are documented together with their copyright lines and links --
- * a better artifact than three more OFL dumps, and not one to break.
- */
-/**
  * Which staged fonts have no licence available to them. READS ONLY.
  *
- * Split out of `stageFontLicences` so a release gate can ask the question
- * without answering it. The stager copies, so a test that called it would
- * REPAIR the tree it was checking: a missing licence gets copied in by the act
- * of testing and the run reports success. That is a gate that cannot fail, and
- * it would also be a test writing into the artifact.
+ * Split from `stageFontLicences` so a gate can ask the question without
+ * answering it. The stager copies, so a test that called it would REPAIR the tree
+ * it was checking and report success — a gate that cannot fail, and a test
+ * writing into the artifact.
  *
- * Exported so there is exactly one matcher in the estate. tRadio had a second
- * one -- its release test re-derived the family as the first hyphen-separated
- * token, so `hanken-grotesk-latin.woff2` yielded `hanken`, matched no licence,
- * and needed a hand-kept alias table to paper over it. Every alias in such a
- * table is a family this normalisation already handles; the table only exists
- * because the derivation was wrong. A caller that wants to assert on the
- * shipped files should walk them with this, not re-implement it.
+ * Exported so there is exactly ONE matcher in the estate. tRadio's release test
+ * had a second, deriving the family as the first hyphen-separated token, so
+ * `hanken-grotesk-latin.woff2` yielded `hanken`, matched no licence, and needed a
+ * hand-kept alias table to paper over it.
  *
- * @returns basenames of staged woff2 files with no licence beside them and
- *          none available to copy. Empty means covered.
+ * @returns basenames of staged fonts with no licence beside them and none
+ *          available to copy. Empty means covered.
  */
 export function uncoveredFonts(distDir: string, licenceDirs: string[]): string[] {
   const available = availableLicences(licenceDirs);
   const uncovered: string[] = [];
-  for (const font of woff2Under(distDir)) {
+  for (const font of fontsUnder(distDir)) {
     if (coverageFor(font, available) === null) uncovered.push(basename(font));
   }
   return [...new Set(uncovered)];
@@ -144,13 +115,12 @@ export function uncoveredFonts(distDir: string, licenceDirs: string[]): string[]
 /** `OFL-*.txt` by normalised family, earlier directories winning. */
 function availableLicences(licenceDirs: string[]): Map<string, string> {
   const available = new Map<string, string>();
-  // Later directories must not shadow earlier ones: the resource's own copy of a
-  // licence wins over tLib's, so a resource pinning an older version of a face
-  // ships the text that matches it.
+  // The resource's own copy of a licence must win over tLib's, so a resource
+  // pinning an older version of a face ships the text that matches it.
   for (const dir of licenceDirs) {
     if (!existsSync(dir)) continue;
     for (const entry of readdirSync(dir)) {
-      if (!/^OFL-.*\.txt$/i.test(entry)) continue;
+      if (!LICENCE_FILE.test(entry)) continue;
       const key = licenceKey(entry);
       if (!available.has(key)) available.set(key, join(dir, entry));
     }
@@ -164,7 +134,7 @@ function licenceBesideFont(font: string): boolean {
   const key = fontKey(font);
   if (!existsSync(here)) return false;
   return readdirSync(here).some(
-    (entry) => /^OFL-.*\.txt$/i.test(entry) && key.startsWith(licenceKey(entry))
+    (entry) => LICENCE_FILE.test(entry) && key.startsWith(licenceKey(entry))
   );
 }
 
@@ -176,32 +146,70 @@ function coverageFor(font: string, available: Map<string, string>): "satisfied" 
   const here = dirname(font);
   if (existsSync(join(here, "LICENSES.md"))) return "satisfied";
 
-  // A licence ALREADY beside the font covers it, whether or not the family is
-  // also in a source directory. The stager never needed this -- it only ever
-  // asked "what should I copy here" -- but the gate asks a different question:
-  // is what a customer receives covered. A face vendored straight into a
-  // resource's output, with its licence, is covered and must not be reported
-  // as a violation because tLib happens not to carry that family.
+  // A licence already beside the font covers it whether or not the family is also
+  // in a source directory. The stager never needed this — it only asked "what
+  // should I copy here" — but the gate asks whether what a customer receives is
+  // covered, and a face vendored straight into a resource's output with its
+  // licence is covered.
   if (licenceBesideFont(font)) return "satisfied";
 
   const key = fontKey(font);
   const match = [...available.entries()]
     .filter(([family]) => key.startsWith(family))
-    // Longest family first, so `jetbrainsmono` is preferred over a
-    // hypothetical `jetbrains` rather than chosen by map order.
+    // Longest family first, so `jetbrainsmono` is preferred over a hypothetical
+    // `jetbrains` rather than chosen by map order.
     .sort((a, b) => b[0].length - a[0].length)[0];
   if (match === undefined) return null;
   return existsSync(join(here, basename(match[1]))) ? "satisfied" : match[1];
 }
 
-export function stageFontLicences(distDir: string, licenceDirs: string[]): FontLicenceResult {
+export interface StageFontLicenceOptions {
+  /**
+   * Fail if the staged tree contains no fonts at all.
+   *
+   * Off by default because tAdmin, tAI, tBoost, tChirp, tCinematic, tDB and tMenu
+   * legitimately ship zero fonts (counted 2026-10-23) through the same
+   * `buildResource`. On for a resource KNOWN to ship them, where "examined
+   * nothing, found nothing wrong" is the failure this file exists because of:
+   * tRadio stages 24 font files, so zero means the scan lost its subject.
+   */
+  requireFonts?: boolean;
+}
+
+/**
+ * Put a licence beside every staged font, or throw naming what is uncovered.
+ *
+ * @param distDir     The staged tree about to be zipped.
+ * @param licenceDirs Where to look for licences, most specific first: the
+ *                    resource's own font source, then tLib's.
+ *
+ * A directory that already holds a `LICENSES.md` is taken as covering the fonts
+ * in it and left alone. That is tUnit's `web/fonts/`, where three display faces
+ * are documented together with their copyright lines and links — a better
+ * artifact than three more OFL dumps, and not one to break.
+ */
+export function stageFontLicences(
+  distDir: string,
+  licenceDirs: string[],
+  options: StageFontLicenceOptions = {}
+): FontLicenceResult {
   const available = availableLicences(licenceDirs);
 
   const copied: string[] = [];
   const satisfied: string[] = [];
   const uncovered: string[] = [];
 
-  for (const font of woff2Under(distDir)) {
+  const fonts = fontsUnder(distDir);
+  if (options.requireFonts === true && fonts.length === 0) {
+    throw new Error(
+      `No fonts found under ${distDir}, but this resource is declared to ship them. ` +
+        "The scan measured nothing, so its silence proves nothing. Either the staged " +
+        `tree is wrong or the extensions it looks for (${FONT_EXTENSIONS.join(", ")}) ` +
+        "no longer cover what the build emits."
+    );
+  }
+
+  for (const font of fonts) {
     const coverage = coverageFor(font, available);
     if (coverage === null) {
       uncovered.push(basename(font));
@@ -218,11 +226,18 @@ export function stageFontLicences(distDir: string, licenceDirs: string[]): FontL
     throw new Error(
       "These staged fonts have no licence to ship beside them:\n" +
         [...new Set(uncovered)].map((f) => `  ${f}`).join("\n") +
-        "\n\nOFL 1.1 condition 2 requires the notice and licence to accompany the font " +
-        "software when it is bundled or sold, and this zip is sold. Add the family's " +
-        "`OFL-<Family>.txt` to one of:\n" +
+        "\n\nOFL 1.1 condition 2, and CC BY-SA 3.0 section 4(a), both require the notice " +
+        "and licence to accompany the font software when it is bundled or sold, and this " +
+        "zip is sold. Add the family's `OFL-<Family>.txt` or `LICENSE-<Family>.txt` to " +
+        "one of:\n" +
         licenceDirs.map((d) => `  ${d}`).join("\n") +
-        "\nor, for a directory of faces documented together, a `LICENSES.md` beside them."
+        "\nor, for a directory of faces documented together, a `LICENSES.md` beside them." +
+        "\n\nREQUIRES A DECISION, not a licence file: `Mustica.otf` in the QRX-760 layout. " +
+        "Its name table carries no grant -- nameID 13 only repeats the copyright line, and " +
+        "there is no nameID 14. Alifinart Studio publishes the free weights as " +
+        "donationware whose terms are not evidenced anywhere in this repo. Clearing this " +
+        "needs either proof of a purchased licence filed beside the font, or the face " +
+        "replaced in that layout. Do NOT write a notice for it from memory."
     );
   }
 

@@ -456,7 +456,7 @@ function H.init(webui)
                         end
                     end
                     if reason and active == session then
-                        -- ⚠️ THE DRAFT SURVIVES AN INVOLUNTARY CLOSE. It used to be
+                        -- WARNING: THE DRAFT SURVIVES AN INVOLUNTARY CLOSE. It used to be
                         -- thrown away, which made a momentary focus blip cost a player
                         -- every adjustment they had made -- and `IsNuiFocused()` is a
                         -- GLOBAL signal, so any other resource clearing NUI focus trips

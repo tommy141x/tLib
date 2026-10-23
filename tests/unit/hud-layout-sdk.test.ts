@@ -114,7 +114,7 @@ test("a widget stays hidden until it has a real placement", () => {
 });
 
 test("a widget that is never placed is revealed anyway", async () => {
-  // ⚠️ The failure mode this guards is worse than the jump it replaces: with no
+  // WARNING: the failure mode this guards is worse than the jump it replaces: with no
   // update ever arriving — tLib absent, a failed handshake, an id nothing pushes
   // — a permanently invisible widget would be unrecoverable for the player.
   const el = element();

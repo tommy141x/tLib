@@ -1,29 +1,20 @@
 #!/usr/bin/env bun
 // Replays `internal` onto the published branch with the private paths removed.
+// `internal` carries the private half — the provenance engine under internal/
+// and the .gitea/ workflows that name the private org — and `main` neither.
 //
-// tLib develops on `internal` and publishes `main`. `internal` carries the
-// private half — the provenance engine under internal/, and the .gitea/
-// workflows that name the private org — and `main` carries neither.
+// WHY A SCRIPT AND NOT A HOOK ALONE. Every commit on `internal` contains those
+// paths, and no refspec, filter or hook publishes "the same commit minus a
+// directory": the public branch has to be a DIFFERENT commit, with a different
+// tree and sha. Replay is per-commit so the public history stays real, and a
+// private-only commit is skipped rather than landing empty. The high-water
+// mark is `refs/publish/last-internal`, a local ref — a file tracking publish
+// state would itself have to ship in the public tree.
 //
-// WHY A SCRIPT AND NOT A HOOK ALONE. A push sends commits, and every commit on
-// `internal` contains those paths. There is no refspec, filter or hook that
-// publishes "the same commit minus a directory": the public branch has to be a
-// DIFFERENT commit, with a different tree and a different sha. This builds it.
-//
-// WHY A THROWAWAY WORKTREE. `internal/` is tracked on `internal` and absent
-// from `main`, so `git checkout main` DELETES it from disk — and six sibling
-// resources import `tLib/internal/...` by relative path at build time, so they
-// all break at once with `Cannot find module` and no other warning. That
-// happened. The working directory must never leave `internal`, so `main` is
-// only ever touched inside a temporary worktree this script removes again.
-//
-// Per-commit replay rather than one squashed publish, so the public history
-// stays real. A commit touching ONLY private paths produces nothing public and
-// is skipped rather than landing as an empty commit.
-//
-// The high-water mark lives in `refs/publish/last-internal`, a local ref. Not a
-// file, because a file tracking publish state would itself have to ship in the
-// public tree.
+// WHY A THROWAWAY WORKTREE. `internal/` is absent from `main`, so
+// `git checkout main` DELETES it from disk and every sibling resource that
+// imports `tLib/internal/...` relatively breaks at once with `Cannot find
+// module`. That happened. `main` is only touched inside a temporary worktree.
 //
 // Usage:  bun run publish:public [--dry-run]
 // Exit 1 = a replay conflicted and the worktree was left for inspection.
@@ -35,19 +26,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const REPO = join(import.meta.dirname, "..");
-// Directories, plus the single file `scripts/deck-publish.ts`. Both readers of
-// this list cope with a file: the skip test is `p === d || p.startsWith(`${d}/`)`
-// and the removal is an existsSync plus a recursive rmSync. It is listed
-// unguarded, unlike the other sibling-aware scripts, because nothing references
-// it — no package.json entry, no import — so no dangling reference is left.
-// ⚠️ A TEST OF PRIVATE CODE IS PRIVATE. The three test files below import from
-// `internal/`, which this script strips — so publishing them put a static
-// import of a path that does not exist on `main` into a tsconfig that includes
-// `tests`. `bun run typecheck` therefore failed on EVERY push to main, which
-// is an email per push and a branch nobody could get green.
+// Directories, plus single files. Both readers cope with a file: the skip test
+// is `p === d || p.startsWith(`${d}/`)`, the removal an existsSync + rmSync.
+// `scripts/deck-publish.ts` is listed unguarded because nothing references it.
 //
-// It was invisible from `internal`, where the imports resolve perfectly. The
-// `publishedEntriesAreSelfContained` check below is what stops the next one.
+// WARNING: A TEST OF PRIVATE CODE IS PRIVATE. The test files below import from
+// `internal/`, which this script strips — so publishing them put an import of a
+// path that does not exist on `main` into a tsconfig that includes `tests`, and
+// `bun run typecheck` then failed on EVERY push. It was invisible from
+// `internal`, where it resolves. `publishedEntriesAreSelfContained` stops it.
 const PRIVATE = [
   "internal",
   ".gitea",
@@ -55,10 +42,9 @@ const PRIVATE = [
   "client/web/tests/export-badge.test.tsx",
   "client/web/tests/confirm-delete-unmount.test.tsx",
   "client/web/tests/harness.test.tsx",
-  // These two were published while the guard below was throwing instead of
-  // checking, and they are on `main` now. Listing them here removes them: the
-  // strip loop deletes any PRIVATE path it finds in the worktree, so the next
-  // replayed commit carries the deletion.
+  // These two reached `main` while the guard below was throwing instead of
+  // checking. Listing them here removes them: the strip loop deletes any
+  // PRIVATE path in the worktree, so the next replayed commit carries that.
   "client/web/tests/prop-editor-guard.test.tsx",
   "client/web/tests/undo-redo-ui.test.tsx",
 ];
@@ -74,7 +60,7 @@ function git(args: string[], cwd = REPO): string {
 
 /** `git`, but a non-zero exit is an answer rather than a throw. Stderr is
  *  swallowed: the first run asks for a ref that does not exist yet, and a
- *  `fatal:` on a successful run reads as a failure to whoever is watching. */
+ *  `fatal:` on a successful run reads as a failure. */
 function tryGit(args: string[], cwd = REPO): string | null {
   try {
     return execFileSync("git", args, {
@@ -108,16 +94,13 @@ for (const path of PRIVATE) {
   }
 }
 
-// The mark is the source-side sha, so the range stays correct even though the
-// published shas differ.
+// The mark is the source-side sha, so the range survives the differing shas.
 const mark = tryGit(["rev-parse", "--verify", `${MARK}^{commit}`]);
 const range = mark ? `${mark}..${SOURCE}` : `${PUBLISHED}..${SOURCE}`;
-// --first-parent is load-bearing. internal/ arrived by `git subtree`, and the
-// imported commits keep their ORIGINAL paths (src/, bin/) — the internal/
-// prefix is applied by the merge, not by them. They are reachable only through
-// that merge's second parent, so without --first-parent they read as commits
-// touching public paths, and cherry-picking one conflicts against a branch that
-// shares no ancestry with it.
+// --first-parent is load-bearing. internal/ arrived by `git subtree` and those
+// commits keep their ORIGINAL paths (src/, bin/) — the internal/ prefix comes
+// from the merge. Reachable only through its second parent, they otherwise
+// read as public-path commits that conflict against unrelated ancestry.
 const todo = git(["rev-list", "--reverse", "--first-parent", "--no-merges", range])
   .split("\n")
   .filter(Boolean);
@@ -143,11 +126,9 @@ try {
   for (const sha of todo) {
     const subject = git(["log", "-1", "--format=%s", sha]);
 
-    // Decide BEFORE cherry-picking, not after. A commit that touches only
-    // private paths has nothing to publish, and picking it is not merely
-    // wasted work: the internal/ history arrived by subtree from a repo with
-    // its own root, so those commits conflict against a branch that shares no
-    // ancestry with them. Reading the paths first skips them cleanly.
+    // Decide BEFORE cherry-picking. Picking a private-only commit is not just
+    // wasted work: internal/ arrived by subtree from a repo with its own root,
+    // so it conflicts against a branch sharing no ancestry with it.
     const touched = git(["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", sha])
       .split("\n")
       .filter(Boolean);
@@ -156,20 +137,15 @@ try {
       continue;
     }
 
-    // -n so any private path the commit also touched is dropped before
-    // anything is recorded.
+    // -n so a private path the commit also touched is dropped before recording.
     if (tryGit(["cherry-pick", "-n", "--allow-empty", sha], work) === null) {
-      // A MIXED commit -- one that edits published files and also creates or
-      // edits a private path -- conflicts here even though the private half is
-      // deleted four lines below. `main` has no internal/ history for the merge
-      // to stand on, so every internal/ path comes back DU (deleted by us,
-      // modified by them). That is not a conflict in anything this branch
-      // publishes. Measured 2026-10-16: the move commits conflicted on 16 such
-      // paths and nothing else, which stalled the first real publish after the
-      // dry run had passed -- the dry run does not apply, so it cannot see this.
-      //
-      // Resolve by removal, and fail only when a PUBLISHED path conflicted,
-      // which is a real conflict a human has to look at.
+      // A MIXED commit -- one that edits published files and also touches a
+      // private path -- conflicts here even though the private half is deleted
+      // just below. `main` has no internal/ history for the merge to stand on,
+      // so every internal/ path comes back DU (deleted by us, modified by
+      // them), which is not a conflict in anything this branch publishes. A
+      // --dry-run cannot see it because it never applies a pick. Resolve by
+      // removal; fail only when a PUBLISHED path conflicted, which is real.
       const unmerged = git(["diff", "--name-only", "--diff-filter=U"], work)
         .split("\n")
         .filter(Boolean);
@@ -195,10 +171,8 @@ try {
       }
     }
 
-    // Nothing staged: the public half of this change is already on the branch,
-    // or every path that survived the pick was stripped as private above. A
-    // commit touching ONLY private paths never reaches here — it is skipped
-    // before the pick.
+    // Nothing staged: the public half is already on the branch, or every path
+    // that survived the pick was stripped as private above.
     if (git(["diff", "--cached", "--name-only"], work) === "") {
       tryGit(["reset", "--hard", "--quiet"], work);
       skipped++;
@@ -212,45 +186,35 @@ try {
     published++;
   }
 
-  // ── The published tree must not reach into a path we strip ───────────────
-  //
-  // Three test files imported `internal/` and were published anyway. On `main`
-  // that import resolves to nothing, `client/web/tsconfig.json` includes
-  // `tests`, and so typecheck failed on every push — a red branch and an email
-  // each time, for days, while `internal` was perfectly green.
-  //
-  // Scanned from the WORKTREE, which is the published tree itself, so this
-  // measures what a consumer gets rather than what we think we sent. Grep
-  // rather than a parse: a static import, a dynamic one and a `new URL(...)`
-  // all mention the path, and all three were present in those files.
+  // The published tree must not reach into a path we strip. Scanned from the
+  // WORKTREE, which is the published tree itself, so this measures what a
+  // consumer gets rather than what we think we sent. Grep rather than a parse:
+  // a static import, a dynamic one and a `new URL(...)` have all turned up.
   const reaching = git(["ls-files"], work)
     .split("\n")
     .filter((f) => /\.(ts|tsx|lua|css)$/.test(f))
     .filter((f) => {
       const body = readFileSync(join(work, f), "utf8");
       // Only a MODULE SPECIFIER counts, not prose. A bare `[./]internal/` also
-      // matched "Design notes: docs/internal/…" in a comment and a quoted rule
-      // inside private-not-tracked.test.ts, neither of which breaks anything on
-      // `main`. The three forms that DO break it all put the path in quotes
-      // after `from`, `import(` or `new URL(`.
+      // matched a `docs/internal/…` mention in a comment and a quoted rule in
+      // a test, neither of which breaks `main`. The three forms that DO break
+      // it put the path in quotes after `from`, `import(` or `new URL(`.
       return PRIVATE.some((d) => {
         if (d === ".gitea") return false;
-        // Double-escaped on purpose, and it was not: this is a TEMPLATE
-        // LITERAL, so `\b` is a backspace character and `\s` is a plain `s`
-        // before the RegExp constructor ever sees them. Written singly, the
-        // source read `(?:\bfroms*|\bimports*(s*|…` -- an unbalanced group --
-        // and the guard threw `Invalid regular expression: missing )` on every
-        // publish, wedging the tool rather than checking anything.
+        // Double-escaped on purpose: this is a TEMPLATE LITERAL, so `\b` is a
+        // backspace and `\s` a plain `s` before the RegExp constructor sees
+        // them. Written singly the source became an unbalanced group and threw
+        // `Invalid regular expression: missing )` on every publish, wedging
+        // the tool rather than checking anything.
         const spec = `["'\`][^"'\`]*[./]${d}/`;
         const lead = `(?:\\bfrom\\s*|\\bimport\\s*\\(\\s*|\\bURL\\s*\\(\\s*)`;
         return new RegExp(`${lead}${spec}`).test(body);
       });
     });
   if (reaching.length > 0) {
-    // THROW, DO NOT process.exit. `finally` removes the throwaway worktree, and
-    // process.exit skips it -- which left `main` checked out in a temp dir and
-    // made the NEXT publish die with "'main' is already used by worktree at …".
-    // A guard that wedges the tool it guards gets deleted rather than obeyed.
+    // THROW, DO NOT process.exit. `finally` removes the throwaway worktree and
+    // process.exit skips it, leaving `main` checked out in a temp dir so the
+    // NEXT publish dies with "'main' is already used by worktree at …".
     throw new Error(
       "publish-public: these published files reference a path that is stripped from " +
         `${PUBLISHED}:\n` +
@@ -266,16 +230,12 @@ try {
       `${PUBLISHED} is now ${git(["rev-parse", "--short", PUBLISHED])}.`
   );
   // BOTH REMOTES, AND GITEA IS THE ONE THAT GETS FORGOTTEN -- but ORIGIN is the
-  // one the website reads. Correcting an earlier note here that had this
-  // backwards: docs do NOT reach tWeb from a gitea push. tWeb's own
-  // `sync-github-docs.yml` PULLS them from github.com/tommy141x/tLib daily at
-  // 04:17, so a doc edit that is committed but not on GitHub's `main` will not
-  // appear, and a run of that workflow will roll the site back to whatever
-  // GitHub last saw.
-  //
-  // gitea still wants both branches: it is where CI runs and where the private
-  // half lives. Nothing fails when a push is missed -- the release is out,
-  // GitHub is correct -- which is exactly why it is worth saying out loud.
+  // one the website reads. Docs do NOT reach tWeb from a gitea push: tWeb's own
+  // `sync-github-docs.yml` PULLS them from github.com/tommy141x/tLib on a
+  // schedule, so a doc edit committed but not on GitHub's `main` never appears,
+  // and a run of that workflow rolls the site back to what GitHub last saw.
+  // gitea still wants both branches: CI runs there and the private half lives
+  // there. Nothing fails when that push is missed, hence saying it out loud.
   console.log("  Push it with:  git push origin main && git push gitea main");
   console.log("  origin is what the website reads: tWeb pulls docs/ from GitHub on a schedule.");
   console.log("  gitea is where CI runs and where the private half lives.");

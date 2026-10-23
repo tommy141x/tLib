@@ -1,0 +1,5 @@
+{
+  "$comment": "Licence policy for tLib, read by shared/ts/build/license.ts. `roots` names the trees that are installed separately from the root manifest and whose code reaches the release; `exceptions` records reviewed breaches of the approved/restricted sets in that file.",
+  "roots": ["client/web", "shared/ts"],
+  "exceptions": []
+}

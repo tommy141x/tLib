@@ -41,6 +41,11 @@ runProd(
       "imports.lua",
       "README.md",
       "LICENSE",
+      // The ISC/MIT notices for the Lucide set in server/lib/http/icons.json and
+      // for the npm packages measured inside the shipped bundles. Those licences
+      // require the notice to travel with the binary, so it is a release file,
+      // not documentation.
+      "THIRD-PARTY-NOTICES.md",
 
       "shared/sh_api.lua",
       "shared/sh_branding.lua",

@@ -551,7 +551,7 @@ do
     --- "LED Editor: X", and tLib's own bare "Open Menu"), so a player scanning
     --- ~70 rows cannot tell which product a row belongs to.
     ---
-    --- ⛔ THE LABEL MUST NOT DEPEND ON WHETHER A DEFAULT KEY EXISTS.
+    --- WARNING: THE LABEL MUST NOT DEPEND ON WHETHER A DEFAULT KEY EXISTS.
     ---
     --- This used to append " (unbound — assign a key in GTA keybinds menu)"
     --- when `default` was empty. It was well meant — an unbound row is easy to

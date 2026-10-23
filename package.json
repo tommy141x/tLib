@@ -6,7 +6,8 @@
   "description": "Shared UI and utility library for FiveM resources",
   "secretGate": {
     "ignore": {
-      "tests/lua/config-validate.lua": "a tlib.config VALIDATOR fixture, not a config: its `licenseKey = 'abc123'` is a synthetic input proving a declared string key validates. The config rule matches it only because the basename contains `config`. Ignored by exact path rather than by widening the rule or by allowing `licenseKey` everywhere."
+      "tests/lua/config-validate.lua": "a tlib.config VALIDATOR fixture, not a config: its `licenseKey = 'abc123'` is a synthetic input proving a declared string key validates. The config rule matches it only because the basename contains `config`. Ignored by exact path rather than by widening the rule or by allowing `licenseKey` everywhere.",
+      "tests/lua/community-configs-update.lua": "a CommunityConfigsUpdate request-body fixture, not a config: its `editToken = 'tok_xyz'` is a synthetic input proving the field is forwarded in the update body, which is the whole point of the suite. The rule matches it only because the basename contains `config`. Ignored by exact path, same reasoning as config-validate.lua above — not by allowing `editToken` everywhere, which is a key that must stay caught in real config files."
     }
   },
   "scripts": {
@@ -43,6 +44,8 @@
     "check:classes:control": "bun run scripts/css-contract-control.ts",
     "check:comments": "bun run scripts/comment-style-gate.ts",
     "check:comments:control": "bun run scripts/comment-style-control.ts",
+    "license:check": "bun run scripts/license-check.ts",
+    "license:check:control": "bun run scripts/license-control.ts",
     "check:deadfiles": "bun run scripts/dead-file-gate.ts",
     "check:deadfiles:control": "bun run scripts/dead-file-control.ts",
     "scan:solid2": "bun run scripts/solid2-scan.ts",
@@ -53,7 +56,7 @@
     "probe:escape": "bun run scripts/probe-escape-layer.ts",
     "probe:focus": "bun run scripts/probe-focus-paint.ts",
     "probe:preview": "bun run scripts/probe-marketplace-preview.ts",
-    "check:regression": "bun run typecheck && bun run typecheck:shared && bun run typecheck:internal && bun run typecheck:server && bun run check:imports && bun run check:classes && bun run check:classes:control && bun run check:boolattr && bun run check:runtime-state && bun run check:runtime-state:control && bun run check:deadfiles && bun run check:deadfiles:control && bun run check:comments && bun run check:comments:control && bun run secrets:provision:check && bun run secrets:control && bun run test && bun run test:dom && bun run test:dom:control && bun run test:lua && bun run test:lua:control",
+    "check:regression": "bun run license:check:control && bun run license:check && bun run typecheck && bun run typecheck:shared && bun run typecheck:internal && bun run typecheck:server && bun run check:imports && bun run check:classes && bun run check:classes:control && bun run check:boolattr && bun run check:runtime-state && bun run check:runtime-state:control && bun run check:deadfiles && bun run check:deadfiles:control && bun run check:comments && bun run check:comments:control && bun run secrets:provision:check && bun run secrets:control && bun run test && bun run test:dom && bun run test:dom:control && bun run test:lua && bun run test:lua:control",
     "verify": "bun run secrets:check && bun run lint && bun run check:regression && bun run build"
   },
   "dependencies": {

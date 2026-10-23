@@ -1,7 +1,5 @@
--- The data.json-backed sound registry every t* device panel keeps: which tone
--- keys point at which .wav, which .wav files are installed, and the boot-time
--- reconciliation that keeps both honest against the disk.
---
+-- The data.json-backed sound registry every t* device panel keeps: tone key to
+-- file, the installed-file list, and the boot-time reconciliation of both.
 --
 -- Server-only: it writes a resource file and asks tlib.assets to list a
 -- directory, and neither works from a client VM.
@@ -13,7 +11,6 @@
 -- but the admin panel ever writes it back, so the device is silent forever. The
 -- self-heal step is the other half: it restores a default mapping once its file
 -- is confirmed, so a registry already destroyed recovers on the next boot.
---
 
 local soundstore = {}
 
@@ -56,8 +53,7 @@ end
 
 --- Drop an installed sound by filename and clear every tone that used it: a
 --- mapping left pointing at a deleted file 404s in the NUI rather than falling
---- back. Through `tlib.marketplace.forgetSoundFile`, which is the one sweep --
---- it was extracted because the same eight lines existed in five other places.
+--- back. Through `tlib.marketplace.forgetSoundFile`, the one shared sweep.
 --- @return boolean
 function Store:removeSound(filename)
     if type(filename) ~= "string" or filename == "" then return false end
@@ -102,12 +98,11 @@ end
 --- `opts.keys`    the tone keys this device knows; their lowercased names plus
 ---                `.wav` are the shipped defaults the self-heal restores.
 --- `opts.log`     a tlib.logger.create handle. Required: every branch below is
----                destructive or corrective, and one that happens silently is
----                the failure this module exists to end.
+---                destructive or corrective, and a silent one is the failure
+---                this module exists to end.
 --- `opts.phantom` `(key, filename) -> boolean`, "this mapping was auto-seeded
 ---                and must be confirmed on disk". Defaults to the shipped-name
----                rule; a consumer with its own history of seeded names passes
----                its own. Only mappings it accepts are ever deleted.
+---                rule. Only mappings it accepts are ever deleted.
 --- `opts.dir`, `opts.file`, `opts.resource` override the usual locations.
 --- @return table
 function soundstore.open(opts)
@@ -123,7 +118,6 @@ function soundstore.open(opts)
     local keySet = {}
     for _, key in ipairs(keys) do keySet[key] = true end
 
-    -- Only a mapping that still reads as the shipped default for its own key is
     local phantom = opts.phantom or function(key, filename)
         return keySet[key] == true and filename == key:lower() .. ".wav"
     end
@@ -203,14 +197,12 @@ function soundstore.open(opts)
     --    a direct read -- LoadResourceFile still works where a listing does not.
     for _, key in ipairs(keys) do
         if not self.toneWavMap[key] then
-            -- A default sound's file MUST be named in lowercase. This is an
-            -- invariant, not a convenience: `diskSet` is keyed by the real
-            -- directory entry, so a shipped `KA_BAND.wav` is simply never found
-            -- by this lookup on either platform. The fallback below is worse
-            -- than that -- `LoadResourceFile` opens case-insensitively on
-            -- Windows and case-sensitively on Linux, so a capitalised default
-            -- would re-seed on a dev box and silently not re-seed on a Linux
-            -- server. Lowercase the file, do not "fix" this by folding case.
+            -- A default sound's file MUST be named in lowercase: `diskSet` is
+            -- keyed by the real directory entry, so a shipped `KA_BAND.wav` is
+            -- never found here. The fallback is worse -- `LoadResourceFile` is
+            -- case-insensitive on Windows and case-sensitive on Linux, so a
+            -- capitalised default re-seeds on a dev box and silently does not
+            -- on a Linux server. Lowercase the file; do not fold case here.
             local filename = key:lower() .. ".wav"
             local present
             if diskSet then

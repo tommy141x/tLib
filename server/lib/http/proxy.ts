@@ -62,7 +62,7 @@ export function proxyRequest(
   });
 
   upstream.on("error", (err: NodeJS.ErrnoException) => {
-    // ⚠️ SAY WHETHER THE CLIENT WAS STILL THERE. Without it this line cannot
+    // WARNING: SAY WHETHER THE CLIENT WAS STILL THERE. Without it this line cannot
     // distinguish the two things it gets used to diagnose, and they have
     // opposite remedies:
     //

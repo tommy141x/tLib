@@ -27,15 +27,23 @@
  *                                       createUniqueId, mergeProps, on,
  *                                       onMount, splitProps        (66 files)
  *   @solid-primitives/props             mergeProps
- *   @solid-primitives/refs              solid-js/web, createComputed
- *   @solid-primitives/transition-group  solid-js/web, batch, createComputed
  *   @tanstack/solid-form                solid-js/web, createComputed,
  *                                       createUniqueId, mergeProps, onMount,
  *                                       splitProps                 (10 files)
  *   @tanstack/solid-store               solid-js/web
  *   @zag-js/solid                       mergeProps, onMount
  *   lucide-solid                        solid-js/web, splitProps  (3700 files)
- *   solid-motionone                     solid-js/web, batch, splitProps
+ *
+ * A THIRD EXCLUSION, 2026-10-23
+ *
+ * `solid-motionone` measured as a hit and is gone, because nothing imports it:
+ * zero references in any source file in the tree, and the package is no longer
+ * declared. `@solid-primitives/refs` and `@solid-primitives/transition-group`
+ * went with it -- both were reachable ONLY through it, neither was ever declared
+ * here, so with it removed there is no file left that can run their code. Three
+ * of the nine entries were the "dead weight that reads as a supported case" this
+ * header warns about, which is the whole reason they are removed rather than
+ * left harmlessly in place.
  *
  * TWO EXCLUSIONS THAT ARE DELIBERATE
  *
@@ -59,11 +67,8 @@
 export const VENDOR_PACKAGES = [
   "@ark-ui/solid",
   "@solid-primitives/props",
-  "@solid-primitives/refs",
-  "@solid-primitives/transition-group",
   "@tanstack/solid-form",
   "@tanstack/solid-store",
   "@zag-js/solid",
   "lucide-solid",
-  "solid-motionone",
 ] as const;

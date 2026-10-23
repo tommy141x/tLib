@@ -1,11 +1,13 @@
 {
-  "//": "Deep paths into shared/ts that consumers import directly, measured by `bun run scripts/dead-file-gate.ts --write-baseline`. Checked in because a fresh clone has no siblings. Not a ratchet — see the note in scripts/dead-file-gate.ts.",
+  "//": "Deep paths into shared/ts that consumers import directly, measured by `bun run scripts/dead-file-gate.ts --write-baseline`. Checked in because a fresh clone has no siblings. Not a ratchet \u2014 see the note in scripts/dead-file-gate.ts.",
   "entries": [
     "shared/ts/build/argv.ts",
+    "shared/ts/build/billboard.ts",
     "shared/ts/build/bun-builder.ts",
     "shared/ts/build/cef-output-contract-control.ts",
     "shared/ts/build/cef-output-contract.ts",
     "shared/ts/build/dead-classes.ts",
+    "shared/ts/build/deck-banner.ts",
     "shared/ts/build/detect-plates.ts",
     "shared/ts/build/dev.ts",
     "shared/ts/build/hero.ts",
@@ -45,6 +47,8 @@
     "shared/ts/marketplace/item.ts",
     "shared/ts/marketplace/local-name.ts",
     "shared/ts/marketplace/sort.ts",
+    "shared/ts/marketplace/ui/PanelPreviewFrame.tsx",
+    "shared/ts/marketplace/ui/browse.ts",
     "shared/ts/marketplace/ui/preview-canvas.ts",
     "shared/ts/marketplace/ui/preview-frame.ts",
     "shared/ts/modules/manifest.ts",

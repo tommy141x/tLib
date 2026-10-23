@@ -194,7 +194,7 @@ test('product and action compose to one house format', function()
 end)
 
 test('the label does not change when a key is unbound', function()
-    -- ⛔ The inverse of what this used to assert, and the reason is that
+    -- NEVER: The inverse of what this used to assert, and the reason is that
     -- `RegisterKeyMapping`'s description is PERSISTED by FiveM at first sight.
     -- A label that says "unbound" still says it after the player binds a key,
     -- and editing a registered label registers a second row rather than

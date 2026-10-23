@@ -102,7 +102,61 @@ test("the matcher is a prefix match, so a short family cannot swallow a longer o
   expect(uncoveredFonts(dist, [licences])).toEqual([]);
 });
 
-// ── The shape the only consumer actually calls ──────────────────────────────
+// -- Beyond `.woff2` --------------------------------------------------------
+//
+// The scan read `.woff2` and nothing else until 2026-10-23, so nine `.otf`/`.ttf`
+// faces in tRadio's `layouts/` shipped with no licence text while this gate was
+// green on every run. These pin the widened scan, and the `LICENSE-<Family>.txt`
+// form that a non-OFL face needs in order to be coverable at all.
+
+test("an .otf with no licence is reported, not ignored", () => {
+  writeFileSync(join(dist, "Mustica.otf"), "font");
+
+  expect(uncoveredFonts(dist, [licences])).toEqual(["Mustica.otf"]);
+});
+
+test("a .ttf with no licence is reported, not ignored", () => {
+  writeFileSync(join(dist, "Charmset.ttf"), "font");
+
+  expect(uncoveredFonts(dist, [licences])).toEqual(["Charmset.ttf"]);
+});
+
+test("an .otf is covered by its OFL text, extension and all", () => {
+  writeFileSync(join(licences, "OFL-CreatoDisplay.txt"), "licence text\n");
+  writeFileSync(join(dist, "CreatoDisplay.otf"), "font");
+
+  // `fontKey` keeps the extension's letters, so `creatodisplayotf` has to still
+  // start with `creatodisplay`.
+  expect(uncoveredFonts(dist, [licences])).toEqual([]);
+});
+
+test("a non-OFL face is covered by LICENSE-<Family>.txt", () => {
+  writeFileSync(join(licences, "LICENSE-Charmset.txt"), "CC BY-SA 3.0\n");
+  writeFileSync(join(dist, "Charmset.ttf"), "font");
+
+  expect(uncoveredFonts(dist, [licences])).toEqual([]);
+});
+
+test("a bare LICENSE.txt covers nothing — the family part is what attributes it", () => {
+  writeFileSync(join(dist, "Charmset.ttf"), "font");
+  writeFileSync(join(dist, "LICENSE.txt"), "some licence, for something\n");
+
+  expect(uncoveredFonts(dist, [licences])).toEqual(["Charmset.ttf"]);
+});
+
+test("requireFonts fails on a tree with no fonts — examining zero is not a pass", () => {
+  expect(() => stageFontLicences(dist, [licences], { requireFonts: true })).toThrow(
+    /No fonts found/
+  );
+});
+
+test("without requireFonts a fontless resource still builds", () => {
+  // tAdmin, tAI, tBoost, tChirp, tCinematic, tDB and tMenu ship zero fonts and
+  // share `buildResource`, so the floor cannot be the default.
+  expect(stageFontLicences(dist, [licences])).toEqual({ copied: [], satisfied: [] });
+});
+
+// -- The shape the only consumer actually calls ------------------------------
 //
 // tRadio's release gate passes NO licence directories: `uncoveredFonts(dir, [])`.
 // Coverage then comes purely from a licence sitting beside the font in the

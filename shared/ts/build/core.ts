@@ -15,6 +15,7 @@ import {
 import { dirname, join } from "node:path";
 import { describeSanitize, sanitizeStagedSecrets } from "../secrets/release.ts";
 import { stageFontLicences } from "./font-licences.ts";
+import { checkLicenses, formatLicenseReport } from "./license.ts";
 import { assertManifestStaged } from "./manifest-coverage.ts";
 
 export function step(label: string) {
@@ -190,6 +191,30 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
   // demand at start, and the build reports success -- the failure surfaces on a
   // customer's server, not here.
   assertManifestStaged(readFileSync(join(root, "fxmanifest.lua"), "utf8"), include);
+
+  // Dependency licences, after the structural asserts and before anything is
+  // written. tRadio's prod.ts has run this check since it was written and no tLib
+  // release path ever did, so tLib and every resource releasing through runProd
+  // shipped with no licence check at all; running it here rather than in each
+  // resource's prod.ts is what makes that impossible to forget again.
+  //
+  // AFTER the asserts above, not before them, which is where it first went: a root
+  // with no package.json fails the licence check, so a build that was really missing
+  // an artifact reported "License compliance failed" instead of naming the missing
+  // file. Two tests caught it -- `missing artifacts refuse packaging before touching
+  // prior output` and `runProd refuses an allowlist that would ship without a
+  // manifest path` -- and they were right to: a structural fault is the actionable
+  // one, and a licence gate that masks it has made the build harder to fix.
+  //
+  // It still cannot be bypassed. Nothing is staged and nothing is zipped until this
+  // has passed; the only cost of the later position is that a UI build runs before a
+  // licence failure stops the release.
+  step("Checking dependency licences");
+  const depLicences = checkLicenses({ cwd: root });
+  console.log(formatLicenseReport(depLicences));
+  if (!depLicences.ok) {
+    throw new Error(`License compliance failed with ${depLicences.failures.length} finding(s)`);
+  }
 
   // Everything generated lands under one root, so .gitignore needs a single
   // rule and a new artifact can never reach a release by being forgotten.

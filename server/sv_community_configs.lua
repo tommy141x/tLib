@@ -118,25 +118,18 @@ local function registerExports()
     --- and the LED-name index from `configJson` in the same write, so a
     --- listing cannot end up matched by data describing its previous contents.
     ---
-    --- ⚠️ AN UPDATE IS A FULL REPLACEMENT, NOT A PATCH, and this export sent a
-    --- patch until 2026-10-21 — so Update answered HTTP 400 for every customer
-    --- on every press while Share worked, which is why it read as a token
-    --- problem. The Worker runs the update body through `readConfigBody`, the
-    --- SAME reader publish uses, deliberately so the two cannot drift. Its
-    --- required set is therefore identical: `configType`, `name`, `configJson`,
-    --- and `key` for everything but a pattern. This built a body with none of
-    --- the first three and got
-    ---
-    ---     configType must be led_layout, pattern or vehicle_setup (HTTP 400)
-    ---
-    --- — the first guard it tripped, which is why `name` and `key` were never
-    --- implicated.
+    --- WARNING: AN UPDATE IS A FULL REPLACEMENT, NOT A PATCH. The Worker runs
+    --- the update body through `readConfigBody`, the SAME reader publish uses,
+    --- deliberately so the two cannot drift — so the required set is identical:
+    --- `configType`, `name`, `configJson`, and `key` for everything but a
+    --- pattern. Sending a patch answers HTTP 400 naming only the first guard it
+    --- trips (`configType must be led_layout, pattern or vehicle_setup`), which
+    --- reads as a token problem while Share keeps working.
     ---
     --- `description` and `keyLabel` are sent UNCONDITIONALLY for the same
-    --- reason, and that is the half with no error to show for it: the Worker
-    --- writes both columns on every update, so a body that omitted them was a
-    --- silent request to blank them. A caller that wants to keep a description
-    --- has to send it back.
+    --- reason, and that half has no error to show for it: the Worker writes
+    --- both columns on every update, so a body omitting them is a silent
+    --- request to blank them. A caller keeping a description sends it back.
     Platform.export('tLib', 'CommunityConfigsUpdate', function(opts, callback)
         if type(opts) ~= 'table' then
             if isCallable(callback) then callback(false, 'invalid opts') end

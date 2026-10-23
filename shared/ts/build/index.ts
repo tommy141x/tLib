@@ -92,7 +92,16 @@ export {
   renderHudGallery,
   statesFromManifest,
 } from "./hud-gallery.ts";
-export { checkLicenseCompliance } from "./license.ts";
+export type {
+  LicenseException,
+  LicenseFailure,
+  LicenseFailureCode,
+  LicenseOptions,
+  LicenseReport,
+  LicenseStatus,
+  PackageLicense,
+} from "./license.ts";
+export { checkLicenseCompliance, checkLicenses, formatLicenseReport } from "./license.ts";
 export type { ManifestCoverage } from "./manifest-coverage.ts";
 export {
   assertManifestOnDisk,

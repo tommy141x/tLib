@@ -1,5 +1,56 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
+/**
+ * Dependency licence gate.
+ *
+ * -- Why this was rewritten (2026-10-23) -------------------------------------
+ *
+ * The previous version could not fail for any of the reasons it existed. It
+ * read ONLY the root `package.json`'s `dependencies` — 5 packages in tRadio,
+ * exactly one (`ws`) in tLib — and tRadio's ~110 bundled packages live in the
+ * `client/web`, `server/web`, `shared/ui` and `client/dm32/web` workspaces,
+ * none of which it opened. It never walked transitives, so the 80 `@zag-js/*`
+ * packages that reach the artifact through `@ark-ui/solid` were invisible. It
+ * returned `true` when there was no `package.json` and `true` again when the
+ * dependency list was empty, so "I read nothing" and "everything is approved"
+ * were the same green. A bare `catch {}` around the per-package read made "not
+ * installed" indistinguishable from "approved". The net effect: tRadio's
+ * release gate classified 5 of ~110 shipped packages and could not go red.
+ *
+ * So the three changes that matter are not the SPDX table — that part was fine
+ * — they are WHERE the package set comes from, and the floors underneath it:
+ * zero packages examined is a FAILURE, an unreadable manifest is a FAILURE,
+ * and an unresolvable package is a FAILURE rather than a shrug.
+ *
+ * -- What the package set is, and what it is not -----------------------------
+ *
+ * Nothing in this estate ships `node_modules`: every workspace is bundled
+ * (Vite for the two web UIs, `bun build` for the server), so the artifact's
+ * true dependency set is what the bundler emitted. A bundler metafile would be
+ * the exact answer, and there is none to read — this gate runs BEFORE the build
+ * (tRadio `scripts/prod.ts` step 1, tLib `runProd`), on purpose, because
+ * failing a licence check after a 2-minute build wastes the build. Bun's
+ * builder emits no esbuild-style metafile either.
+ *
+ * What is computed instead is the PRODUCTION CLOSURE: the root manifest plus
+ * every declared workspace, walked transitively through `node_modules`. That is
+ * a SUPERSET of the artifact — tree-shaking can drop a package whose code never
+ * lands — which is the safe direction for a licence gate: it can accuse a
+ * package that did not ship, never miss one that did. `method` and `confidence`
+ * on the report say this in the output rather than leaving a reader to assume
+ * the numbers are exact. The known gaps are listed on `confidence` itself.
+ *
+ * -- Why `RESTRICTED_LICENSES` still contains LGPL-2.1 -----------------------
+ *
+ * tRadio deliberately ships codec2 under LGPL-2.1. Deleting the id to make the
+ * build green would have quietly approved every future LGPL dependency, and
+ * leaving it while the product breached it made the set a lie. Instead a
+ * breach is recorded per component, with a reason and a review date, in the
+ * product's `license-policy.json`, and a vendored exception must point at a
+ * licence file that exists on disk — so the exception list cannot become
+ * decorative either.
+ */
+
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
 const APPROVED_LICENSES = new Set([
   "MIT",
@@ -14,6 +65,7 @@ const APPROVED_LICENSES = new Set([
   "Python-2.0",
   "Zlib",
   "BlueOak-1.0.0",
+  "CC-BY-4.0",
 ]);
 
 const RESTRICTED_LICENSES = new Set([
@@ -46,104 +98,540 @@ const LICENSE_ALIASES = new Map([
   ["GNU Lesser General Public License v3.0", "LGPL-3.0"],
 ]);
 
-interface LicenseResult {
+export type LicenseStatus = "approved" | "restricted" | "excepted" | "unknown" | "missing";
+
+export type LicenseFailureCode =
+  | "NO_MANIFEST"
+  | "NO_PACKAGES"
+  | "UNRESOLVED"
+  | "MISSING_LICENSE"
+  | "UNKNOWN_LICENSE"
+  | "RESTRICTED_LICENSE"
+  | "POLICY_INVALID"
+  | "STALE_EXCEPTION"
+  | "VENDORED_LICENSE_MISSING";
+
+export interface LicenseFailure {
+  code: LicenseFailureCode;
+  detail: string;
+}
+
+/**
+ * A reviewed, deliberate breach of the policy above. `reason` is the record of
+ * the decision; `kind: "vendored"` covers a component that is not an npm
+ * package at all (codec2, blip25) and must name the licence file that travels
+ * with it.
+ */
+export interface LicenseException {
+  package: string;
+  license: string;
+  kind: "npm" | "vendored";
+  reason: string;
+  reviewed: string;
+  reviewedBy: string;
+  licenseFile?: string;
+}
+
+export interface PackageLicense {
   package: string;
   version: string;
   license: string;
-  status: "approved" | "restricted" | "unknown" | "missing";
+  status: LicenseStatus;
+  /** Relative to the product root, so the report says where a package came from. */
+  dir: string;
+  requiredBy: string[];
+  exception?: LicenseException;
+}
+
+export interface LicenseReport {
+  ok: boolean;
+  method: string;
+  confidence: string[];
+  /** Root plus every declared workspace whose manifest was read, relative. */
+  roots: string[];
+  examined: number;
+  packages: PackageLicense[];
+  firstParty: string[];
+  vendored: LicenseException[];
+  optionalAbsent: string[];
+  policyPath: string | null;
+  failures: LicenseFailure[];
+}
+
+export interface LicenseOptions {
+  cwd?: string;
+  /** Defaults to `<cwd>/license-policy.json`. Absent is allowed; invalid is not. */
+  policyPath?: string;
+}
+
+interface Manifest {
+  name?: string;
+  version?: string;
+  private?: boolean;
+  license?: unknown;
+  licenses?: { type?: string }[];
+  dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  workspaces?: string[] | { packages?: string[] };
+}
+
+function readManifest(file: string): Manifest | null {
+  try {
+    return JSON.parse(readFileSync(file, "utf8")) as Manifest;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeLicense(license: string): string {
-  if (!license) return "unknown";
   const trimmed = license.trim();
-  if (LICENSE_ALIASES.has(trimmed)) return LICENSE_ALIASES.get(trimmed)!;
-  if (trimmed.includes(" OR ") || trimmed.includes(" AND ")) return trimmed;
-  return (
-    trimmed
-      .replace(/^License:\s*/i, "")
-      .replace(/\s+License$/i, "")
-      .replace(/^\(|\)$/g, "") || "unknown"
-  );
+  const alias = LICENSE_ALIASES.get(trimmed);
+  if (alias) return alias;
+  return trimmed
+    .replace(/^License:\s*/i, "")
+    .replace(/\s+License$/i, "")
+    .replace(/-only$/i, "")
+    .replace(/-or-later$/i, "")
+    .replace(/\+$/, "");
 }
 
-function getStatus(license: string): "approved" | "restricted" | "unknown" {
-  const normalized = normalizeLicense(license);
-  if (APPROVED_LICENSES.has(normalized)) return "approved";
-  if (RESTRICTED_LICENSES.has(normalized)) return "restricted";
+/**
+ * SPDX expressions are evaluated rather than treated as opaque: `MIT OR
+ * GPL-3.0` is dual-licensed and we take the MIT side, and `MIT AND GPL-3.0` is
+ * both at once and therefore restricted. The old code string-matched the whole
+ * expression, so every dual-licensed package landed in "unknown" and the signal
+ * drowned in noise nobody could act on.
+ */
+function classify(expr: string): LicenseStatus {
+  const e = expr
+    .trim()
+    .replace(/^\(([\s\S]*)\)$/, "$1")
+    .trim();
+  if (!e) return "missing";
+  if (/^see\s+licen[cs]e/i.test(e)) return "unknown";
+  if (/\sOR\s/i.test(e)) {
+    const parts = e.split(/\sOR\s/i).map(classify);
+    if (parts.includes("approved")) return "approved";
+    if (parts.includes("restricted")) return "restricted";
+    return "unknown";
+  }
+  if (/\sAND\s/i.test(e)) {
+    const parts = e.split(/\sAND\s/i).map(classify);
+    if (parts.includes("restricted")) return "restricted";
+    return parts.every((p) => p === "approved") ? "approved" : "unknown";
+  }
+  const id = normalizeLicense(e);
+  if (APPROVED_LICENSES.has(id)) return "approved";
+  if (RESTRICTED_LICENSES.has(id)) return "restricted";
   return "unknown";
 }
 
-export async function checkLicenseCompliance(cwd = "."): Promise<boolean> {
-  console.log("Checking production dependencies for license compliance...");
+function declaredLicense(m: Manifest): string {
+  if (typeof m.license === "string") return m.license;
+  // Pre-SPDX manifests use `license: { type }` or an array of them.
+  if (m.license && typeof m.license === "object") {
+    const t = (m.license as { type?: string }).type;
+    if (typeof t === "string") return t;
+  }
+  const legacy = m.licenses?.[0]?.type;
+  return typeof legacy === "string" ? legacy : "";
+}
 
-  const pkgPath = path.resolve(cwd, "package.json");
-  let deps: string[];
+function workspaceDirs(root: string, m: Manifest): string[] {
+  const patterns = Array.isArray(m.workspaces) ? m.workspaces : (m.workspaces?.packages ?? []);
+  const out: string[] = [];
+  for (const pattern of patterns) {
+    if (!pattern.endsWith("/*")) {
+      out.push(join(root, pattern));
+      continue;
+    }
+    const base = join(root, pattern.slice(0, -2));
+    if (!existsSync(base)) {
+      // Pushed anyway so the caller records a missing manifest: a workspace
+      // glob that matches nothing must not silently shrink the package set.
+      out.push(base);
+      continue;
+    }
+    for (const entry of readdirSync(base, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name !== "node_modules") out.push(join(base, entry.name));
+    }
+  }
+  return out;
+}
+
+/** Node resolution, stopped at the product root: a package outside it is not in this install. */
+function resolveFrom(fromDir: string, root: string, name: string): string | null {
+  let dir = fromDir;
+  for (;;) {
+    const candidate = join(dir, "node_modules", name);
+    if (existsSync(join(candidate, "package.json"))) return candidate;
+    if (dir === root) return null;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+function loadPolicy(
+  root: string,
+  policyPath: string,
+  failures: LicenseFailure[]
+): { exceptions: LicenseException[]; roots: string[]; path: string | null } {
+  if (!existsSync(policyPath)) return { exceptions: [], roots: [], path: null };
+
+  let parsed: { exceptions?: unknown; roots?: unknown };
   try {
-    const content = await fs.promises.readFile(pkgPath, "utf8");
-    deps = Object.keys(JSON.parse(content).dependencies || {});
-  } catch {
-    console.log("No package.json found.");
-    return true;
+    parsed = JSON.parse(readFileSync(policyPath, "utf8"));
+  } catch (err) {
+    failures.push({ code: "POLICY_INVALID", detail: `${policyPath}: ${(err as Error).message}` });
+    return { exceptions: [], roots: [], path: policyPath };
   }
 
-  if (deps.length === 0) {
-    console.log("No production dependencies found.");
-    return true;
+  // `roots` exists because bun workspaces are not the only shape in the estate:
+  // tLib's client/web and shared/ts are separately installed trees that the root
+  // manifest never mentions, and without them the gate examined ONE package
+  // (`ws`) for a release that bundles ~40. A declared root that has no manifest
+  // fails, so this list cannot rot into a shorter scan.
+  const roots =
+    Array.isArray(parsed.roots) && parsed.roots.every((r) => typeof r === "string")
+      ? (parsed.roots as string[])
+      : [];
+  if (parsed.roots !== undefined && roots.length !== (parsed.roots as unknown[]).length) {
+    failures.push({
+      code: "POLICY_INVALID",
+      detail: `${policyPath}: "roots" must be an array of strings`,
+    });
   }
 
-  console.log(`Found ${deps.length} production dependencies to check...`);
+  if (!Array.isArray(parsed.exceptions)) {
+    failures.push({
+      code: "POLICY_INVALID",
+      detail: `${policyPath}: "exceptions" must be an array`,
+    });
+    return { exceptions: [], roots, path: policyPath };
+  }
 
-  const results: LicenseResult[] = [];
-  for (const name of deps) {
-    const depPkg = path.resolve(cwd, "node_modules", name, "package.json");
-    try {
-      const content = await fs.promises.readFile(depPkg, "utf8");
-      const json = JSON.parse(content);
-      const license = json.license || json.licenses?.[0]?.type || "missing";
-      results.push({
-        package: json.name || name,
-        version: json.version || "unknown",
-        license: normalizeLicense(license),
-        status: license === "missing" ? "missing" : getStatus(license),
+  const exceptions: LicenseException[] = [];
+  for (const [i, raw] of parsed.exceptions.entries()) {
+    const e = raw as Partial<LicenseException>;
+    const missing = (["package", "license", "kind", "reason", "reviewed", "reviewedBy"] as const)
+      .filter((k) => typeof e[k] !== "string" || !(e[k] as string).trim())
+      .join(", ");
+    if (missing) {
+      failures.push({
+        code: "POLICY_INVALID",
+        detail: `exceptions[${i}] (${e.package ?? "unnamed"}) is missing: ${missing}`,
       });
-    } catch {
-      // package not found in node_modules
+      continue;
     }
+    if (e.kind !== "npm" && e.kind !== "vendored") {
+      failures.push({
+        code: "POLICY_INVALID",
+        detail: `exceptions[${i}] (${e.package}): kind must be "npm" or "vendored"`,
+      });
+      continue;
+    }
+    if (Number.isNaN(Date.parse(e.reviewed as string))) {
+      failures.push({
+        code: "POLICY_INVALID",
+        detail: `exceptions[${i}] (${e.package}): reviewed "${e.reviewed}" is not a date`,
+      });
+      continue;
+    }
+    if (e.kind === "vendored") {
+      if (!e.licenseFile) {
+        failures.push({
+          code: "POLICY_INVALID",
+          detail: `exceptions[${i}] (${e.package}): a vendored exception must name its licenseFile`,
+        });
+        continue;
+      }
+      if (!existsSync(resolve(root, e.licenseFile))) {
+        failures.push({
+          code: "VENDORED_LICENSE_MISSING",
+          detail: `${e.package}: licenseFile "${e.licenseFile}" does not exist`,
+        });
+        continue;
+      }
+    }
+    exceptions.push(e as LicenseException);
+  }
+  return { exceptions, roots, path: policyPath };
+}
+
+export function checkLicenses(opts: LicenseOptions = {}): LicenseReport {
+  const root = resolve(opts.cwd ?? ".");
+  const rel = (p: string) => (p === root ? "." : p.slice(root.length + 1).replace(/\\/g, "/"));
+
+  const failures: LicenseFailure[] = [];
+  const packages: PackageLicense[] = [];
+  const firstParty: string[] = [];
+  const optionalAbsent: string[] = [];
+  const roots: string[] = [];
+
+  const rootManifest = readManifest(join(root, "package.json"));
+  if (!rootManifest) {
+    failures.push({
+      code: "NO_MANIFEST",
+      detail: `no readable package.json at ${root} — the gate cannot know what ships, which is a failure and not an empty pass`,
+    });
+    return {
+      ok: false,
+      method: "none — the root manifest could not be read",
+      confidence: [],
+      roots,
+      examined: 0,
+      packages,
+      firstParty,
+      vendored: [],
+      optionalAbsent,
+      policyPath: null,
+      failures,
+    };
   }
 
-  results.sort((a, b) => {
-    const order = { missing: 0, unknown: 1, restricted: 2, approved: 3 };
-    return order[a.status] - order[b.status] || a.package.localeCompare(b.package);
-  });
+  interface Pending {
+    name: string;
+    fromDir: string;
+    requiredBy: string;
+    optional: boolean;
+  }
+  const queue: Pending[] = [];
+  const enqueue = (m: Manifest, fromDir: string, requiredBy: string) => {
+    for (const name of Object.keys(m.dependencies ?? {})) {
+      queue.push({ name, fromDir, requiredBy, optional: false });
+    }
+    // `optionalDependencies` may legitimately not be installed on this
+    // platform, so an absent one is reported rather than failed. Declared
+    // `peerDependencies` are deliberately NOT traversed: a bundler either
+    // externalises them or the dependent lists them in `dependencies` too, so
+    // walking them would invent packages that are not in this install.
+    for (const name of Object.keys(m.optionalDependencies ?? {})) {
+      queue.push({ name, fromDir, requiredBy, optional: true });
+    }
+  };
 
-  // Report
-  const approved = results.filter((r) => r.status === "approved");
-  const restricted = results.filter((r) => r.status === "restricted");
-  const unknown = results.filter((r) => r.status === "unknown");
-  const missing = results.filter((r) => r.status === "missing");
+  const policy = loadPolicy(root, opts.policyPath ?? join(root, "license-policy.json"), failures);
 
-  console.log(`\nSummary:`);
-  console.log(`  Approved: ${approved.length}`);
-  console.log(`  Restricted: ${restricted.length}`);
-  console.log(`  Unknown: ${unknown.length}`);
-  console.log(`  Missing: ${missing.length}`);
-
-  for (const group of [
-    { label: "Restricted", items: restricted },
-    { label: "Unknown", items: unknown },
-    { label: "Missing", items: missing },
+  for (const dir of [
+    root,
+    ...workspaceDirs(root, rootManifest),
+    ...policy.roots.map((r) => resolve(root, r)),
   ]) {
-    if (group.items.length) {
-      console.log(`\n${group.label}:`);
-      for (const r of group.items) console.log(`  ${r.package}@${r.version} - ${r.license}`);
+    const m = dir === root ? rootManifest : readManifest(join(dir, "package.json"));
+    if (!m) {
+      failures.push({
+        code: "NO_MANIFEST",
+        detail: `declared workspace "${rel(dir)}" has no readable package.json — its dependencies would have been skipped silently`,
+      });
+      continue;
+    }
+    roots.push(rel(dir));
+    enqueue(m, dir, `${rel(dir)} (workspace)`);
+  }
+
+  const visited = new Map<string, PackageLicense | null>();
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const item = queue[cursor];
+    const dir = resolveFrom(item.fromDir, root, item.name);
+    if (!dir) {
+      if (item.optional) {
+        optionalAbsent.push(`${item.name} (optional, required by ${item.requiredBy})`);
+        continue;
+      }
+      failures.push({
+        code: "UNRESOLVED",
+        detail: `${item.name}, required by ${item.requiredBy}, is not installed under ${rel(item.fromDir)} — run \`bun install\`; an unreadable package is not an approved one`,
+      });
+      continue;
+    }
+
+    const already = visited.get(dir);
+    if (already !== undefined) {
+      if (already && !already.requiredBy.includes(item.requiredBy)) {
+        already.requiredBy.push(item.requiredBy);
+      }
+      continue;
+    }
+
+    const m = readManifest(join(dir, "package.json"));
+    if (!m) {
+      visited.set(dir, null);
+      failures.push({
+        code: "UNRESOLVED",
+        detail: `${item.name}: package.json at ${rel(dir)} could not be parsed`,
+      });
+      continue;
+    }
+
+    if (m.private === true) {
+      // A workspace package linked into node_modules. First-party, so it is
+      // counted and named but not classified — it carries the product's own
+      // licence, not a third party's.
+      visited.set(dir, null);
+      firstParty.push(m.name ?? item.name);
+      enqueue(m, dir, m.name ?? item.name);
+      continue;
+    }
+
+    const raw = declaredLicense(m);
+    const record: PackageLicense = {
+      package: m.name ?? item.name,
+      version: m.version ?? "unknown",
+      license: raw ? normalizeLicense(raw) : "none declared",
+      status: raw ? classify(raw) : "missing",
+      dir: rel(dir),
+      requiredBy: [item.requiredBy],
+    };
+    visited.set(dir, record);
+    packages.push(record);
+    enqueue(m, dir, `${record.package}@${record.version}`);
+  }
+
+  const npmExceptions = policy.exceptions.filter((e) => e.kind === "npm");
+  const vendored = policy.exceptions.filter((e) => e.kind === "vendored");
+
+  const used = new Set<LicenseException>();
+  for (const record of packages) {
+    if (record.status === "approved") continue;
+    const match = npmExceptions.find(
+      (e) => e.package === record.package && normalizeLicense(e.license) === record.license
+    );
+    if (match) {
+      used.add(match);
+      record.status = "excepted";
+      record.exception = match;
     }
   }
 
-  const hasIssues = restricted.length > 0 || unknown.length > 0 || missing.length > 0;
-  console.log(
-    hasIssues
-      ? "\nLicense compliance issues found."
-      : "\nAll production dependencies have approved licenses!"
+  for (const e of npmExceptions) {
+    if (used.has(e)) continue;
+    failures.push({
+      code: "STALE_EXCEPTION",
+      detail: `exception for ${e.package} @ ${e.license} matched no package needing it — remove it, or correct the licence it was reviewed against`,
+    });
+  }
+
+  // The floor that the whole rewrite exists for: an empty result set is the
+  // shape every one of the old gate's false passes had.
+  if (packages.length === 0) {
+    failures.push({
+      code: "NO_PACKAGES",
+      detail: `examined zero third-party packages across ${roots.length} manifest(s) — a resolver that read nothing looks exactly like a tree with nothing to check, so this is a failure`,
+    });
+  }
+
+  for (const r of packages) {
+    if (r.status === "restricted") {
+      failures.push({
+        code: "RESTRICTED_LICENSE",
+        detail: `${r.package}@${r.version} is ${r.license} (via ${r.requiredBy.join(", ")}) — restricted, and no reviewed exception covers it`,
+      });
+    } else if (r.status === "unknown") {
+      failures.push({
+        code: "UNKNOWN_LICENSE",
+        detail: `${r.package}@${r.version} declares "${r.license}", which is neither approved nor restricted`,
+      });
+    } else if (r.status === "missing") {
+      failures.push({
+        code: "MISSING_LICENSE",
+        detail: `${r.package}@${r.version} (${r.dir}) declares no licence at all`,
+      });
+    }
+  }
+
+  return {
+    ok: failures.length === 0,
+    method: `production closure: root manifest + ${Math.max(roots.length - 1, 0)} further manifest(s) (workspaces and policy-declared roots), walked transitively through node_modules`,
+    confidence: [
+      "Superset of the artifact, not an exact match: every workspace is bundled, and tree-shaking can drop a package whose code never lands in the output.",
+      "No bundler metafile is read — this gate runs before the build so that a licence failure does not cost a build, and Bun's builder emits none.",
+      "peerDependencies are not traversed; optionalDependencies absent from this install are listed, not classified.",
+      "Vendored (non-npm) components are only as complete as license-policy.json declares them; nothing here discovers them.",
+    ],
+    roots,
+    examined: packages.length,
+    packages,
+    firstParty,
+    vendored,
+    optionalAbsent,
+    policyPath: policy.path,
+    failures,
+  };
+}
+
+export function formatLicenseReport(report: LicenseReport): string {
+  const order: Record<LicenseStatus, number> = {
+    missing: 0,
+    unknown: 1,
+    restricted: 2,
+    excepted: 3,
+    approved: 4,
+  };
+  const sorted = [...report.packages].sort(
+    (a, b) => order[a.status] - order[b.status] || a.package.localeCompare(b.package)
   );
-  return !hasIssues;
+  const count = (s: LicenseStatus) => sorted.filter((r) => r.status === s).length;
+
+  const lines: string[] = [];
+  lines.push(`Method: ${report.method}`);
+  lines.push(`Manifests read: ${report.roots.join(", ") || "none"}`);
+  lines.push(
+    `Policy: ${report.policyPath ?? "none (no license-policy.json; no exceptions declared)"}`
+  );
+  lines.push("");
+  lines.push(`Third-party packages examined: ${report.examined}`);
+  lines.push(`  approved: ${count("approved")}`);
+  lines.push(`  excepted: ${count("excepted")}`);
+  lines.push(`  restricted: ${count("restricted")}`);
+  lines.push(`  unknown: ${count("unknown")}`);
+  lines.push(`  no licence declared: ${count("missing")}`);
+  lines.push(`First-party workspace packages: ${report.firstParty.length}`);
+
+  if (report.vendored.length > 0) {
+    lines.push("");
+    lines.push("Vendored components (declared, licence file verified on disk):");
+    for (const v of report.vendored) {
+      lines.push(`  ${v.package} — ${v.license} — ${v.licenseFile}`);
+      lines.push(`    reviewed ${v.reviewed} by ${v.reviewedBy}: ${v.reason}`);
+    }
+  }
+
+  const excepted = sorted.filter((r) => r.status === "excepted");
+  if (excepted.length > 0) {
+    lines.push("");
+    lines.push("Reviewed npm exceptions:");
+    for (const r of excepted) {
+      lines.push(`  ${r.package}@${r.version} — ${r.license}: ${r.exception?.reason}`);
+    }
+  }
+
+  if (report.optionalAbsent.length > 0) {
+    lines.push("");
+    lines.push("Optional dependencies not installed here (not classified):");
+    for (const o of report.optionalAbsent) lines.push(`  ${o}`);
+  }
+
+  lines.push("");
+  lines.push("Confidence:");
+  for (const c of report.confidence) lines.push(`  - ${c}`);
+
+  if (report.failures.length > 0) {
+    lines.push("");
+    lines.push(`Failures (${report.failures.length}):`);
+    for (const f of report.failures) lines.push(`  [${f.code}] ${f.detail}`);
+    lines.push("");
+    lines.push("License compliance FAILED.");
+  } else {
+    lines.push("");
+    lines.push(`License compliance PASSED on ${report.examined} third-party packages.`);
+  }
+  return lines.join("\n");
+}
+
+/** Kept for tRadio's `scripts/prod.ts`, which awaits a boolean. */
+export async function checkLicenseCompliance(cwd = "."): Promise<boolean> {
+  const report = checkLicenses({ cwd });
+  console.log(formatLicenseReport(report));
+  return report.ok;
 }

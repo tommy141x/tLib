@@ -94,7 +94,7 @@ end
 
 eq(type(exported.CommunityConfigsUpdate), 'function', 'CommunityConfigsUpdate is exported')
 
--- ── The whole required set reaches the wire ─────────────────────────────────
+-- -- The whole required set reaches the wire ---------------------------------
 
 reset()
 local ok = update(valid())
@@ -121,7 +121,7 @@ update(valid({ description = 'Full lightbar + grille', keyLabel = '2018 Charger'
 eq(captured.description, 'Full lightbar + grille', 'an explicit description was dropped')
 eq(captured.keyLabel, '2018 Charger', 'an explicit keyLabel was dropped')
 
--- ── A pattern is the one type with no key ───────────────────────────────────
+-- -- A pattern is the one type with no key -----------------------------------
 --
 -- Same rule as upload. Requiring a key here would make a published pattern
 -- uneditable, and sending one would make the row look vehicle-specific to
@@ -134,7 +134,7 @@ eq(captured.configType, 'pattern', 'the pattern type was not sent')
 eq(captured.key, nil, 'a pattern sent a key')
 eq(captured.keyLabel, nil, 'a pattern sent a keyLabel')
 
--- ── Refused here, not by the Worker ─────────────────────────────────────────
+-- -- Refused here, not by the Worker -----------------------------------------
 --
 -- Each of these used to reach the API and come back as an opaque 400. The
 -- point of the local refusal is that nothing is sent at all.
@@ -158,7 +158,7 @@ local bad = update('not a table')
 eq(bad.ok, false, 'a non-table opts was accepted')
 eq(#bridgeCalls, 0, 'a non-table opts reached the API')
 
--- ── A refusal from the Worker is passed through, not swallowed ──────────────
+-- -- A refusal from the Worker is passed through, not swallowed --------------
 
 reset()
 nextResult = { ok = false, err = 'edit token refused' }

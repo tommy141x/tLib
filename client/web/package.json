@@ -11,14 +11,13 @@
   "dependencies": {
     "@ark-ui/solid": "6.0.0-next.0",
     "@solid-primitives/i18n": "^2.2.1",
+    "@solid-primitives/utils": "7.0.0-next.4",
     "@solidjs/web": "2.0.0-rc.14",
     "@tanstack/solid-form": "^1.33.5",
     "@unocss/reset": "^66.11.0",
-    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-solid": "^1.47.0",
     "solid-js": "2.0.0-rc.14",
-    "solid-motionone": "^1.0.4",
     "unocss-merge": "^0.10.0"
   },
   "devDependencies": {
