@@ -232,12 +232,13 @@ export function stageFontLicences(
         "one of:\n" +
         licenceDirs.map((d) => `  ${d}`).join("\n") +
         "\nor, for a directory of faces documented together, a `LICENSES.md` beside them." +
-        "\n\nREQUIRES A DECISION, not a licence file: `Mustica.otf` in the QRX-760 layout. " +
-        "Its name table carries no grant -- nameID 13 only repeats the copyright line, and " +
-        "there is no nameID 14. Alifinart Studio publishes the free weights as " +
-        "donationware whose terms are not evidenced anywhere in this repo. Clearing this " +
-        "needs either proof of a purchased licence filed beside the font, or the face " +
-        "replaced in that layout. Do NOT write a notice for it from memory."
+        "\n\nFIRST read the face's own OpenType name table -- nameID 0, 13 and 14 -- not its " +
+        "download page. If it carries no grant at all (nameID 13 merely repeating the " +
+        "copyright line, no nameID 14) then no licence file can honestly be written for it, " +
+        "and this is a DECISION rather than a missing file: either proof of a purchased " +
+        "licence filed beside the font, or replace the face. Do NOT write a notice from " +
+        "memory. tRadio's `Mustica.otf` was exactly this case and was resolved on " +
+        "2026-10-23 by replacing it with an OFL-licensed face."
     );
   }
 
