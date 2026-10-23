@@ -112,6 +112,59 @@ const DEFAULT_PUBLIC_DIR = "docs/public";
  */
 const SKIP_DIRS = new Set(["bin", "logs", "node_modules"]);
 
+/**
+ * The shared Windows launcher `CodePathWin` points at, and the files that decide
+ * its bytes.
+ *
+ * ## It is built here because the thing it replaces was built nowhere
+ *
+ * Stream Deck starts a Node plugin with `node.exe`, a CONSOLE-subsystem binary,
+ * and Windows gives a console process without a terminal to the default terminal
+ * application -- a blank terminal window per plugin. The first answer to that was
+ * `bun build --compile --windows-hide-console`, which is correct about the
+ * subsystem and catastrophic about everything else: 114 MB of embedded Bun
+ * runtime per plugin, 99.8% of the bundle, over Cloudflare Workers' 25 MiB asset
+ * cap (it took the website's deploys down twice in one day), and Node, V8,
+ * OpenSSL, libuv, ICU, zlib, llhttp, nghttp2 and brotli shipped with no notice
+ * file at any path. And the command that produced it existed in NO script: it was
+ * typed by hand, once, so only one machine could rebuild the download.
+ *
+ * `shared/rust/deck-launcher` is 0.2 MB, embeds nothing, and resolves the Node
+ * the host would itself have used at launch time. Three resources share this
+ * pack step, so building it here is what makes tRadio, tELS and tRadar all
+ * correct rather than one of them.
+ */
+const LAUNCHER_DIR = join(import.meta.dir, "../../rust/deck-launcher");
+const LAUNCHER_SOURCES = ["Cargo.toml", "build.rs", "src/main.rs"];
+/** Explicit, so the pack cannot depend on which host it ran on. */
+const LAUNCHER_TRIPLE = "x86_64-pc-windows-msvc";
+const LAUNCHER_BUILD_DIR = join(import.meta.dir, "../../../.build/deck-launcher");
+
+interface DeckManifest {
+  CodePathWin?: string;
+  Nodejs?: { Version?: string };
+}
+
+function readManifest(paths: DeckPaths): DeckManifest | null {
+  const path = join(paths.sdPlugin, "manifest.json");
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as DeckManifest;
+  } catch (e) {
+    throw new Error(`Stream Deck manifest is not readable JSON (${path}): ${String(e)}`);
+  }
+}
+
+/**
+ * `CodePathWin` when it names a native binary this build is responsible for
+ * producing. A `.js` there means the host launches node itself, which is the
+ * arrangement the launcher exists to replace — so there is nothing to build.
+ */
+function launcherTarget(manifest: DeckManifest | null): string | null {
+  const path = manifest?.CodePathWin;
+  return path?.toLowerCase().endsWith(".exe") ? path : null;
+}
+
 export function deckPaths(cfg: DeckPluginConfig): DeckPaths {
   const pluginRoot = join(cfg.root, cfg.pluginDir ?? DEFAULT_PLUGIN_DIR);
   const fileName = `${cfg.pluginId}.streamDeckPlugin`;
@@ -185,6 +238,30 @@ export function scanDeckSources(cfg: DeckPluginConfig): DeckSourceScan {
     }
     const st = statSync(full);
     files.push({ rel: name, sha256: sha256File(full), size: st.size, mtimeMs: st.mtimeMs });
+  }
+
+  // The launcher is an input to the artifact exactly like `src/` is, so editing
+  // it has to make the gate go red. It is hashed only for a plugin that actually
+  // embeds one: a manifest with no native `CodePathWin` does not ship it, and
+  // hashing it there would report every plugin stale on a launcher change.
+  if (launcherTarget(readManifest(paths))) {
+    for (const name of LAUNCHER_SOURCES) {
+      const full = join(LAUNCHER_DIR, name);
+      if (!existsSync(full)) {
+        throw new Error(
+          `The shared Stream Deck launcher is missing ${name} (${full}). CodePathWin names a ` +
+            "native binary, so this scan would hash the artifact's sources without the sources " +
+            "of the one file in it that is not built from this resource."
+        );
+      }
+      const st = statSync(full);
+      files.push({
+        rel: `tLib/shared/rust/deck-launcher/${name}`,
+        sha256: sha256File(full),
+        size: st.size,
+        mtimeMs: st.mtimeMs,
+      });
+    }
   }
 
   if (files.length === 0) {
@@ -291,6 +368,71 @@ export function checkDeckArtifact(cfg: DeckPluginConfig): DeckCheckResult {
 }
 
 /**
+ * Produce the native `CodePathWin` binary, in place, from tracked source.
+ *
+ * Cargo is a hard requirement rather than a fallback to a committed binary: a
+ * prebuilt `.exe` in the tree is how the last one came to be unrebuildable.
+ */
+function buildDeckLauncher(
+  paths: DeckPaths,
+  manifest: DeckManifest,
+  target: string,
+  execute: typeof run
+): void {
+  step(`Building the Windows launcher for ${target}`);
+
+  // Bun.spawnSync THROWS ENOENT on a missing binary rather than returning a
+  // status, so without this the whole pack fails with a stack trace that names
+  // neither Rust nor what to do. tELS and tRadar share this step and neither has
+  // any other Rust in it.
+  if (!Bun.which("cargo")) {
+    throw new Error(
+      `${target} is a native launcher and cargo is not on PATH. Install Rust (rustup.rs) and ` +
+        `the ${LAUNCHER_TRIPLE} target, then re-run. There is deliberately no prebuilt binary ` +
+        "to fall back to."
+    );
+  }
+
+  // Which Node major the host would have used. The launcher prefers it and falls
+  // back, so an absent block is not fatal — but passing the manifest's own value
+  // is what makes the launcher's choice the same choice.
+  const nodeMajor = manifest.Nodejs?.Version ?? "";
+
+  execute(
+    "cargo",
+    [
+      "build",
+      "--release",
+      "--target",
+      LAUNCHER_TRIPLE,
+      "--manifest-path",
+      join(LAUNCHER_DIR, "Cargo.toml"),
+      "--target-dir",
+      LAUNCHER_BUILD_DIR,
+    ],
+    LAUNCHER_DIR,
+    { DECK_NODE_MAJOR: nodeMajor }
+  );
+
+  const built = join(LAUNCHER_BUILD_DIR, LAUNCHER_TRIPLE, "release", "deck-launcher.exe");
+  if (!existsSync(built)) {
+    throw new Error(
+      `cargo reported success but produced no launcher at ${built}. Refusing to pack whatever ` +
+        `${target} happened to be already — that is how a 114 MB hand-built binary shipped for ` +
+        "three releases."
+    );
+  }
+
+  const dest = join(paths.sdPlugin, target);
+  mkdirSync(dirname(dest), { recursive: true });
+  copyFileSync(built, dest);
+  console.log(
+    `  → ${target} — ${(statSync(dest).size / 1024).toFixed(1)} KiB` +
+      (nodeMajor ? `, resolving Node ${nodeMajor} at launch` : "")
+  );
+}
+
+/**
  * Build, validate, pack, publish — and write the stamp the gate reads.
  */
 export function packDeckPlugin(
@@ -320,6 +462,12 @@ export function packDeckPlugin(
 
   if (cfg.install !== false) installDeps(paths.pluginRoot);
   execute("bun", ["run", "build"], paths.pluginRoot);
+
+  // Before `validate`, which checks that every path the manifest names exists.
+  const manifest = readManifest(paths);
+  const launcher = launcherTarget(manifest);
+  if (launcher && manifest) buildDeckLauncher(paths, manifest, launcher, execute);
+
   execute("bun", ["run", "validate"], paths.pluginRoot);
   execute("bun", ["run", "pack"], paths.pluginRoot);
 

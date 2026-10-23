@@ -151,8 +151,44 @@ export function assertManifestOnDisk(
   console.log(`  manifest coverage: ${checked} declared path(s), all present in the staged tree`);
 }
 
-export function assertManifestStaged(manifestSource: string, include: string[]) {
-  const { missing, checked } = manifestCoverage(manifestSource, include);
+/**
+ * Paths a manifest declares ON PURPOSE and the release stages NEVER.
+ *
+ * There is exactly one shape of these today and it is not a mistake: a resource that
+ * ships both generations declares both `.ytyp` files, because an Enhanced client is
+ * never served `stream/` and so cannot resolve an archetype declared only from there --
+ * measured on an Enhanced client 2026-10-23, where `IsModelValid` answered false for all
+ * 32 of tUnit's cell archetypes and no text could draw on any vehicle. But the Cfx escrow
+ * uploader rejects gen9 assets per FILE, so `stream_enhanced/` cannot be in a release at
+ * all. The manifest must name it and the zip must not contain it, and both of those are
+ * correct at the same time.
+ *
+ * Declaring it here rather than deleting the manifest line, or loosening the gate, keeps
+ * the exemption a NAMED one commit can be read against. A path listed here that stops
+ * being deliberate is a one-line deletion; a gate that silently tolerated absent paths
+ * would be the "green while measuring nothing" failure this estate keeps finding.
+ */
+export function assertManifestStaged(
+  manifestSource: string,
+  include: string[],
+  declaredNotStaged: string[] = []
+) {
+  const exempt = new Set(declaredNotStaged);
+  const { missing: allMissing, checked } = manifestCoverage(manifestSource, include);
+  const missing = allMissing.filter((m) => !exempt.has(m));
+
+  // An exemption for a path the manifest no longer declares is dead weight that reads as
+  // a live decision -- the same trap as a vendor list entry that can never match. Name it
+  // rather than letting it rot.
+  const stale = [...exempt].filter((e) => !allMissing.includes(e));
+  if (stale.length > 0) {
+    throw new Error(
+      `declaredNotStaged names ${stale.length} path(s) that are not missing from the release:\n` +
+        stale.map((s) => `  ${s}`).join("\n") +
+        "\nEither fxmanifest.lua no longer declares them, or they are staged after all. Remove them."
+    );
+  }
+
   if (checked === 0) {
     // A manifest with nothing to load is not a manifest -- the parse broke, and
     // reporting "all covered" would make this check worse than not having it.

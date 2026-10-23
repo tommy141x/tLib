@@ -1,0 +1,18 @@
+[package]
+name = "deck-launcher"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# No dependencies, deliberately. This binary ships to customers inside every
+# `.streamDeckPlugin`, and the whole reason it exists is that the artifact it
+# replaces embedded a JavaScript runtime whose notice-retention licences we were
+# not discharging. A crate graph here would hand that problem back in miniature.
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -22,8 +22,13 @@ export function step(label: string) {
   console.log(`\n→ ${label}`);
 }
 
-export function run(cmd: string, args: string[], cwd: string) {
-  const proc = Bun.spawnSync([cmd, ...args], { cwd, stdout: "inherit", stderr: "inherit" });
+export function run(cmd: string, args: string[], cwd: string, env?: Record<string, string>) {
+  const proc = Bun.spawnSync([cmd, ...args], {
+    cwd,
+    stdout: "inherit",
+    stderr: "inherit",
+    env: env ? { ...process.env, ...env } : undefined,
+  });
   if (proc.exitCode !== 0) {
     console.error(`\nFailed: ${cmd} ${args.join(" ")}`);
     process.exit(1);
