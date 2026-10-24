@@ -4,6 +4,7 @@ import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconSearch from "~icons/lucide/search";
 import IconTrash2 from "~icons/lucide/trash-2";
 import { NuiButton } from "../../nui-kit/NuiButton";
+import { DeleteFromServer } from "./DeleteFromServer";
 import { BUILTIN_EXPLANATION, isBuiltin, isInstallBusy } from "../install-machine";
 import { matchLocalName } from "../local-name";
 import { InstallError } from "./InstallError";
@@ -301,19 +302,11 @@ function InstalledItemCard(props: {
         <div class="flex items-center gap-1">
           <Show when={props.onDelete}>
             {(onDelete) => (
-              <NuiButton
-                class="mp-action mp-delete"
-                aria-label="Delete from server"
+              <DeleteFromServer
                 disabled={busy() || managementBlocked()}
-                aria-busy={busy() ? "true" : "false"}
-                onClick={onDelete}
-                title="Delete from server"
-              >
-                <Show when={s().state === "uninstalling"} fallback={<IconTrash2 class="w-3 h-3" />}>
-                  <IconLoaderCircle class="w-3 h-3 animate-spin" />
-                </Show>
-                <Show when={s().state === "uninstalling"}>Deleting…</Show>
-              </NuiButton>
+                uninstalling={s().state === "uninstalling"}
+                onConfirm={() => onDelete()()}
+              />
             )}
           </Show>
           <Show when={props.onInstall}>

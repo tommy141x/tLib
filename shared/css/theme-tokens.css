@@ -118,9 +118,25 @@
      are how it reads it. See docs/internal/theming-tokens.md. */
   --motion: 1;
 
-  /* The face above. Consumers inherit it by importing this sheet; tLib's own
-     global.css no longer needs to say it. */
+  /* ⚠️ BOTH FONT TOKENS LIVE HERE AND IN NO OTHER SHEET. Declaring either one in a
+     second unlayered `:root` makes `@import` ORDER decide the product's typeface, with
+     no error and no test to catch it. That is not hypothetical: until 2026-10-24
+     `fonts.css` declared `--font-sans` too, and the built CSS of the estate came out
+     split — tELS, tRadio and tUnit on Inter, the other seven on Hanken Grotesk, purely
+     because of which `@import` each one happened to put last. Swapping two adjacent
+     import lines in tUnit changed the product's face.
+
+     `--font-mono` is here for the other half of the same bug: it was declared ONLY in
+     `fonts.css`, so the five bundles that import this sheet without it (tLib, tRadar,
+     tRadio, tDetector, tSpawn) read it twice from surface.css and had both declarations
+     dropped at computed-value time. The same shared text field rendered mono in tELS and
+     sans in tRadio. A declared token falls back through the stack; an undeclared one
+     takes the whole `font-family` down with it.
+
+     The faces themselves still ship from `fonts.css` — import that too for real Inter and
+     JetBrains Mono; without it these stacks resolve to the system fallbacks. */
   --font-sans: "Hanken Grotesk", Inter, "Segoe UI", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 /* The elevation ladder: --background ≤ --card < --input = --popover < --border. Every

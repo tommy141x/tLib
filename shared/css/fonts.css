@@ -135,11 +135,14 @@
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* A BARE `:root`, deliberately, and never inside `@layer base`. This file is
-   unlayered and in the cascade an unlayered declaration beats a layered one
-   regardless of source order — the trap theme-tokens.css documents having cost
-   tELS and tAFK their whole override block. */
-:root {
-  --font-sans: Inter, "Segoe UI", Arial, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
-}
+/* ⚠️ THIS SHEET DECLARES NO TOKENS, AND MUST NOT. It ships faces; `theme-tokens.css`
+   names them.
+
+   It used to declare `--font-sans` and `--font-mono` in a bare `:root`. Both are also
+   unlayered in theme-tokens.css, so the cascade fell back to `@import` order and the
+   estate split in two: three products shipped Inter and seven Hanken Grotesk, decided by
+   which import each one happened to put last. Nothing errored and no test saw it.
+
+   If a bundle reads `--font-mono` (anything using surface.css's `.section-label` or
+   `.prop-input` does) and wants the real JetBrains face rather than the system fallback,
+   it imports THIS file as well as theme-tokens.css. That is the only reason to import it. */

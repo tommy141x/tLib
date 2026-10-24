@@ -29,17 +29,15 @@
 }
 
 /* Neutral HUD surfaces. The HSL channels are the public dialog/toast theme
-   contract and now live in shared/css/theme-tokens.css, imported above; the menu
-   keeps its separate full-color tokens on .tlib-menu. Only the font stays here,
-   because it names a face this resource ships and no other one has. */
-@layer base {
-  :root {
-    /* The shipped face first, then the same fallbacks the menu has always
-       named, so a client that somehow cannot decode the woff2 lands where it
-       used to rather than on a serif. */
-    --font-sans: "Hanken Grotesk", Inter, "Segoe UI", Arial, sans-serif;
-  }
+   contract and live in shared/css/theme-tokens.css, imported above; the menu keeps
+   its separate full-color tokens on .tlib-menu.
 
+   ⛔ THE FONT TOKEN NO LONGER LIVES HERE EITHER, and the block that held it was a
+   live trap: it sat inside `@layer base`, which this file's own README section says
+   is silently ignored against an unlayered sheet. It happened to name the identical
+   stack theme-tokens.css names, so nothing looked wrong — and anyone editing it to
+   change tLib's face would have seen no effect and no error. */
+@layer base {
   html,
   body {
     margin: 0;

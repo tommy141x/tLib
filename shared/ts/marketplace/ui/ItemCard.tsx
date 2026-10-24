@@ -4,8 +4,8 @@ import IconEye from "~icons/lucide/eye";
 import IconHeart from "~icons/lucide/heart";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconPlay from "~icons/lucide/play";
-import IconTrash2 from "~icons/lucide/trash-2";
 import { NuiButton } from "../../nui-kit/NuiButton";
+import { DeleteFromServer } from "./DeleteFromServer";
 import { CARD_COPY, cardIdentity, cardStats, likeAffordance, nextLikedState } from "../card-model";
 import {
   BUILTIN_EXPLANATION,
@@ -159,19 +159,11 @@ export function ItemCard(props: {
           </NuiButton>
 
           <Show when={removable()}>
-            <NuiButton
-              class="mp-action mp-delete"
-              aria-label="Delete from server"
+            <DeleteFromServer
               disabled={busy()}
-              aria-busy={busy() ? "true" : "false"}
-              onClick={props.onUninstall}
-              title="Delete from server"
-            >
-              <Show when={s().state === "uninstalling"} fallback={<IconTrash2 class="w-3 h-3" />}>
-                <IconLoaderCircle class="w-3 h-3 animate-spin" />
-              </Show>
-              <Show when={s().state === "uninstalling"}>Deleting…</Show>
-            </NuiButton>
+              uninstalling={s().state === "uninstalling"}
+              onConfirm={() => props.onUninstall?.()}
+            />
           </Show>
 
           {/*

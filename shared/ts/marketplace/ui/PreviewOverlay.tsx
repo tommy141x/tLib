@@ -14,9 +14,9 @@ import IconDownload from "~icons/lucide/download";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconPause from "~icons/lucide/pause";
 import IconPlay from "~icons/lucide/play";
-import IconTrash2 from "~icons/lucide/trash-2";
 import { buildHudPreviewScript } from "../../hud-preview-script";
 import { NuiButton } from "../../nui-kit/NuiButton";
+import { DeleteFromServer } from "./DeleteFromServer";
 import { cardIdentity } from "../card-model";
 import {
   BUILTIN_EXPLANATION,
@@ -113,18 +113,11 @@ export function PreviewOverlay(props: {
         <div class="flex-1" />
         <div class="flex items-center gap-1 shrink-0">
           <Show when={removable()}>
-            <NuiButton
-              class="mp-action mp-delete"
-              aria-label="Delete from server"
+            <DeleteFromServer
               disabled={busy()}
-              aria-busy={busy() ? "true" : "false"}
-              onClick={props.onUninstall}
-            >
-              <Show when={s().state === "uninstalling"} fallback={<IconTrash2 class="w-3 h-3" />}>
-                <IconLoaderCircle class="w-3 h-3 animate-spin" />
-              </Show>
-              <Show when={s().state === "uninstalling"}>Deleting…</Show>
-            </NuiButton>
+              uninstalling={s().state === "uninstalling"}
+              onConfirm={() => props.onUninstall?.()}
+            />
           </Show>
           {/* See the long note on the same button in `ItemCard.tsx`: a built-in
               keeps a disabled "Built in" rather than disappearing, because the

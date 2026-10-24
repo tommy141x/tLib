@@ -147,12 +147,22 @@ function DialogSession(props: {
       const d = dialog();
       // Never close on HTTP completion: Lua alone sends closeDialog after value
       // validation. This also leaves the form available after rejected submits.
-      await fetchNui("dialogSubmit", {
+      const response = await fetchNui<{ ok?: boolean }>("dialogSubmit", {
         id: d.id,
         instance: d.instance,
         values: initialValues(d.fields, value.values),
       });
-      if (alive && props.open) setNotice("Submitted. Waiting for the game to accept these values.");
+      if (!alive || !props.open) return;
+      // `fetchNui` resolves to null on EVERY failure and never rejects (see its contract
+      // in shared/ts/nui.ts), so an unconditional success notice told the user "Submitted"
+      // when the callback had timed out or the handler had thrown. The form stays open
+      // either way — Lua alone closes it — so the honest failure is simply to say so and
+      // leave their values in the fields.
+      setNotice(
+        response?.ok === false || response === null
+          ? "Not submitted — the game did not answer. Your values are still here; close this and try again."
+          : "Submitted. Waiting for the game to accept these values."
+      );
     },
   }));
   const values = form.useSelector((state) => state.values.values);
