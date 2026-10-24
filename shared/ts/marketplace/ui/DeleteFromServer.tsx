@@ -80,10 +80,7 @@ export function DeleteFromServer(props: DeleteFromServerProps) {
       aria-busy={props.uninstalling ? "true" : "false"}
       onClick={handleClick}
     >
-      <Show
-        when={props.uninstalling}
-        fallback={<IconTrash2 class="w-3 h-3" />}
-      >
+      <Show when={props.uninstalling} fallback={<IconTrash2 class="w-3 h-3" />}>
         <IconLoaderCircle class="w-3 h-3 animate-spin" />
       </Show>
       <Show when={props.uninstalling}>Deleting…</Show>

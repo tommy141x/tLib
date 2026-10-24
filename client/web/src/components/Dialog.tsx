@@ -15,14 +15,15 @@ import {
 import { fetchNui, onNuiEvent } from "@/lib/nui";
 import {
   clickIsSendable,
-  type DialogData,
-  type DialogField,
-  type DialogValue,
-  type DialogValues,
+  dialogSpecWarnings,
   effectiveTabs,
   groupFieldsByRow,
   initialValues,
   matchesDialog,
+  type DialogData,
+  type DialogField,
+  type DialogValue,
+  type DialogValues,
   validationErrors,
 } from "./dialog-model";
 import {
@@ -87,6 +88,15 @@ function DialogSession(props: {
   onExit: () => void;
 }) {
   const [dialog, setDialog] = createSignal(props.initial);
+  /*
+    Authoring problems in the SPEC go to the console of whoever shipped it, once per
+    opened dialog. Warn, never throw: a badly authored dialog must still open, because
+    refusing to draw it turns a content nit into a player-facing outage. See
+    `dialogSpecWarnings` for why this check lives against the data rather than in CSS.
+  */
+  for (const warning of dialogSpecWarnings(props.initial)) {
+    console.warn(`[tLib] dialog "${props.initial.id}": ${warning}`);
+  }
   const [attempted, setAttempted] = createSignal(false);
   const [touched, setTouched] = createSignal<Set<string>>(new Set());
   const [notice, setNotice] = createSignal("");
