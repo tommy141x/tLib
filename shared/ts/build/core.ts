@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { describeSanitize, sanitizeStagedSecrets } from "../secrets/release.ts";
 import { stageFontLicences } from "./font-licences.ts";
 import { checkLicenses, formatLicenseReport } from "./license.ts";
+import { type LicenceSource, mergeLicenceFiles } from "./licence-bundle.ts";
 import { assertManifestStaged } from "./manifest-coverage.ts";
 
 export function step(label: string) {
@@ -157,6 +158,14 @@ export interface ProdConfig {
    * searched and does not need listing.
    */
   fontLicenceDirs?: string[];
+  /**
+   * The legal documents to merge into one `server/LICENSE.txt`, in reading order.
+   *
+   * Omitted means no merge, for a resource that ships none. When set, the files must
+   * NOT also appear in `include` -- `mergeLicenceFiles` throws on a loose copy in the
+   * staged tree, because two copies of a licence is how they come to disagree.
+   */
+  licenceSources?: LicenceSource[];
 }
 
 export function assertProductionFiles(root: string, files: string[]) {
@@ -225,6 +234,20 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
   // rule and a new artifact can never reach a release by being forgotten.
   const dist = join(root, ".build", "dist");
   stageFiles(root, dist, include);
+
+  // One merged `server/LICENSE.txt` rather than loose legal files at the resource root,
+  // which is the first thing an operator sees when they extract the zip. The repo keeps
+  // the documents separate; only the archive is merged.
+  if (config.licenceSources) {
+    step("Merging the licence and notices");
+    const bundle = mergeLicenceFiles({
+      root,
+      dist,
+      name,
+      sources: config.licenceSources,
+    });
+    console.log(`  ${bundle.out} — ${bundle.sections.length} section(s), ${(bundle.bytes / 1024).toFixed(1)} KB`);
+  }
 
   // A licence beside every staged webfont, or refuse to build. After staging and
   // before zipping, deliberately: it has to read the tree that is about to be

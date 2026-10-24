@@ -35,17 +35,20 @@ runProd(
       // nothing here noticed the difference.
       "server/lib/http/icons.json",
     ],
+    // Merged into one `server/LICENSE.txt` rather than staged loose at the root. The
+    // ISC/MIT notices cover the Lucide set in server/lib/http/icons.json and the npm
+    // packages inside the shipped bundles; those licences bind the distribution, so the
+    // text is a release file and not documentation. `LICENSE` stays at the REPO root,
+    // because that is where GitHub reads it to label a public repository.
+    licenceSources: [
+      { title: "Licence (MIT)", file: "LICENSE" },
+      { title: "Third-party notices", file: "THIRD-PARTY-NOTICES.md" },
+    ],
     include: [
       "fxmanifest.lua",
       // Named as '@tLib/imports.lua' by every consumer's manifest.
       "imports.lua",
       "README.md",
-      "LICENSE",
-      // The ISC/MIT notices for the Lucide set in server/lib/http/icons.json and
-      // for the npm packages measured inside the shipped bundles. Those licences
-      // require the notice to travel with the binary, so it is a release file,
-      // not documentation.
-      "THIRD-PARTY-NOTICES.md",
 
       "shared/sh_api.lua",
       "shared/sh_branding.lua",

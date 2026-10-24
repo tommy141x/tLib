@@ -70,6 +70,10 @@ export {
   readDeckStamp,
   scanDeckSources,
 } from "./deck-pack.ts";
+export type { LicenceBundleResult, LicenceBundleSpec, LicenceSource } from "./licence-bundle.ts";
+// Merges the legal documents into one `server/LICENSE.txt` at STAGING time; the repo
+// keeps them separate, since a root LICENSE is what GitHub reads on a public repo.
+export { mergeLicenceFiles } from "./licence-bundle.ts";
 export type { BundledPackages } from "./bundled-packages.ts";
 // Reads the BUILT server bundle, not any manifest: the package that prompted it
 // (adm-zip) is a dependency of tLib, so no consumer repo declares it anywhere.
