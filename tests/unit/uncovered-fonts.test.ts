@@ -86,11 +86,28 @@ test("a licence already beside the font counts as covered", () => {
   expect(uncoveredFonts(dist, [licences])).toEqual([]);
 });
 
-test("a LICENSES.md beside the faces covers them, as tUnit's web/fonts does", () => {
+test("a LICENSES.md covers the faces it names, as tUnit's web/fonts does", () => {
   writeFileSync(join(dist, "poppins-400-latin-cpxAROuN.woff2"), "font");
-  writeFileSync(join(dist, "LICENSES.md"), "three display faces, documented\n");
+  writeFileSync(
+    join(dist, "LICENSES.md"),
+    "## `poppins-400-latin-cpxAROuN.woff2` — Poppins 400\n\nSIL OFL 1.1\n"
+  );
 
   expect(uncoveredFonts(dist, [licences])).toEqual([]);
+});
+
+test("a LICENSES.md does NOT cover a face it never mentions", () => {
+  // The exemption used to be the file's EXISTENCE, so a fourth face dropped into
+  // tUnit's web/fonts/ shipped undocumented with the gate green. Coverage is a claim
+  // about a face; a sibling file that does not mention it makes no such claim.
+  writeFileSync(join(dist, "poppins-400-latin-cpxAROuN.woff2"), "font");
+  writeFileSync(join(dist, "newface-700-latin-QQQQ.woff2"), "font");
+  writeFileSync(
+    join(dist, "LICENSES.md"),
+    "## `poppins-400-latin-cpxAROuN.woff2` — Poppins 400\n\nSIL OFL 1.1\n"
+  );
+
+  expect(uncoveredFonts(dist, [licences])).toEqual(["newface-700-latin-QQQQ.woff2"]);
 });
 
 test("the matcher is a prefix match, so a short family cannot swallow a longer one", () => {

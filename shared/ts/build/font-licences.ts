@@ -25,7 +25,7 @@
 // it runs on every UI build, where failing would be worse. This runs only at
 // package time.
 
-import { copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 // `.woff2` is what Vite emits; the rest are what a layout or a vendored face
@@ -144,7 +144,23 @@ function licenceBesideFont(font: string): boolean {
  */
 function coverageFor(font: string, available: Map<string, string>): "satisfied" | string | null {
   const here = dirname(font);
-  if (existsSync(join(here, "LICENSES.md"))) return "satisfied";
+
+  // A `LICENSES.md` beside the faces covers the ones it NAMES, and only those.
+  //
+  // It used to cover everything in the directory, which made the gate answer a
+  // question nobody asked: the file's existence, not the face's coverage. Drop a
+  // fourth face into tUnit's `web/fonts/` -- the directory this exemption was written
+  // for, where three faces are documented together -- and the archive shipped it
+  // undocumented with the gate green, because a sibling file happened to exist.
+  //
+  // Matched on the file name, because that is how the document is organised: each
+  // face gets a `## \`condensed.woff2\` -- Barlow Condensed 900` heading. A face the
+  // index does not mention falls through to the normal search for a licence of its
+  // own, which is exactly what should happen to a face nobody documented.
+  const index = join(here, "LICENSES.md");
+  if (existsSync(index) && readFileSync(index, "utf8").includes(basename(font))) {
+    return "satisfied";
+  }
 
   // A licence already beside the font covers it whether or not the family is also
   // in a source directory. The stager never needed this — it only asked "what
