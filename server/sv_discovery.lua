@@ -592,7 +592,7 @@ function Discovery.create(opts)
                     --
                     -- Measured in the field 2026-10-23, on the US East test server: tLS
                     -- data.json carried `18charger21tr` (18 patterns, the old set) while
-                    -- `timmyg_matrix_charger/tls.json` shipped 30 patterns including the
+                    -- `matrix_charger/tls.json` shipped 30 patterns including the
                     -- one being looked for. Updating the pack file changed nothing in game,
                     -- restarting changed nothing, and the only fix was deleting the entry
                     -- from data.json by hand -- exactly the outcome the comment above says
