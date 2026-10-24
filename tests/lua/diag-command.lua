@@ -410,7 +410,7 @@ must(clientEvents[1].event == 'chat:addMessage' and clientEvents[1].target == 7,
 
 -- A config supplied as a function, resolved per invocation
 --
--- tAFK reads its settings out of data.json and tELS keeps serverDefaults, so
+-- tAFK reads its settings out of data.json and tLS keeps serverDefaults, so
 -- neither has a table to hand in at registration time. The loader is called per
 -- invocation, which is also what makes a credential written into that state
 -- AFTER boot covered.

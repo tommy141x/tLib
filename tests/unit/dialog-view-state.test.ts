@@ -50,7 +50,7 @@ describe("dialog view state restores where the player left it", () => {
     rememberDialogView("tradio_settings", { tab: "shop", scroll: {}, offset: { x: 0, y: 0 } });
     expect(recallDialogView("tradar_settings")?.tab).toBe("sounds");
     expect(recallDialogView("tradio_settings")?.tab).toBe("shop");
-    expect(recallDialogView("tels_settings")).toBeUndefined();
+    expect(recallDialogView("tls_settings")).toBeUndefined();
   });
 
   test("scroll is remembered per tab, and a tabless dialog has exactly one panel", () => {

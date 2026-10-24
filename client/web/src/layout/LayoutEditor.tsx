@@ -131,9 +131,9 @@ export default function LayoutEditor() {
    * asking.
    *
    * The sentence that used to be here — "this was the ONLY surface in the
-   * stack that threw it away without asking: tELS prompts, the prop editor
+   * stack that threw it away without asking: tLS prompts, the prop editor
    * prompts, tAFK prompts" — was WRONG about the prop editor, and being wrong
-   * here sent a later audit down the wrong path. tELS and tAFK did prompt;
+   * here sent a later audit down the wrong path. tLS and tAFK did prompt;
    * tLib's own shared `PropEditor` did not, and had no dirty tracking anywhere
    * in its chain — Escape and Cancel both called `propEditorCancel` straight
    * out, in tRadar, tDetector and tRadio simultaneously. It prompts now, off the
@@ -1136,7 +1136,7 @@ export default function LayoutEditor() {
            * convention.
            *
            * Affirmative-left is the side the rest of the stack is already on — the
-           * prop editor (tLib's own, mounted by three consumers), tELS and tAFK —
+           * prop editor (tLib's own, mounted by three consumers), tLS and tAFK —
            * and it is the native order on Windows, which is the only OS a FiveM
            * client runs on. A player who confirms in the prop editor and then
            * meets a tLib dialog must not have to re-read the buttons; that
@@ -1205,7 +1205,7 @@ export default function LayoutEditor() {
                  * is that the lossy button goes right and the safe one takes the
                  * affirmative slot, because "Keep editing" IS the affirmative
                  * answer to "discard?" — the primary action of this dialog is to
-                 * NOT lose the work. tELS's discard guard, tUnit's
+                 * NOT lose the work. tLS's discard guard, tUnit's
                  * `CharacterEditor` footer and tLib's own shared `PropEditor`
                  * prompt are all spelled this way.
                  *

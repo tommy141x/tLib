@@ -3,7 +3,7 @@
  *
  * `uiLayoutContract` is the floor every product's layout install is gated by.
  * Three of the four consumers had NO contract before it existed — tDetector,
- * tRadar and tELS — so a bundle with no `ui.html`, or with an `install.lua` in
+ * tRadar and tLS — so a bundle with no `ui.html`, or with an `install.lua` in
  * it, installed with a success and went wrong later on a player's machine.
  *
  * The half of this file that matters most is `the shipped corpus still installs`:
@@ -58,7 +58,7 @@ const SHIPPED_CORPUS: Record<string, readonly string[]> = {
   "tRadar/SLX-1100": ["ui.html", "module.json", "chassis.png"],
   // The one that nests its artwork, which is why the allow-list is tested
   // against a PATH and not against a basename.
-  "tELS/WCC": [
+  "tLS/WCC": [
     "ui.html",
     "module.json",
     "icons/arrow.png",
@@ -69,7 +69,7 @@ const SHIPPED_CORPUS: Record<string, readonly string[]> = {
     "icons/panel.png",
     "icons/reference.png",
   ],
-  "tELS/WCC2": [
+  "tLS/WCC2": [
     "ui.html",
     "module.json",
     "btn.png",
@@ -93,7 +93,7 @@ describe("accepts", () => {
   });
 
   test("inline script inside ui.html", () => {
-    // Load-bearing for tELS: both of its shipped layouts drive themselves from a
+    // Load-bearing for tLS: both of its shipped layouts drive themselves from a
     // function the preview calls by name. What the allow-list refuses is a
     // separate executable FILE, and the document's CONTENTS are not inspected by
     // the floor at all.

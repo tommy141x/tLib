@@ -34,7 +34,7 @@ const THEMING_HOOKS = [/^tlib-/, "mp-preview", "weapon-stats"];
 /**
  * `cssRoots` reaches outside `src` because the stylesheets that declare these
  * names no longer live in this app. `nui.css` and `marketplace.css` moved into
- * `shared/ts` so that tELS, tDetector and tRadar can mount the marketplace
+ * `shared/ts` so that tLS, tDetector and tRadar can mount the marketplace
  * components -- nothing in a resource's own `src` is reachable from a sibling
  * resource. Without this, every `mp-*` class MarketplacePanel.tsx uses is
  * reported dead because its definition is simply out of scope.

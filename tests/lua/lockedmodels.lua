@@ -73,7 +73,7 @@ check('matching is case-insensitive', m.isLocked('18charger21tr') == true)
 check('whitespace around entries is ignored', m.isLocked('fpiu21tr') == true)
 check('a mixed-case query matches too', m.isLocked('FPIU21TR') == true)
 
--- Hash forms: tUnit keys by hash-as-string, tELS by name
+-- Hash forms: tUnit keys by hash-as-string, tLS by name
 
 convars = { tlib_locked_models = '18charger21tr' }
 m = load_module()

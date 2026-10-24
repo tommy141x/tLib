@@ -213,13 +213,35 @@ function platform.triggerEvent(event, ...)
     TriggerEvent(event, ...)
 end
 
+-- The client twin carries the full account of why this is the engine's own
+-- mechanism and why `provide 'x'` is not a substitute for it. In short:
+-- `provide` fixes GetResourceState and dependency checks, this fixes exports,
+-- and a rename needs both.
+local _legacyNames = {}
+local _published   = {}
+
+local function answerAs(legacyResource, name, fn)
+    AddEventHandler(('__cfx_export_%s_%s'):format(legacyResource, name), function(setCb)
+        setCb(fn)
+    end)
+end
+
+--- Also answer exports sent to a resource name this resource used to have.
+--- Order-independent with respect to `wrapExport`; see the client twin.
+function platform.publishExportsAs(legacyResource)
+    if type(legacyResource) ~= "string" or legacyResource == "" then return end
+    if _legacyNames[legacyResource] then return end
+    _legacyNames[legacyResource] = true
+    for name, fn in pairs(_published) do answerAs(legacyResource, name, fn) end
+end
+
 -- IT NOW ACTUALLY WRAPS. IT DID NOT, AND THE NAME SAID IT DID. The full
 -- account is on the client twin; in short, a throw inside an export body does
 -- not cross the FiveM boundary, so ~40 call sites that adopted this as a guard
 -- never had one. `resource` is still ignored for registration and used only in
 -- the error line. `table.pack`/`unpack` because `ok, reason` is the house shape.
 function platform.wrapExport(resource, name, fn)
-    exports(name, function(...)
+    local wrapped = function(...)
         local result = table.pack(pcall(fn, ...))
         if result[1] then return table.unpack(result, 2, result.n) end
         -- Printed, not re-raised. Re-raising puts it back where it came from:
@@ -227,7 +249,13 @@ function platform.wrapExport(resource, name, fn)
         -- got before — the change is that the reason now exists somewhere.
         print(("^1[%s] export '%s' threw: %s^7"):format(resource or "?", name, tostring(result[2])))
         return nil
-    end)
+    end
+
+    exports(name, wrapped)
+
+    -- One function object behind every name, so an alias cannot drift.
+    _published[name] = wrapped
+    for legacyResource in pairs(_legacyNames) do answerAs(legacyResource, name, wrapped) end
 end
 
 return platform

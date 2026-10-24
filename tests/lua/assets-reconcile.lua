@@ -1,9 +1,9 @@
 -- Reconciling a tracked asset registry against disk. The regression that made
--- this shared: tELS and tDetector both adopted the reconciled list only when
+-- this shared: tLS and tDetector both adopted the reconciled list only when
 -- its *length* changed, so a boot that removed one file and added another
 -- cancelled out and applied neither.
 local scanReply = nil
-GetCurrentResourceName = function() return 'tELS' end
+GetCurrentResourceName = function() return 'tLS' end
 exports = { tLib = { ScanResourceFiles = function(_, _, _) return scanReply end } }
 json = { decode = function(text)
     -- Enough of a decoder for the shapes ScanResourceFiles emits.

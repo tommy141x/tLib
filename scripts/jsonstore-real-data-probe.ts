@@ -59,7 +59,7 @@ const TLIB = resolve(import.meta.dir, "..");
 const SIBLINGS = resolve(TLIB, "..");
 
 /** Resources known to keep a `data.json`. Absent ones are reported, not skipped. */
-const CANDIDATES = ["tAFK", "tCAD", "tDetector", "tELS", "tRadar", "tRadio", "tUnit"];
+const CANDIDATES = ["tAFK", "tCAD", "tDetector", "tLS", "tRadar", "tRadio", "tUnit"];
 
 // No sibling at all is a different thing from "the siblings are there and their
 // data.json files are not". The first is a standalone clone of tLib, where this

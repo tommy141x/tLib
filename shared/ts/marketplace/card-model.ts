@@ -27,7 +27,7 @@ export function cardStats(item: MarketplaceItem): readonly CardStat[] {
 
 /**
  * The counts a stats row needs, narrowed to a structural contract so a host whose
- * item is not a `MarketplaceItem` can use it — tELS merges two catalogues into one
+ * item is not a `MarketplaceItem` can use it — tLS merges two catalogues into one
  * `CardView`. `MarketplaceItem` satisfies it structurally, so `cardStats`
  * delegates rather than reimplementing. See ../README.md.
  */

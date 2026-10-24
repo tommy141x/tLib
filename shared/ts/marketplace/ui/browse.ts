@@ -283,7 +283,7 @@ const previewCache = new Map<string, PreviewCacheEntry>();
  *
  * It is NOT a multiple of the server's own ceiling, and must not be read as one.
  * `MAX_PREVIEW_BYTES` in `server/lib/marketplace/browse.ts` is 10 MB (raised from
- * 2 MB on 2026-10-08, once two shipped tELS documents turned out to exceed the
+ * 2 MB on 2026-10-08, once two shipped tLS documents turned out to exceed the
  * old cap), so ONE admissible document can be larger than this whole budget. That
  * is what `evict` keeping the newest entry is for.
  */

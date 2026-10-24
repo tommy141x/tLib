@@ -3,7 +3,7 @@
 
     Why this file exists
 
-   These four woff2 files were on disk three times: `tELS/client/web/src/assets/
+   These four woff2 files were on disk three times: `tLS/client/web/src/assets/
    fonts`, `tUnit/client/web/src/assets/fonts`, and now here. The two copies were
    byte-identical (sha256-verified when this file was written) and their two
    `@font-face` blocks were the same block, one copied from the other with a

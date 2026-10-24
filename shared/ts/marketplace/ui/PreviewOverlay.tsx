@@ -556,7 +556,7 @@ function UiPreviewFrame(props: {
    * These are not the same moment, and the gap between them is the lag players
    * actually report. `html()` being set only means the document crossed the NUI
    * boundary; the iframe then has to parse it and decode its images, which is
-   * measured at 44–97 ms for tRadio's heads and 440 ms for tels-wcc in the
+   * measured at 44–97 ms for tRadio's heads and 440 ms for tls-wcc in the
    * pinned Chromium 103 that CEF is — longer on a low-end machine, and that
    * figure is 85–95% image decode. Gating the indicator on `html()` alone
    * therefore swapped "Loading…" for an EMPTY BLACK BOX for the entire
@@ -631,7 +631,7 @@ function UiPreviewFrame(props: {
         // Dummy state, so the layout renders non-empty.
         //
         // Two shapes of layout have to be covered. A layout that ships its own
-        // update function (tELS's WCC2, and anything built before the binder)
+        // update function (tLS's WCC2, and anything built before the binder)
         // gets that function called by name — the retry loop is for one that
         // registers asynchronously. A purely declarative layout has no script
         // at all, by design: every tDetector and tRadar skin is markup only,
@@ -648,8 +648,8 @@ function UiPreviewFrame(props: {
          * and "render this layout unbound" were the same code path. Surveyed
          * 2026-10-07, exactly three resources supply a preset, each as a
          * hand-written Lua table: tRadio (`cl_bridge.lua`'s
-         * `MARKETPLACE_PREVIEW_STATE`), tRadar and tDetector. **tELS supplies
-         * none**, so every tELS layout previewed here rendered with every
+         * `MARKETPLACE_PREVIEW_STATE`), tRadar and tDetector. **tLS supplies
+         * none**, so every tLS layout previewed here rendered with every
          * `data-hud-show` element visible at once and every readout left at
          * whatever placeholder its author typed.
          *

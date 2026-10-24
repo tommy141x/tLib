@@ -421,15 +421,15 @@ end
 --- Three resources discovered both halves of this independently and none of
 --- them was in the shared helper:
 ---
---- - `tELS/client/cl_editor.lua` — calling SetNuiFocus from inside a NUI
+--- - `tLS/client/cl_editor.lua` — calling SetNuiFocus from inside a NUI
 ---   callback can fail silently, so the release has to yield first.
 --- - the same file, and `tVDJ/client/nui.lua` — the generation guard. A UI that
 ---   reopens before the deferred thread resumes has already taken focus
 ---   synchronously, so an ungated release revokes the NEW session's focus. The
 ---   symptom is a fully-drawn editor with no cursor whose gizmo ignores every
 ---   click, and the only cure is exiting and re-entering. Exit-then-reopen
----   inside one frame is an ordinary user action: `/telsedit` is a toggle, and
----   tELS's settings dialog opens the editor immediately after closing itself.
+---   inside one frame is an ordinary user action: `/tlsedit` is a toggle, and
+---   tLS's settings dialog opens the editor immediately after closing itself.
 --- - `tLib/client/cl_layout.lua` warns about the third part: never try to
 ---   re-acquire focus from a deferred thread. This only ever releases.
 ---
@@ -491,8 +491,48 @@ end
 -- `table.pack`/`unpack` rather than a plain `return fn(...)`: several exports
 -- return more than one value (`ok, reason` is the house shape) and a guard that
 -- silently truncated them to the first would be a new bug in place of the old.
+-- The two halves of `publishExportsAs`, below. Kept as state because the calls
+-- can arrive in either order and both orders have to work.
+local _legacyNames = {}
+local _published   = {}
+
+-- Answer an export addressed to ANOTHER resource's name.
+--
+-- Not a trick: this is verbatim what the engine does for a resource's own
+-- exports. citizen/scripting/lua/scheduler.lua defines `exports(name, fn)` as
+-- this same AddEventHandler under GetCurrentResourceName(), and the read side
+-- (`exports['x'].y`) does no existence check on `x` at all -- it TriggerEvents
+-- the name and errors "No such export" only when nothing answers. So a second
+-- name is indistinguishable from the real one to every caller.
+--
+-- `provide 'x'` in the manifest does NOT do this; tDB measured that on a live
+-- server (tDB/server/utils/export-router.js:76). It makes GetResourceState('x')
+-- report `started`, which satisfies a dependency check and is why the gap looks
+-- closed, while `exports.x:anything()` still answers "No such export". Both
+-- halves are needed, and they fix different things.
+local function answerAs(legacyResource, name, fn)
+    AddEventHandler(('__cfx_export_%s_%s'):format(legacyResource, name), function(setCb)
+        setCb(fn)
+    end)
+end
+
+--- Also answer exports sent to a resource name this resource used to have.
+---
+--- For a renamed resource: every consumer written against the old name keeps
+--- working, including ones we do not ship and cannot edit. Call it once per
+--- retired name; calling it before or after the `wrapExport` calls is the same,
+--- which is deliberate -- exports get registered across many files and at least
+--- one call site registers them in a loop, so demanding an order here would be
+--- a trap that only shows up as a missing export on a customer's server.
+function platform.publishExportsAs(legacyResource)
+    if type(legacyResource) ~= "string" or legacyResource == "" then return end
+    if _legacyNames[legacyResource] then return end
+    _legacyNames[legacyResource] = true
+    for name, fn in pairs(_published) do answerAs(legacyResource, name, fn) end
+end
+
 function platform.wrapExport(resource, name, fn)
-    exports(name, function(...)
+    local wrapped = function(...)
         local result = table.pack(pcall(fn, ...))
         if result[1] then return table.unpack(result, 2, result.n) end
         -- Printed, not re-raised. Re-raising puts it back where it came from:
@@ -500,7 +540,15 @@ function platform.wrapExport(resource, name, fn)
         -- got before — the change is that the reason now exists somewhere.
         print(("^1[%s] export '%s' threw: %s^7"):format(resource or "?", name, tostring(result[2])))
         return nil
-    end)
+    end
+
+    exports(name, wrapped)
+
+    -- ONE function object behind every name, so an alias cannot drift from the
+    -- real export -- not even by being wrapped a second time, which would
+    -- double the pcall and report a different resource in the error line.
+    _published[name] = wrapped
+    for legacyResource in pairs(_legacyNames) do answerAs(legacyResource, name, wrapped) end
 end
 
 -- Thin FiveM wrapper over RegisterCommand + RegisterKeyMapping.
@@ -535,7 +583,7 @@ do
     ---
     --- The group used to be hardcoded to 'keyboard', and that single line is why
     --- three resources never adopted this helper: every in-world editor needs
-    --- MOUSE_BUTTON for orbit/look, so tELS, tAFK and tRadio each dropped to raw
+    --- MOUSE_BUTTON for orbit/look, so tLS, tAFK and tRadio each dropped to raw
     --- RegisterKeyMapping and took their own naming conventions with them.
     local VALID_GROUPS = {
         keyboard = true,
@@ -586,7 +634,7 @@ do
         _registry[#_registry + 1] = entry
         -- Best-effort report to tLib so conflicts can be found ACROSS resources.
         -- Intra-resource conflicts are findable here; the live ones are not —
-        -- tELS's PA mic and tRadio's push-to-talk both default to B, and neither
+        -- tLS's PA mic and tRadio's push-to-talk both default to B, and neither
         -- VM can see the other.
         --
         -- The pcall is NOT a version fallback — this module and
@@ -605,7 +653,7 @@ do
     ---
     --- Returns `{ { group = , key = , tokens = { ... } }, ... }`. Two mappings on
     --- one default key both register and both dispatch, so nothing errors — the
-    --- vehicle just does two things per press. tELS shipped exactly that: its
+    --- vehicle just does two things per press. tLS shipped exactly that: its
     --- siren-tone loop ran 1..8 while cruise, takedown and traffic advisor had
     --- already claimed 6, 7 and 8.
     function platform.keybindConflicts()
@@ -656,7 +704,7 @@ do
     --- `token` exists because **a command name IS the stored binding**. FiveM
     --- persists a player's rebind against the command token, so renaming a token
     --- silently discards that rebind and the key reverts to default. tRadio's
-    --- `talkOnRadio`/`toggleradioui` and tELS's 32 `lbar_*` tokens therefore
+    --- `talkOnRadio`/`toggleradioui` and tLS's 32 `lbar_*` tokens therefore
     --- cannot be migrated to a namespaced form — pass them as `token` and leave
     --- them alone. New binds should use `id` and get namespacing for free.
     ---

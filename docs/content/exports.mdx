@@ -674,7 +674,7 @@ file I/O targets tLib instead of you.
 ## Exporting a config into another resource
 
 Discovery can move a config out of your `data.json` and into the resource that owns the
-model — a vehicle pack ships `tels.json` beside its `.yft`, declares it in its own
+model — a vehicle pack ships `tls.json` beside its `.yft`, declares it in its own
 `fxmanifest.lua`, and the config travels with the vehicle.
 
 <Callout type="warning">
@@ -705,13 +705,13 @@ The target decides which path you get:
 
 ```
 1. Copy tLib/export-staging/<target-resource>/<file>.json  ->  <target-resource>/<file>.json
-2. Add this line to <target-resource>/fxmanifest.lua:  tels_config 'tels.json'
+2. Add this line to <target-resource>/fxmanifest.lua:  tls_config 'tls.json'
 3. Restart <target-resource> (or the server).
 ```
 
 The staged file is the target's existing config with your model merged in. Until you copy
 it the config is still local and still served to clients.
 
-The metadata key is whatever the consuming resource declares — `tels_config` for tELS,
+The metadata key is whatever the consuming resource declares — `tls_config` for tLS,
 `tradio_config` for tRadio — and the value is the file name relative to the resource root.
 Without that line the file is never read.

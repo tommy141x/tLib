@@ -35,11 +35,11 @@ tlib = { ratelimit = ratelimit }
 local client = dofile('shared/imports/net/client.lua')
 
 local got
-client.fromServer('tels:serverDefaults', function(a, b) got = { a, b } end)
-assert(registered['tels:serverDefaults'], 'the event is registered under its real name')
+client.fromServer('tls:serverDefaults', function(a, b) got = { a, b } end)
+assert(registered['tls:serverDefaults'], 'the event is registered under its real name')
 
 source = 65535
-registered['tels:serverDefaults']('quality', 4)
+registered['tls:serverDefaults']('quality', 4)
 assert(got and got[1] == 'quality' and got[2] == 4,
     'a server-triggered event runs the handler with its own arguments')
 
@@ -52,11 +52,11 @@ capture()
 for _, spoof in ipairs({ 1, 0, 7, -1, '65535', 65534 }) do
     got = nil
     source = spoof
-    registered['tels:serverDefaults']('spoofed')
+    registered['tls:serverDefaults']('spoofed')
     assert(got == nil, 'source ' .. tostring(spoof) .. ' must not reach the handler')
 end
 source = nil
-registered['tels:serverDefaults']('spoofed')
+registered['tls:serverDefaults']('spoofed')
 assert(got == nil, 'a nil source must not reach the handler')
 
 -- Reported, not silently dropped: a resource in this estate firing a
@@ -64,17 +64,17 @@ assert(got == nil, 'a nil source must not reach the handler')
 -- handler simply never runs. ONCE per event name, because the Nth rejection
 -- carries nothing the first did not and a per-call print hands an attacker a
 -- console flood as the payload.
-assert(lineCount('tels:serverDefaults') == 1,
+assert(lineCount('tls:serverDefaults') == 1,
     'seven rejections produce exactly one line')
 assert(lineCount('tlib.net.fromServer') == 1, 'and it names the function that dropped it')
 release()
 
 -- A second event name gets its own line; the budget is per name, not global.
 capture()
-client.fromServer('tels:other', function() end)
+client.fromServer('tls:other', function() end)
 source = 3
-registered['tels:other']()
-assert(lineCount('tels:other') == 1, 'a different event name reports separately')
+registered['tls:other']()
+assert(lineCount('tls:other') == 1, 'a different event name reports separately')
 release()
 
 -- Every handler still runs. tRadar registers a SECOND handler for

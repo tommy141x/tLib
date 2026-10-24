@@ -17,7 +17,7 @@
  *
  *   · A staged tree is only meaningful when it is FRESH. `stageFiles` cleans the
  *     output directory first, so a dist on disk between builds is whatever the
- *     last build left — MEASURED on this machine: tAFK's, tELS's and tRadio's
+ *     last build left — MEASURED on this machine: tAFK's, tLS's and tRadio's
  *     `.build/dist` each hold a `data.json` older than the `fxmanifest.lua`
  *     beside it, i.e. a leftover from a build that predates the exclusion. That
  *     is a true finding about a directory and a false finding about a release.
@@ -50,7 +50,7 @@ const strict = process.argv.includes("--strict");
  * filtered by a name pattern — exactly the kind of thing that returns an empty
  * array after a reorganisation and reports success.
  *
- * Eight is the count today (tAFK tCAD tChirp tDetector tELS tRadar tRadio
+ * Eight is the count today (tAFK tCAD tChirp tDetector tLS tRadar tRadio
  * tUnit); the floor is set below it so adding or retiring one resource does not
  * need an edit here, while a collapse to two or three still stops the run.
  */

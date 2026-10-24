@@ -16,7 +16,7 @@
    it. This sheet is the one every consumer imports, and it said nothing — so
    every tLib dialog, menu and toast drew Hanken Grotesk while every resource's
    own NUI drew whatever it had, and the typeface changed the moment a player
-   went from /tels to the LED editor or /tafk to the sequence editor. Eight
+   went from /tls to the LED editor or /tafk to the sequence editor. Eight
    resources were on the wrong side of that; the one that was not had been fixed
    by hand, which is the tell.
 
@@ -122,14 +122,14 @@
      second unlayered `:root` makes `@import` ORDER decide the product's typeface, with
      no error and no test to catch it. That is not hypothetical: until 2026-10-24
      `fonts.css` declared `--font-sans` too, and the built CSS of the estate came out
-     split — tELS, tRadio and tUnit on Inter, the other seven on Hanken Grotesk, purely
+     split — tLS, tRadio and tUnit on Inter, the other seven on Hanken Grotesk, purely
      because of which `@import` each one happened to put last. Swapping two adjacent
      import lines in tUnit changed the product's face.
 
      `--font-mono` is here for the other half of the same bug: it was declared ONLY in
      `fonts.css`, so the five bundles that import this sheet without it (tLib, tRadar,
      tRadio, tDetector, tSpawn) read it twice from surface.css and had both declarations
-     dropped at computed-value time. The same shared text field rendered mono in tELS and
+     dropped at computed-value time. The same shared text field rendered mono in tLS and
      sans in tRadio. A declared token falls back through the stack; an undeclared one
      takes the whole `font-family` down with it.
 

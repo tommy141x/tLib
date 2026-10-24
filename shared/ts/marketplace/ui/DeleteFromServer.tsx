@@ -4,7 +4,7 @@
  * UNTIL 2026-10-24 THIS WAS A BARE TRASH GLYPH THAT DELETED SERVER CONTENT ON ONE
  * CLICK, with no arming step and no undo — `handleUninstall` went straight to
  * `fetchNui("marketplaceUninstall", …)` and the word "confirm" did not appear anywhere in
- * MarketplaceBrowser.tsx. Four triggers shared that behaviour. In the same estate, tELS
+ * MarketplaceBrowser.tsx. Four triggers shared that behaviour. In the same estate, tLS
  * guards the strictly less destructive "un-share a listing" with a two-step confirm, and
  * tRadio confirms its own uninstall, so this was the outlier rather than the convention.
  *
@@ -24,7 +24,7 @@ import { NuiButton } from "../../nui-kit/NuiButton";
  * Matches `CONFIRM_DELETE_TIMEOUT_MS` in `internal/shared-ts/ui/confirm-delete.tsx`.
  *
  * Duplicated across the public/private boundary deliberately, not by accident. If that
- * value moves, move this one: six live call sites in tELS are tuned to 2.5 s, and a
+ * value moves, move this one: six live call sites in tLS are tuned to 2.5 s, and a
  * delete that arms for a different length of time in two places is the inconsistency this
  * whole control exists to remove.
  */

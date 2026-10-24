@@ -36,7 +36,7 @@ local TLIB_RESOURCE = _TLIB_IS_FIVEM and GetCurrentResourceName() or 'tLib'
 -- TARGET's own `WriteResourceFile` export achieves. Every t* resource bundles
 -- tLib's shared/ts and registers one, and exports cross resources freely. The
 -- only unreachable destination is one with no server bundle at all -- a plain
--- ASSET PACK, a vehicle resource shipping a tels.json. That case is structural.
+-- ASSET PACK, a vehicle resource shipping a tls.json. That case is structural.
 --
 -- For that case, and only that case, there is STAGING: write the finished file
 -- inside tLib and tell the operator the two or three steps to put it where it
@@ -62,7 +62,7 @@ end
 -- amplifier: the client sends a few bytes and the server pays for the reply.
 --
 -- A floor on the interval between calls rather than a token bucket, for the
--- same reason tELS uses one: a client asks for configs once per boot, so there
+-- same reason tLS uses one: a client asks for configs once per boot, so there
 -- is no legitimate burst to accommodate.
 --
 -- Buckets are keyed by event name, not by instance, because every consumer
@@ -253,7 +253,7 @@ end
 --  the closures it builds belong to tLib and survive for as long as TLIB is
 --  running. Nothing in here used to end that lifetime.
 --
---  The consequence was not subtle. `restart tELS` re-ran CreateDiscovery and
+--  The consequence was not subtle. `restart tLS` re-ran CreateDiscovery and
 --  registered a SECOND config_request handler over a freshly loaded `configs`
 --  table, while the first one stayed live over the table it loaded whenever
 --  tLib last started. Both answered. The client kept whichever reply landed
@@ -308,7 +308,33 @@ function Discovery.create(opts)
     local tag           = opts.logTag or metadataKey
     local chatTag       = opts.chatTag or ("[" .. ownerResource .. "]")
 
+    -- Metadata keys this channel ANSWERS TO but no longer writes.
+    --
+    -- A consumer that renames its metadata key cannot rename the key in other
+    -- people's fxmanifest.lua. Those packs are the whole point of the channel:
+    -- they declare `<key> 'file.json'` and ship a config for a vehicle we have
+    -- never seen. Rename the key with nothing else and every one of them goes
+    -- INVISIBLE -- not an error, no log line, just a pack whose config stops
+    -- being found, which presents as "the new version lost my vehicle".
+    --
+    -- Reads accept these; writes never use them. A pack that is re-exported
+    -- through this channel gets the current key appended to its manifest, so the
+    -- old spelling drains away as packs are touched rather than by a migration.
+    local legacyKeys = opts.legacyMetadataKeys or {}
+
     Discovery.addManifestSibling(metadataKey)
+
+    --- The config path a resource declares, under the current key or a retired one.
+    --- Returns the path and the key it was found under, so a caller can say which.
+    local function declaredConfigPath(resName)
+        local path = _getResourceMeta(resName, metadataKey)
+        if path and path ~= "" then return path, metadataKey end
+        for _, key in ipairs(legacyKeys) do
+            local legacy = _getResourceMeta(resName, key)
+            if legacy and legacy ~= "" then return legacy, key end
+        end
+        return nil, nil
+    end
 
     -- One live instance per (owner, event namespace). A consumer that restarts
     -- calls in here again, and this is where its previous instance dies.
@@ -358,7 +384,7 @@ function Discovery.create(opts)
 
     -- Every walk over `configs` type-guards its values. Without a `localSection`,
     -- loadLocal adopts the whole of the owner's data file as the model → config
-    -- map, and owners legitimately park scalars at its top level (tELS keeps
+    -- map, and owners legitimately park scalars at its top level (tLS keeps
     -- bloom, paRange, envQuality, hudVisible there). Reaching one with pairs() is
     -- a hard error, and since the export is a bare exports(name, fn) it unwinds
     -- out of CreateDiscovery before any handler is registered — one stray scalar
@@ -510,7 +536,7 @@ function Discovery.create(opts)
     end
 
     function inst:loadExternalFromResource(resName)
-        local configPath = _getResourceMeta(resName, metadataKey)
+        local configPath = declaredConfigPath(resName)
         if not configPath or configPath == "" then return 0 end
 
         local raw = _loadFile(resName, configPath)
@@ -539,11 +565,11 @@ function Discovery.create(opts)
                 -- Re-registration by the SAME external resource is not a shadow.
                 -- scanExternal() walks every resource at owner start, including
                 -- ones that have not started yet -- their folder is on disk, so
-                -- the metadata and tels.json read fine and the config is adopted.
+                -- the metadata and tls.json read fine and the config is adopted.
                 -- Their onResourceStart then re-registers the identical file, and
                 -- this used to see the owner's own earlier adoption as a local
                 -- override and report a shadow against a file that does not
-                -- contain the model at all. Measured 2026-10-13: tELS/data.json
+                -- contain the model at all. Measured 2026-10-13: tLS/data.json
                 -- held `vehicles: {}` and the warning still fired every boot for
                 -- 18charger21tr and fpiu21tr. Refresh in place instead.
                 if existing and prevSource
@@ -564,9 +590,9 @@ function Discovery.create(opts)
                     -- not enough: the entry is only dropped when somebody SAVES that exact
                     -- model, so a vehicle nobody edits keeps its stale local copy forever.
                     --
-                    -- Measured in the field 2026-10-23, on the US East test server: tELS
+                    -- Measured in the field 2026-10-23, on the US East test server: tLS
                     -- data.json carried `18charger21tr` (18 patterns, the old set) while
-                    -- `timmyg_matrix_charger/tels.json` shipped 30 patterns including the
+                    -- `timmyg_matrix_charger/tls.json` shipped 30 patterns including the
                     -- one being looked for. Updating the pack file changed nothing in game,
                     -- restarting changed nothing, and the only fix was deleting the entry
                     -- from data.json by hand -- exactly the outcome the comment above says
@@ -574,7 +600,7 @@ function Discovery.create(opts)
                     -- thing is not the same as fixing it.
                     --
                     -- So the pack is adopted here. A config a resource SHIPS is the author's
-                    -- current intent; an unmarked local copy is a leftover of whatever tELS
+                    -- current intent; an unmarked local copy is a leftover of whatever tLS
                     -- (or tRadar, tRadio, tCAD -- every Discovery consumer) last persisted.
                     --
                     -- `_local` still wins, and that is the whole exception: it marks a
@@ -694,7 +720,7 @@ function Discovery.create(opts)
                 -- _saveFile has already tried the target's own fs bridge, which
                 -- is the route that does work. It means this particular target
                 -- has no server bundle to host one: a plain asset pack, a
-                -- vehicle resource shipping a tels.json. That case is
+                -- vehicle resource shipping a tls.json. That case is
                 -- structural, not a configuration gap, and no cfg line fixes it.
                 --
                 -- So do what the export path at the bottom of this file already
@@ -721,7 +747,7 @@ function Discovery.create(opts)
                 end
 
                 -- Still false: tLib did not write the owning resource's file.
-                -- The caller (tELS) persists its own copy, which is why the
+                -- The caller (tLS) persists its own copy, which is why the
                 -- setting survives a restart -- but that is the CALLER's doing,
                 -- not something this function may claim.
                 return false, err, kind
@@ -789,7 +815,7 @@ function Discovery.create(opts)
         for i = 0, numResources - 1 do
             local resName = _getResourceAtIndex(i)
             if resName and resName ~= ownerResource and _getResourceState(resName) == "started" then
-                local declared = _getResourceMeta(resName, metadataKey)
+                local declared = declaredConfigPath(resName)
                 table.insert(targets, {
                     name = resName,
                     hasMetadata = (declared ~= nil and declared ~= ""),
@@ -893,7 +919,7 @@ function Discovery.create(opts)
             return moveBackToLocal(model, config)
         end
 
-        local targetPath = _getResourceMeta(targetResource, metadataKey)
+        local targetPath = declaredConfigPath(targetResource)
         if not targetPath or targetPath == "" then
             targetPath = defaultFile
         end

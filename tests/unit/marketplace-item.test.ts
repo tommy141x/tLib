@@ -18,7 +18,7 @@ const base: CatalogueItem = {
   id: "i1",
   slug: "siren-pack",
   type: "sound",
-  resource: "tELS",
+  resource: "tLS",
   name: "Siren Pack",
   description: "d",
   creatorName: "someone",

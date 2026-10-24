@@ -47,7 +47,7 @@ export interface MarketplaceReleaseMetadata {
  * — that is the receipt model (`owned()` in installer/core.ts), which IS live.
  * Wiring this is: call it as a post-staging hook per consumer, embed the result in
  * the shipped bundle, and pass `protectedInventory` at the one
- * `createMarketplaceAgent` call site each of tRadio, tELS, tDetector and tRadar
+ * `createMarketplaceAgent` call site each of tRadio, tLS, tDetector and tRadar
  * has. `agent.ts` already forwards it into every `InstallTarget`.
  */
 export function writeMarketplaceReleaseMetadata(

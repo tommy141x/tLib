@@ -17,7 +17,7 @@
  * password — handed to every customer.
  *
  * Five of the seven resources with a data file already exclude it, and three
- * different ways: tELS and tAFK by an INCLUDE allowlist, tCAD by a named
+ * different ways: tLS and tAFK by an INCLUDE allowlist, tCAD by a named
  * forbidden list with a reason per entry, tRadio by `assertNoRuntimeStateStaged`.
  * tRadio's is the one worth generalising and its own docstring says why — the
  * other two are tests of the POLICY, and the zip is built by walking the

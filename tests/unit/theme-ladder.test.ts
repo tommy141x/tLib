@@ -10,7 +10,7 @@
  *
  * holds in EVERY palette block it declares. When it does not, a tLib field and every
  * `border-input` edge become darker than the panel they sit on and the product grows
- * black outlines around things. That has shipped twice — tELS raised `--card`, then
+ * black outlines around things. That has shipped twice — tLS raised `--card`, then
  * tUnit did — and neither time did anything fail. Each token on its own is a
  * perfectly reasonable colour; only the ORDER is wrong, and nothing reads the order.
  *
@@ -36,7 +36,7 @@ const LADDER = ["--background", "--card", "--input", "--border"] as const;
  * Every `<selector> { … }` block in the file that declares at least one ladder token.
  *
  * Comments are stripped first: the header of theme-tokens.css quotes token
- * declarations inside prose ("tELS --background: 0 0% 3.5% → rendered …"), and a
+ * declarations inside prose ("tLS --background: 0 0% 3.5% → rendered …"), and a
  * naive scan reads those as real and fails on a palette nobody ships.
  */
 function paletteBlocks(css: string): { selector: string; body: string }[] {
@@ -80,7 +80,7 @@ describe("theme-tokens.css declares at least the two palettes it documents", () 
 describe("every palette block keeps the elevation ladder in order", () => {
   for (const { selector, body } of paletteBlocks(CSS)) {
     /**
-     * A block is allowed to move a SUBSET of the ladder — tELS lowers only
+     * A block is allowed to move a SUBSET of the ladder — tLS lowers only
      * `--background` and that is the documented safe case — so absent rungs are
      * inherited from `:root` and filled in here before comparing. Comparing only the
      * rungs a block happens to declare is what would let a lone `--card: 12%` through.
@@ -112,7 +112,7 @@ describe("--popover tracks --input", () => {
    * recessed control sits on. When the two drift, a Select trigger and the list it
    * opens are different colours for no reason a reader can name — and if `--popover`
    * drifts DOWN to `--card`, the list is invisible against the panel behind it, which
-   * is the "black text on a dark grey selector" report that made tELS and tUnit each
+   * is the "black text on a dark grey selector" report that made tLS and tUnit each
    * fork their own select.
    */
   for (const { selector, body } of paletteBlocks(CSS)) {

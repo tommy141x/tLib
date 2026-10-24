@@ -4,7 +4,7 @@
  * THE BUG THIS EXISTS FOR WAS INVISIBLE AND SHIPPED FOR MONTHS. Both tokens were
  * declared in TWO unlayered `:root` blocks — theme-tokens.css and fonts.css — so neither
  * one won on specificity and the cascade fell back to `@import` ORDER. Measured in the
- * built CSS of the estate on 2026-10-24: tELS, tRadio and tUnit shipped Inter while tLib,
+ * built CSS of the estate on 2026-10-24: tLS, tRadio and tUnit shipped Inter while tLib,
  * tRadar, tDetector, tAFK, tChat, tBlips and tSpawn shipped Hanken Grotesk. Three products
  * and seven products, side by side on one server, in different typefaces. Swapping two
  * adjacent import lines in tUnit changed its face with no error and no test.
@@ -14,7 +14,7 @@
  * read `var(--font-mono)` twice from surface.css with nothing behind it. An undeclared
  * custom property makes `font-family` invalid at computed-value time, so the whole
  * declaration is dropped — `.section-label` and `.prop-input` silently inherited the sans
- * face. The same shared text field rendered mono in tELS and sans in tRadio.
+ * face. The same shared text field rendered mono in tLS and sans in tRadio.
  *
  * Neither failure produces a warning anywhere. The only way to catch it is to count.
  */

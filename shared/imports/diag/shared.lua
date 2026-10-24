@@ -408,7 +408,7 @@ end
 ---                        the global `Config` when there is one; `false`
 ---                        harvests nothing; a FUNCTION is called per invocation,
 ---                        for a resource whose state is loaded rather than a
----                        global (tAFK's data.json, tELS's serverDefaults).
+---                        global (tAFK's data.json, tLS's serverDefaults).
 ---   spec     table|nil   a tlib.config spec, enabling `ctx.configKeys()`.
 ---   order    table|nil   presentation order for `ctx.configKeys()`.
 ---   secrets  table|nil   extra credential key names beyond SECRET_PATTERNS.

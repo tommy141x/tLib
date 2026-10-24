@@ -51,7 +51,7 @@ export interface EscapeLayerOptions {
   ignoreWhenTyping?: boolean;
   /**
    * Skip this layer for this press. The layer-level form of a registry guard,
-   * and the general case `ignoreWhenTyping` is the common shorthand for: tELS's
+   * and the general case `ignoreWhenTyping` is the common shorthand for: tLS's
    * editor declines Escape while focus is on any interactive control, not just
    * a text field, because its Escape throws a draft away.
    *

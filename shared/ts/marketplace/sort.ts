@@ -14,7 +14,7 @@
  *
  *   - tRadio: `DEFAULT_SORT` / the `"recommended"` case in `filteredItems`
  *     (`server/web/src/admin/pages/PageMarketplace.tsx`)
- *   - tELS: the `if (sort === "recommended") return kept` early return in
+ *   - tLS: the `if (sort === "recommended") return kept` early return in
  *     `visibleCards` (`client/web/src/store/marketplace-store.ts`)
  *
  * `SERVER_ORDER` is that rule, named once. `applySort` honours it, and honours
@@ -23,7 +23,7 @@
  * Generic over the item, by comparator table
  *
  * The two surfaces sort different shapes by different fields and offer
- * different key sets (tRadio six, tELS four). What is identical is the
+ * different key sets (tRadio six, tLS four). What is identical is the
  * machinery: pick a comparator, copy, sort, never mutate, and fall back to a
  * tie-breaker so the order does not reshuffle between refreshes. So the keys
  * stay each surface's business and the machinery lives here.

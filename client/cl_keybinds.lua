@@ -8,13 +8,13 @@
      Why a per-resource check is not enough
 
     `platform.keybindConflicts()` runs inside the consumer's own VM, so it can
-    only see that resource's own bindings. It catches the case tELS shipped —
+    only see that resource's own bindings. It catches the case tLS shipped —
     a siren-tone loop running 1..8 while cruise, takedown and traffic advisor
     already held 6, 7 and 8 — but it is structurally blind to the collisions that
     actually reach a player:
 
-        B       tELS  "ELS: PA Mic (hold)"        vs  tRadio "Radio: Push to Talk"
-        RMENU   tELS  "ELS: Toggle Rumbler"       vs  tRadar "tRadar: work the radar keys"
+        B       tLS  "ELS: PA Mic (hold)"        vs  tRadio "Radio: Push to Talk"
+        RMENU   tLS  "ELS: Toggle Rumbler"       vs  tRadar "tRadar: work the radar keys"
 
     Both are certainties on a police server: one key, two products, both fire.
     Neither VM can see the other, so neither could ever report it.
@@ -27,7 +27,7 @@
     working. So this prints, and a human decides.
 
     The report is deferred rather than immediate because resources start in an
-    arbitrary order — checking on the first report would compare tELS against an
+    arbitrary order — checking on the first report would compare tLS against an
     empty table. `REPORT_DELAY_MS` is generous for that reason.
 ------------------------------------------------------------------------------]]
 

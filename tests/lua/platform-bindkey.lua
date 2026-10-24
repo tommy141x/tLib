@@ -4,7 +4,7 @@
 --
 -- Two things are under test and the first matters more than the second:
 --
---  1. THE POSITIONAL FORM STILL WORKS. There are 32 live call sites in tELS alone
+--  1. THE POSITIONAL FORM STILL WORKS. There are 32 live call sites in tLS alone
 --     using `bindKey(key, cb, eventType, bindingId, label)`. A command token IS the
 --     player's stored rebind in FiveM, so a regression that changed a token would
 --     silently reset every player's customised keys — with no error anywhere.
@@ -226,7 +226,7 @@ test('every bind lands in the registry', function()
 end)
 
 test('two binds on one default key are reported as a conflict', function()
-    -- This is the tELS bug in miniature: the siren-tone loop ran 1..8 while cruise,
+    -- This is the tLS bug in miniature: the siren-tone loop ran 1..8 while cruise,
     -- takedown and traffic advisor already held 6, 7 and 8. Both mappings register
     -- and both dispatch, so nothing errors and the car does two things per press.
     local platform = fixture()

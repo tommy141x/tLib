@@ -1,6 +1,6 @@
 -- Vehicle occupancy — who is aboard a vehicle, in which tier, and which of them
 -- is allowed to act on it. One rule, shared, because three resources answered
--- the question three different ways and tELS let a rear passenger steal the
+-- the question three different ways and tLS let a rear passenger steal the
 -- state-bag relay from the driver:
 --
 --     The CONTROLLER of a vehicle is its driver if a driver is seated, and

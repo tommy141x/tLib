@@ -117,7 +117,7 @@ describe("local install-name matching", () => {
   });
 
   it("covers the other products' slug shapes, which are the same mistake waiting", () => {
-    expect(stripResourcePrefix("tels-wcc2", "tELS")).toBe("wcc2");
+    expect(stripResourcePrefix("tls-wcc2", "tLS")).toBe("wcc2");
     expect(stripResourcePrefix("tdetector-rdx-4000", "tDetector")).toBe("rdx-4000");
     expect(stripResourcePrefix("tradar-chx-800", "tRadar")).toBe("chx-800");
   });
@@ -281,7 +281,7 @@ describe("cardStats", () => {
 
 describe("cardStatsOf — the same contract for a host with its own item type", () => {
   /**
-   * These assertions are the reason `cardStatsOf` exists at all. tELS's
+   * These assertions are the reason `cardStatsOf` exists at all. tLS's
    * marketplace tab merges two catalogues into one `CardView` and so will never
    * hold a `MarketplaceItem`; without a narrowed contract its only options were
    * to fake the fields it does not have, or to word and order the stats itself —
@@ -531,7 +531,7 @@ describe("resolvePreviewState", () => {
   /**
    * The reported blank previews with no mock state. `previewState` is optional
    * all the way down and the binder was only injected `if (state)`, so a surface
-   * with no preset — tELS has none — rendered every layout unbound.
+   * with no preset — tLS has none — rendered every layout unbound.
    */
   it("falls back to a populated default instead of rendering a dead device", () => {
     expect(resolvePreviewState(null)).toBe(DEFAULT_HUD_PREVIEW_STATE);

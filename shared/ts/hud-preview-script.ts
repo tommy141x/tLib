@@ -42,17 +42,17 @@ export const HUD_PREVIEW_ATTRS = HUD_BINDING_ATTRS.filter((a) => a !== "data-hud
  * it with `new Function(...)` instead of asserting about a string.
  *
  * @param fn   Name of a layout's own global update function, called AFTER the
- *             declarative pass when it exists. tELS's WCC2 and anything built
+ *             declarative pass when it exists. tLS's WCC2 and anything built
  *             before the binder ship one; it may register asynchronously, hence
  *             the retry.
  *
  * It runs IN ADDITION to `bind()`, not instead of it, because that is
  *             what the runtime does: `HudPanel.tsx` calls `binder.update(state)` and
- *             then `window.__telsLayoutUpdate?.(state, root)` on the same tick, and
+ *             then `window.__tlsLayoutUpdate?.(state, root)` on the same tick, and
  *             a layout that ships an update function still carries `data-hud-*` on
  *             the elements that function does not touch. This used to `return` after
  *             calling `fn`, which blanked every declarative binding on exactly the
- *             layouts that have their own script — tELS's WCC2 lost its pattern-name
+ *             layouts that have their own script — tLS's WCC2 lost its pattern-name
  *             readout and its lit HEAD/MAIN SIREN keys while its script-drawn tone
  *             keys painted fine, so half the device was live and half was dead.
  * @param state The dummy state to paint, already the nested shape the runtime sends.

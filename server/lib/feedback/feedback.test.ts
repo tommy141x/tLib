@@ -33,7 +33,7 @@ describe("feedback body", () => {
       buildBody({
         baseUrl: "https://x.test",
         message: "hi",
-        resource: "tELS",
+        resource: "tLS",
         resourceVersion: "1.14.2-rc.3+ab12cd34",
       })
     ).toMatchObject({ resourceVersion: "1.14.2-rc.3.ab12cd34" });

@@ -129,7 +129,7 @@ assert(printedContains('resets on restart'), 'and it says why, not just that')
 printed = {}
 for _ = 1, 20 do demo.dropWrite('tRadar/data.json') end
 assert(#printed == 0, 'the same target is announced once, not on every write')
-demo.dropWrite('tELS/data.json')
+demo.dropWrite('tLS/data.json')
 assert(#printed == 1, 'but a different target gets its own line')
 
 -- The client half

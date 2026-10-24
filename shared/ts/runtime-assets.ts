@@ -38,7 +38,7 @@ export interface RuntimeAssetCacheOptions {
   /**
    * The local URL prefix the resource itself serves a bundle's files from,
    * INCLUDING the trailing slash. tRadio's NUI document sits at the resource
-   * root so it is `/layouts/<key>/`; tELS, tRadar and tDetector serve their
+   * root so it is `/layouts/<key>/`; tLS, tRadar and tDetector serve their
    * bundle from a nested page and use `../../layouts/<key>/`.
    */
   bundleBase: (key: string) => string;
@@ -75,7 +75,7 @@ export interface RuntimeAssetCacheOptions {
    * inflation, revocable.
    *
    * `"data"` exists for ONE measured constraint: a `blob:` URL belongs to the
-   * origin that created it, so a document with an OPAQUE origin -- tELS's
+   * origin that created it, so a document with an OPAQUE origin -- tLS's
    * `sandbox`ed layout iframe with no `allow-same-origin` -- cannot load one. A
    * `data:` URL carries its bytes and has no origin to check, at 4/3 the size and
    * with nothing to revoke, so lower `maxTotalBytes` to match.

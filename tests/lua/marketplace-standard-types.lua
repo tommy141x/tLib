@@ -4,7 +4,7 @@
 -- The bug: installing a sound pack whose slug collides with an existing
 -- filename fired `TriggerClientEvent('<prefix>:soundOverwriteWarning', -1, …)`
 -- -- to every player, about an admin action -- and in three of the four
--- resources nothing anywhere registered the event. tELS deleted its copy
+-- resources nothing anywhere registered the event. tLS deleted its copy
 -- rather than fix it; the honest fix needed the installing admin's id, which
 -- tLib now carries as `meta.src`.
 --
@@ -247,7 +247,7 @@ must(#warns == 1, 'the overwrite went unlogged because the admin had disconnecte
 must(#clientEvents == 0, 'a warning was sent with no target')
 
 -- A consumer with no client handler declares no warnEvent and gets the log
--- alone. That is tELS's behaviour, now by declaration rather than by a send it
+-- alone. That is tLS's behaviour, now by declaration rather than by a send it
 -- deleted.
 reset()
 must(marketplace.soundConflict('old-tone', 'ka-band', { src = 9 }, nil, warn) == false,

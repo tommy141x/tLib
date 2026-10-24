@@ -388,7 +388,7 @@ describe("HUD geometry (no DOM)", () => {
   });
   /**
    * Outline/render agreement, with the actual numbers. `layoutRect` is the single
-   * definition of where a widget is; tRadar, tELS, tDetector and the tLib SDK all
+   * definition of where a widget is; tRadar, tLS, tDetector and the tLib SDK all
    * call this exact function, and tRadio's Lua `convert()` is asserted against the
    * same numbers in tRadio's own suite. A regression here is a regression in all
    * five at once, so the expected values are written out rather than derived.

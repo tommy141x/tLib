@@ -1,7 +1,7 @@
 /**
  * "Only the newest in-flight request may touch anything" — one async fence.
  *
- * Three resources had arrived at this independently and identically: tELS as
+ * Three resources had arrived at this independently and identically: tLS as
  * `createHudRequest`, tDetector and tRadar as `createLatestLayoutRequest`. The
  * three bodies differed only in the nouns (`epoch`/`generation`,
  * `abort`/`controller`) and in how the comment above them was worded, so there

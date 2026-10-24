@@ -11,7 +11,7 @@
 //   tRadio     server/lib/ui-item-contract.ts, thorough
 //   tDetector  none
 //   tRadar     none
-//   tELS       none
+//   tLS       none
 //
 // For the three with none, a bundle containing no `ui.html` — or an `install.lua`
 // — installed with a success, and the only place left to find out was render time
@@ -20,8 +20,8 @@
 //
 // The part that is genuinely shared is the part all four need, and it is settled
 // by the corpus rather than by taste. All ten shipped layouts across tDetector,
-// tRadar and tELS are `ui.html` + `module.json` at the archive root plus `.png`
-// assets (tELS's WCC nests its under `icons/`). So: a ZIP, with `ui.html` at the
+// tRadar and tLS are `ui.html` + `module.json` at the archive root plus `.png`
+// assets (tLS's WCC nests its under `icons/`). So: a ZIP, with `ui.html` at the
 // top level, carrying only the file types a layout legitimately ships.
 //
 // FAILS ONLY ON WHAT CANNOT WORK — the rule tRadio's own contract states and the
@@ -35,7 +35,7 @@
 //     fallback tier, so an undeclared canvas is a mis-scale and not a dead
 //     layout. A product that wants it passes `checkDocument` — tRadio does, with
 //     its `checkLayoutContract`.
-//   · INLINE `<script>` IS FINE. Both shipped tELS layouts carry one, which is
+//   · INLINE `<script>` IS FINE. Both shipped tLS layouts carry one, which is
 //     how a pre-binder layout drives itself. What the allow-list refuses is a
 //     separate executable FILE, which nothing in the corpus ships and no consumer
 //     reads.

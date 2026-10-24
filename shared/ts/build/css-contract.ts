@@ -322,7 +322,7 @@ const LENGTH = /^[+-]?(?:\d*\.)?\d+(?:px|r?em|v[wh]|%|pt|ch|ex|q|cm|mm|in|pc)?$/
 
 export function blurredShadow(value: string): string | undefined {
   // One `box-shadow` property may hold a comma-separated LIST of shadows; any
-  // one of them blurring is enough. tELS:373 is exactly that case.
+  // one of them blurring is enough. tLS:373 is exactly that case.
   for (const shadow of splitSelectorList(value)) {
     const tokens = shadow
       // Blank `rgba(0,0,0,.3)` and `hsl(var(--x) / .4)`: their numbers are not

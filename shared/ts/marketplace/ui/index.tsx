@@ -10,8 +10,8 @@
 //
 // So nothing here renders a backdrop, a dialog, a header or a tab bar. A host
 // lays out its own chrome and drops `ItemCard`, `InstalledTab`, `PreviewOverlay`
-// and `InstallError` into it, keeping its own filter over what it browses: tELS
-// sees patterns and tELS HUDs, tDetector sees tDetector HUDs, and so on.
+// and `InstallError` into it, keeping its own filter over what it browses: tLS
+// sees patterns and tLS HUDs, tDetector sees tDetector HUDs, and so on.
 //
 // The theming contract
 //

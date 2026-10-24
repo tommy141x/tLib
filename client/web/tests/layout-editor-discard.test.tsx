@@ -6,7 +6,7 @@
  *
  * It shipped `Discard` first, with `tone="primary"` AND `autofocus`, under an
  * affirmative-left reading of the pair. Every other confirmation footer in the
- * estate — tELS's discard guard, tUnit's `CharacterEditor`, and tLib's own
+ * estate — tLS's discard guard, tUnit's `CharacterEditor`, and tLib's own
  * shared `PropEditor` prompt — puts the lossy action on the right and gives the
  * affirmative slot to the safe answer, because "Keep editing" IS the affirmative
  * answer to "discard?".
@@ -87,8 +87,8 @@ afterEach(() => {
 
 const LAYOUT = { x: 0.2, y: 0.3, scale: 1, visible: true, anchor: "top-left" } as const;
 const COMPONENT: Component = {
-  key: "tels:speed",
-  owner: "tels",
+  key: "tls:speed",
+  owner: "tls",
   id: "speed",
   label: "Speedometer",
   width: 200,

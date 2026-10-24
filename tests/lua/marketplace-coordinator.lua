@@ -290,9 +290,9 @@ aces = nil
 -- Cross-product install enforcement
 --
 -- The gap these pin: the coordinator keys registrations `resource:type` and
--- writes into that resource's own registered installPath, so a tELS item could
+-- writes into that resource's own registered installPath, so a tLS item could
 -- never land in tRadar's DIRECTORY. The item's own `resource` field was the
--- unenforced half — `tlib:marketplace:install('tRadar','ui','<a-tELS-slug>')`
+-- unenforced half — `tlib:marketplace:install('tRadar','ui','<a-tLS-slug>')`
 -- passed every check above and tLib fetched and installed it.
 eq(reg('a'), true)
 

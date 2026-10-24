@@ -174,7 +174,7 @@ test('GitHub checks the configured repository and renders its release', function
 end)
 
 test('Studios provider queries each product and resolves once', function()
-    for _, product in ipairs({ 'tAFK', 'tELS' }) do
+    for _, product in ipairs({ 'tAFK', 'tLS' }) do
         local f = fixture({ 'TIMMYG Studios' })
         f.vc({ name = product, current = '1.0.0', fetch = f.vc.studios(product, '1.0.0') })
         assert(f.requests[1].url == 'https://timmygstudios.com/api/products/' .. product .. '/changelog?since=1.0.0&limit=10')
@@ -201,8 +201,8 @@ test('Studios provider follows tlib_api_base_url; GitHub does not', function()
         if name == 'tlib_api_base_url' then return 'http://localhost:8787/' end
         return default
     end
-    f.vc({ name = 'tELS', current = '1.0.0', fetch = f.vc.studios('tELS', '1.0.0') })
-    assert(f.requests[1].url == 'http://localhost:8787/api/products/tELS/changelog?since=1.0.0&limit=10',
+    f.vc({ name = 'tLS', current = '1.0.0', fetch = f.vc.studios('tLS', '1.0.0') })
+    assert(f.requests[1].url == 'http://localhost:8787/api/products/tLS/changelog?since=1.0.0&limit=10',
         'studios provider ignored the convar: ' .. tostring(f.requests[1].url))
 
     local g = fixture({ 'TIMMYG Studios' })
@@ -225,15 +225,15 @@ test('Studios provider trims a trailing /api path off the convar', function()
         if name == 'tlib_api_base_url' then return '  http://localhost:8787/api/v1/  ' end
         return default
     end
-    f.vc({ name = 'tELS', current = '1.0.0', fetch = f.vc.studios('tELS', '1.0.0') })
-    assert(f.requests[1].url == 'http://localhost:8787/api/products/tELS/changelog?since=1.0.0&limit=10',
+    f.vc({ name = 'tLS', current = '1.0.0', fetch = f.vc.studios('tLS', '1.0.0') })
+    assert(f.requests[1].url == 'http://localhost:8787/api/products/tLS/changelog?since=1.0.0&limit=10',
         'normalisation drifted from shared/sh_api.lua: ' .. tostring(f.requests[1].url))
     GetConvar = nil
 end)
 
 test('Studios timeout prints failure without accepting a late result', function()
     local f = fixture({ 'TIMMYG Studios' })
-    f.vc({ name = 'tELS', current = '1.0.0', fetch = f.vc.studios('tELS', '1.0.0') })
+    f.vc({ name = 'tLS', current = '1.0.0', fetch = f.vc.studios('tLS', '1.0.0') })
     f.run(9000)
     contains(f.text(), 'Could not check for updates')
     local count = #f.output
@@ -263,10 +263,10 @@ testWithSiblings('tDB forwards initial and subsequent database status through tL
 end)
 
 testWithSiblings('all five shipped manifests explicitly credit TIMMYG Studios', {
-    '../tLib/fxmanifest.lua', '../tRadio/fxmanifest.lua', '../tELS/fxmanifest.lua',
+    '../tLib/fxmanifest.lua', '../tRadio/fxmanifest.lua', '../tLS/fxmanifest.lua',
     '../tAFK/fxmanifest.lua', '../tDB/fxmanifest.lua',
 }, function()
-    for _, resource in ipairs({ 'tLib', 'tRadio', 'tELS', 'tAFK', 'tDB' }) do
+    for _, resource in ipairs({ 'tLib', 'tRadio', 'tLS', 'tAFK', 'tDB' }) do
         local authors = {}
         local function author(value)
             if type(value) == 'table' then
@@ -307,17 +307,17 @@ test('duplicate status events do not satisfy other required startup fields', fun
     contains(f.text(), 'http://localhost:7777/dispatch')
 end)
 
-testWithSiblings('tAFK and tELS startup scripts use the shared provider and info events', {
-    '../tAFK/server/sv_version.lua', '../tELS/server/sv_version.lua',
+testWithSiblings('tAFK and tLS startup scripts use the shared provider and info events', {
+    '../tAFK/server/sv_version.lua', '../tLS/server/sv_version.lua',
 }, function()
-    for _, resource in ipairs({ 'tAFK', 'tELS' }) do
+    for _, resource in ipairs({ 'tAFK', 'tLS' }) do
         local f = fixture({ 'TIMMYG Studios' }, resource)
         tlib = { versioncheck = f.vc }
         assert(loadfile('../' .. resource .. '/server/sv_version.lua'))()
         contains(f.requests[1].url, '/api/products/' .. resource .. '/changelog')
         f.requests[1].cb(200, { product = { currentVersion = '1.0.0' } })
         TriggerEvent('tafk:vcInfo:sequences', '42 sequences')
-        TriggerEvent('tels:vcInfo:configs', '42 configs')
+        TriggerEvent('tls:vcInfo:configs', '42 configs')
         f.run(1100)
         contains(f.text(), resource == 'tAFK' and '42 sequences' or '42 configs')
         contains(f.text(), 'up to date')
@@ -437,7 +437,7 @@ end)
 
 test('Studios changelogs retain both title and body', function()
     local f = fixture({})
-    f.vc({ current = '1.0', fetch = f.vc.studios('tELS', '1.0') })
+    f.vc({ current = '1.0', fetch = f.vc.studios('tLS', '1.0') })
     f.requests[1].cb(200, { product = { currentVersion = '1.1' }, updates = {
         { version = '1.1', title = 'Summary', body = 'Important details' },
     } })

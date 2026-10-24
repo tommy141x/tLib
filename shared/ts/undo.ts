@@ -108,7 +108,7 @@ export interface UndoHistoryOptions {
    * commit on pointerup — were always correct; the flush had already happened.
    *
    * Injected rather than imported so this module stays framework-agnostic.
-   * Pinned by tELS's `tests/undo-redo-roundtrip.test.ts`, control included.
+   * Pinned by tLS's `tests/undo-redo-roundtrip.test.ts`, control included.
    */
   settle?: () => void;
 }

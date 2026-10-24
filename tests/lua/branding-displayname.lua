@@ -38,11 +38,11 @@ local function branding(resource, metaName, authors)
 end
 
 test('displayName returns the manifest name when the manifest declares one', function()
-    local b = branding('tels', "Tommy's ELS")
-    assert(b.displayName('tels') == "Tommy's ELS", b.displayName('tels'))
+    local b = branding('tls', "Tommy's ELS")
+    assert(b.displayName('tls') == "Tommy's ELS", b.displayName('tls'))
     -- The apostrophe survives the Lua escape in the manifest, which is the one
     -- character in these titles that can silently break a single-quoted string.
-    assert(b.displayName('tels'):find("'", 1, true), 'apostrophe lost')
+    assert(b.displayName('tls'):find("'", 1, true), 'apostrophe lost')
 end)
 
 test('displayName falls back to the resource name when absent, empty or blank', function()
@@ -164,8 +164,8 @@ test('the banner prints the manifest title and still spells the wordmark', funct
 end)
 
 test('an unbranded resource gets the title as plain text, with no art', function()
-    local f = fixture('tELS', "Tommy's ELS", { 'Someone else' })
-    f.vc({ name = 'tELS', current = '1.0.0', fetch = current })
+    local f = fixture('tLS', "Tommy's ELS", { 'Someone else' })
+    f.vc({ name = 'tLS', current = '1.0.0', fetch = current })
     f.run(1100)
     contains(f.text(), "Tommy's ELS")
     excludes(f.text(), '_/_/')
@@ -191,11 +191,11 @@ end)
 -- The version check's request URL is keyed on the PRODUCT SLUG, and the slug is
 -- the technical name. A title that reached it would 404 every update check.
 test('the display title never reaches the studios request URL', function()
-    local f = fixture('tELS', "Tommy's ELS")
+    local f = fixture('tLS', "Tommy's ELS")
     local seen
     PerformHttpRequest = function(url) seen = url end
-    f.vc({ name = 'tELS', current = '1.0.0', fetch = f.vc.studios('tELS', '1.0.0') })
-    assert(seen == 'https://timmygstudios.com/api/products/tELS/changelog?since=1.0.0&limit=10',
+    f.vc({ name = 'tLS', current = '1.0.0', fetch = f.vc.studios('tLS', '1.0.0') })
+    assert(seen == 'https://timmygstudios.com/api/products/tLS/changelog?since=1.0.0&limit=10',
         'slug drifted to a display name: ' .. tostring(seen))
 end)
 

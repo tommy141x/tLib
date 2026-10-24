@@ -6,12 +6,12 @@
 -- Counting happens in the Worker, so at this layer the whole property reduces to
 -- WHICH BRIDGE EXPORT is called. That is what these assert. The two wrappers are
 -- deliberately near-identical, which is exactly the shape someone later collapses
--- into one — and collapsing them would make tELS's marketplace tab increment every
+-- into one — and collapsing them would make tLS's marketplace tab increment every
 -- listing's import counter on hover. `peek must never reach ccImport` below is the
 -- line that fails when that happens.
 --
 -- Also pinned here: the (ok, configJson, err) argument ORDER out of the Lua export,
--- against the (ok, err, value) the bridge uses. tELS calls this export with the
+-- against the (ok, err, value) the bridge uses. tLS calls this export with the
 -- former and the asymmetry is intentional, so it needs a test rather than a comment.
 
 local exported, calls = {}, {}
@@ -44,7 +44,7 @@ json = {
 }
 
 function GetCurrentResourceName() return 'tLib' end
-function GetInvokingResource() return 'tELS' end
+function GetInvokingResource() return 'tLS' end
 function GetConvar(_, default) return default end
 
 dofile('server/sv_community_configs.lua')
@@ -83,7 +83,7 @@ reset()
 invoke('CommunityConfigsImport', 'cfg_abc')
 eq(calls[1].name, 'ccImport', 'import still counts, so the two are genuinely distinct')
 
--- The callback contract tELS is already written against
+-- The callback contract tLS is already written against
 eq(peeked.ok, true, 'peek ok')
 eq(peeked.configJson, '{"leds":[]}', 'peek hands back the raw config STRING, arg 2')
 eq(peeked.err, nil, 'no error on success')

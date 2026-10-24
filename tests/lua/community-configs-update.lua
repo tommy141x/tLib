@@ -18,7 +18,7 @@
 -- Worker writes on every update, so omitting them asks it to blank them -- a
 -- failure with no error attached to it. Both are asserted present below.
 --
--- These assertions are the contract with internal/tWeb/src/lib/tels-configs/
+-- These assertions are the contract with internal/tWeb/src/lib/tls-configs/
 -- api.ts `readConfigBody`. If a field is added there, it fails here.
 
 local exported, bridgeCalls = {}, {}
@@ -52,7 +52,7 @@ json = {
 }
 
 function GetCurrentResourceName() return 'tLib' end
-function GetInvokingResource() return 'tELS' end
+function GetInvokingResource() return 'tLS' end
 function GetConvar(_, default) return default end
 
 dofile('server/sv_community_configs.lua')
@@ -165,7 +165,7 @@ nextResult = { ok = false, err = 'edit token refused' }
 local refused = update(valid())
 eq(refused.ok, false, 'a refused update reported success')
 eq(refused.err, 'edit token refused',
-    'the error text was rewritten -- tELS matches on it to forget a dead listing')
+    'the error text was rewritten -- tLS matches on it to forget a dead listing')
 
 reset()
 nextResult = { ok = false, err = nil }

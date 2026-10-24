@@ -52,7 +52,7 @@ describe("matchesSearchTerm", () => {
   });
 
   test("searches the description too, which is the divergence it settles", () => {
-    // tELS matched the title only; tRadio matched name and description. A theme
+    // tLS matched the title only; tRadio matched name and description. A theme
     // is looked for by what it looks like, and only the description says that.
     expect(matchesSearchTerm(["Nightfall", "a dark blue dispatch board"], "dark")).toBe(true);
   });

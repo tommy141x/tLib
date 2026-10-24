@@ -126,7 +126,7 @@ export type {
 export { writeMarketplaceReleaseMetadata } from "./marketplace-inventory.ts";
 export type { NuiBundleOptions } from "./nui-vite.ts";
 // `resourceVersion` is exported separately from `nuiBundleOptions` because three
-// bundles (tELS, tAFK, tCAD) carry their own resolve blocks and so declare their
+// bundles (tLS, tAFK, tCAD) carry their own resolve blocks and so declare their
 // own `define`, but must still read the version the same way — see the note on
 // it for why a hand-rolled second reader is the thing to avoid.
 export { nuiBundleOptions, resourceVersion } from "./nui-vite.ts";

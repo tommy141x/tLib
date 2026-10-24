@@ -3,7 +3,7 @@
 // tLib dialog rather than a look-alike.
 //
 // It lives here and not in tLib's own `components/ui/nui-field.tsx` because the
-// marketplace components next door are imported by tELS, tDetector and tRadar,
+// marketplace components next door are imported by tLS, tDetector and tRadar,
 // and nothing in tLib's app is reachable from a sibling resource — each one is
 // a separate FiveM resource with its own CEF page and its own bundle, so the
 // only sharing that exists is at build time through this package.

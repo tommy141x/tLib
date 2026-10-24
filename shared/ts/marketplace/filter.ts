@@ -7,11 +7,11 @@
  * Two surfaces browse the same catalogue by filtering a list they already hold,
  * and both had written this by hand:
  *
- *   - tELS: `visibleCards` in `client/web/src/store/marketplace-store.ts`
+ *   - tLS: `visibleCards` in `client/web/src/store/marketplace-store.ts`
  *   - tRadio: the `counts` / `searched` / `filteredItems` memos in
  *     `server/web/src/admin/pages/PageMarketplace.tsx`
  *
- * They had already diverged on what a search searches: tELS matched the TITLE
+ * They had already diverged on what a search searches: tLS matched the TITLE
  * only, tRadio matched name and description. That is settled here in favour of
  * both — a dispatch theme or a light pattern is usually looked for by what it
  * does, and the description is the only field carrying that. `searchableText`
@@ -20,7 +20,7 @@
  *
  * Generic over the item, by accessor
  *
- * The two surfaces do not share an item type — tELS holds a `CardView` keyed by
+ * The two surfaces do not share an item type — tLS holds a `CardView` keyed by
  * `kind`, tRadio holds a `MarketplaceItem` keyed by `type` — and they never
  * will, because one of them merges a second catalogue in. So the facet is
  * reached through a function rather than a field name. That is what lets the

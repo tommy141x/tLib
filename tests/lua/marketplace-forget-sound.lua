@@ -8,8 +8,8 @@
 --   tRadio   radio:removeInstalledSound
 --   tRadio   radio:admin:webRemoveSound
 --   tRadio   standardTypes sounds.uninstalled
---   tELS     tels:removeInstalledSound
---   tELS     standardTypes sounds.uninstalled
+--   tLS     tls:removeInstalledSound
+--   tLS     standardTypes sounds.uninstalled
 --
 -- -- and all five agreed. There was no divergence to resolve, which is the
 -- state in which the SIXTH copy, written from one of the other five, quietly
@@ -112,7 +112,7 @@ do
     must(flat.HORN == 'horn.wav', 'a refused sweep still mutated the map')
 end
 
--- No flat map at all: tELS's per-vehicle maps are swept on their own in one of
+-- No flat map at all: tLS's per-vehicle maps are swept on their own in one of
 -- its paths, and a nil `flatMap` must not be an error.
 do
     local byModel = { police = { HORN = 'horn.wav' } }
@@ -156,7 +156,7 @@ end
 
 -- More than one scoped map, because the signature takes a list and nothing else
 -- in the tree exercises the second element yet. tRadio has one today
--- (modelToneWavMap) and tELS has one (vehicleToneWavMap); a device with both a
+-- (modelToneWavMap) and tLS has one (vehicleToneWavMap); a device with both a
 -- per-model and a per-vehicle override is the obvious next shape.
 do
     local a = { police = { HORN = 'horn.wav' } }

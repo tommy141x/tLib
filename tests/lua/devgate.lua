@@ -17,28 +17,28 @@ end
 local devgate = dofile('shared/imports/devgate/shared.lua')
 
 -- Each resource names its own convar, and two gates in one VM stay independent.
-local els = devgate('tels_internal_name')
+local els = devgate('tls_internal_name')
 local radio = devgate('tradio_internal_name')
 
 assert(els() == false, 'an unset convar is off')
 assert(radio() == false, 'an unset convar is off')
 
-convars['tels_internal_name'] = '1'
+convars['tls_internal_name'] = '1'
 assert(els() == true, 'the convar is re-read, not captured at gate creation')
 assert(radio() == false, 'one resource turning its gate on does not turn another on')
 
 -- Mid-session: the convar is replicated, so this is a real sequence and not a
 -- contrived one. Reading once at load would have pinned the `false` above.
-convars['tels_internal_name'] = '0'
+convars['tls_internal_name'] = '0'
 assert(els() == false, 'turning it back off takes effect at the next call')
 
 for _, spelling in ipairs({ '1', 'true', 'TRUE', 'yes', 'On' }) do
-    convars['tels_internal_name'] = spelling
+    convars['tls_internal_name'] = spelling
     assert(els() == true, ('"%s" is truthy'):format(spelling))
 end
 
 for _, spelling in ipairs({ '0', 'false', 'no', 'off', '', '2', 'enabled' }) do
-    convars['tels_internal_name'] = spelling
+    convars['tls_internal_name'] = spelling
     assert(els() == false, ('"%s" is not truthy'):format(spelling))
 end
 
@@ -53,14 +53,14 @@ assert(not pcall(devgate), 'no name at all is rejected')
 -- check -- the gate is off rather than an error at the call site.
 local realGetConvar = GetConvar
 GetConvar = nil
-local bare = devgate('tels_internal_name')
+local bare = devgate('tls_internal_name')
 assert(bare() == false, 'no GetConvar native means off, not a crash')
 GetConvar = realGetConvar
 
 -- A native that raises (an engine that has the symbol but refuses the call) is
 -- the same answer: off.
 GetConvar = function() error('native unavailable') end
-assert(devgate('tels_internal_name')() == false, 'a raising native means off')
+assert(devgate('tls_internal_name')() == false, 'a raising native means off')
 GetConvar = realGetConvar
 
 print('PASS: devgate')

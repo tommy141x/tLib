@@ -14,7 +14,7 @@ local mySeat = nil       -- { seat = -1|0|1.., vehicle = h, netId = n } or nil
 local frontIds = {}      -- { driver = serverId, passenger = serverId }
 
 IsDuplicityVersion = function() return false end
-GetCurrentResourceName = function() return 'tELS' end
+GetCurrentResourceName = function() return 'tLS' end
 AddEventHandler = function() end
 
 tlib = {

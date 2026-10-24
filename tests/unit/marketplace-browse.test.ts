@@ -284,7 +284,7 @@ describe("the UI preview document", () => {
     // then into a NUI message, and an unbounded one stalls both.
     //
     // Tracks `MAX_PREVIEW_BYTES`, raised 2 MB → 10 MB on 2026-10-08. The old
-    // number was refusing real catalogue items — two shipped tELS documents
+    // number was refusing real catalogue items — two shipped tLS documents
     // (12.9 MB and 8.6 MB) could never preview — so it had stopped being a
     // stall backstop and become a size gate.
     captureHtml("x".repeat(10 * 1024 * 1024 + 1));

@@ -69,7 +69,7 @@ describe("manifest coverage", () => {
     expect(manifestCoverage(MANIFEST, COMPLETE).missing).not.toContain("@tLib/imports.lua");
   });
 
-  test("a data_file target counts: tELS shipped without its ytyp", () => {
+  test("a data_file target counts: tLS shipped without its ytyp", () => {
     const { missing } = manifestCoverage(
       MANIFEST,
       COMPLETE.filter((item) => item !== "stream")

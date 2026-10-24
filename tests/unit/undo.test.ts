@@ -215,7 +215,7 @@ describe("UndoHistory — batching", () => {
     history.push("paint", ["one"]);
     one.state.value = 11;
     // The second store only joins the gesture half way through, which is what
-    // tELS's drag-paint does when the stroke crosses into another store.
+    // tLS's drag-paint does when the stroke crosses into another store.
     history.push("paint", ["one", "two"]);
     two.state.value = 22;
     history.commit();
@@ -546,7 +546,7 @@ describe("UndoHistory — onChange", () => {
   test("the payload carries REDO availability, not just dirty", () => {
     /*
      * The defect this fixes. The old module emitted one boolean, `canUndo()`, so
-     * a listener was never told that redo availability had changed. tELS got
+     * a listener was never told that redo availability had changed. tLS got
      * away with it because it only drove a dirty pill; a redo BUTTON wired to it
      * would never enable, which is exactly what the shared UI affordance is.
      */

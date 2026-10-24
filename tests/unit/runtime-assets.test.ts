@@ -655,7 +655,7 @@ describe("the expanded-size ceiling", () => {
 
 describe("the data-URL mode, for a sandboxed iframe", () => {
   /**
-   * tELS hosts a layout pack in a `sandbox`ed iframe with no
+   * tLS hosts a layout pack in a `sandbox`ed iframe with no
    * `allow-same-origin`, so the frame's origin is OPAQUE. The blob URL store is
    * keyed by origin, so a blob: URL minted by the parent cannot be loaded in
    * there at all — it is not a permissions warning, the fetch simply fails. A

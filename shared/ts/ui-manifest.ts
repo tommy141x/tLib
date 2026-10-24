@@ -4,7 +4,7 @@
 // consumer is allowed to SetHudState with.
 //
 // tLib owns the generic types and the helpers that read them. Concrete manifests
-// live in their consumer resources — `uiRadarManifest`, `uiTelsHudManifest`,
+// live in their consumer resources — `uiRadarManifest`, `uiTlsHudManifest`,
 // `uiDetectorManifest`, `uiRadioSkinManifest` — and tWeb's Studio VENDORS those
 // files at build time (`scripts/sync-hud-sdk.ts`) so it can preview a layout
 // with no game running.
@@ -19,11 +19,11 @@
 //
 // There was also a STATIC registry here — `shared/ts/manifests.ts`, exported as
 // `@tlib/shared/manifests`, holding hand-copied bodies of `uiRadioManifest` and
-// `uiTelsHudManifest` under a comment saying "kept in sync manually". It is gone,
+// `uiTlsHudManifest` under a comment saying "kept in sync manually". It is gone,
 // and the two reasons it went are both reasons not to write another one:
 //
 //   1. It had already drifted, materially. 148 lines standing in for tRadio's 323
-//      and 83 for tELS' 213: it defaulted the radio display to `ln01: "CH 01"` /
+//      and 83 for tLS' 213: it defaulted the radio display to `ln01: "CH 01"` /
 //      `ln02: "CITY PD"` and the softkeys to "ZN"/"CH"/"ST" — text tRadio has
 //      never rendered on any screen — and had no `topLine1`, `topLine2` or
 //      `zoneBankLetter` at all, which are the keys the painted heads bind. This is
@@ -32,7 +32,7 @@
 //   2. It could not be fixed by gating it the way `internal/shared-ts/deck` is
 //      gated. That vendoring runs one way, from a library into private
 //      consumers. A manifest sync would run the other way — tLib reading
-//      tRadio and tELS — which inverts the dependency tLib exists to keep
+//      tRadio and tLS — which inverts the dependency tLib exists to keep
 //      one-directional and puts two paid resources' manifests in a public repo.
 //
 // Its only consumer was `internal/tgstudios-v2`, which now reads the real

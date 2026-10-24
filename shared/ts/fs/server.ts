@@ -17,7 +17,7 @@
 //
 // `--allow-fs-write` is a server STARTUP ARGUMENT, not a manifest key, so the
 // "fix" would be asking every customer to edit their launch command. It is not
-// available to us. What is available is the thing tELS and tRadio were already
+// available to us. What is available is the thing tLS and tRadio were already
 // doing by accident: each resource writes to itself from its own Node bundle.
 //
 // So the implementation is shared at BUILD time — tDetector and tRadar already

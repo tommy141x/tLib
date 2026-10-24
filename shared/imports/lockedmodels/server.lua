@@ -32,14 +32,14 @@
     A client cannot unlock a vehicle by sending `locked = false`, and cannot
     lock someone else's by sending `true`. Changing the set means editing
     server.cfg and restarting, which is the right bar for something only the
-    operator should decide. tELS reached the same conclusion independently for
+    operator should decide. tLS reached the same conclusion independently for
     its own `"locked": true` flag (server/sv_configs.lua), which predates this
     and stays as it is: it is already correct and already shipped.
 
      Name or hash
 
     Consumers disagree about what a "model" is, and both are right for their own
-    storage. tELS keys configs by NAME (`18charger21tr`); tUnit keys elements by
+    storage. tLS keys configs by NAME (`18charger21tr`); tUnit keys elements by
     the model HASH as a string, because that is what the client has in hand.
     So the snapshot holds both forms and `isLocked` accepts either, rather than
     making every caller remember which it has.

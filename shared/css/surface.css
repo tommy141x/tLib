@@ -4,7 +4,7 @@
  * after theme-tokens.css and fonts.css, both of which it reads.
  *
  * The type scale. Eleven pixels is the FLOOR, and this is not taste: "the fonts
- * are poor" has been reported against tELS and tUnit with both faces correctly
+ * are poor" has been reported against tLS and tUnit with both faces correctly
  * loading, and both times the cause was a panel whose whole vocabulary was 8-10px
  * at a fractional `--muted-foreground`. CEF 103 renders that with almost no stem
  * left, and the eye reads it as a bad FACE rather than as small dim text.
@@ -28,7 +28,7 @@
  *
  * UnoCSS emits its utilities UNLAYERED, and an unlayered declaration beats a
  * layered one regardless of source order. Putting these in a layer is what makes
- * `class="panel !bg-secondary"` behave the way anyone reading it expects. tELS uses
+ * `class="panel !bg-secondary"` behave the way anyone reading it expects. tLS uses
  * the same layer for the same classes.
  * Every `font-family` names `var(--font-mono)` or `var(--font-sans)` — the same
  * values the `font-mono`/`font-sans` UTILITIES resolve, provided the consumer points
@@ -177,7 +177,7 @@
     border: 1px solid hsl(var(--border));
   }
 
-  /* One selectable row of a list — an LED in tELS, a text element in tUnit. Named
+  /* One selectable row of a list — an LED in tLS, a text element in tUnit. Named
      for its shape rather than its contents, which is the only reason the two
      resources had two classes. */
   .list-row {

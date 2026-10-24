@@ -10,7 +10,7 @@ import {
 export interface InstallTarget {
   /** Resource name that registered the type — owns the install path. */
   resourceName: string;
-  /** Asset type identifier (e.g. 'ui-radio', 'ui-tels-hud', 'tone'). */
+  /** Asset type identifier (e.g. 'ui-radio', 'ui-tls-hud', 'tone'). */
   type: string;
   /** Directory, relative to the resource root, where items land. */
   installPath: string;

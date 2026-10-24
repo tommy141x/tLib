@@ -17,9 +17,9 @@ is written in terms of `hsl(var(--card))`, `var(--radius-control)` and friends.
 They used to be declared inline in tLib's own `global.css`, and every other
 resource hand-copied the token *names* with its own *values*. The shared
 `admin-ui` controls style themselves from those names, so the same control
-rendered a different colour in each host — tELS had drifted to a blue-tinted
+rendered a different colour in each host — tLS had drifted to a blue-tinted
 palette while importing tLib's components, so one control was grey in a tLib
-dialog and blue in the tELS editor. Nothing was broken; the two were simply
+dialog and blue in the tLS editor. Nothing was broken; the two were simply
 maintained apart with no reason to converge.
 
 Importing this file is what makes a change here reach every consumer without a
@@ -31,7 +31,7 @@ matching commit in each resource.
   self-hosts a different one, so a shared value would name a file that is only
   on disk in one of them. Each resource sets its own beside its own
   `@font-face`.
-- **Anything resource-specific.** tELS's gizmo axis and LED-side colours have no
+- **Anything resource-specific.** tLS's gizmo axis and LED-side colours have no
   meaning in a tLib dialog.
 
 ## The layer order is declared, not inferred

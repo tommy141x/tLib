@@ -66,7 +66,7 @@ const WEB = resolve(ROOT, "client", "web");
  * A floor rather than an equality, so adding tests is not a chore — but it has
  * to stay high enough that a whole FILE going empty cannot slip under it. The
  * smallest file here carries 7, so a floor 7 below the real count is the
- * loosest it may be. A stale floor is not a conservative floor: tELS left
+ * loosest it may be. A stale floor is not a conservative floor: tLS left
  * one at 209 while its suite grew to 398, which had quietly disarmed it.
  * Re-measure when you add a batch.
  */

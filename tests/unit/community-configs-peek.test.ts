@@ -11,7 +11,7 @@
  *
  * That re-pointing is the exact regression this guards: someone tidying two
  * near-identical functions into one, or "fixing" a 404 during a deploy by
- * reusing the endpoint that is known to work. Either would make tELS's
+ * reusing the endpoint that is known to work. Either would make tLS's
  * marketplace tab inflate every listing's import count on hover.
  */
 import { afterEach, describe, expect, test } from "bun:test";

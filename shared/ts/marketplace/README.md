@@ -7,7 +7,7 @@ and a Cloudflare Workers build all call the same code.
 ## Why any of it is shared
 
 Four surfaces drew a marketplace card and three of them had written their own:
-the shared `ui/ItemCard.tsx`, tRadio's admin panel, tWeb, and tELS's NUI. Every
+the shared `ui/ItemCard.tsx`, tRadio's admin panel, tWeb, and tLS's NUI. Every
 parity complaint traced to that — tRadio's card rendered no likes and hid
 download counts behind `> 0`, which on a freshly imported catalogue hides every
 item.
@@ -31,8 +31,8 @@ which is how the duplication started.
 
 ### Narrow structural contracts, not `MarketplaceItem`
 
-`cardStatsOf` takes `CardCounts` rather than an item because tELS's marketplace
-tab merges two catalogues — `tels_community_configs` for LED layouts and vehicle
+`cardStatsOf` takes `CardCounts` rather than an item because tLS's marketplace
+tab merges two catalogues — `tls_community_configs` for LED layouts and vehicle
 setups, tLib's for HUD layouts and sound packs — into one `CardView` so its card
 never branches on provenance. Forcing that shape to satisfy `MarketplaceItem`
 would mean inventing `size_bytes`, `slug` and `created_at` for a community config
@@ -106,7 +106,7 @@ A catalogue slug is namespaced by product; a local install name is not.
 | --- | --- |
 | `tradio-qrx-720` | `layouts/QRX-720` |
 | `tradio-swx-250` | `layouts/SWX-250` |
-| `tels-wcc2` | … |
+| `tls-wcc2` | … |
 | `tdetector-rdx-4000` | … |
 
 tRadio's panel asked `new Set(readdir(layouts/)).has(item.slug)`, so the answer
@@ -212,7 +212,7 @@ half its own size.
 A default exists because most hosts have no preset and the fallback was painting
 nothing: `previewState` is optional all the way down and the binder script is only
 built `if (state)`. Three resources supply one as a hand-written Lua table
-(tRadio, tRadar, tDetector); **tELS supplies none**, so every tELS layout
+(tRadio, tRadar, tDetector); **tLS supplies none**, so every tLS layout
 previewed unbound — every `data-hud-show` element visible at once and every
 readout left at the author's placeholder. That is the literal "blank previews, no
 mock state" for that surface, and no amount of fixing the geometry touches it.
@@ -260,7 +260,7 @@ element into a check it currently escapes. Pulling audio bytes through Lua would
 mean shipping binary across the Lua↔JS boundary.
 
 The preview size cap is a stall backstop, not a content policy: the string crosses
-the Lua VM and then a NUI message. It was raised from 2 MB once two shipped tELS
+the Lua VM and then a NUI message. It was raised from 2 MB once two shipped tLS
 documents (12.9 MB and 8.6 MB) turned out to exceed it, which made real catalogue
 items unpreviewable rather than acting as a backstop. The account quota is the
 only size gate that should exist.

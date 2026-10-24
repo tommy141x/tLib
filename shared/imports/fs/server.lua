@@ -9,7 +9,7 @@
 --
 -- On Enhanced, `SaveResourceFile` returns false for some resources while Node's
 -- `fs` writes the identical path successfully. The cause is still unknown; the
--- workaround is proven. tRadio hit it first, then tELS, then tDetector — and
+-- workaround is proven. tRadio hit it first, then tLS, then tDetector — and
 -- each one shipped its own Node bridge for it, which is why this is a tLib
 -- module rather than a fourth copy.
 --
@@ -91,7 +91,7 @@ function fs.writeResourceFile(relPath, contents, resource, log)
             nativeWriteUsable[resource] = true
             return true
         end
-        -- WARN, not ERROR. tELS's original copy of this said ERROR, which was
+        -- WARN, not ERROR. tLS's original copy of this said ERROR, which was
         -- right when nothing caught the refusal; now the bridge does, the write
         -- still lands and nothing is lost, so an ERROR here is a red line on a
         -- healthy Enhanced server every boot. It is still said once per target

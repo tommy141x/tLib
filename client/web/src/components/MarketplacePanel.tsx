@@ -23,7 +23,7 @@ import type { OpenData } from "@tlib/shared/marketplace/ui";
 // paths are already the documented rule in `menu/components/lucide.ts` (the
 // barrel pulls ~400KB), and `lucide-solid` is in this bundle's dependencies.
 // `shared/ts/**` is the other side of a real boundary and keeps `~icons/lucide`
-// -- tELS, tDetector and tRadar mount those components and have unplugin-icons
+// -- tLS, tDetector and tRadar mount those components and have unplugin-icons
 // but NOT `lucide-solid`, which is written up on `NuiButton`. The rule is
 // "`~icons` in shared, the package in an app", and it is now stated rather than
 // left to whichever file you opened first.

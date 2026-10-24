@@ -131,7 +131,7 @@ const SKIP_DIRS = new Set(["bin", "logs", "node_modules"]);
  *
  * `shared/rust/deck-launcher` is 0.2 MB, embeds nothing, and resolves the Node
  * the host would itself have used at launch time. Three resources share this
- * pack step, so building it here is what makes tRadio, tELS and tRadar all
+ * pack step, so building it here is what makes tRadio, tLS and tRadar all
  * correct rather than one of them.
  */
 const LAUNCHER_DIR = join(import.meta.dir, "../../rust/deck-launcher");
@@ -383,7 +383,7 @@ function buildDeckLauncher(
 
   // Bun.spawnSync THROWS ENOENT on a missing binary rather than returning a
   // status, so without this the whole pack fails with a stack trace that names
-  // neither Rust nor what to do. tELS and tRadar share this step and neither has
+  // neither Rust nor what to do. tLS and tRadar share this step and neither has
   // any other Rust in it.
   if (!Bun.which("cargo")) {
     throw new Error(

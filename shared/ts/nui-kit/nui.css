@@ -14,7 +14,7 @@
  *
  * Why the fallbacks went, and what was actually wrong with the case for them
  *
- * They were defended on the grounds that "these controls are imported by tELS,
+ * They were defended on the grounds that "these controls are imported by tLS,
  * tDetector and tRadar, not just tLib", and that in tDetector and tRadar —
  * which declared no tokens — `hsl(var(--card))` would resolve to `hsl()` with an
  * empty argument, be dropped as invalid, and paint nothing.
@@ -30,7 +30,7 @@
  *   2. More to the point, THIS SHEET WAS NEVER IN THEIR BUNDLES AT ALL. Measured
  *      across all eight NUI bundles, cold-cache: `tlib-nui` appears 99 times in
  *      tLib's stylesheet and ZERO times in tDetector's, tRadar's, tRadio's,
- *      tELS's, tAFK's, tUnit's and tCAD's. The belief that it reached them came
+ *      tLS's, tAFK's, tUnit's and tCAD's. The belief that it reached them came
  *      from `prop-editor/prop-editor.css`, which NAMES `nui-kit/nui.css` in its
  *      header prose and does not `@import` it — and `PropEditor.tsx` builds its
  *      chrome from `internal/shared-ts/ui/*` (the Ark kit) instead. So the fallbacks were
@@ -83,7 +83,7 @@
    * `internal/shared-ts/ui/*` and never moved. Measured in the built sheets: tLib's bundle
    * emits `outline-color: hsl(var(--nui-accent-raw) / .4)` and the other five emit
    * `hsl(var(--ring) / .4)`. So a player opening a tLib confirm dialog from inside
-   * the tELS editor watched the primary button change colour, which is the same
+   * the tLS editor watched the primary button change colour, which is the same
    * complaint from the other end.
    *
    * Converging on the blue ends the isolation the other way, and ends it
@@ -100,7 +100,7 @@
    *
    * So the divergence that remains is a glyph colour on an identical fill, which
    * is not the defect this change closes — the defect was the FILL repainting
-   * between a tLib dialog and a tELS editor, and it no longer does. The proper
+   * between a tLib dialog and a tLS editor, and it no longer does. The proper
    * resolution is to move `--primary-foreground` in theme-tokens.css to match, so
    * all seven bundles use the readable ink; that token is on five other bundles'
    * primary buttons and badges and needs their galleries, so it is a separate
@@ -164,7 +164,7 @@
  *   - CEF 103 does not composite a blurred one usefully, so the moment anybody
  *     widens the radius to make focus more visible, focus stops rendering.
  *   - An elevation inside an `overflow: hidden` ancestor is clipped away
- *     entirely. That is not hypothetical: it is already happening in tELS's own
+ *     entirely. That is not hypothetical: it is already happening in tLS's own
  *     `ui/select.tsx`.
  *
  * So: two signals, border-colour AND an outline, which is what the Ark kit in

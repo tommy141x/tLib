@@ -17,7 +17,7 @@ export function getResourceName(fallback = "tLib"): string {
 // A NUI callback that returns without invoking its `cb` leaves the request open
 // forever: the promise never settles, so neither `.then` nor `.catch` runs and
 // the caller's loading state spins for the rest of the session -- this is what
-// hung tELS's Vehicle Import on "Loading...". Every callback in the consuming
+// hung tLS's Vehicle Import on "Loading...". Every callback in the consuming
 // resources answers inside the same frame, so 10s (~600 frames) only ever
 // catches one that was never going to answer.
 export const NUI_TIMEOUT_MS = 10_000;
@@ -146,7 +146,7 @@ async function requestNuiInner<T>(
 }
 
 // POSTs to the game's NUI callback endpoint, no-ops in dev. Never rejects, and
-// resolves to null on any failure: ~190 call sites across tRadio, tELS,
+// resolves to null on any failure: ~190 call sites across tRadio, tLS,
 // tDetector and tAFK are bare `fetchNui(...)` with no rejection handler, so
 // rejecting would turn a hang into an unhandled-rejection storm. The deadline is
 // what fixes the hang. Use fetchNuiOrThrow to distinguish the failure.
@@ -184,7 +184,7 @@ export async function fetchNuiOrThrow<T = unknown>(
 
 // The three SendNUIMessage shapes in use:
 //   { name, args: [payload] }  cfx structured
-//   { action, ... }            tRadio/tELS flat
+//   { action, ... }            tRadio/tLS flat
 //   { type, ... }              destroyUI and friends
 export function onNuiEvent<T = unknown>(action: string, handler: (data: T) => void): () => void {
   const listener = (event: MessageEvent) => {

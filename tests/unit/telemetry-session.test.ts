@@ -247,8 +247,8 @@ describe("storage is never allowed to break boot", () => {
 
   test("the namespace is per resource, so two resources cannot share a ledger", () => {
     const a = startSessionLog({ namespace: "tradio" });
-    const c = startSessionLog({ namespace: "tels" });
-    expect([...store.keys()].sort()).toEqual(["tels.session", "tradio.session"]);
+    const c = startSessionLog({ namespace: "tls" });
+    expect([...store.keys()].sort()).toEqual(["tls.session", "tradio.session"]);
     a.stop();
     c.stop();
   });

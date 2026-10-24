@@ -19,7 +19,7 @@
             isAdmin = level >= 1
         end)
 
-    tELS/client/cl_lights.lua, tRadar/client/cl_hud.lua and
+    tLS/client/cl_lights.lua, tRadar/client/cl_hud.lua and
     tDetector/client/cl_hud.lua each had it. tAFK had none, so revoking a
     player's `tlib.admin` on a running server left their /tafk panel drawing the
     admin section for the rest of the session — the panel lying about what the

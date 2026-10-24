@@ -417,7 +417,7 @@ export const LAYOUT_OPEN: LayoutOpen = {
   // An offset moves AWAY from its anchor's own corner (geometry.ts layoutRect), so pulling a
   // bottom-right widget back on screen is negative on both axes, not positive.
   components: [
-    widget("tELS", "hud", "Lightbar HUD", 440, 245, 40, -40, "bottom-left"),
+    widget("tLS", "hud", "Lightbar HUD", 440, 245, 40, -40, "bottom-left"),
     widget("tRadio", "radio", "Radio", 210, 427, -40, -40, "bottom-right"),
     widget("tRadar", "head", "Radar", 520, 157, 40, 40, "top-left"),
   ],

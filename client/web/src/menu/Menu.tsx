@@ -377,7 +377,7 @@ export default function Menu() {
   /*
    * The shared "Send feedback" row
    *
-   * INJECTED BY tLib'S MENU, NOT MOUNTED BY EIGHT RESOURCES. tELS, tRadar,
+   * INJECTED BY tLib'S MENU, NOT MOUNTED BY EIGHT RESOURCES. tLS, tRadar,
    * tDetector, tUnit, tAFK, tCAD, tChirp and tRadio all render through THIS
    * bundle, so one row here is one row in every one of their menus and none of
    * them has to wire anything. That is the whole point: the alternative is

@@ -3,11 +3,11 @@
  * each assertion is measuring the thing it names.
  *
  * This suite is the union of the two suites that previously lived in the
- * consumers (tELS `scripts/tests/hud-request.test.ts`, tDetector
+ * consumers (tLS `scripts/tests/hud-request.test.ts`, tDetector
  * `scripts/tests/latest-layout-request.test.ts`). They tested the same
  * primitive under different names and neither was a superset of the other:
  * tDetector had the A→B→A identity case and the "late old failure cannot clear
- * a newer success" case, tELS had the "abort is observable on the superseded
+ * a newer success" case, tLS had the "abort is observable on the superseded
  * signal" case. All of them are here.
  *
  * Why the negative controls exist

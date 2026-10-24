@@ -178,7 +178,7 @@ try {
   // theme-tokens.css and --ring in `internal/shared-ts/ui/*`. These two lines used to pin
   // the neutral #eeeeee, which is the 2026-09-22 repaint recorded in
   // `internal/shared-ts/admin-ui/index.tsx`; it was reverted because the other five
-  // bundles never followed it and a tLib dialog opened over a tELS editor
+  // bundles never followed it and a tLib dialog opened over a tLS editor
   // repainted the primary button. Pinned as a literal on purpose: a token read
   // would agree with whatever the sheet says.
   assert.equal(

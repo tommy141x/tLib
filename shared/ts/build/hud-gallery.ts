@@ -49,12 +49,12 @@ export interface HudGalleryOptions {
   layoutsDir: string;
   /** Where the PNGs go, flat. Existing shots of the same layouts are replaced. */
   outDir: string;
-  /** Declaration namespace: `"radar"` reads `data-radar-width`. tELS and tDetector use `"radio"`. */
+  /** Declaration namespace: `"radar"` reads `data-radar-width`. tLS and tDetector use `"radio"`. */
   prefix: string;
   /** Situations to render. Usually `statesFromManifest(theResourcesManifest)`. */
   states: GalleryState[];
   /**
-   * Global update function a layout installs for itself, e.g. `"__telsLayoutUpdate"` — the same
+   * Global update function a layout installs for itself, e.g. `"__tlsLayoutUpdate"` — the same
    * value the marketplace panel is given as `previewFn`.
    */
   previewFn?: string;

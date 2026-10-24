@@ -221,8 +221,8 @@ local function request(action, resource, kind, slug, version, requestId)
     -- Everything above proves the CALLER is allowed to install into this
     -- resource. Nothing above proves the ITEM belongs to it. The registry keys
     -- on `resource:type` and writes into that resource's own registered
-    -- installPath, so a tELS item could never land in tRadar's directory — but
-    -- `tlib:marketplace:install('tRadar', 'ui', '<a-tELS-slug>')` passed every
+    -- installPath, so a tLS item could never land in tRadar's directory — but
+    -- `tlib:marketplace:install('tRadar', 'ui', '<a-tLS-slug>')` passed every
     -- check and tLib fetched and installed it anyway.
     --
     -- Only install needs this. UNINSTALL AND INSPECT ARE DELIBERATELY NOT
@@ -635,9 +635,9 @@ AddEventHandler('tlib:marketplace:agentResult', function(result)
         --   tDetector  TriggerClientEvent(..., -1, ...)  with NO handler anywhere
         --   tRadar     TriggerClientEvent(..., -1, ...)  with NO handler anywhere
         --   tRadio     broadcast to -1, every client filters on its own `isAdmin`
-        --   tELS       gave up and logged server-side, with a comment saying why
+        --   tLS       gave up and logged server-side, with a comment saying why
         --
-        -- tELS's comment names the exact cause: retargeting at the installing admin
+        -- tLS's comment names the exact cause: retargeting at the installing admin
         -- "is the honest alternative, but `p.src` is known only inside tLib's
         -- sv_marketplace.lua and is not carried on the payload". So the fix belongs
         -- here rather than four times over in the consumers.

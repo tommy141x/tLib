@@ -75,7 +75,7 @@ export interface LayoutScan {
  * - **Comments.** Every layout opens with a block listing the keys it consumes,
  *   written with placeholder names.
  * - **`<style>`.** tRadio's layouts select on `[data-hud-show="..."]`.
- * - **`<script>`.** tELS's layout script contains the attribute names as strings.
+ * - **`<script>`.** tLS's layout script contains the attribute names as strings.
  */
 export function stripProse(html: string): string {
   return html

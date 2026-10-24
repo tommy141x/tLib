@@ -518,7 +518,7 @@ end
 
 -- 9. Two owners version one document independently
 --
--- Every one of these documents is co-owned: tELS's `vehicles` belongs to tLib
+-- Every one of these documents is co-owned: tLS's `vehicles` belongs to tLib
 -- Discovery, tDetector's `soundWavMap` to tlib.soundstore. One scalar version
 -- for the whole file would make soundstore bumping its shape lock the consumer
 -- out of its own sections.

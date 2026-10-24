@@ -17,7 +17,7 @@
  * stating rather than assuming: **tLib's own `data.json` has exactly one
  * writer, and it is this file.** `tlib.jsonstore`, `CreateServerSettings` and
  * `CreateDiscovery` all write the *invoking* resource's document — tDetector's,
- * tELS's — never tLib's. Nothing in tLib opens a store on tLib.
+ * tLS's — never tLib's. Nothing in tLib opens a store on tLib.
  *
  * IF THAT EVER CHANGES, it still holds, but only because this write MERGES:
  * it re-reads the whole document, sets one key and writes it back, which is the

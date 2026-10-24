@@ -1,5 +1,5 @@
 /**
- * The Stream Deck integration banner, shared by tRadio, tELS and tRadar.
+ * The Stream Deck integration banner, shared by tRadio, tLS and tRadar.
  *
  * A different composition from `hero.ts` — two stacked logo lockups, the device dead centre,
  * individual keys floating either side of it, and a two-line tagline under the lot — but the
@@ -152,7 +152,7 @@ ${LIGHT_RIG_CSS}
 
   /* Deliberately a sibling of .stage rather than a child of it, so that a device shot WITHOUT an
      alpha channel can key its black ground out with mix-blend-mode screen (tRadar's deck
-     gallery renders on solid #000; tRadio's and tELS's are RGBA). A blend only composites
+     gallery renders on solid #000; tRadio's and tLS's are RGBA). A blend only composites
      against its own stacking context, and .stage makes one by having a z-index — nested, the
      device would screen against nothing and keep its black box. */
   .device {

@@ -2,10 +2,10 @@
 -- hardcoded default. Requires tlib.kvp.
 --
 --   local settings = tlib.settings.create({
---       { key = 'tels_emissive',    type = 'float',  default = 1.0, clamp = { 0.1, 3.0 } },
---       { key = 'tels_env_quality', type = 'int',    default = 4,   clamp = { 0, 4 } },
---       { key = 'tels_hud_visible', type = 'bool',   default = true },
---       { key = 'tels_hud_layout',  type = 'string', default = 'default' },
+--       { key = 'tls_emissive',    type = 'float',  default = 1.0, clamp = { 0.1, 3.0 } },
+--       { key = 'tls_env_quality', type = 'int',    default = 4,   clamp = { 0, 4 } },
+--       { key = 'tls_hud_visible', type = 'bool',   default = true },
+--       { key = 'tls_hud_layout',  type = 'string', default = 'default' },
 --   })
 --
 -- A server default only lands on a setting the player has not set themselves.

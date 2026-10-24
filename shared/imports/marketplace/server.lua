@@ -1,4 +1,4 @@
--- Server-side marketplace sound utilities — shared across tRadio, tELS, tDetector.
+-- Server-side marketplace sound utilities — shared across tRadio, tLS, tDetector.
 
 local marketplace = {}
 

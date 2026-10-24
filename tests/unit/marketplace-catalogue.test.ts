@@ -363,9 +363,9 @@ describe("assertBundleHash", () => {
  * Cross-product install enforcement.
  *
  * The gap this closes: tLib's coordinator keys registrations `resource:type`
- * and writes into that resource's own registered `installPath`, so a tELS item
+ * and writes into that resource's own registered `installPath`, so a tLS item
  * could never land in tRadio's DIRECTORY. The item's own `resource` field was
- * the unenforced half — `install('tRadar', 'ui', '<a-tELS-slug>')` passed every
+ * the unenforced half — `install('tRadar', 'ui', '<a-tLS-slug>')` passed every
  * check and tLib fetched and installed it.
  *
  * It could not be answered client-side before this, and that is the reason the
@@ -410,7 +410,7 @@ describe("item ownership", () => {
   });
 
   test("refuses an item another product owns — the whole point", async () => {
-    captureFetch({ ...owned, resource: "tELS" });
+    captureFetch({ ...owned, resource: "tLS" });
     await expect(assertItemBelongsToResource("midnight", "tRadio")).rejects.toThrow(
       new RegExp(ITEM_RESOURCE_MISMATCH)
     );

@@ -1,5 +1,5 @@
 -- platform permission adapter — arbitrary permission keys, not just tlib.admin.
--- Server-only. Consumers (tRadio zones/NACs, tELS admin gating, etc.) get a
+-- Server-only. Consumers (tRadio zones/NACs, tLS admin gating, etc.) get a
 -- single API that resolves to ACE or a registered framework resolver.
 
 if _TLIB_SIDE ~= 'server' then return end
@@ -109,7 +109,7 @@ Platform.export('tLib', 'HasPermission', function(source, key)
     return Platform.hasPermission(source, key)
 end)
 
--- Additive. HasPermission above is unchanged and still the only thing tELS,
+-- Additive. HasPermission above is unchanged and still the only thing tLS,
 -- tRadar and the rest call; a consumer that does not know about the batch export
 -- is not affected by it. There is NO fallback for a consumer that does: this
 -- export and shared/imports/permission/server.lua's `hasBatch` ship in the same

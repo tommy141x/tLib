@@ -176,7 +176,7 @@ export function effectiveTabs(dialog: DialogData): DialogTab[] {
  * `dialogButtonClick` naming one. The NUI required a matching enabled `button`
  * field and returned before sending, so every action row in the estate was
  * inert and silent: tRadio's two panels, the prop editors in tRadar and
- * tDetector, tELS's LED editor, tUnit's element editor.
+ * tDetector, tLS's LED editor, tUnit's element editor.
  */
 export function clickIsSendable(dialog: DialogData, fieldId: string): boolean {
   const field = dialog.fields.find((entry) => entry.id === fieldId);

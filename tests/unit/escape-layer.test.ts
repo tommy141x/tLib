@@ -324,7 +324,7 @@ test("a layer registered during the press does not own that press", () => {
     onEscape: () => {
       fired.push("host");
       // Opening a confirm dialog from the same key that closed the host is an
-      // ordinary action here (tELS's discard guard does exactly this). It must
+      // ordinary action here (tLS's discard guard does exactly this). It must
       // not then eat its own opening keyup.
       registry.add({ label: "confirm", depth: 5, onEscape: () => fired.push("confirm") });
     },
@@ -360,7 +360,7 @@ test("a guard is handed the press, and is asked once per press", () => {
   const registry = new EscapeLayerRegistry(target);
   const seen: unknown[] = [];
   let count = 0;
-  // tELS's probe reads the event target, which is why guards take the event.
+  // tLS's probe reads the event target, which is why guards take the event.
   registry.addGuard((event) => {
     count++;
     seen.push(event.target);
@@ -403,7 +403,7 @@ test("ignoreWhenTyping stands down inside a text field and acts outside one", ()
 });
 
 test("a blocked layer is skipped, so the layer below it owns the press", () => {
-  // The difference between "not mine" and "mine, do nothing". tELS's editor
+  // The difference between "not mine" and "mine, do nothing". tLS's editor
   // declines Escape while focus is on an interactive control; a modal stacked
   // above it must still close, and when the editor itself declines, nothing
   // above it should be invented either.

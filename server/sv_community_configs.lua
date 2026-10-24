@@ -4,7 +4,7 @@
 -- No HTTP happens here: every export below is a thin wrapper over the `cc*`
 -- exports registered by server/community-configs/bridge.ts, which holds the
 -- credential. The two original exports keep their names and their exact
--- callback signatures, because tELS calls them.
+-- callback signatures, because tLS calls them.
 --
 -- The publish endpoint requires `X-Resource-Secret`, carrying the baked-in
 -- TLIB_PUBLIC_KEY from shared/ts/marketplace/catalogue.ts. The header name must
@@ -43,7 +43,7 @@ local function registerExports()
     --- opts = { script, configType, key, keyLabel, name, description,
     ---          serverName, configJson, fp, publisher }, callback(ok, err, id).
     ---
-    --- `fp` is the model fingerprint from tELS's shared/model_fingerprint.lua
+    --- `fp` is the model fingerprint from tLS's shared/model_fingerprint.lua
     --- and is OPTIONAL — without it a config can still be found by exact model
     --- key, just not by geometry, so an un-updated consumer keeps working.
     ---
@@ -98,7 +98,7 @@ local function registerExports()
         --
         -- IT IS A CREDENTIAL. Whoever holds it can overwrite or withdraw
         -- that listing. It is never logged here, and a consumer must keep it
-        -- server-side; see the note in tELS's `sv_configs.lua`.
+        -- server-side; see the note in tLS's `sv_configs.lua`.
         exports['tLib']:ccPublish(json.encode(payload), function(ok, err, id, editToken)
             if not ok or type(id) ~= 'string' or id == '' then
                 local errMsg = tostring(err or 'unexpected response')
@@ -216,7 +216,7 @@ local function registerExports()
     --- configJson, err) carries the config so no second request is needed.
     ---
     --- Note the argument ORDER here is (ok, configJson, err), not the
-    --- (ok, err, value) the bridge uses. It is the shipped signature tELS
+    --- (ok, err, value) the bridge uses. It is the shipped signature tLS
     --- already calls and is not reordered to match.
     Platform.export('tLib', 'CommunityConfigsImport', function(id, callback)
         if type(id) ~= 'string' or id == '' then
@@ -244,7 +244,7 @@ local function registerExports()
     ---
     --- The ONLY difference from CommunityConfigsImport is that this does not
     --- count. Use it whenever the config is being read to render or preview it
-    --- rather than because a player chose to install it — tELS's marketplace
+    --- rather than because a player chose to install it — tLS's marketplace
     --- tab animates a listing's LEDs on hover, and routing that through import
     --- would turn the counter into a measure of mouse movement. Keep the two
     --- separate; do not "simplify" one into the other.
@@ -315,7 +315,7 @@ local function registerExports()
     --- CANDIDATE configs for a vehicle, by model fingerprint.
     ---
     --- Candidates, NOT matches. Each item carries the publisher's own
-    --- fingerprint in `fp`; the caller decides with TELS_FP_Compare. The
+    --- fingerprint in `fp`; the caller decides with TLS_FP_Compare. The
     --- similarity algorithm deliberately lives in the consuming resource so it
     --- can be tuned by shipping a resource update rather than a web deploy.
     Platform.export('tLib', 'CommunityConfigsMatch', function(opts, callback)

@@ -172,7 +172,7 @@ try {
   );
   // `.list-row.selected` is the one compound subject in surface.css. Harvesting
   // both of its classes put bare `selected` in the guarded set and reported
-  // tELS's unrelated `.selected` -- the only false positive in a nine-bundle
+  // tLS's unrelated `.selected` -- the only false positive in a nine-bundle
   // sweep. A state modifier compounded onto something is not a forkable rule.
   setCheck(
     "a state modifier from a compound subject is not guarded on its own",

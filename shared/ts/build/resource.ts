@@ -1,7 +1,7 @@
 /**
  * The standard tScripts resource build.
  *
- * tAFK, tDetector, tELS and tRadar all had their own `scripts/build.ts`, three of
+ * tAFK, tDetector, tLS and tRadar all had their own `scripts/build.ts`, three of
  * them byte-identical and the fourth differing only by not having a server bundle.
  * Every one of them also lacked the version fan-out that tRadio learned the hard
  * way it needed, so their package.json could — and did — drift from the version

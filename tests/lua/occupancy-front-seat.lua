@@ -1,7 +1,7 @@
--- Vehicle occupancy: the one trust rule tELS, tRadar and tRadio share.
+-- Vehicle occupancy: the one trust rule tLS, tRadar and tRadio share.
 --
 -- Three resources each grew their own answer to "may this player act on that
--- vehicle" and all three got it differently wrong: tELS accepted any seat (so a
+-- vehicle" and all three got it differently wrong: tLS accepted any seat (so a
 -- rear passenger could steal the relay from the driver), tRadio accepted only
 -- the driver, tRadar never asked because it never left the client. This module
 -- is the single answer, and this suite is its oracle.
@@ -18,7 +18,7 @@ local seats = {}   -- [src] = { seat = -1|0|1.., netId = n } or nil
 local reads = 0
 
 IsDuplicityVersion = function() return true end
-GetCurrentResourceName = function() return 'tELS' end
+GetCurrentResourceName = function() return 'tLS' end
 AddEventHandler = function() end
 local netEvents = {}
 RegisterNetEvent = function(name, fn) netEvents[name] = fn end

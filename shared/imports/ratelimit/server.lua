@@ -13,12 +13,12 @@
      Why this exists
 
     Seven byte-identical copies of the same twelve-line function were in the
-    tree: tELS/server/sv_configs.lua, tRadio/server/sv_props.lua,
+    tree: tLS/server/sv_configs.lua, tRadio/server/sv_props.lua,
     tDetector/server/sv_admin.lua and sv_props.lua, tRadar/server/sv_admin.lua
     and sv_props.lua, and tUnit/server/sv_elements.lua. Nothing differed but
     the local's name (`_rateBuckets` in six, `_buckets` in one) and whether the
     `if not b then` was folded onto one line. The interval was 1000 at every
-    call site but tELS's two community-config queries.
+    call site but tLS's two community-config queries.
 
      A floor on the interval, not a token bucket
 

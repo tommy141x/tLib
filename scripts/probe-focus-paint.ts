@@ -46,7 +46,7 @@
  * that was not, which is how two live `focus-visible:outline-ring` deletions
  * shipped in it unnoticed.
  *
- * NOT in `verify`, for two reasons: it needs tELS, tAFK, tCAD, tUnit and
+ * NOT in `verify`, for two reasons: it needs tLS, tAFK, tCAD, tUnit and
  * tRadio/server BUILT first and `verify` does not build them, and
  * `shared/ts/build/nui-chromium.ts` is Windows-only (a `Win_x64` snapshot,
  * `chrome-win/chrome.exe`, `powershell Expand-Archive`) while `verify` must run
@@ -176,15 +176,15 @@ const TUNIT_FOCUS =
 
 const BUNDLES: readonly Bundle[] = [
   {
-    name: "tELS/client/web",
+    name: "tLS/client/web",
     blocklisted: true,
-    cssDir: `${TSCRIPTS}/tELS/client/ui/assets`,
+    cssDir: `${TSCRIPTS}/tLS/client/ui/assets`,
     cssPrefix: "index-",
     tokens: HSL_TOKENS,
     cases: [
       {
         name: "select trigger, real Tab",
-        source: "tELS/client/web/src/components/ui/select.tsx",
+        source: "tLS/client/web/src/components/ui/select.tsx",
         classes: `outline-none ${FOCUS_VISIBLE}`,
         trigger: "tab",
         tag: "button",
@@ -192,7 +192,7 @@ const BUNDLES: readonly Bundle[] = [
       },
       {
         name: "LED drag-over indicator (static)",
-        source: "tELS/client/web/src/components/LEDList.tsx",
+        source: "tLS/client/web/src/components/LEDList.tsx",
         classes: "outline-2 outline-solid outline-primary -outline-offset-2",
         trigger: "static",
         tag: "div",
@@ -200,7 +200,7 @@ const BUNDLES: readonly Bundle[] = [
       },
       {
         name: "community config name field, real Tab",
-        source: "tELS/client/web/src/components/CommunityConfigsPanel.tsx",
+        source: "tLS/client/web/src/components/CommunityConfigsPanel.tsx",
         classes:
           "outline-none focus:border-ring focus:outline-2 focus:outline-solid " +
           "focus:outline-ring/40 focus:-outline-offset-1",
@@ -597,12 +597,12 @@ function check(ok: boolean, msg: string): void {
  *
  * The hash in the filename is OPTIONAL, and that is not a tolerance -- it is the
  * estate's two real spellings. Most bundles emit vite's default `index-<hash>.css`;
- * `tELS/client/web` sets `assetFileNames: "assets/[name][extname]"` deliberately
+ * `tLS/client/web` sets `assetFileNames: "assets/[name][extname]"` deliberately
  * (see its vite.config.ts: a renamed bundle 404s off FiveM's file table until a
  * `refresh`, and FiveM keys its cache on the file hash, not the name), so it emits
  * a bare `index.css`. Matching only `<prefix>*` made this probe throw
- * "expected exactly one index-*.css ... found 0" on a CORRECT tELS build, so
- * `bun run probe:focus` exited 1 and tELS's cases could never run at all --
+ * "expected exactly one index-*.css ... found 0" on a CORRECT tLS build, so
+ * `bun run probe:focus` exited 1 and tLS's cases could never run at all --
  * a gate that cannot pass, which is worse than no gate.
  */
 function newestCss(dir: string, prefix: string): string {
@@ -647,7 +647,7 @@ try {
     // The sheet must have left the ring namespace behind. A `.ring` emitted from
     // prose is dead CSS, and dead CSS is what makes "search the build for a
     // box-shadow" cry wolf -- so it is reported, not ignored.
-    // Both spellings. MEASURED: a class-only pattern reported 0 for tELS while
+    // Both spellings. MEASURED: a class-only pattern reported 0 for tLS while
     // its sheet still carried `[-ring=""]{--un-ring-width:-3px; …}` -- 375 bytes
     // of the full ring box-shadow machinery, emitted through attributify mode
     // from text nobody wrote as a class. Dead CSS that a class-shaped search

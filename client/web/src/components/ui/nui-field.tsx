@@ -15,7 +15,7 @@ import {
   Switch as MatchType,
   Show,
 } from "solid-js";
-// NuiButton moved into the shared package so tELS, tDetector and tRadar can
+// NuiButton moved into the shared package so tLS, tDetector and tRadar can
 // mount the marketplace components that use it; nothing in this app is
 // reachable from a sibling resource. Re-exported here so the existing import
 // sites in tLib keep working. nui.css comes along with it.

@@ -44,7 +44,7 @@ export interface PublishPayload {
   description?: string;
   serverName?: string;
   configJson: string;
-  /** The model fingerprint from tELS's `shared/model_fingerprint.lua`. */
+  /** The model fingerprint from tLS's `shared/model_fingerprint.lua`. */
   fp?: unknown;
   publisher?: { name?: string; identifiers?: string[] };
 }
@@ -52,7 +52,7 @@ export interface PublishPayload {
 /**
  * A listing, and the capability to edit it.
  *
- * `editToken` is `HMAC-SHA256(TELS_CONFIG_EDIT_SECRET, id)`, minted by the
+ * `editToken` is `HMAC-SHA256(TLS_CONFIG_EDIT_SECRET, id)`, minted by the
  * Worker at publish and required by `updateConfig` and `withdrawConfig`.
  *
  * Optional, and every caller must treat it as such: a host running a build
@@ -62,7 +62,7 @@ export interface PublishPayload {
  *
  * It is a capability — whoever holds it can overwrite or withdraw the listing
  * — so it stays in server-side storage, never anywhere a game client can read.
- * tELS keeps it out of the broadcast `serverDefaults` for that reason.
+ * tLS keeps it out of the broadcast `serverDefaults` for that reason.
  */
 export interface PublishResult {
   id: string;
@@ -141,7 +141,7 @@ export async function updateConfig(
  * Take a listing out of the catalogue.
  *
  * `POST .../withdraw`, not `DELETE`, because it is not a delete: the Worker
- * sets `status = 'unlisted'`. Rows in `tels_community_config_imports` point at
+ * sets `status = 'unlisted'`. Rows in `tls_community_config_imports` point at
  * it and `import_count` is derived from them, and a server that already
  * imported it has done nothing wrong. Every public read gates on
  * `status = 'published'`, so the withdrawal is immediate.

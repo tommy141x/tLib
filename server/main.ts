@@ -172,7 +172,7 @@ registerWriteResourceFile();
 // io.readdir returns an empty list for every path, including the resource's own
 // root. Same flattened-failure contract as ListResourceFiles.
 //
-//   local dirs = json.decode(exports.tLib:ListResourceDirs('tELS', 'layouts') or '[]')
+//   local dirs = json.decode(exports.tLib:ListResourceDirs('tLS', 'layouts') or '[]')
 //
 exports("ListResourceDirs", (resourceName: unknown, subdir: unknown): string => {
   const result = scanResource(resourceName, subdir, "dir");

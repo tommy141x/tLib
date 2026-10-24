@@ -1,9 +1,9 @@
 -- Typed KVP storage, prefixed per community so one box's servers stay isolated.
 -- The prefix is the tlib_community_id convar, else sv_projectName, else nothing.
 --
---   tlib.kvp.getString('tels_hud_layout', 'default')
---   tlib.kvp.setFloat('tels_hud_scale', 1.5)
---   tlib.kvp.delete('tels_hud_scale')
+--   tlib.kvp.getString('tls_hud_layout', 'default')
+--   tlib.kvp.setFloat('tls_hud_scale', 1.5)
+--   tlib.kvp.delete('tls_hud_scale')
 --
 -- Every getter takes an optional default, returned when the key was never set.
 

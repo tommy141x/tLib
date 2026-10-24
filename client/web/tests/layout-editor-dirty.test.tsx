@@ -56,8 +56,8 @@ afterEach(() => {
 
 const LAYOUT = { x: 0, y: 0, scale: 1, visible: true, anchor: "center" } as const;
 const COMPONENT: Component = {
-  key: "tels:speed",
-  owner: "tels",
+  key: "tls:speed",
+  owner: "tls",
   id: "speed",
   label: "Speedometer",
   width: 200,

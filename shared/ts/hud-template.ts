@@ -11,7 +11,7 @@
 // same node lists. The lists are now built once and reused.
 //
 // scan() is the explicit invalidation point, and a MutationObserver is the
-// implicit one: a layout script (tELS re-creates `[data-hud-script]` blocks as
+// implicit one: a layout script (tLS re-creates `[data-hud-script]` blocks as
 // live elements, and they may add or retag nodes) mutates the tree after scan()
 // has run, and a cache with no way to notice would bind the old set forever.
 // The observer costs nothing while the DOM is static, which is the normal case.
@@ -20,7 +20,7 @@
 //
 // Skipping an unchanged write is the other half of the saving, but the value to
 // compare against has to be read back from the element rather than remembered
-// here. A layout script owns the same nodes we do — tELS's hands it `(state,
+// here. A layout script owns the same nodes we do — tLS's hands it `(state,
 // root)` precisely so it can paint derived values — so a remembered "last value"
 // goes stale the moment anything else writes, and we would then skip a write
 // that was genuinely needed. Reading `el.textContent` is cheap; writing it is
@@ -258,7 +258,7 @@ export class HudBinder {
       for (const b of list) keys.add(top(b));
     }
 
-    // led-color alone also reports the REST of the path. tELS's Lua builds `leds` as a table of
+    // led-color alone also reports the REST of the path. tLS's Lua builds `leds` as a table of
     // colours and needs the sub-names to know which entries to fill; the other attributes only ever
     // need the top-level key.
     for (const b of this.cache.ledColor) {

@@ -24,7 +24,7 @@
  *
  * A typo'd name; a `shared/imports` directory with no loadable file in it; a
  * declaration referenced ONLY inside a Lua comment (real: every `tlib.diag` in
- * tELS's `cl_env.lua` is commented out); a commented-out declaration, which must
+ * tLS's `cl_env.lua` is commented out); a commented-out declaration, which must
  * NOT be read as one; and a wrong tLib path, which makes every declared name a
  * ghost and must therefore trip the floor rather than report a screen of
  * confident lies.
@@ -355,7 +355,7 @@ const MODULES: ModuleFixture[] = [
     },
     expect: ["R-MODULE-UNUSED"],
     why:
-      "⛔ prose is not use. MEASURED for real: every `tlib.diag` in tELS's cl_env.lua is " +
+      "⛔ prose is not use. MEASURED for real: every `tlib.diag` in tLS's cl_env.lua is " +
       "inside a comment, and a reader that did not strip comments called that declaration used.",
   },
   {

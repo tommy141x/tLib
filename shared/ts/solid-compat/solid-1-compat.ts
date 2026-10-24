@@ -967,7 +967,7 @@ export function createStore<T extends object>(init: T, options?: any) {
  *
  * and `REACTIVITY_HALTED` is the expensive half: after the first throw NOTHING
  * in the page updates again, so a later click handler runs and renders nothing.
- * tELS's editor gallery counted 14 of these across two scenarios, plus 4
+ * tLS's editor gallery counted 14 of these across two scenarios, plus 4
  * overlays that never opened because the graph was already down.
  *
  * THE FIX: PUT THE BIT BACK FOR THE DURATION OF A STORE WRITE. The two needs
@@ -1171,7 +1171,7 @@ export function batch<T>(fn: () => T): T {
  * keeping. `devGuardStoreSetterWrite` rejected those same two writes at the
  * setter's front door — see the long note beside `storeWriteScopes` — so the
  * diff walk was never reached and the only error anyone saw was
- * `REACTIVE_WRITE_IN_OWNED_SCOPE`. Repairing that one turned all 14 of tELS's
+ * `REACTIVE_WRITE_IN_OWNED_SCOPE`. Repairing that one turned all 14 of tLS's
  * editor-gallery page errors into 14 of `keyFn is not a function`: same count,
  * same two scenarios, same four overlays still unopened. A guard that throws
  * early conceals whatever stands behind it, so a shorter error list after one

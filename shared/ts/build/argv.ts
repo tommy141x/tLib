@@ -4,7 +4,7 @@
  * Eleven of those tools had their own `arg()`, in four variants, and the
  * variants were a safety ladder rather than four tastes:
  *
- *   throws on a bad value            4 copies  (tAFK, tELS ×2, tLib)
+ *   throws on a bad value            4 copies  (tAFK, tLS ×2, tLib)
  *   silently returns the default     2 copies
  *   returns `""`                     2 copies
  *   no guard at all                  3 copies
