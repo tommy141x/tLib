@@ -6,8 +6,10 @@ import Menu from "@/menu/Menu";
 
 // Theme store initializes its NUI listeners on import
 import "@/stores/theme-store";
-// Same: motion-store listens for `setMotion` and writes `--motion` to :root.
-import "@/stores/motion-store";
+// Same, but from `shared/` rather than from this app: every consumer that
+// animates anything needs the identical `setMotion` listener, and tLib's own
+// page is just the first of them.
+import "@tlib/shared/motion";
 
 export default function App() {
   return (

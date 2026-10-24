@@ -81,6 +81,18 @@ export default defineConfig(({ command }) => ({
     // not express.
     target: "es2020",
     cssTarget: "chrome103",
+    // Stated, not inherited. A sourcemap carries `sourcesContent` — the original
+    // text of every module in its chunk — so emitting one ships this whole tree
+    // inside client/ui, which is a published FiveM resource. Nothing here would
+    // catch it: cef-output-contract.ts reads stylesheets and never looks at a
+    // .map.
+    //
+    // Measured across the vite-plus 1.1.0 -> 1.4.0 upgrade on this config:
+    // client/ui held 0 .map files before and 0 after, so 1.4.0 did not flip the
+    // default here. It did on a sibling Solid project with an SSR environment
+    // (0 -> 299 .map files under dist/server/assets), which is why this is now
+    // written down rather than left to whatever the next release defaults to.
+    sourcemap: false,
     outDir: OUT_DIR,
     emptyOutDir: false,
     modulePreload: { polyfill: false },

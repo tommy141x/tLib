@@ -2,7 +2,6 @@ import { For, Show } from "solid-js";
 import IconDownload from "~icons/lucide/download";
 import IconLoaderCircle from "~icons/lucide/loader-circle";
 import IconSearch from "~icons/lucide/search";
-import IconTrash2 from "~icons/lucide/trash-2";
 import { NuiButton } from "../../nui-kit/NuiButton";
 import { DeleteFromServer } from "./DeleteFromServer";
 import { BUILTIN_EXPLANATION, isBuiltin, isInstallBusy } from "../install-machine";

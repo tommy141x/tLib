@@ -7,7 +7,7 @@
  * row, its hover has to land on the frame the cursor arrives, not 100-200ms later.
  *
  * Why this is asserted and not just commented. These classes are consumed through
- * `@tlib/internal` by tELS, tUnit, tRadio, tAFK and tCAD, so one `transition-colors`
+ * `@tlib/internal` by tLS, tUnit, tRadio, tAFK and tCAD, so one `transition-colors`
  * put back here for "polish" re-slows six products at once, in a repo whose own
  * tests would all still pass. Nothing else reads the decision.
  *
@@ -37,10 +37,14 @@ const SURFACE = read("shared/css/surface.css");
 const UI = "internal/shared-ts/ui";
 const describeWithUiKit = existsSync(join(root, UI, "tabs.tsx")) ? describe : describe.skip;
 
-/** The body of one top-level `.<name> { … }` rule, comments stripped. */
+/** The body of one top-level rule, comments stripped. The selector is escaped
+ *  whole rather than just its leading dot, so a pseudo-class selector carrying
+ *  brackets and quotes — the press states below — is matched literally instead
+ *  of being read as a character class that matches something else. */
 function rule(css: string, selector: string): string {
   const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  const m = stripped.match(new RegExp(`(^|[\\s,])\\${selector}\\s*\\{([^{}]*)\\}`, "m"));
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = stripped.match(new RegExp(`(^|[\\s,])${escaped}\\s*\\{([^{}]*)\\}`, "m"));
   if (!m) throw new Error(`no rule for ${selector} in surface.css`);
   return m[2];
 }
@@ -50,6 +54,23 @@ describe("surface.css: a row is one of many", () => {
   for (const selector of [".list-row", ".row-action", ".segment"]) {
     test(`${selector} tints instantly`, () => {
       expect(rule(SURFACE, selector)).not.toContain("transition");
+    });
+  }
+
+  // The other half of the same rule. "Tints instantly" above is about the
+  // cursor ARRIVING; these are about the button being HELD, which nothing in
+  // this sheet answered at all — every one of these surfaces acts through a
+  // round trip to Lua, so the press was the only moment available to say the
+  // click had registered and it was blank.
+  for (const selector of [
+    '.segment:active:not([aria-disabled="true"])',
+    ".list-row:active",
+    ".row-action:active",
+  ]) {
+    test(`${selector} repaints, and does it instantly`, () => {
+      const body = rule(SURFACE, selector);
+      expect(body).toContain("background:");
+      expect(body).not.toContain("transition");
     });
   }
 

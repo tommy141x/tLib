@@ -171,38 +171,25 @@ do
     check(#env.printed == 2, 'shim: Platform.export is guarded, not a bypass')
 end
 
--- ══════════════════════════════════════════════════════════════════
---  publishExportsAs -- a renamed resource keeps answering its old name
+-- publishExportsAs -- a renamed resource keeps answering its old name.
 --
---  ⚠️ THE NAMES BELOW ARE DELIBERATELY NOT REAL PRODUCT NAMES.
+-- THE NAMES BELOW ARE DELIBERATELY NOT REAL PRODUCT NAMES. They were, and the
+-- rename of 2026-10-24 swept this file: every mention of the old name became
+-- the new one, so these tests published a name AS ITSELF and asserted a handler
+-- appeared. They still passed, having lost the ability to tell an alias from a
+-- self-alias -- the entire bug the section exists to catch.
 --
---  They were, and the rename of 2026-10-24 swept this file: every mention of
---  the old name became the new one, so these tests ended up publishing a name
---  AS ITSELF and asserting that a handler appeared. They still passed. They had
---  simply stopped being able to tell an alias from a self-alias, which is the
---  entire bug the section exists to catch. `tProduct` / `tRetired` are inert, so
---  no future rename can quietly hollow this out the same way.
+-- `provide '<old name>'` does NOT fix a rename. tDB measured that on a live
+-- server: it makes GetResourceState report `started`, which is why it looks
+-- sufficient, while the export call still fails. What works is answering
+-- `__cfx_export_<resource>_<name>` -- verbatim what the engine does for a
+-- resource's own exports (citizen/scripting/lua/scheduler.lua:627-666), and
+-- what oxmysql, rpemotes and qb-policejob use for their own legacy names.
 --
---  The real case: a resource with a documented, public export API gets renamed.
---  Scripts we do not ship and cannot edit still call the old name, and a folder
---  rename alone turns every one of those into "No such export".
---
---  `provide '<old name>'` in the manifest does NOT fix it. tDB measured that on a
---  live server: `provide` makes GetResourceState report `started` -- which is
---  why it looks sufficient -- while the export call still fails. The mechanism
---  that works is answering `__cfx_export_<resource>_<name>`, which is verbatim
---  what the engine does for a resource's own exports
---  (citizen/scripting/lua/scheduler.lua:627-666) and what oxmysql, rpemotes and
---  qb-policejob all already use for their own legacy names.
---
---  THE ORDERING IS THE TRAP THIS MOSTLY GUARDS. Exports are registered across
---  many files and tLS registers part of its surface in a loop, so "declare the
---  legacy name first" would be a rule that holds on a dev machine and drops a
---  random subset of exports on a customer's server. Both orders are tested
---  because only testing one is how that ships.
--- ══════════════════════════════════════════════════════════════════
-
--- Inert stand-ins, NOT product names -- see the note above.
+-- THE ORDERING IS THE TRAP THIS MOSTLY GUARDS. Exports register across many
+-- files and one call site registers them in a loop, so "declare the legacy name
+-- first" is a rule that holds on a dev machine and drops a random subset on a
+-- customer's server. Both orders are tested because testing one is how that ships.
 local CURRENT        = 'tProduct'
 local LEGACY         = 'tRetired'
 local SECOND_RETIRED = 'tRetiredToo'
