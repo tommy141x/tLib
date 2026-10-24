@@ -12,10 +12,13 @@
  *   deck--mini--<state>.png   the device, rendered on a transparent ground
  *   keys/<name>--<state>.png  one key face, square, also transparent
  *
- * The Elgato mark is a third-party logo used to name the integration. It lives at
- * `internal/tWeb/assets/brand/stream-deck.png` — `assets/`, not `public/`, because it is a
- * build input and nothing should start serving it from timmygstudios.com as a side effect of
- * being here. The artwork is black, so it is inverted to white for this dark frame.
+ * THE ELGATO MARK IS NOT USED HERE, and putting it back is not a style decision.
+ * Until 2026-10-23 this banner stacked Elgato's own logo-and-wordmark artwork directly under
+ * the TIMMYG Studios lockup, which is the one arrangement that reads as a co-branded product
+ * rather than a compatibility claim — on a storefront page selling a paid resource we publish.
+ * The integration is named in our own typeface instead: words are nominative use, a logo
+ * lockup is not. The artwork is still at `internal/tWeb/assets/brand/stream-deck.png` for
+ * reference; nothing renders it.
  *
  * The browser is the NUI Chromium (revision 103). No `oklch()` or `color-mix()` — they
  * arrived in 111 and fail silently there.
@@ -28,7 +31,6 @@ import { ATMOS_HTML, GRAIN_CSS, LIGHT_RIG_CSS, SPILL_HTML, shoot } from "./hero.
 const TWEB = path.resolve(import.meta.dir, "../../../..", "internal", "tWeb");
 const FONT = path.join(TWEB, "public", "fonts", "alte-haas-grotesk.bold.woff2");
 const TIMMYG_MARK = path.join(TWEB, "public", "brand-mark.webp");
-const STREAM_DECK = path.join(TWEB, "assets", "brand", "stream-deck.png");
 
 const W = 2000;
 const H = 1000;
@@ -133,13 +135,17 @@ ${LIGHT_RIG_CSS}
   .brand img { width: 62px; height: 62px; display: block; }
   .brand span { font-size: 62px; line-height: 1; letter-spacing: -.02em; color: #fff; }
 
+  /* Set in our own face at the weight the rest of the frame uses, not Elgato's artwork — see
+     the note at the top. Smaller and dimmer than the brand lockup above it on purpose: this
+     line says what the product works with, and a compatibility line that competes with the
+     publisher's name is the thing that reads as co-branding. */
   .sd {
-    top: 168px; left: 0; right: 0;
-    display: flex; align-items: center; justify-content: center;
+    top: 176px; left: 0; right: 0;
+    text-align: center;
+    font-size: 30px;
+    letter-spacing: .3em;
+    color: rgba(255,255,255,.72);
   }
-  /* The supplied artwork is black-on-transparent, so it is inverted rather than recoloured —
-     a filter keeps the mark and the wordmark locked together at their authored spacing. */
-  .sd img { height: 62px; display: block; filter: invert(1); }
 
   .stage { inset: 0; }
   .stage img { position: absolute; display: block; }
@@ -199,7 +205,7 @@ ${GRAIN_CSS}
   <div class="pool"></div>
   ${ATMOS_HTML}
   <div class="brand"><img src="${dataUri(TIMMYG_MARK)}"><span>TIMMYG Studios</span></div>
-  <div class="sd"><img src="${dataUri(STREAM_DECK)}"></div>
+  <div class="sd">WORKS WITH STREAM DECK</div>
   <img class="device" src="${dataUri(spec.device)}">
   <div class="stage">
     ${keyImgs}
@@ -218,8 +224,9 @@ ${GRAIN_CSS}
     width: W,
     height: H,
     fontSizePx: TAGLINE_PX,
-    // Both logos and the device, plus a key each.
-    expectImages: spec.keys.length + 3,
+    // The brand mark and the device, plus a key each. Was +3 while Elgato's artwork was a
+    // third image; the guard counts loaded <img>s, so leaving it would fail every render.
+    expectImages: spec.keys.length + 2,
     out: spec.out,
     label: "deck-banner",
     log: spec.log ?? console.log,

@@ -8,6 +8,7 @@
     "shared/ts/build/cef-output-contract.ts",
     "shared/ts/build/dead-classes.ts",
     "shared/ts/build/deck-banner.ts",
+    "shared/ts/build/deck-plate.ts",
     "shared/ts/build/detect-plates.ts",
     "shared/ts/build/dev.ts",
     "shared/ts/build/hero.ts",
