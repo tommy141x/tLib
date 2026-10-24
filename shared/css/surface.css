@@ -236,13 +236,9 @@
     color: hsl(var(--muted-foreground));
     cursor: pointer;
   }
-  /* ⚠️ HOVER AND FOCUS ARE SEPARATE RULES, AND FOCUS KEEPS AN OUTLINE.
-     They were one selector ending in `outline: none`, so the shared recipe for every
-     row-level DELETE button in the estate painted keyboard focus identically to a mouse
-     hover: tabbing down a list gave no way to tell which row's destructive action Enter
-     was about to fire. The `outline: none` also beat the blanket `:focus-visible` rules
-     in tBlips and tChat — equal specificity, and surface.css is imported first — so no
-     consumer could add one back. */
+  /* SEPARATE RULES, AND FOCUS KEEPS ITS OUTLINE: one selector ending in `outline: none`
+     painted focus identically to hover on every row-level DELETE button, and beat
+     tBlips's and tChat's blanket `:focus-visible` so no consumer could fix it. */
   .row-action:hover {
     background: hsl(var(--destructive) / 0.22);
     border-color: hsl(var(--destructive));

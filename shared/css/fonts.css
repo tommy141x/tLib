@@ -135,7 +135,7 @@
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* ⚠️ THIS SHEET DECLARES NO TOKENS, AND MUST NOT. It ships faces; `theme-tokens.css`
+/* THIS SHEET DECLARES NO TOKENS, AND MUST NOT. It ships faces; `theme-tokens.css`
    names them.
 
    It used to declare `--font-sans` and `--font-mono` in a bare `:root`. Both are also

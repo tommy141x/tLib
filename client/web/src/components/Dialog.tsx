@@ -15,7 +15,6 @@ import {
 import { fetchNui, onNuiEvent } from "@/lib/nui";
 import {
   clickIsSendable,
-  dialogSpecWarnings,
   effectiveTabs,
   groupFieldsByRow,
   initialValues,
@@ -26,6 +25,7 @@ import {
   type DialogValues,
   validationErrors,
 } from "./dialog-model";
+import { dialogSpecWarnings } from "./dialog-spec";
 import {
   clampOffset,
   DIALOG_NO_TAB,

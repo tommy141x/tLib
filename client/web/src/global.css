@@ -32,7 +32,7 @@
    contract and live in shared/css/theme-tokens.css, imported above; the menu keeps
    its separate full-color tokens on .tlib-menu.
 
-   ⛔ THE FONT TOKEN NO LONGER LIVES HERE EITHER, and the block that held it was a
+   THE FONT TOKEN NO LONGER LIVES HERE EITHER, and the block that held it was a
    live trap: it sat inside `@layer base`, which this file's own README section says
    is silently ignored against an unlayered sheet. It happened to name the identical
    stack theme-tokens.css names, so nothing looked wrong — and anyone editing it to

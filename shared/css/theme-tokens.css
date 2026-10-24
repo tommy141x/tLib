@@ -118,7 +118,7 @@
      are how it reads it. See docs/internal/theming-tokens.md. */
   --motion: 1;
 
-  /* ⚠️ BOTH FONT TOKENS LIVE HERE AND IN NO OTHER SHEET. Declaring either one in a
+  /* BOTH FONT TOKENS LIVE HERE AND IN NO OTHER SHEET. Declaring either one in a
      second unlayered `:root` makes `@import` ORDER decide the product's typeface, with
      no error and no test to catch it. That is not hypothetical: until 2026-10-24
      `fonts.css` declared `--font-sans` too, and the built CSS of the estate came out

@@ -26,11 +26,14 @@ local frameworks = {
     {
         name = 'qbx_core',
         jobs = function(src)
-            -- GetGroups returns `{ [name] = gradeLevel }` -- already exactly the
-            -- shape we normalise to, and it covers ALL held jobs and gangs, not
-            -- just the primary pair on PlayerData. It indexes QBX.Players[src]
-            -- with no nil-guard and so throws for an unloaded source; the pcall
-            -- in server.lua is what makes that a `{}` rather than a crash.
+            -- GetGroups returns `{ [name] = gradeLevel }`, covering ALL held jobs and
+            -- gangs rather than the primary pair.
+            -- THE GetPlayer PROBE MUST STAY FIRST: GetGroups indexes
+            -- `QBX.Players[source].PlayerData` unguarded (qbx functions.lua:526) and an
+            -- export runs in the CALLEE's VM, so for an unloaded source qbx prints
+            -- `SCRIPT ERROR: attempt to index a nil value` before access.jobs's pcall
+            -- (which guards us, not qbx) sees it. Two customers, 2026-10-22/23.
+            if not exports.qbx_core:GetPlayer(src) then return {} end
             return exports.qbx_core:GetGroups(src)
         end,
     },

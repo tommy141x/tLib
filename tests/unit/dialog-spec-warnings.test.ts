@@ -12,7 +12,8 @@
  * These tests pin both directions: a clean spec is silent, and each defect is named.
  */
 import { describe, expect, test } from "bun:test";
-import { type DialogData, dialogSpecWarnings } from "../../client/web/src/components/dialog-model";
+import type { DialogData } from "../../client/web/src/components/dialog-model";
+import { dialogSpecWarnings } from "../../client/web/src/components/dialog-spec";
 
 const base: DialogData = {
   id: "settings",

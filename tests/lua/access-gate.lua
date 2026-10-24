@@ -69,12 +69,25 @@ end
 -- Framework / inventory stubs. Each is only reachable when its resource is
 -- 'started', which is what detection tests.
 local qbxGroups, qbPlayer, esxPlayer, ndPlayer, oxGroups, natOnDuty
+-- qbx only: whether QBX.Players[src] exists yet. The adapter probes GetPlayer
+-- before GetGroups because GetGroups indexes that table unguarded; see the note
+-- in shared/imports/access/adapters.lua.
+local qbxLoaded = true
 local oxCount, qsCount, qbHasItem
 
 exports = setmetatable({}, {
     __index = function(_, name)
         local api = {
-            qbx_core = { GetGroups = function(_, src) return qbxGroups(src) end },
+            qbx_core = {
+                GetPlayer = function(_, src) return qbxLoaded and { source = src } or nil end,
+                GetGroups = function(_, src)
+                    -- Mirrors the real one: it indexes QBX.Players[src] with no
+                    -- nil-guard, so calling it for an unloaded source THROWS. The
+                    -- adapter must never reach here in that state.
+                    assert(qbxLoaded, 'GetGroups called for an unloaded source -- this is the customer-facing throw')
+                    return qbxGroups(src)
+                end,
+            },
             ['qb-core'] = { GetPlayer = function(_, src) return qbPlayer(src) end },
             es_extended = { getSharedObject = function()
                 return { GetPlayerFromId = function(src) return esxPlayer(src) end }
@@ -125,6 +138,7 @@ local access = dofile('shared/imports/access/server.lua')
 local function reset()
     resourceStates, printed, clientEvents, timers = {}, {}, {}, {}
     aceGrants = {}
+    qbxLoaded = true
     demoOn = false
     gameTime = gameTime + 10000
     access.use('auto', 'auto')
@@ -166,6 +180,27 @@ assert(jobGate:allowed(7), 'grade 2 meets a minimum of 2')
 qbxGroups = function() return { police = 1 } end
 jobGate:invalidate()
 assert(jobGate:allowed(7) == false, 'grade 1 does not meet a minimum of 2')
+
+-- THE CUSTOMER-FACING REGRESSION: a source that is connected but not yet
+-- character-loaded. qbx's GetGroups indexes QBX.Players[src] with no nil-guard, so
+-- calling it in that window throws INSIDE qbx_core's VM — access.jobs's pcall catches
+-- the failure for us, but qbx has already printed `SCRIPT ERROR: attempt to index a
+-- nil value` to the console. Two customers reported floods of it on 2026-10-22 and
+-- 2026-10-23: a clean diag, a working radio, and an unreadable console, roughly three
+-- per joining player. The stub above throws exactly as the real one does, so if the
+-- adapter ever drops its GetPlayer probe this assert fails instead of a customer.
+reset()
+resourceStates.qbx_core = 'started'
+qbxLoaded = false
+qbxGroups = function() return { police = 2 } end
+local joiningGate = access.gate({ mode = 'job', job = { police = 2 } }, { key = 'd', label = 'the radio' })
+assert(access.jobs(7) ~= nil, 'an unloaded source yields a table, not a throw')
+assert(next(access.jobs(7)) == nil, 'an unloaded source yields NO jobs')
+assert(joiningGate:allowed(7) == false, 'an unloaded source is denied, quietly')
+
+qbxLoaded = true
+joiningGate:invalidate()
+assert(joiningGate:allowed(7), 'once loaded, the same gate passes')
 
 qbxGroups = function() return { sheriff = 0 } end
 jobGate:invalidate()

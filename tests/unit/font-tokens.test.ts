@@ -1,7 +1,7 @@
 /**
  * `--font-sans` and `--font-mono` are declared exactly once, in theme-tokens.css.
  *
- * ⚠️ THE BUG THIS EXISTS FOR WAS INVISIBLE AND SHIPPED FOR MONTHS. Both tokens were
+ * THE BUG THIS EXISTS FOR WAS INVISIBLE AND SHIPPED FOR MONTHS. Both tokens were
  * declared in TWO unlayered `:root` blocks — theme-tokens.css and fonts.css — so neither
  * one won on specificity and the cascade fell back to `@import` ORDER. Measured in the
  * built CSS of the estate on 2026-10-24: tELS, tRadio and tUnit shipped Inter while tLib,
