@@ -70,6 +70,10 @@ export {
   readDeckStamp,
   scanDeckSources,
 } from "./deck-pack.ts";
+export type { BundledPackages } from "./bundled-packages.ts";
+// Reads the BUILT server bundle, not any manifest: the package that prompted it
+// (adm-zip) is a dependency of tLib, so no consumer repo declares it anywhere.
+export { assertBundledPackagesNamed, bundledPackages } from "./bundled-packages.ts";
 export type { DevConfig, WatcherDef } from "./dev.ts";
 export { startDevMode } from "./dev.ts";
 export type { FontLicenceResult } from "./font-licences.ts";
