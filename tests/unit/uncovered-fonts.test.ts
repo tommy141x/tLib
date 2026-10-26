@@ -7,10 +7,6 @@
 // into the artifact. tRadio hit exactly that and worked around it by re-deriving
 // the family itself, which is where its real bug was: it split on the first
 // hyphen, so `hanken-grotesk-latin.woff2` became `hanken` and matched nothing.
-//
-// These tests pin the two properties that make a single shared matcher worth
-// having: the normalisation handles a two-word family with no alias table, and
-// asking the question changes nothing on disk.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";

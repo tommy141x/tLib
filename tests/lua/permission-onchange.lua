@@ -182,8 +182,8 @@ assert(#serverAsks == before + 1 and serverAsks[#serverAsks] == REQUEST,
     'refresh asks the server')
 
 -- The wire names are an implementation detail
--- This is what unblocks renaming tLib:receiveAdminPermission. The module's
--- surface must name neither wire event, or a consumer can reach for one.
+-- The module's surface must name neither wire event, or a consumer can reach
+-- for one and tLib:receiveAdminPermission becomes unrenameable.
 for _, name in ipairs({ 'level', 'isAdmin', 'onChange', 'refresh' }) do
     assert(type(p[name]) == 'function', name .. ' is part of the interface')
 end

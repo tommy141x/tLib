@@ -1,14 +1,10 @@
 /**
- * Turns a caught `unknown` into something pasteable, and now into something
- * telemetry can send unattended. Moved here from tRadio's two render
- * boundaries (now reached via `@tlib/shared`) because it was already most of
- * a telemetry payload: `name`/`message`/`stack`/`causes` plus a context
- * carrying `surface`/`location`/`version`/`panelVersion`.
+ * Turns a caught `unknown` into something pasteable, and into something
+ * telemetry can send unattended.
  *
- * Redaction changed on the move to `scrub()`, not `redactSecrets()` alone, so
- * a home-directory path and any host-registered player value are blanked too
- * — strictly more redaction, since a pasted `C:\Users\<name>\...` leaks a
- * Windows account to Discord.
+ * Redaction is `scrub()`, not `redactSecrets()` alone, so a home-directory path
+ * and any host-registered player value are blanked too: a pasted
+ * `C:\Users\<name>\...` leaks a Windows account to Discord.
  *
  * Against solid-js 2.0.0-rc.14 (tRadio's shipped renderer): `<Errored>` passes
  * a thrown value to its fallback by identity — a non-Error stays a non-Error,
@@ -108,10 +104,8 @@ export function describeError(err: unknown): ErrorReport {
  * The copyable block. Plain text on purpose — it is pasted into Discord or a
  * board card, where markdown tables and ANSI colour do not survive.
  *
- * The two version labels are `serverVersion:` and `panelVersion:`, and that
- * is deliberate rather than verbose: a bare `version:` is ambiguous when both
- * exist, and the whole point of carrying both is that a reader can tell them
- * apart. A suite pins both labels.
+ * The version labels are `serverVersion:` and `panelVersion:`, both spelled out
+ * because a bare `version:` is ambiguous when both exist. A suite pins both.
  */
 export function formatErrorReport(report: ErrorReport, ctx: ErrorContext): string {
   const lines = [`surface: ${ctx.surface}`, `location: ${ctx.location ?? "(unknown)"}`];

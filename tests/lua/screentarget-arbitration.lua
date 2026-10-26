@@ -71,8 +71,8 @@ assert(screentarget.DEFAULT_DWELL_MS == 1500, 'and the incumbent holds for 1.5 s
 assert(screentarget.SOURCE_OWN == 'own' and screentarget.SOURCE_NEAREST == 'nearest')
 
 -- The range must be SHORTER than any plausible audio range: you can hear a radio
--- from across the street and cannot read its display from there. Asserted rather
--- than left as prose, because the two numbers will be tuned by different people.
+-- from across the street and cannot read its display from there. The two numbers
+-- are tuned by different people.
 assert(screentarget.DEFAULT_RANGE_M < 20.0,
     'the reading range is the short one; audio range is a different, longer number')
 

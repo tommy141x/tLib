@@ -302,14 +302,12 @@ function H.init(webui)
         defaults = { x = -24 / 1080, y = 24 / 1080, scale = 1, visible = true, anchor = 'top-right' } }, function(data)
         Platform.sendUIEvent(ui, 'toastLayout', data)
     end)
-    -- No GetHudLayoutCapabilities export, and do not re-add one: it returned a
-    -- set of hardcoded `true` flags naming features no released tLib actually
-    -- had, so it could not distinguish anything a consumer could reach — and
-    -- consumers' pcall probes of it collapsed `layout` into `defaults` on no
-    -- answer, which broke the shared editor for tRadio. The contract is now
-    -- unconditional: RegisterHudComponent takes `layout` (current position)
+    -- There is no GetHudLayoutCapabilities export: it returned hardcoded `true`
+    -- flags naming features no released tLib had, and consumers' pcall probes of
+    -- it collapsed `layout` into `defaults` on no answer, which broke the shared
+    -- editor for tRadio. RegisterHudComponent takes `layout` (current position)
     -- alongside `defaults` (Reset target), x/y as ratios of a 1080px reference
-    -- height, and SetHudLayout/ResetHudLayout exist.
+    -- height, and SetHudLayout/ResetHudLayout exist unconditionally.
     Platform.export('tLib', 'RegisterHudComponent', function(id, options, fn)
         local name = owner()
         if not name then return false, 'Cannot identify calling resource' end

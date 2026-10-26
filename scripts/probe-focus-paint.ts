@@ -212,15 +212,13 @@ const BUNDLES: readonly Bundle[] = [
     ],
   },
   {
-    // tUnit was missing from this table until 2026-10-07: `unocss-merge`
-    // 0.10.0 files a positive `outline-offset-*` and an outline colour into
-    // one conflict group and drops the colour, so ElementList's rows and
-    // CharacterEditor's slot chips shipped without `focus-visible:outline-ring`
-    // and painted in `currentColor`. This probe would not have caught that
-    // either -- it measures the shipped class string faithfully, and that
-    // string was already the merged, broken one. The `outline-*` shield in
-    // shared/ts/cn.ts covers the merge; this covers the other half, that the
-    // settled spelling paints pixels inside a clipping ancestor.
+    // tUnit was missing from this table until 2026-10-07: `unocss-merge` 0.10.0
+    // files a positive `outline-offset-*` and an outline colour into one conflict
+    // group and drops the colour, so ElementList's rows and CharacterEditor's slot
+    // chips shipped without `focus-visible:outline-ring` and painted in
+    // `currentColor`. This probe would not have caught that either -- it measures
+    // the shipped class string faithfully, and that string was already the merged,
+    // broken one. The `outline-*` shield in shared/ts/cn.ts covers the merge.
     name: "tUnit/client/web",
     blocklisted: true,
     cssDir: `${TSCRIPTS}/tUnit/client/ui/assets`,
@@ -272,9 +270,9 @@ const BUNDLES: readonly Bundle[] = [
         ink: "accent",
       },
       {
-        // The one that was DEAD before this migration: an Ark `*.Control` is a
-        // div, Ark focuses a hidden input, and `focus-visible:` on the part
-        // compiled to a selector nothing could ever match.
+        // DEAD before this migration: an Ark `*.Control` is a div, Ark focuses a
+        // hidden input, and `focus-visible:` on the part compiled to a selector
+        // nothing could ever match.
         name: "switch control, zag's mirrored attribute",
         source: "tRadio/server/web/src/components/ui/switch.tsx",
         classes:
@@ -298,12 +296,10 @@ const BUNDLES: readonly Bundle[] = [
   },
 ];
 
-// A PNG reader, because the verdict is pixels
-//
-// Deliberately NOT `sharp`: that is a native binary, it is pinned in tRadio for
-// a documented reason, and tLib must stay installable without it. Chromium's
-// own screenshots are 8-bit, non-interlaced, colour type 2 or 6, which is all
-// this needs to read. Anything else throws rather than being guessed at.
+// A PNG reader, because the verdict is pixels. NOT `sharp`: a native binary, and
+// tLib must stay installable without it. Chromium's own screenshots are 8-bit,
+// non-interlaced, colour type 2 or 6; anything else throws rather than being
+// guessed at.
 interface Bitmap {
   readonly width: number;
   readonly height: number;
@@ -414,8 +410,6 @@ function countInk(bmp: Bitmap, ink: Ink): number {
   return n;
 }
 
-// The page
-//
 // The target FILLS the clipper exactly, which is the whole geometry of the
 // defect: an outward stroke then lies entirely outside the clipper's padding box
 // and is clipped away, while an inward one lies inside it.

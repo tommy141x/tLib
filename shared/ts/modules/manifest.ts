@@ -42,7 +42,8 @@ export const MODULE_THEME_FONT_DIR = "fonts";
 export interface ModuleThemeFont {
   /**
    * The CSS family name this file provides, spelled exactly as a font token
-   * will name it. This is the whole point of the declaration: it is what makes
+   * will name it. Declared rather than read out of the file: nothing in this
+   * pipeline parses a `.woff2` name table.
    */
   family: string;
   /** Bare filename inside the module's `fonts/` directory. `.woff2` only. */
@@ -105,9 +106,8 @@ const TONE_KEY = /^[A-Z0-9_]+$/;
 const AUDIO = /\.(?:wav|ogg|mp3)$/i;
 /**
  * woff2 only: every engine the panel runs in, including CEF 103, has supported
- * it since 2016, and it's 25-30% smaller than woff. One format means one
- * `format()` string and one code path; convert a ttf once at authoring time
- * instead of making every consumer carry a second branch forever.
+ * it since 2016, and it's 25-30% smaller than woff. Convert a ttf at authoring
+ * time.
  */
 const FONT_FILE = /\.woff2$/i;
 /**
@@ -351,7 +351,6 @@ export function parseModuleManifest(value: unknown, id: string, kind?: ModuleKin
 
   if (manifest.kind === "sound") manifest.sound = soundFacts(raw.sound, declaredId);
   else if (raw.sound !== undefined && raw.sound !== null)
-    // A field that does nothing is a field someone will eventually trust.
     throw new Error(`module.json: a "${manifest.kind}" module must not carry "sound"`);
 
   // `theme` is OPTIONAL on a theme — a theme that merely selects a family the

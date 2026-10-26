@@ -39,22 +39,18 @@ export function InstalledTab(props: {
   const mpBySlug = () => new Map(props.marketplaceItems.map((i) => [i.slug, i]));
 
   /**
-   * This list is `readdir(layouts/)`, not catalogue slugs
-   *
-   * Which is the whole defect. It used to resolve a row three ways off the bare
-   * folder name — `bySlug.get(name)` for the catalogue entry, `name in states`
-   * for whether a Delete was offered, `states[name]` for the install state — and
-   * all three missed for every layout the resource shipped, because a shipped
+   * `installedLayouts` is `readdir(layouts/)`, NOT catalogue slugs. A shipped
    * layout is named by its model (`QRX-720`) and a marketplace slug is
-   * product-namespaced and lowercased (`tradio-qrx-720`).
+   * product-namespaced and lowercased (`tradio-qrx-720`), so resolving a row off
+   * the bare folder name misses for everything the resource shipped.
    *
-   * `name in states` was the dangerous one, and not for the reason it looks: the
-   * seed in `MarketplaceBrowser.applyOpenData` put EVERY discovered layout name
-   * into `installStates`, so that test was true for all of them and every
-   * shipped layout got a Delete button — against a path the uninstaller cannot
-   * address. `matchLocalName` answers both questions at once instead, and `slug`
-   * is now non-null only for a `"managed"` match, i.e. only where the on-disk
-   * name IS the install target.
+   * `name in states` was the dangerous version of that: the seed in
+   * `MarketplaceBrowser.applyOpenData` puts EVERY discovered layout name into
+   * `installStates`, so the test was true for all of them and every shipped
+   * layout got a Delete button — against a path the uninstaller cannot address.
+   * `matchLocalName` answers both questions at once, and `slug` is non-null only
+   * for a `"managed"` match, i.e. only where the on-disk name IS the install
+   * target.
    */
   const uiEntries = (): InstalledEntry[] => {
     const states = props.installStates;
@@ -133,15 +129,11 @@ export function InstalledTab(props: {
                         name={e.displayName}
                         item={mpItem}
                         installState={e.installState}
-                        /*
-                           A built-in gets NO Reinstall either, even though we
-                          have its catalogue entry and so could offer one. The
-                          install target is the raw slug, so "Reinstall QRX-720"
-                          would write `layouts/tradio-qrx-720/` BESIDE the
-                          shipped `layouts/QRX-720/` rather than replace it —
-                          two copies of one radio, which is the duplication this
-                          fix exists to make unreachable.
-                        */
+                        /* A built-in gets NO Reinstall either, even though its
+                           catalogue entry is in hand. The install target is the
+                           raw slug, so "Reinstall QRX-720" writes
+                           `layouts/tradio-qrx-720/` BESIDE the shipped
+                           `layouts/QRX-720/` rather than replacing it. */
                         onInstall={
                           mpItem && !isBuiltin(e.installState)
                             ? () => props.onInstall(mpItem)
@@ -224,7 +216,6 @@ function InstalledItemCard(props: {
   inspection: InspectionState | null;
 }) {
   const s = () => props.installState;
-  // Third copy of this boolean before `../install-machine` existed.
   const busy = () => isInstallBusy(s());
   const managementBlocked = () => {
     const state = props.inspection;
@@ -254,14 +245,10 @@ function InstalledItemCard(props: {
         {(desc) => <p class="text-sm mp-muted line-clamp-2">{desc()}</p>}
       </Show>
 
-      {/*
-         A SENTENCE, because this row is the one that would otherwise be
-        silent. A built-in now draws neither Reinstall nor Delete, so without
-        this the card is a name, a size and an Inspect button — and "the
-        marketplace shows my radio but offers nothing" is a bug report waiting.
-        Shared copy from `../install-machine`, so this and the two grid surfaces
-        cannot word it three ways.
-      */}
+      {/* A built-in draws neither Reinstall nor Delete, so without this sentence
+          the card is a name, a size and an Inspect button, and "the marketplace
+          shows my radio but offers nothing" is a bug report waiting. Copy comes
+          from `../install-machine` so three surfaces cannot word it three ways. */}
       <Show when={isBuiltin(s())}>
         <p class="mp-inspection-note">{BUILTIN_EXPLANATION}</p>
       </Show>

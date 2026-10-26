@@ -27,12 +27,6 @@ dist/
 # and git clean -xdf leaves a nested repo alone. tests/unit/private-not-tracked.test.ts
 # asserts both.
 #
-# ⚠️ THE COMMENT ABOVE DESCRIBED RULES THAT WERE NOT HERE. It said internal/ was
-# "ignored" and the only line beneath it was the obfuscator path; the two rules
-# the test names were never written. The test is skipped on this branch -- which
-# tracks both paths deliberately -- so only main ever ran it, and main's CI had
-# not reached the Test step in a long time.
-#
 # A rule does not untrack anything: git applies ignores only to untracked paths,
 # so these are inert on the private branch and are the tripwire on a public
 # clone. The cost is that a NEW file under .gitea/ needs `git add -f` here.

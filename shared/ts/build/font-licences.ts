@@ -10,9 +10,9 @@
 // 2026-10-18: `tRadio.zip` held 15 .woff2 and 0 licence files. Reading the bytes
 // that are about to be zipped is what makes that impossible rather than unlikely.
 //
-// It reads `.otf`/`.ttf` and not just `.woff2`, since 2026-10-23. The comment
-// here used to argue the layout faces were settled as "free for commercial use".
-// Their own OpenType name tables disproved it: `CreatoDisplay.otf` (7 layouts) is
+// It reads `.otf`/`.ttf` and not just `.woff2`. The layout faces were believed to
+// be "free for commercial use"; their own OpenType name tables say otherwise.
+// `CreatoDisplay.otf` (7 layouts) is
 // SIL OFL -- nameID 14 `http://scripts.sil.org/OFL`, nameID 0 `Copyright (c) 2021
 // by Anugrah Pasau`; `Charmset.ttf` is CC BY-SA 3.0 per nameID 13/14, where
 // attribution is a condition; `Mustica.otf` carries no grant at all. Hence

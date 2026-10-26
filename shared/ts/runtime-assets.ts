@@ -132,8 +132,8 @@ export interface RuntimeAssetCache {
 }
 
 /**
- * Where one marketplace item's payload is downloaded from. One definition —
- * four NUI bundles and `cl_bridge.lua` were each about to build it separately.
+ * Where one marketplace item's payload is downloaded from. Shared by four NUI
+ * bundles and `cl_bridge.lua`.
  * `baseUrl` comes from `tlib.marketplace.baseUrl()` (reads the
  * `tlib_api_base_url` convar live) rather than a constant, so a server pointed
  * at a dev worker follows.
@@ -237,8 +237,7 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
   /**
    * One extracted file's address. `data:` is built here rather than through the
    * injected `objectUrls` because it isn't an object URL — nothing to register
-   * or revoke, and routing it through create/revoke would invite someone to
-   * "fix" the missing revoke.
+   * or revoke.
    */
   function addressFor(bytes: Uint8Array, mime: string): string {
     if (urlMode === "blob") {

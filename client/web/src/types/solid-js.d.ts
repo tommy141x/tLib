@@ -7,7 +7,7 @@
  * The re-export is a direct path into node_modules on purpose: writing
  * `export * from "solid-js"` here would resolve back through the same `paths`
  * entry and be circular. Everything real therefore comes from the package
- * itself and stays genuinely type-checked — nothing is widened or invented.
+ * itself and stays genuinely type-checked.
  */
 
 /**

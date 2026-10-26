@@ -141,16 +141,11 @@ describe("optional fields are omitted, not set to undefined", () => {
 
 describe('likes: omission means "this host has no likes", not zero', () => {
   /*
-   * THE ONE RULE ON THIS FIELD THAT IS EASY TO BREAK AND SILENT WHEN BROKEN.
-   *
    * `downloads` and `size_bytes` go through `num()`, which maps a missing value
    * to `0`. Doing the same to `likes` would be the obvious consistency — and it
    * would make a backend that predates likes indistinguishable from an item
    * nobody has liked, printing a confident "0 likes" on every card in the
    * catalogue against any older or self-hosted host.
-   *
-   * `ItemCard` branches on PRESENCE for exactly that reason, so these tests use
-   * `in` rather than comparing against `undefined` — see this file's header.
    */
   test("likes is absent when the wire omits it, NOT coerced to 0", () => {
     const item = toCanonicalItem(base);

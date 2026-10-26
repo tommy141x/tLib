@@ -10,8 +10,7 @@
 --
 -- NEGATIVE CONTROLS are at the bottom. Each re-implements one thing the
 -- module does correctly, the wrong way, and the suite asserts the wrong body
--- FAILS the scenario. A scenario the control also passes cannot discriminate
--- and is worth nothing; the control is how that gets noticed.
+-- FAILS the scenario.
 --
 -- Run via `bun run test:lua`.
 

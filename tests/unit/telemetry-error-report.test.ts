@@ -1,19 +1,10 @@
 /**
- * Moved from `tRadio/shared/ui/src/error-report.test.ts` with the module it
- * covers. Every assertion is the one that was there, plus the three at the end
- * for the redaction that was ADDED in the move (home-directory paths and
- * registered identifying values) — see `shared/ts/telemetry/scrub.ts`.
- *
  * `error-report.ts` exists because both `ErrorBoundary` fallbacks threw away
  * the only parts of an exception a bug report needs — BUG-68735 is blocked on
- * precisely that. So these tests assert the two halves of its contract:
+ * precisely that.
  *
- *   1. nothing diagnosable is lost (name, stack, `.cause`, non-Error throws)
- *   2. nothing credential-shaped survives into the string
- *
- * (2) is the one that matters for a customer-facing panel, and it is the half
- * that would rot silently: a redactor that stops matching still produces a
- * perfectly readable report.
+ * The redaction half is the one that rots silently: a redactor that stops
+ * matching still produces a perfectly readable report, on a customer-facing panel.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -165,12 +156,10 @@ describe("formatErrorReport — it is a paste, not a table", () => {
 });
 
 /**
- * What the move ADDED. These three are not ports — they are the behaviour change
- * `error-report.ts`'s header calls out, and they are here rather than in
- * `telemetry-scrub.test.ts` because the question is specifically whether
- * `describeError` reaches the new rules at all. It would be entirely possible for
- * `scrub()` to be correct and `describeError` to still be calling the old
- * `redactSecrets`, and every assertion above would pass.
+ * Here rather than in `telemetry-scrub.test.ts` because the question is whether
+ * `describeError` reaches the new rules at all: `scrub()` could be correct while
+ * `describeError` still called the old `redactSecrets`, and every assertion above
+ * would pass.
  */
 describe("describeError — the redaction added in the move", () => {
   test("a Windows home directory in a stack loses the account name and keeps the path", () => {

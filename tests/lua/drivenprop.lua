@@ -64,8 +64,7 @@ local function nearVec(got, want, label, tol)
 end
 
 -- Host stubs. The module is loaded for real against these rather than
--- reimplemented here — a suite that reimplements its subject only proves two
--- copies agree, and notices nothing when the shipped one changes.
+-- reimplemented here.
 
 local world = {}
 local nextHandle = 100

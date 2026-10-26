@@ -67,8 +67,7 @@ function isLuaComment(line: string): boolean {
  *
  * which is how tDB's config.lua is actually written. That is the same key the
  * hand-written list missed, missed a second time for a different reason, and
- * the end-to-end control is what caught it. A line-anchored scanner is a gate
- * with a blind spot that depends on formatting.
+ * the end-to-end control is what caught it.
  */
 const LUA_TOKEN =
   /(?<key>\[\s*["'][^"']+["']\s*\]|[A-Za-z_][\w.]*)[ \t]*=(?!=)[ \t]*|(?<open>\{)|(?<close>\})/g;
@@ -264,9 +263,7 @@ export type BlankResult = {
  * and alignment so a shipped template stays readable.
  *
  * Verifies its own write by re-scanning the result: a regex that matched but
- * replaced nothing would otherwise report success over a shipped secret. That
- * self-check is tRadio's, kept because it is the one assertion that catches a
- * blanker which has stopped blanking.
+ * replaced nothing would otherwise report success over a shipped secret.
  */
 export function blankSecrets(
   source: string,

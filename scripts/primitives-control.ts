@@ -1,34 +1,22 @@
-// Negative control for three shared primitives (tlib.permission's client
-// half, tlib.net, tlib.opengate) plus imports.lua's AUTOLOAD list, patched by
-// the same machinery since tests/lua/imports-autoload.lua `dofile`s it like
-// any other module. `bun run test:lua:control`
+// Negative control for three shared primitives (tlib.permission's client half,
+// tlib.net, tlib.opengate) plus imports.lua's AUTOLOAD list, patched by the same
+// machinery since tests/lua/imports-autoload.lua `dofile`s it like any other
+// module. Six suites in all. `bun run test:lua:control`
 //
-// Six suites from one file (net-guards, opengate, permission-onchange,
-// permission-consumer, imports-autoload, imports-has): every defect is
-// planted the same way, so one patcher, one broken-gate drill, one baseline
-// pass covers all of them rather than triplicating the machinery.
+// Each defect patches the MODULE'S OWN SOURCE by one exact substitution (not a
+// stub), writing the patched module and a line-count-preserving copy of the suite
+// into the OS temp dir, then repoints the suite copy's one `dofile` at the patched
+// file. Patching happens in TS, not Lua, because fengari ships no `io`.
 //
-// Each defect patches the MODULE'S OWN SOURCE by one exact substitution (not
-// a stub), writing the patched module and a line-count-preserving copy of the
-// suite into the OS temp dir (never the tree, which other agents work in),
-// then repoints the suite copy's one `dofile` at the patched file. Patching
-// happens in TS, not Lua, because fengari ships no `io`.
-//
-// Every defect declares the suite line AND message text its first failing
-// `assert` must produce (these suites stop at the first failure, so this is
-// stronger than "something went red"), and each run must exit non-zero
-// (scripts/run-lua-suite.lua converts fengari's exit-0-on-unhandled-error)
-// and must not print the suite's success line.
-//
-// Two broken-gate drills (an unmatchable module anchor; a module the target
-// suite never loads) must both REFUSE the run -- without them, "every defect
-// reddened something" isn't evidence the patcher fired at all.
+// Every defect declares the suite line AND message text its first failing `assert`
+// must produce (these suites stop at the first failure), and each run must exit
+// non-zero (scripts/run-lua-suite.lua converts fengari's
+// exit-0-on-unhandled-error) and must not print the suite's success line.
 //
 // Known limits: the client source guard is one suite line covering six spoof
-// values, so three defects there are distinguishable only by which value's
-// message appears. `broken-routed-to-denied` must be planted as
-// `do return ... end`, since a bare mid-block `return` is a Lua syntax error.
-// A pass proves the assertions still fire, not that the rule set is complete.
+// values, so three defects there are distinguishable only by which value's message
+// appears. `broken-routed-to-denied` must be planted as `do return ... end`, since
+// a bare mid-block `return` is a Lua syntax error.
 
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -299,9 +287,7 @@ const DEFECTS: Defect[] = [
     ],
   },
 
-  // imports.lua's AUTOLOAD list: the "module" patched here is imports.lua
-  // itself. Without a planted defect here, nothing proves the list is what
-  // loads telemetry rather than something else in the chain.
+  // imports.lua's AUTOLOAD list: the "module" patched here is imports.lua itself.
   {
     mode: "autoload-emptied",
     path:
@@ -491,11 +477,10 @@ function check(defect: Defect, want: Expectation) {
   console.log(`ok   ${label}  ${want.message}`);
 }
 
-// Broken-gate drill: without it, "every defect reddened something" isn't
-// evidence the patcher fired -- a substitution matching nothing hands the
-// suite the unmodified module, which passes. Both anchors are drilled since
-// they fail differently; a multi-line anchor has matched nothing here before
-// purely because one file is CRLF and another LF.
+// A substitution matching nothing hands the suite the unmodified module, which
+// passes. Both anchors are drilled since they fail differently; a multi-line
+// anchor has matched nothing here before purely because one file is CRLF and
+// another LF.
 function drill(name: string, defect: Defect, suite: string) {
   try {
     plantAndRun(defect, suite);

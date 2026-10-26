@@ -46,10 +46,8 @@ end
 
 --- An assertion the control has to INVERT. Everything that depends on a stale
 --- copy actually being REPORTED goes through this one, so disabling the subject
---- cannot leave the suite green. An assertion that still holds with the subject
---- disabled is not measuring the subject, and the verdict at the bottom refuses
---- the run on the count rather than on "it printed CONTROL OK" -- an absence
---- assertion holds either way and belongs in `must`.
+--- cannot leave the suite green. An absence assertion holds either way, so it
+--- belongs in `must` and not here.
 local flipped = 0
 
 local function reports(condition, message)

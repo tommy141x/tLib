@@ -6,20 +6,10 @@
 -- changelog -- follows it. Its reach is the whole `timmygstudios.com` API
 -- surface (`/api/v1`, `/api/v2`, `/api/products`).
 --
--- Before this file the default host was written out separately in
--- client/cl_marketplace.lua, server/sv_marketplace.lua and
--- shared/imports/versioncheck/server.lua (which did not read the convar at all).
--- Four copies of a value that must agree is a drift bug waiting to happen; the
--- TypeScript side has the same single definition in
--- shared/ts/marketplace/catalogue.ts, and tests/unit/marketplace-base-url.test.ts
--- asserts the two literals are equal because no single source can span both.
---
 -- Free of every tLib global -- no Platform, no Logger, no Config -- so it can be
--- loaded standalone into a CONSUMER resource's Lua VM through LoadResourceFile,
--- exactly the way shared/imports/versioncheck/server.lua loads
--- shared/sh_branding.lua. Keep it dependency-free, and keep it listed in BOTH
--- `shared_scripts` and `files` in fxmanifest.lua, or one side silently ends up
--- with no rule at all.
+-- loaded standalone into a CONSUMER resource's Lua VM through LoadResourceFile.
+-- Keep it dependency-free, and keep it listed in BOTH `shared_scripts` and
+-- `files` in fxmanifest.lua, or one side silently ends up with no rule at all.
 --
 -- Not a security boundary: the base URL is operator-controlled by design.
 
@@ -70,9 +60,7 @@ end
 ---
 --- Deliberately not memoised. The whole point of the convar is iterating against
 --- a local dev server, and a cached value means a mid-session change silently
---- does nothing until the resource restarts. tRadio's client bridge already
---- re-read per call; tLib's `resolveConfig()` used to cache and no longer does,
---- so both sides now agree.
+--- does nothing until the resource restarts.
 ---@return string
 function StudioApi.baseUrl()
     if type(GetConvar) ~= 'function' then return StudioApi.DEFAULT_BASE_URL end
@@ -86,10 +74,7 @@ end
 -- in Lua -- which today is the product version check in
 -- shared/imports/versioncheck/server.lua -- goes through `StudioApi.headers()`
 -- so a second caller cannot assemble its own header set and forget the id. The
--- TypeScript half is `studioHeaders()` in shared/ts/marketplace/catalogue.ts;
--- the two are separate because no single source can span both languages, which
--- is the same reason this file's base URL is asserted byte-equal to the TS copy
--- by tests/unit/marketplace-base-url.test.ts.
+-- TypeScript half is `studioHeaders()` in shared/ts/marketplace/catalogue.ts.
 --
 -- READ-ONLY, AND IT DOES NOT MINT. The id is minted by whichever request
 -- needs it first, in tLib's Node bundle (server/lib/install-id.ts), which is

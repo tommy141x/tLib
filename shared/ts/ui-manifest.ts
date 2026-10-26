@@ -9,36 +9,17 @@
 // files at build time (`scripts/sync-hud-sdk.ts`) so it can preview a layout
 // with no game running.
 //
-// There was a runtime registry here — `registerUiManifest`, `getUiManifest`,
-// `listUiManifests`, `unregisterUiManifest` — and three resources called the
-// setter at boot. Nothing ever called a getter, in any repo: it was write-only
-// for its whole life, kept "so a tool can iterate listUiManifests()" for a tool
-// that was never written. The vendoring above is what the Studio actually does
-// and it cannot use a registry anyway, because it runs with no game attached.
-// Do not reintroduce one speculatively; add it when something reads it.
+// DO NOT KEEP A COPY OF A CONSUMER'S MANIFEST HERE. A hand-copied one drifted
+// badly enough to default the radio display to text tRadio has never rendered on
+// any screen, while missing `topLine1`, `topLine2` and `zoneBankLetter` — the keys
+// the painted heads actually bind. It cannot be fixed by syncing either: tLib
+// reading tRadio and tLS inverts the one-directional dependency tLib exists to
+// keep, and puts two paid resources' manifests in a public repo. A project that
+// cannot see the siblings at build time should port tWeb's
+// `hud-sdk:sync`/`hud-sdk:check` pair instead.
 //
-// There was also a STATIC registry here — `shared/ts/manifests.ts`, exported as
-// `@tlib/shared/manifests`, holding hand-copied bodies of `uiRadioManifest` and
-// `uiTlsHudManifest` under a comment saying "kept in sync manually". It is gone,
-// and the two reasons it went are both reasons not to write another one:
-//
-//   1. It had already drifted, materially. 148 lines standing in for tRadio's 323
-//      and 83 for tLS' 213: it defaulted the radio display to `ln01: "CH 01"` /
-//      `ln02: "CITY PD"` and the softkeys to "ZN"/"CH"/"ST" — text tRadio has
-//      never rendered on any screen — and had no `topLine1`, `topLine2` or
-//      `zoneBankLetter` at all, which are the keys the painted heads bind. This is
-//      the same defect tWeb's `scripts/sync-hud-sdk.ts` header describes finding
-//      in its own hand-written port, inherited from tg-new's.
-//   2. It could not be fixed by gating it the way `internal/shared-ts/deck` is
-//      gated. That vendoring runs one way, from a library into private
-//      consumers. A manifest sync would run the other way — tLib reading
-//      tRadio and tLS — which inverts the dependency tLib exists to keep
-//      one-directional and puts two paid resources' manifests in a public repo.
-//
-// Its only consumer was `internal/tgstudios-v2`, which now reads the real
-// manifests off disk through its own sibling alias. A project that CANNOT see the
-// siblings at build time should port tWeb's `hud-sdk:sync`/`hud-sdk:check` pair
-// rather than copy a manifest by hand.
+// There is no runtime registry, and nothing needs one: the Studio runs with no
+// game attached, so it vendors the files. Add one when something reads it.
 //
 // Keys are dot-pathed so `leds.R1` resolves through HudBinder's `read()`.
 

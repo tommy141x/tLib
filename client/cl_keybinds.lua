@@ -10,7 +10,7 @@ local log = Logger.create('tLib/keybinds')
 
 --- Every bind reported, keyed `group\1key` -> { {resource=, token=, label=}, ... }
 local byKey = {}
---- Flat list, for `GetKeybinds` and a future controls UI.
+--- Flat list, for `GetKeybinds`.
 local all = {}
 
 --- Long enough for every consumer to have started and registered; a bind

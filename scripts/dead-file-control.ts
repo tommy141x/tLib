@@ -1,29 +1,13 @@
 #!/usr/bin/env bun
-// Negative control for scripts/dead-file-gate.ts, over REAL git repositories
-// created in the OS temp dir — a real `git init`, because the gate gets its file
-// set from `git ls-files` and a fixture that is not a repo exercises a different
-// path from the one that runs in anger.
+// Negative control for scripts/dead-file-gate.ts. The fixtures are REAL git
+// repositories in the OS temp dir: the gate gets its file set from `git ls-files`,
+// so a fixture that is not a repo exercises a different code path from the one
+// that runs in anger.
 //
-// It plants one orphan and requires it to be REPORTED BY NAME, then requires
-// that same orphan to go GREEN through each of the gate's four readers in turn:
-// the exports map, the recorded baseline, an import from a reachable file, and a
-// package.json script string. Those four are the four ways a library file
-// legitimately has no importer, and getting any one of them wrong is how an audit
-// comes to recommend deleting a published API.
-//
-// A fixture of CORRECT shapes must stay green: a `.d.ts` and a `.test.ts` have no
-// importer by their nature, and a gate that reports either is a gate that gets
-// switched off. Both vacuity floors are asserted in the direction that matters —
-// a collapsed file set and a collapsed root set each exit 2, not 0.
-//
-// Then FIVE broken-gate drills, one per reader: each reader is removed in turn and
-// the fixture that was green BECAUSE of it must go red. Without those, "the
-// exports map kept it alive" is a claim about an exit code and nothing more.
-//
-// A passing run proves the readers still FIRE. It does not prove the entry-point
-// set is complete, and it cannot judge whether a file with no importer anywhere is
-// dead or an unused public API — that belongs to whoever owns the published
-// surface.
+// One planted orphan, required to be reported by name, then required to go green
+// through each of the gate's four readers in turn — the exports map, the recorded
+// baseline, an import from a reachable file, and a package.json script string —
+// with a drill per reader that removes it and requires the orphan back.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -40,16 +24,9 @@ function check(name: string, ok: boolean, detail = "") {
   if (!ok) failures++;
 }
 
-// The fixture. Deliberately a REAL git repository in the OS temp dir: the gate
-// gets its file set from `git ls-files`, so a fixture that is not a repo would
-// exercise a different code path from the one that runs in anger. Nothing is
-// written into the tree — other agents work in this tree.
-// `check:imports` scans this file's TEXT and cannot tell a fixture body from
-// real code, so every fixture specifier is assembled rather than written out.
-// A literal `from "./core.ts"` in here is reported as an unresolved import, and
-// the alternatives were a fixture with no imports at all — which cannot
-// exercise the import graph, the thing half these cases are about — or a gate
-// left red.
+// `check:imports` scans this file's TEXT and cannot tell a fixture body from real
+// code, so every fixture specifier is assembled rather than written out: a literal
+// `from "./core.ts"` in here is reported as an unresolved import.
 const from = (spec: string) => `from "${spec}"`;
 
 const BASE: Record<string, string> = {
@@ -114,8 +91,8 @@ function withFixture(
   }
 }
 
-// 1. The real repo is green. Without this no red result below is attributable
-//    to a planted orphan rather than to the gate being broken.
+// 1. The real repo is green, so a red result below is attributable to a planted
+//    orphan rather than to the gate being broken.
 {
   const r = Bun.spawnSync(["bun", GATE, `--root=${REPO}`], { stdout: "pipe", stderr: "pipe" });
   check(
@@ -145,9 +122,7 @@ withFixture(ORPHAN, [FLOORS], (r) => {
   );
 });
 
-// 4-7. Each reader that can keep a file alive, one at a time. These are the
-//      four ways a library file legitimately has no importer, and getting any
-//      one of them wrong is how an audit recommends deleting a public API.
+// 4-7. Each reader that can keep a file alive, one at a time.
 withFixture(
   {
     ...ORPHAN,
@@ -208,7 +183,7 @@ withFixture({ "client/web/index.html": "<p>no script tag</p>\n" }, ["--floors=7,
 );
 
 // 9. A .d.ts and a .test.ts have no importer by their nature and must not be
-//    findings. A gate that reports either gets switched off.
+//    findings.
 withFixture(
   {
     "shared/ts/env.d.ts": "declare const x: number;\n",
@@ -237,10 +212,9 @@ withFixture(ORPHAN, ["--floors=7,999"], (r) =>
   )
 );
 
-// BROKEN-GATE DRILLS. Each removes one reader and requires the fixture that
-// was green BECAUSE of that reader to go red. Without these, "the exports map
-// kept it alive" is an assertion about a green exit code and nothing more —
-// a reader deleted outright would leave every case above passing.
+// BROKEN-GATE DRILLS. Each removes one reader and requires the fixture that was
+// green BECAUSE of that reader to go red; a reader deleted outright would
+// otherwise leave every case above passing.
 withFixture(
   {
     ...ORPHAN,

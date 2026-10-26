@@ -64,9 +64,8 @@ describe("the default", () => {
     // "We do not send anything" and "we do not store a decision" are
     // different promises, and only the second is honest about an opt-in default.
     //
-    // THE INSTALL ID IS NOT PART OF THIS ANY MORE. It used to be asserted
-    // here — no id minted until consent said yes — and it is now minted by any
-    // tWeb-bound request, consent or not. See tests/unit/install-id.test.ts.
+    // The install id is not part of this: it is minted by any tWeb-bound request,
+    // consent or not. See tests/unit/install-id.test.ts.
     resolve();
     expect(existsSync(join(root, CONSENT_FILE))).toBe(false);
   });

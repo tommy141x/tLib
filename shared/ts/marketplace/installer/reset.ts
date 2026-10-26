@@ -15,11 +15,10 @@
 // model, not a special case coded here, which is why there is no list of
 // exceptions to keep in sync with the release.
 //
-// It is NOT the `ProtectedBuiltinInventory`, whatever the note here used to
-// say. That type gates LEGACY ADOPTION and an inspection status label only; it is
-// not consulted by install.ts at all, and nothing in the estate passes one today
-// (`protectedLegacyDestination` returns false on its first line). Measured
-// 2026-10-08. Do not cite it as the thing protecting shipped files.
+// It is NOT the `ProtectedBuiltinInventory`. That type gates LEGACY ADOPTION and
+// an inspection status label only; it is not consulted by install.ts at all, and
+// nothing in the estate passes one (`protectedLegacyDestination` returns false on
+// its first line). Do not cite it as the thing protecting shipped files.
 //
 // Why one bad slug must not stop the sweep
 //

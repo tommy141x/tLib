@@ -4,9 +4,6 @@
 // Every export here must be a READ: `fExports` has no ACE check and no `source`
 // to attribute a caller, so installs/uninstalls go through a net event gated on
 // `tlib.admin` instead, with disk work done by the owning consumer's own agent.
-// `mpInstallFromFile`, `mpUninstall`, `mpListTypes`, `mpUnregisterResource` were
-// removed from here: uncalled, unauthenticated write surface. A write belongs on
-// a net event with the admin gate, dispatched to the agent — never added here.
 
 import {
   assertItemBelongsToResource,

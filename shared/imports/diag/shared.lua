@@ -260,8 +260,8 @@ function Diag.describe(name, value)
 end
 
 --- Every credential-looking string value in a config table, with the key it was
---- found under. This is what makes redaction derived rather than hand-listed.
---- Depth-limited and cycle-safe; short values are skipped deliberately.
+--- found under. Depth-limited and cycle-safe; values under 6 characters are
+--- skipped, since they produce false positives against ordinary prose.
 --- @param config table|nil
 --- @param extraNames table|nil  extra key names to treat as credentials
 --- @return table list of { key = string, value = string }
@@ -428,7 +428,7 @@ end
 ---   spec     table|nil   a tlib.config spec, enabling `ctx.configKeys()`.
 ---   order    table|nil   presentation order for `ctx.configKeys()`.
 ---   secrets  table|nil   extra credential key names beyond SECRET_PATTERNS.
---- redact boolean|nil defaults to TRUE. `false` exists for the suite's
+---   redact   boolean|nil defaults to TRUE. `false` exists for the suite's
 ---                        negative control and for nothing else.
 ---   route    string|nil  'both' (default) | 'console' | 'caller'.
 ---   event    string|nil  a client event to deliver the line list on, instead of
@@ -442,7 +442,7 @@ end
 ---                    verbose where chat would be a wall of text (tUnit's rule).
 ---   ctx.line(fmt,…)  one line, `string.format`ed when given arguments.
 ---   ctx.blank()      a blank line.
---- ctx.section(t) a ' t ' divider.
+---   ctx.section(t)   t between two horizontal rules.
 ---   ctx.kv(k,v,w)    'k   <described v>', redacted by key name.
 ---   ctx.message(m)   a validation message: indented, newline-continued, and
 ---                    WITHHELD when it names one of the harvested credentials.

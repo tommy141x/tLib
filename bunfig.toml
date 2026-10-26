@@ -14,13 +14,10 @@
 #      build, where component code throws `notSup()`.
 #
 # So it is excluded here and reached by `bun run test:dom`, which cds into
-# `client/web` (picking up that bunfig) and passes the flag. The exclusion is a
-# DIRECTORY glob, not a glob over file names, so a DOM test added to that
-# directory tomorrow is covered by construction.
+# `client/web` (picking up that bunfig) and passes the flag.
 #
-# It must be `**/client/web/tests/**` and not `client/web/tests/`:
-# the bare relative form matched NOTHING on Windows, the five DOM files were
-# collected by the root run without their preload, and 20 tests failed with
-# `ReferenceError: document is not defined` -- which reads as the DOM suite being
-# broken rather than as being run from the wrong place.
+# It must be `**/client/web/tests/**` and not `client/web/tests/`: the bare
+# relative form matched NOTHING on Windows, the five DOM files were collected by
+# the root run without their preload, and 20 tests failed with
+# `ReferenceError: document is not defined`.
 pathIgnorePatterns = ["**/client/web/tests/**"]

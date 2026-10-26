@@ -16,18 +16,11 @@ jobs:
         with:
           bun-version: latest
 
-      # `bun run setup` installs THREE trees: the root, client/web, and
-      # shared/ts. The third was missing until 2026-10-21, and shared/ts has
-      # its own package.json carrying the Solid 2 packages — `@solidjs/web`
-      # and `solid-js` at 2.0.0-rc.14. Without it the Typecheck step below
-      # reported 170 × TS7026 "no interface 'JSX.IntrinsicElements' exists",
-      # `@solidjs/web/jsx-runtime` unresolvable, and `bun:test` missing, so
-      # EVERY push to main sent a failure email while the same checks were
-      # green locally — where the directory had been installed by hand once
-      # and never thought about again.
-      #
-      # Measured by reproducing it in a worktree of main: root + client/web
-      # installs give the CI error list exactly; adding shared/ts gives zero.
+      # `bun run setup` must install THREE trees: the root, client/web, and
+      # shared/ts, which has its own package.json carrying the Solid 2 packages.
+      # Drop shared/ts and Typecheck below reports 170 × TS7026 "no interface
+      # 'JSX.IntrinsicElements' exists" plus an unresolvable
+      # `@solidjs/web/jsx-runtime`, while the same checks stay green locally.
       - name: Install
         run: bun run setup
 
@@ -37,17 +30,12 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      # shared/ts has its OWN tsconfig and its own jsx settings. The step
-      # above is client/web's project, which pulls the shared TSX in under
-      # `jsxImportSource: "solid-js"` — so the Solid 2 surface was compiled
-      # only under the wrong jsx runtime and never under its own.
+      # Its own tsconfig and jsx settings. The step above is client/web's
+      # project, which pulls the shared TSX in under `jsxImportSource:
+      # "solid-js"` rather than under shared/ts's own runtime.
       - name: Typecheck shared
         run: bun run typecheck:shared
 
-      # `typecheck:server` existed and nothing ran it, so it rotted: by the time
-      # it was tried it failed on `baseUrl`, removed in TypeScript 7. The server
-      # bundle is the half of tLib that holds the marketplace and community-config
-      # HTTP, so it is not the half to leave unchecked.
       - name: Typecheck server
         run: bun run typecheck:server
 

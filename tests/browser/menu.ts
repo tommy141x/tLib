@@ -372,7 +372,7 @@ try {
   // tokens.css maps --nui-* from the menu's own colours as a stylesheet rule; a
   // theme's cssVars land as INLINE styles on the menu root and therefore beat it.
   // That is the documented way one theme id accents a menu, a dialog and a toast
-  // identically, so it is asserted rather than assumed.
+  // identically.
   assert.ok(
     (await rangeFill()).includes("rgb(238, 238, 238)"),
     "unthemed fill comes from the --selected mapping"

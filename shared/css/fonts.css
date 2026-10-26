@@ -1,89 +1,35 @@
-/* ---------------------------------------------------------------------------
-   The editor faces — Inter and JetBrains Mono, self-hosted, shipped ONCE.
+/* The editor faces — Inter and JetBrains Mono, self-hosted.
 
-    Why this file exists
+   Consume it as `@import "@tlib/shared/css/fonts.css";` from a bundle that
+   aliases `@tlib/shared` at `tLib/shared/ts`. The bundler rebases the `url()`s
+   below and emits the four woff2 into the CONSUMER's own asset directory, which
+   is what has to happen: fxmanifest.lua globs only its own resource, so a font
+   left behind in tLib 404s at runtime with no error anywhere but the network
+   panel. Check `client/ui/assets` holds four `.woff2` after a build — an
+   `@import` that fails to resolve is a WARNING in Vite and the build exits 0.
 
-   These four woff2 files were on disk three times: `tLS/client/web/src/assets/
-   fonts`, `tUnit/client/web/src/assets/fonts`, and now here. The two copies were
-   byte-identical (sha256-verified when this file was written) and their two
-   `@font-face` blocks were the same block, one copied from the other with a
-   comment saying so. Shipping them from tLib is the point of tLib.
-
-    Why tLib ALSO self-hosts Hanken Grotesk, and this does not replace it
-
-   `client/web/src/menu/fonts/hanken-grotesk-latin.woff2` is tLib's own NUI menu
-   face and is still in use there. It is a different product surface — a menu a
-   player sees — from the dense editor chrome these two are for. Nothing here
-   removes or supersedes it.
-
-    The tokens are HERE, not in theme-tokens.css
-
-   `--font-sans` and `--font-mono` are declared below, alongside the `@font-face`
-   rules that put the faces on disk, and deliberately NOT in theme-tokens.css.
-   That file's own header explains why it refuses them: a `--font-sans` naming a
-   face that is not shipped in the consuming bundle resolves to nothing and the
-   element silently falls back. Here the token and the file travel together, so
-   importing this cannot leave a token dangling.
-
-   Point your UnoCSS `theme.fontFamily` at the TOKENS, never at the face names:
+   Point UnoCSS `theme.fontFamily` at the TOKENS, never at the face names:
 
        fontFamily: { sans: ["var(--font-sans)"], mono: ["var(--font-mono)"] }
 
-   That is what stops an element styled by a `font-sans` utility and one styled by
-   a hand-written `font-family` rule resolving to different stacks.
+   Otherwise an element styled by a `font-sans` utility and one styled by a
+   hand-written `font-family` rule resolve to different stacks.
 
-    How to consume
-
-       @import "@tlib/shared/css/fonts.css";
-
-   from a bundle that aliases `@tlib/shared` at `tLib/shared/ts` (every consumer
-   here does; see `shared/ts/css/fonts.css`, the one-line shim that makes the
-   package-relative specifier resolve). The bundler rebases the `url()`s below and
-   emits the four woff2 into the CONSUMER's own asset directory, which is what has
-   to happen: fxmanifest.lua globs only its own resource, so a font left behind in
-   tLib would 404 at runtime with no error anywhere but the network panel.
-
-   VERIFY THAT, do not assume it: after a build, `client/ui/assets` in the consumer
-   must contain four `.woff2`. An @import that fails to resolve is a WARNING in
-   Vite, not an error, and the build still exits 0.
-
-    Not fetched from Google
-
-   NOT because a NUI page has no network. It does — `tRadio/client/web/src/lib/
-   runtime-asset-cache.ts` fetches a timmygstudios.com zip from inside CEF and
-   reads its `arrayBuffer()`, with in-game logging at lines 133/141/144 that only
-   exists because it was debugged live. The reasons are these instead:
-
-   - Third-party reachability is not ours to assume. CEF 103 renders on the
-     resource's own origin, but whether a CUSTOMER's server or a PLAYER's network
-     reaches fonts.gstatic.com is their business, and when it does not the face
-     falls back mid-render with no error anywhere. That is what every "the font
-     looks bad" report has actually been.
-   - Offline renders have no network at all. Preview and gallery shots are taken
-     headless, so a remote face makes the screenshots disagree with the game.
-   - A NUI bundle does not make third-party requests, as policy, and on a
-     marketplace page embedding a preview an off-origin request is a property the
-     page is not allowed to have.
-   - CORS, where a remote face IS used. A `@font-face` fetch is always CORS-mode,
-     so it needs an explicit `Access-Control-Allow-Origin` from the host — the
-     browser makes the request and then refuses to hand the page the body without
-     one. See `shared/ts/marketplace/ui/browse.ts` lines 6-16 for the same
-     mechanism on an API route, and `internal/tWeb/src/routes/api/storage.$.ts`
-     lines 146-164, which sets ACAO on `public/marketplace/` precisely because a
-     rehosted font arrives from an opaque-origin sandbox iframe with `Origin:
-     null`. fonts.gstatic.com happens to send ACAO; a self-hosted face needs no
-     header at all, which is the stronger position.
-
-   The conclusion is unchanged: self-host, via `shared/ts/build/web-fonts.ts`'s
-   `selfHostWebFonts`. Only the premise above was wrong.
+   Nothing is fetched from fonts.gstatic.com, and not because a NUI page has no
+   network — it has one. Whether a customer's server or a player's network
+   reaches gstatic is their business, and when it does not the face falls back
+   mid-render with no error anywhere; that is what every "the font looks bad"
+   report has turned out to be. Headless preview and gallery shots have no
+   network at all, so a remote face makes the screenshots disagree with the game.
+   `selfHostWebFonts` in `shared/ts/build/web-fonts.ts` is how the subsets get
+   here.
 
    The unicode-range values are Google's own, kept verbatim so a page still
    downloads only the subset it needs.
 
    Fonts are SIL Open Font License 1.1. Redistribution is permitted; the licence
    files must travel with the woff2 — they are in ./fonts alongside them, and a
-   consumer that vendors these files must carry them too.
-   --------------------------------------------------------------------------- */
+   consumer that vendors these files must carry them too. */
 
 /* Inter 100 900 — latin-ext */
 @font-face {

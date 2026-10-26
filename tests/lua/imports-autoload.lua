@@ -310,15 +310,13 @@ test('a host that cannot read tLib AT ALL is not a packaging fault', function()
 end)
 
 test('imports-has.lua is exactly that shape, and is the suite that proves it', function()
-    -- Named rather than left implicit: the no-files fixture is a deliberate
-    -- supported state, not an accident of a test, and it is what regressed.
+    -- The no-files fixture is a supported state, and it is what regressed.
     local _, wired, ok = fixture({ unreadable = true })
     assert(ok and #wired.printed == 0, 'the no-files fixture must be silent and survive')
 end)
 
 test('a declared name that resolves to no file still raises nothing', function()
-    -- Pinned deliberately: this is the gap runtime-state-contract.ts exists to
-    -- cover, and a reader who assumes the manifest half is loud would skip it.
+    -- This is the gap runtime-state-contract.ts exists to cover.
     local _, _, ok = fixture({ declared = { 'notamodule' } })
     assert(ok, 'the manifest loop must stay silent for an unresolvable name; '
         .. 'check:runtime-state is what reports those')

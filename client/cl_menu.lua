@@ -82,9 +82,6 @@ local function convarNumber(name, fallback, minimum, maximum)
     return math.floor(value)
 end
 
--- Every duration convar carries its unit (`_ms`); no unit-less alias is owed —
--- tLib has never shipped a server.cfg naming one.
-
 -- No open key or command: tLib used to bind F1 by default, the ESX/QB framework
 -- menu key, and FiveM fires every command bound to a key, so one press opened
 -- the framework menu plus an empty tLib one on top. Opening is the consuming
@@ -1586,10 +1583,9 @@ function MC.registerApi()
 
     -- For a resource whose settings live in a tLib dialog rather than a menu, so
     -- it never gets the feedback row the menu injects into an owner's root page
-    -- (tRadio's /tradio is the first). Goes through the menu's own channel on
-    -- purpose: that channel already carries the correlation id, the rate
-    -- limiter, the timeout and the drop sweep, so nothing had to be loosened or
-    -- re-derived for this. The owner is the calling resource, never an argument,
+    -- (tRadio's /tradio is the first). Goes through the menu's own channel,
+    -- which already carries the correlation id, the rate limiter, the timeout
+    -- and the drop sweep. The owner is the calling resource, never an argument,
     -- so a message cannot be attributed to a resource that did not send it.
     api('SubmitFeedback', function(message, callback, declaredOwner)
         local owner, err = ownerOf(declaredOwner)

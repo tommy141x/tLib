@@ -2,20 +2,14 @@
  * "How big is this preview document meant to be?" — one answer, for every surface
  * that scales a marketplace layout into a box.
  *
- * Why it is its own module
+ * A second copy of this is how tRadio's admin panel ended up with a single tier
+ * (`data-radio-width`/`-height`, else a constant), which silently mis-sized every
+ * layout carrying studio-design metadata instead: the preview came out letterboxed or
+ * cropped with nothing reported, because there is no error to report when a scale
+ * factor is merely wrong.
  *
- * This logic was inline in `PreviewOverlay.tsx`'s `canvasSize` memo, which made it
- * unreachable from anywhere that is not a Solid component in this tree. tRadio's
- * admin panel needed the same answer and therefore grew its own: a single tier
- * (`data-radio-width`/`data-radio-height`, else a constant), which silently mis-sized
- * every layout that carries studio-design metadata instead — the preview came out
- * letterboxed or cropped and nothing reported an error, because there is no error to
- * report when a scale factor is merely wrong.
- *
- * Extracting it is the alternative to a second copy. It is deliberately pure: a
- * string in, two numbers out. No DOM, no Solid, no fetch — so a Node/bun test or a
- * non-Solid consumer can call it, and so it can be imported by a tree that aliases
- * `@tlib/shared` without dragging the component graph in behind it.
+ * Pure — a string in, two numbers out. No DOM, no Solid, no fetch, so a bun test or a
+ * non-Solid consumer can call it without dragging the component graph in.
  *
  * The tiers, in descending order of trust
  *
@@ -63,49 +57,28 @@ export function parsePreviewCanvasSize(
   }
 
   /**
-   * FRACTIONAL, and this was a real silent defect until 2026-10-07.
+   * FRACTIONAL, and BOTH families. Two silent defects lived here.
    *
-   * These were `(\d+)` with `parseInt`, so a half-pixel canvas did not match
-   * the regex AT ALL — tier 2 reported nothing and the value fell through to
-   * tier 3, which takes the largest CSS px in the document and therefore
-   * picks some inner element. Measured on tRadio's shipped heads: **six of
-   * eleven** declare a fractional height, and QRX-720 resolved to **98x96**
-   * against its real **209.5x426.5**.
+   * `(\d+)` with `parseInt` meant a half-pixel canvas did not match the regex
+   * AT ALL, so tier 2 reported nothing and the value fell through to tier 3's
+   * largest-CSS-px guess — some inner element. Six of tRadio's eleven shipped
+   * heads declare a fractional height, and QRX-720 resolved to 98x96 against
+   * its real 209.5x426.5. tWeb's own reader (`src/lib/studio/codec.ts`) used
+   * `([^"]*)` and handled decimals, so the two sides of the same marketplace
+   * disagreed about the same attribute.
    *
-   * That is the dangerous shape of wrong — not a blank preview that announces
-   * itself, but a confidently-rendered one at a quarter scale, with nothing
-   * reporting a failure.
-   *
-   * tWeb's own reader (`src/lib/studio/codec.ts`) already used `([^"]*)` and
-   * handled decimals correctly, so the two sides disagreed about the same
-   * attribute. This matches its behaviour; `[\d.]+` with `parseFloat` is
-   * narrower than tWeb's catch-all while accepting every value a real layout
-   * emits.
-   */
-  /**
-   * TWO ATTRIBUTE FAMILIES, because two products declare a canvas.
-   *
-   * `data-radar-*` was missing here while tWeb's own reader
-   * (`src/lib/studio/codec.ts`'s `CANVAS_SIZE_ATTRS`) has carried both all
-   * along — so for every tRadar layout the two sides of the same marketplace
-   * disagreed about the same document: tWeb read the declared canvas, this
-   * read nothing and fell through to tier 3's largest-CSS-px guess. That is the
-   * identical silent mis-scale the fractional fix above was written for, one
-   * product over, and it is why the pairs are a TABLE now rather than a literal
-   * anybody has to remember to duplicate.
+   * `data-radar-*` was missing entirely, for the identical mis-scale one
+   * product over, while tWeb's `CANVAS_SIZE_ATTRS` carried both all along.
    *
    * Tried in order, first complete pair wins. A document carrying both families
-   * is not a real case; if one ever appears, radio wins because it is the
-   * older declaration.
+   * is not a real case; if one ever appears, radio wins as the older
+   * declaration.
    */
   const CANVAS_ATTR_PAIRS: readonly (readonly [RegExp, RegExp])[] = [
     [/data-radio-width="([\d.]+)"/, /data-radio-height="([\d.]+)"/],
     [/data-radar-width="([\d.]+)"/, /data-radar-height="([\d.]+)"/],
   ];
   for (const [wRe, hRe] of CANVAS_ATTR_PAIRS) {
-    // Both required, per the tier's contract above: a document carrying only one
-    // has a stray attribute, not a declared canvas, and pairing a real width
-    // with a guessed height distorts the aspect.
     const attrW = Number.parseFloat(html.match(wRe)?.[1] ?? "");
     const attrH = Number.parseFloat(html.match(hRe)?.[1] ?? "");
     if (attrW > 0 && attrH > 0) return { w: attrW, h: attrH };

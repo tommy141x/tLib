@@ -5,11 +5,11 @@
         if not tlib.permission.isAdmin(src) then return end
         if tlib.permission.has(src, Config.acePermission) then ... end
 
-    Four resources hand-rolled these, three different ways, both drifted from
-    tLib's own rule: one fallback checked only `tlib.admin` (so a
+    Four resources hand-rolled these, three different ways, and two of those
+    drifted from tLib's own rule: one fallback checked only `tlib.admin` (so a
     `tlib.superadmin`-only player wasn't admin to the resource), and one
     tested `IsPlayerAceAllowed(...) == true`, which reads a numeric 1 as a
-    denial — `server/lib/adapter/permission.lua` accepts both.
+    denial — `server/lib/adapter/permission.lua` accepts both shapes.
 
     `isAdmin`/`level` are answered HERE, in the consumer's VM, because tLib's
     own admin rule is pure ACE with no resolver — no round trip needed, and no

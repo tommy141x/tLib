@@ -115,8 +115,8 @@
   --nui-radius: var(--menu-radius);
   --nui-radius-lg: var(--radius-surface, 0.875rem);
   --nui-radius-sm: var(--radius-tight, 0.25rem);
-  /* Not --row-height — a free-standing control, a row is a row. Nothing reads it
-     today; exists so a shared class that does cannot fall back to undefined. */
+  /* Nothing reads this today; it exists so a shared class that does cannot fall
+     back to undefined. */
   --nui-control-h: 34px;
   --nui-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   /* Entrance curve, restated so menu.css's three enter animations can name it. Was

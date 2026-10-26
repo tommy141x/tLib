@@ -1,23 +1,19 @@
 // Negative control for tests/lua/runtimetxd-create-once.lua.
 //
-// The thing that suite guards cannot be observed in game: CREATE_RUNTIME_TXD leaks a
+// What that suite guards cannot be observed in game: CREATE_RUNTIME_TXD leaks a
 // pinned `ytd` streaming slot silently, and a name that collides across a resource
 // restart makes every AddReplaceTexture resolve to the wrong dictionary — also
-// silently. So the suite's only oracle is a counter and a set of strings, and a
-// counter test is the easiest kind to write so that it agrees with the code.
+// silently. So the suite's only oracle is a counter and a set of strings.
 //
-// This plants the defect in THE MODULE'S OWN SOURCE, one substitution at a time, and
-// requires an exact named set of assertions to go red. The patched copy is written to
-// the OS temp directory — nothing inside the repo is touched — and the suite is told
-// where it is through RUNTIMETXD_SOURCE. The patching happens here rather than in Lua
-// because fengari ships no `io`.
+// The defect goes into THE MODULE'S OWN SOURCE, one substitution at a time, written
+// to the OS temp directory and handed to the suite through RUNTIMETXD_SOURCE. The
+// patching happens here rather than in Lua because fengari ships no `io`.
 //
 //   nocache  `ensure` loses its cache and calls the native on every call.
 //   notag    the dictionary name and both texture-name forms lose the per-load tag.
 //
-// Every substitution is asserted to have matched EXACTLY ONCE. A gsub that matched
-// nothing would hand the suite the unmodified module, and the control would then be
-// asserting that correct code is correct.
+// Every substitution is asserted to have matched EXACTLY ONCE: a gsub matching
+// nothing hands the suite the unmodified module.
 //
 //   bun run test:lua:control
 
@@ -114,8 +110,7 @@ for (const [mode, patches] of Object.entries(MODES)) {
   }
 }
 
-// And green with nothing planted — a pair that is red in both modes and red at
-// baseline too would be indistinguishable from a working control.
+// And green with nothing planted.
 const baseline = Bun.spawnSync(
   ["bunx", "--bun", "--package", "fengari-node-cli", "fengari", "scripts/run-lua-suite.lua", SUITE],
   { cwd: root }

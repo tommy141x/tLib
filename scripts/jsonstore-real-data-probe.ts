@@ -3,21 +3,15 @@
  * Drive the REAL `tlib.jsonstore` seed/migrate path over the REAL `data.json`
  * of every sibling resource that has one.
  *
- * ## Why this exists separately from the suite
+ * Every document in `tests/lua/jsonstore-schema.lua` is SYNTHETIC — three keys,
+ * two of them empty tables. The real files in this estate are 11 KB to 92 KB, 4
+ * to 30 top-level keys, with arrays 1700 entries long and objects nested six
+ * deep. A migration that is fine on `{ props = {} }` can quietly drop a section
+ * on tCAD's 519-call log.
  *
- * `tests/lua/jsonstore-schema.lua` is thorough and every one of its documents is
- * SYNTHETIC — three keys, two of them empty tables, written by the suite that
- * then asserts on them. That is the right shape for pinning behaviour and it is
- * the wrong shape for believing the behaviour on a customer's file. The files in
- * this estate are 11 KB to 92 KB, 4 to 30 top-level keys, with arrays 1700
- * entries long and objects nested six deep. A migration that is fine on
- * `{ props = {} }` and quietly drops a section on tCAD's 519-call log is exactly
- * the failure that would not show up until it had already happened.
- *
- * So this is the answer to one question, asked literally: has the migration path
- * ever run against a real pre-existing data file? It reads each sibling's actual
- * `data.json` off disk, hands the real bytes and the real decoded structure to
- * the real module, runs a two-step migration over it, and asserts:
+ * This reads each sibling's actual `data.json` off disk, hands the real bytes and
+ * the real decoded structure to the real module, runs a two-step migration over
+ * it, and asserts:
  *
  *   1. the migration RAN and the document was stamped;
  * 2. the pre-migration backup is BYTE-IDENTICAL to the file that was there;
@@ -25,21 +19,15 @@
  *   4. a deep value sampled from the real document survived unchanged;
  * 5. the original file was NOT modified.
  *
- * ## What is stubbed, and what that costs
- *
  * fengari ships no `cjson`, so `json.encode`/`json.decode` cannot be the real
  * ones. The codec here special-cases ONE string — the actual bytes of the file
- * under test — so `decode(realBytes)` returns the real decoded document. That
- * keeps both halves of assertion 2 honest: the bytes handed to `_backup` are the
- * file's own bytes, and the comparison is `==` over those bytes.
+ * under test — so `decode(realBytes)` returns the real decoded document, and the
+ * bytes handed to `_backup` are the file's own bytes.
  *
- * What it does NOT prove, and nothing short of a running FXServer would:
- * cjson's own round-trip behaviour on these documents — notably that an empty
- * Lua table re-encodes as `{}` whether it went in as `[]` or `{}`, which tCAD's
- * `sv_json.lua` and tRadio's `array_compaction.lua` both document as a real
- * hazard. This probe therefore cannot tell you a migration is SAFE to run on
- * a live server. It tells you the module's own logic holds on real-shaped data,
- * which is strictly less and was previously zero.
+ * It therefore does NOT cover cjson's own round-trip behaviour on these
+ * documents — notably whether an empty Lua table re-encodes as `{}` whether it
+ * went in as `[]` or `{}`, which tCAD's `sv_json.lua` and tRadio's
+ * `array_compaction.lua` both document as a real hazard.
  *
  * Nothing is written to any resource directory: the Lua side runs on an
  * in-memory file table and the generated probe goes to the OS temp dir.
@@ -61,10 +49,9 @@ const SIBLINGS = resolve(TLIB, "..");
 /** Resources known to keep a `data.json`. Absent ones are reported, not skipped. */
 const CANDIDATES = ["tAFK", "tCAD", "tDetector", "tLS", "tRadar", "tRadio", "tUnit"];
 
-// No sibling at all is a different thing from "the siblings are there and their
-// data.json files are not". The first is a standalone clone of tLib, where this
-// probe does not apply; the second is the exit-2 below, which must stay an
-// exit 2 because that is a tree where the probe COULD have run.
+// No sibling at all is a standalone clone of tLib, where this probe does not
+// apply. Siblings present but without data.json files is the exit 2 below: a tree
+// where the probe COULD have run.
 if (isStandaloneClone(TLIB)) {
   console.log(
     `jsonstore-real-data-probe: skipped — no sibling resource is checked out beside tLib in ` +
@@ -338,10 +325,9 @@ for (const resource of CANDIDATES) {
 
 rmSync(work, { recursive: true, force: true });
 
-// The floor. "No resource failed" and "no resource was read" are otherwise
-// the same green, and this probe reads files that are gitignored in five of the
-// seven candidates — so a clean checkout has fewer of them, and a clean
-// checkout is exactly where a vacuous pass would go unnoticed.
+// The floor. "No resource failed" and "no resource was read" are otherwise the
+// same green, and this probe reads files that are gitignored in five of the seven
+// candidates, so a clean checkout has fewer of them.
 const MIN_PROBES = 2;
 if (results.length < MIN_PROBES) {
   console.error(

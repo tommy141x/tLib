@@ -83,8 +83,9 @@ local function differs(a, b)
         or a.cabinSeat ~= b.cabinSeat or a.cabinNetId ~= b.cabinNetId
 end
 
---- Re-read the local player's seat and surroundings. Cheap enough to call from
---- @return the current state table (a copy).
+--- Re-read the local player's seat and surroundings, firing `onChange` when any
+--- announced field moved. Natives only, no round trip.
+--- @return table  the current state, as a copy.
 function occupancy.poll()
     local p = platform()
     local next_ = emptyState()

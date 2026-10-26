@@ -55,11 +55,9 @@ export interface Resolved {
   /** `argv` with redacted values replaced. The only form that may be logged. */
   loggable: string[];
   /**
-   * Set when the caller's fxmanifest `author` is not the expected one.
-   *
-   * Carried out of the gate rather than acted on inside it, because the only
-   * correct response is to log it. See catalog.ts rung 3: a hostile resource
-   * writes its own manifest, so this is an accident detector, not a check.
+   * Set when the caller's fxmanifest `author` is not the expected one. Carried
+   * out of the gate rather than acted on inside it: the only correct response
+   * is to log it. See `authorWarning` below.
    */
   authorWarning?: string;
 }

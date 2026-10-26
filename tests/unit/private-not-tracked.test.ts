@@ -1,9 +1,8 @@
 /**
- * `internal/` is private and this repo is public MIT. These assert the things that
- * keep it that way, because ".gitignore says so" is a claim nobody re-checks.
+ * `internal/` is private and this repo is public MIT.
  *
- * THE INVARIANT CHANGED, and the difference is the whole point of this file.
- * `internal/` used to be a nested repository, which made the split structural:
+ * THE INVARIANT CHANGED. `internal/` used to be a nested repository, which made
+ * the split structural:
  * `git add -f` recorded a gitlink rather than file contents, and `git clean -xdf`
  * stepped over it. It is now ordinary tracked content on a Gitea-only branch, so
  * it has neither property. The rule is no longer "internal/ is never tracked"

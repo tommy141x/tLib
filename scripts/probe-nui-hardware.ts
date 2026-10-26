@@ -11,23 +11,18 @@
  *
  *   • `navigator.hardwareConcurrency` — standard, but CEF has historically been
  *     built with a renderer process limit, and a value of 1 would be a lie.
- *   • `navigator.deviceMemory` — DOES NOT EXIST. The real name is
- *     `navigator.deviceMemory` in no spec; the Device Memory API ships as
- *     `navigator.deviceMemory` only in some vendor docs and as
- *     `navigator.deviceMemory`/`navigator.deviceMemoryEnabled` nowhere. Chromium
- *     implements it as **`navigator.deviceMemory`** behind
- *     `--enable-blink-features=DeviceMemory`... or not at all. This probe is the
- *     only way to know, and the answer is recorded in the diagnostics module.
+ *   • `navigator.deviceMemory` — the Device Memory API, which Chromium may or may
+ *     not expose depending on how it was built. This probe is the only way to
+ *     know, and the answer is recorded in the diagnostics module.
  *   • `WEBGL_debug_renderer_info` — gated on a runtime-enabled feature and, since
  *     Chromium 92ish, deliberately coarsened for privacy on some platforms.
  *
- * WHAT THIS PROBE CANNOT PROVE. It drives Chromium 103.0.5058.0, which is two
- * patch builds from cfx's 103.0.5060.141 — the same engine, but NOT the same
- * build, and cfx applies its own patches to CEF. A field that exists here can
- * still be absent in game, which is why every field this produces is collected
- * through a guarded reader that OMITS the key rather than sending `undefined`.
- * Headless also has no real GPU: the renderer string under `--headless` is
- * SwiftShader, so the probe runs BOTH modes and reports both.
+ * It drives Chromium 103.0.5058.0, two patch builds from cfx's 103.0.5060.141 —
+ * the same engine, but NOT the same build, and cfx applies its own patches to CEF.
+ * A field that exists here can still be absent in game, which is why every field
+ * this produces is collected through a guarded reader that OMITS the key rather
+ * than sending `undefined`. Headless also has no real GPU: the renderer string
+ * under `--headless` is SwiftShader, so the probe runs BOTH modes.
  *
  * Run:  bun run scripts/probe-nui-hardware.ts
  * Exit: 0 probe ran, 2 the probe could not run (NOT a pass).
@@ -36,11 +31,8 @@
 import { launch } from "../shared/ts/build/nui-chromium.ts";
 
 /**
- * Read every candidate in one page evaluation.
- *
- * Deliberately a single string rather than a serialised function: `Runtime.evaluate`
- * takes an expression, and a template-interpolated function body is how the other
- * probes in this directory do it.
+ * Read every candidate in one page evaluation. A single string rather than a
+ * serialised function, because `Runtime.evaluate` takes an expression.
  */
 const READER = `(() => {
   const out = {};
@@ -112,15 +104,11 @@ interface Probed {
 }
 
 /**
- * The page is served over real `http://` on a loopback port.
- *
- * This is load-bearing and was a measured probe artefact first: on a `data:`
- * URL Chromium 103 THROWS `Storage is disabled inside 'data:' URLs` for
- * `localStorage`, which would have read as "CEF refuses site data" — the one
- * finding that would have killed the crash detector. A real origin is the only
- * way to ask the question. FiveM NUI pages are served from
- * `https://cfx-nui-<resource>/`, i.e. a real scheme with a real origin, so this
- * is the closer double.
+ * The page is served over real `http://` on a loopback port. On a `data:` URL
+ * Chromium 103 throws `Storage is disabled inside 'data:' URLs` for
+ * `localStorage`, which reads as "CEF refuses site data" — the one finding that
+ * would have killed the crash detector. FiveM NUI pages are served from
+ * `https://cfx-nui-<resource>/`, a real scheme with a real origin.
  */
 async function run(headless: boolean, origin: string): Promise<Record<string, Probed>> {
   const b = await launch({ headless, log: () => {} });

@@ -3,18 +3,16 @@
  *
  *   bun run probe:escape
  *
- * The unit suite in `tests/unit/escape-layer.test.ts` drives the registry
- * through a hand-written event target, because there is no DOM in that runner.
- * That harness asserts the registry's *decisions*, and it cannot assert the one
- * thing those decisions rest on: that a capture listener on `window` really does
- * run before a bubble listener on `window`, for a real `KeyboardEvent`, with
- * real `defaultPrevented` propagation and real `repeat` on a held key. If that
- * ordering were wrong the whole sample-then-decide design would be wrong, and
- * every harness assertion would still pass.
+ * The unit suite in `tests/unit/escape-layer.test.ts` drives the registry through
+ * a hand-written event target, because there is no DOM in that runner. It cannot
+ * assert the thing those decisions rest on: that a capture listener on `window`
+ * really does run before a bubble listener on `window`, for a real
+ * `KeyboardEvent`, with real `defaultPrevented` propagation and real `repeat` on
+ * a held key. If that ordering were wrong every harness assertion would still pass.
  *
  * So this bundles the real module, serves it, and presses keys with Playwright.
  * It covers the primitive only — a consumer's own wiring (which layer, what
- * depth, which `active`) is not exercised here and must not be claimed as such.
+ * depth, which `active`) is not exercised here.
  */
 
 import { mkdtemp, rm } from "node:fs/promises";
@@ -199,14 +197,8 @@ try {
   // bubble listener on `window` registered AFTER the registry sees the press
   // already handled; one registered BEFORE it does not, because same-node
   // listeners fire in registration order and `preventDefault` is all the
-  // registry does.
-  //
-  // That asymmetry is not a defect, it is the reason the registry does not try
-  // `stopPropagation`: on `window`'s bubble phase there is nothing left to stop,
-  // and a handler that ran earlier cannot be unrun. It is also exactly why the
-  // three resources that bound Escape themselves had to use capture phase to
-  // out-race each other — and why routing them all through one registry is what
-  // actually removes the race rather than moving it.
+  // registry does. That asymmetry is why it does not try `stopPropagation`: on
+  // `window`'s bubble phase there is nothing left to stop.
   check(
     result.preventedLate.length === 1 && result.preventedLate[0] === true,
     `a later window listener sees the press already handled (got ${JSON.stringify(result.preventedLate)})`

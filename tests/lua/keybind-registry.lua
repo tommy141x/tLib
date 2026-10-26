@@ -13,8 +13,7 @@
 -- Both are real, both are on this repo's defaults today, and both are certainties
 -- on a police server. Only a registry that outlives a single VM can see them.
 --
--- The REAL file is loaded with mocked natives. A reimplementation would keep
--- passing while the shipped file changed.
+-- The REAL file is loaded with mocked natives.
 
 local report = print
 local passed = 0

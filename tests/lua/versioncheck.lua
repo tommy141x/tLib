@@ -256,7 +256,7 @@ testWithSiblings('tDB forwards initial and subsequent database status through tL
     f.run(1100)
     contains(f.text(), 'Database ready')
     -- The status line is tDB's, and it keeps flowing after the version check has
-    -- resolved -- the two are independent, which is the point of this test.
+    -- resolved: the two are independent.
     TriggerEvent('tdb:startupStatus', 'Database authentication failed')
     contains(f.text(), 'Database authentication failed')
 end)

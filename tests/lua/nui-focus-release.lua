@@ -1,9 +1,7 @@
 -- Giving NUI focus back to the game: the native ordering, and the deferred
 -- release's generation guard.
 --
--- ## What this suite can and cannot prove
---
--- It cannot prove which of `SetNuiFocus(false, false)` and
+-- This suite cannot prove which of `SetNuiFocus(false, false)` and
 -- `SetNuiFocusKeepInput(false)` must come first. That is a fact about CitizenFX
 -- and there is no offline oracle for it: neither native is in the native
 -- reference (only the `IsNuiFocused` / `IsNuiFocusKeepingInput` readers are),

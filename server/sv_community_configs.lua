@@ -18,8 +18,7 @@ local function isCallable(value)
     return mt ~= nil and type(mt.__call) == 'function'
 end
 
---- Every cc* export answers (ok, err, value). One adapter so a signature
---- change in the bridge breaks in one place rather than five.
+--- Every cc* export answers (ok, err, value).
 local function guardCallback(callback, label)
     if not isCallable(callback) then
         log(('%s: callback must be callable (got %s)'):format(label, type(callback)), 3)
@@ -223,8 +222,7 @@ local function registerExports()
     --- count. Use it whenever the config is being read to render or preview it
     --- rather than because a player chose to install it — tLS's marketplace
     --- tab animates a listing's LEDs on hover, and routing that through import
-    --- would turn the counter into a measure of mouse movement. Keep the two
-    --- separate; do not "simplify" one into the other.
+    --- would turn the counter into a measure of mouse movement.
     ---
     --- Same argument ORDER note as above: (ok, configJson, err) out here,
     --- (ok, err, value) from the bridge.
@@ -243,10 +241,8 @@ local function registerExports()
                 callback(false, nil, errMsg)
                 return
             end
-            -- No success log, deliberately, where Import has one at level 2.
-            -- An import is a discrete user decision and worth a line; a peek
-            -- fires on hover and would flood a server console during ordinary
-            -- browsing. Failures still log at level 3.
+            -- No success log, unlike Import: a peek fires on hover and would
+            -- flood the console during ordinary browsing. Failures still log.
             callback(true, configJson, nil)
         end)
     end)

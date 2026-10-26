@@ -108,9 +108,8 @@ export function encodeFanout(roomId: string, senderId: number, payload: Buffer):
 }
 
 export function decodeBinary(buf: Buffer): BinaryFrame {
-  // MAX_BINARY_FRAME_BYTES was declared and documented above but never read
-  // here — a mirror (tTest's shell, the Worker iframe SDK) implementing the
-  // documented cap would have disagreed with the server about legal frames.
+  // This cap was documented in the header but unenforced here, so the mirrors
+  // (tTest's shell, the Worker iframe SDK) disagreed about which frames are legal.
   if (buf.length > MAX_BINARY_FRAME_BYTES) {
     throw new ProtocolError("binary_too_large", `binary frame exceeds ${MAX_BINARY_FRAME_BYTES}B`);
   }

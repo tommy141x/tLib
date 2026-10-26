@@ -112,8 +112,7 @@ const SKIP_DIRS = new Set(["bin", "logs", "node_modules"]);
  * asset cap — it took deploys down twice in one day) with no notice file for any of Node,
  * V8, OpenSSL, libuv, ICU, zlib, llhttp, nghttp2 or brotli, built by a hand-typed command in
  * no script. `shared/rust/deck-launcher` is 0.2 MB, embeds nothing, and resolves the Node the
- * host would itself have used. Three resources share this pack step, so building it here
- * keeps tRadio, tLS and tRadar all correct rather than one of them.
+ * host would itself have used.
  */
 const LAUNCHER_DIR = join(import.meta.dir, "../../rust/deck-launcher");
 const LAUNCHER_SOURCES = ["Cargo.toml", "build.rs", "src/main.rs"];
@@ -455,8 +454,9 @@ export function packDeckPlugin(
   mkdirSync(dirname(paths.published), { recursive: true });
   copyFileSync(paths.packed, paths.published);
 
-  // HASHED AFTER THE PACK, NOT BEFORE, AND THAT IS A MEASUREMENT RATHER THAN
-  //
+  // Scanned AFTER the pack: `buildDeckLauncher` above rewrites the launcher binary,
+  // which is part of the hashed source set, so a scan taken earlier would stamp a
+  // hash the artifact does not match.
   const scan = scanDeckSources(cfg);
 
   const sha256 = sha256File(paths.published);

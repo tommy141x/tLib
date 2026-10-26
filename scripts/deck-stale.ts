@@ -16,16 +16,13 @@
  * five days old and 9 files short of its own source tree — missing two property
  * inspectors and the softkey icons, so actions a customer dragged onto a key had
  * no UI. Nothing was wrong with the repo: the artifact is tracked, the sources
- * are tracked, and no gate related the two. The measurement is in the header of
- * tLib/shared/ts/build/deck-pack.ts.
- *
- * What it asserts, and what it only reports
+ * are tracked, and no gate related the two.
  *
  * Asserted: the stamp beside the plugin describes the published artifact's exact
  * bytes, AND the hash of the source set still matches what the stamp recorded.
  * Reported only: mtimes. git does not record mtimes, so on a fresh clone every
  * file is the same age and an mtime gate is green on stale bytes — see
- * deck-pack.ts's header for the full argument.
+ * deck-pack.ts's header.
  *
  * Exit codes are semantic, like the rest of this toolchain:
  *   0  the published artifact is current

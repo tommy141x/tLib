@@ -7,7 +7,7 @@
 -- dispatch safe to open up to every resource: a resource can reach the handlers it
 -- registered and nothing else. The pre-split engine got that property for free by
 -- having exactly one consumer, allowed to use the feature at all. Now it comes from
--- the owner scoping, so it has to be proven rather than assumed.
+-- the owner scoping.
 --
 -- The other half is the effect scheduler, which is the part with real state: an
 -- effect outlives the row that started it, so it has to keep ticking, stop on its

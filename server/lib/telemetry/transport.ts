@@ -141,9 +141,8 @@ export interface Transport {
 }
 
 /**
- * `credential()` always resolves, so there is no `hasCredential()` and no
- * `provisioned` state -- both were unconditionally true. The `no-credential`
- * verdict below is a different thing and guards the injected seam.
+ * `credential()` always resolves in a shipped build. The `no-credential`
+ * verdict below is only reachable through the injected seam.
  */
 
 export function createTransport(opts: TransportOptions): Transport {

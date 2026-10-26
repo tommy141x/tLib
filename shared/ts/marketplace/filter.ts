@@ -2,29 +2,14 @@
  * Narrowing a catalogue that is already in memory: a search term, a facet, and
  * the counts the facet chips show.
  *
- * Why this is shared
- *
- * Two surfaces browse the same catalogue by filtering a list they already hold,
- * and both had written this by hand:
- *
- *   - tLS: `visibleCards` in `client/web/src/store/marketplace-store.ts`
- *   - tRadio: the `counts` / `searched` / `filteredItems` memos in
- *     `server/web/src/admin/pages/PageMarketplace.tsx`
- *
- * They had already diverged on what a search searches: tLS matched the TITLE
- * only, tRadio matched name and description. That is settled here in favour of
- * both — a dispatch theme or a light pattern is usually looked for by what it
- * does, and the description is the only field carrying that. `searchableText`
- * is the seam, so a surface decides which of its own fields are searchable
- * without reimplementing the matching.
- *
- * Generic over the item, by accessor
+ * A search matches name AND description, not the title alone: a dispatch theme
+ * or a light pattern is usually looked for by what it does, and the description
+ * is the only field carrying that. `searchableText` is the seam, so a surface
+ * picks which of its own fields are searchable.
  *
  * The two surfaces do not share an item type — tLS holds a `CardView` keyed by
- * `kind`, tRadio holds a `MarketplaceItem` keyed by `type` — and they never
- * will, because one of them merges a second catalogue in. So the facet is
- * reached through a function rather than a field name. That is what lets the
- * logic be shared without forcing one surface's shape onto the other.
+ * `kind`, tRadio a `MarketplaceItem` keyed by `type` — so the facet is reached
+ * through a function rather than a field name.
  *
  * Headless: no JSX, no class names, no Solid. Safe in CEF 103, in tRadio's Node
  * bundle, and in a Workers build.
@@ -34,8 +19,7 @@
  * The sentinel facet value meaning "do not narrow by facet".
  *
  * A literal rather than `null`/`undefined` because it is also a chip the user
- * can press and a value that round-trips through a URL, and because both
- * surfaces had independently chosen the same spelling.
+ * can press and a value that round-trips through a URL.
  */
 export const ALL_FACETS = "all";
 

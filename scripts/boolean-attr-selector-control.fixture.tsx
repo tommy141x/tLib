@@ -15,10 +15,6 @@
  *   unknown        `data-ctl-opaque` selector `="true"` + an unprovable binding
  *   never-emitted  `data-ctl-ghost`  selector `="true"` + no producer anywhere
  *
- * The map is per-attribute and exact: a drifted rule has to turn a NAMED line
- * red. "all four verdicts appeared" was the first version and is satisfiable by
- * accident — one rule covers for another and the count still looks right.
- *
  * `data-ctl-dead` and `data-ctl-gone` additionally appear in BOTH spellings — a
  * plain selector in `CONTROL_SELECTORS` and an UnoCSS variant in
  * `CONTROL_CLASSES` — and the scanner requires both readers to find them.
@@ -27,13 +23,9 @@
  * selector. The variant form is the one that matters most in this codebase:
  * `data-[active=true]:` lives in a class string, with no stylesheet to read.
  *
- * If any of this stops being produced, the scanner exits 2 and says so. A zero
- * from a rule that no longer matches is indistinguishable from a clean tree, and
- * that indistinguishability is exactly how the original defect shipped.
- *
- * Both halves of the defect are covered on purpose. The `="false"` half is the
- * quieter one: it reads as a deliberate negative state, but Solid 2 REMOVES the
- * attribute on `false`, so there is no value left for the selector to match.
+ * The `="false"` half is the quieter one: it reads as a deliberate negative
+ * state, but Solid 2 REMOVES the attribute on `false`, so there is no value left
+ * for the selector to match.
  */
 
 // biome-ignore-all lint: a deliberately-Solid-1-shaped fixture, never rendered.

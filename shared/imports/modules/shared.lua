@@ -104,8 +104,7 @@ local MAX_THEME_FONTS = 32
 ---
 --- Spelled out in steps rather than as one Lua pattern: Lua patterns have no
 --- optional groups and no alternation, and the loose `^%d+%.%d+` this started as
---- accepted `1.2.3.4.5` and `1.2abc`, which the TypeScript side refuses. Two
---- validators that disagree about what a version is are two validators.
+--- accepted `1.2.3.4.5` and `1.2abc`, which the TypeScript side refuses.
 local function isVersion(value)
     if not isText(value, 64) then return false end
     local core, prerelease = value:match('^([^%-]+)%-(.*)$')
@@ -152,12 +151,12 @@ end
 
 --- Mirror of themeFacts in shared/ts/modules/manifest.ts, field for field.
 ---
+--- Validated here and not only in the TypeScript, unlike `sound`, because a
+--- theme manifest is read on a LIVE SERVER and `theme.fonts` becomes @font-face
+--- rules: a malformed declaration registers a font under the wrong name or not
+--- at all, which is invisible at render time.
+---
 --- @return boolean ok, string|nil err
---- Validated here, unlike `sound`, and the asymmetry is not an inconsistency: a
---- theme manifest is read on a LIVE SERVER, and `theme.fonts` becomes @font-face
---- rules -- a malformed declaration registers a font under the wrong name or not
---- at all, which is invisible at render time. The gate that sees the file has to
---- be the one that refuses it.
 local function validateThemeFacts(raw)
     if type(raw) ~= 'table' then return false, 'module.json: "theme" must be an object' end
     local fonts = raw.fonts
@@ -267,10 +266,9 @@ function modules.validate(raw, id, kind)
     end
 
     -- Not a sound rule -- those live only in manifest.ts, since nothing on a
-    -- FiveM resource reads a sound manifest. This is a rule about layouts and
-    -- themes: a field that does nothing is a field someone will eventually
-    -- trust, and a skin author who pastes a `sound` block in and hears nothing
-    -- deserves to be told why.
+    -- FiveM resource reads a sound manifest. This refuses a `sound` block on a
+    -- layout or theme, where it would be read by nothing: a skin author who
+    -- pastes one in otherwise hears silence with no explanation.
     if raw.sound ~= nil then
         return nil, ('module.json: a "%s" module must not carry "sound"'):format(raw.kind)
     end

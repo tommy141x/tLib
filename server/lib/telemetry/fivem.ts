@@ -9,9 +9,7 @@
 // `server/main.ts`, before a consumer's `onResourceStart`, so the same capture
 // bug would turn host readiness into a load-order question.
 //
-// `exports` is read through `globalThis`, not imported, because bun's CJS
-// bundler shadows FiveM's global `exports(name, fn)` with the CommonJS
-// module-exports object in every non-entry file.
+// `exports` is read through `globalThis` for the reason ../http/fivem.ts gives.
 
 type ExportsFn = (name: string, fn: (...args: unknown[]) => unknown) => void;
 type OnFn = (event: string, handler: (...args: unknown[]) => void) => void;

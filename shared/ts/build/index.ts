@@ -11,10 +11,9 @@ export {
 /**
  * The CEF 103 output contract — what a NUI bundle may not contain.
  *
- * Deliberately separate from `css-contract.ts`: that one owns the blurred
- * `box-shadow` length parser and the surface-collision rules, and this one reads
- * only the BUILT stylesheet for constructs the engine silently drops. Two gates,
- * no overlap, so neither has to know the other's job.
+ * Separate from `css-contract.ts`, which owns the blurred `box-shadow` parser and
+ * the surface-collision rules over HAND-WRITTEN CSS; this reads only the BUILT
+ * stylesheet, for constructs the engine silently drops.
  *
  * It carries two floors — `R-MEDIA-FLOOR` and `R-SIZE-FLOOR` — because "no
  * `oklch` found" and "no CSS was read" are otherwise the same green. That earned
@@ -160,11 +159,10 @@ export type { StandardBuildOptions } from "./resource.ts";
 export { buildStandardResource, runStandardBuild } from "./resource.ts";
 /**
  * The release-artifact contract for runtime state, plus the tlib_modules
- * inventory check. Deliberately separate from `manifest-coverage.ts`: that one
- * answers "is everything the manifest names staged", and this one answers the
- * opposite question, "is anything staged that must never be" — plus the one
- * question neither the manifest nor the staging list can answer, which is
- * whether a declared tLib module exists at all.
+ * inventory check. `manifest-coverage.ts` answers "is everything the manifest names
+ * staged"; this answers the opposite, "is anything staged that must never be" —
+ * plus whether a declared tLib module exists at all, which neither the manifest
+ * nor the staging list can answer.
  *
  * It carries two floors, `R-FILE-FLOOR` and `R-MANIFEST-FLOOR`, because "no
  * data.json in the staged tree" and "no staged tree" are otherwise the same

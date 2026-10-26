@@ -15,8 +15,7 @@
 --
 -- NEGATIVE CONTROL: MKT_CONTROL=1 retargets the warning at -1 inside this
 -- suite's own copy of the dispatch, the way the four resources had it, and
--- REQUIRES the broadcast assertion to fail. Proving the suite can fail is the
--- point: a dead assertion reports a clean run, and so does a working one.
+-- REQUIRES the broadcast assertion to fail.
 --
 --   bun run test:lua
 --   MKT_CONTROL=1 bunx --bun --package fengari-node-cli fengari \

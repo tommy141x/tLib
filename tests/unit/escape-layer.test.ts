@@ -10,23 +10,16 @@
  *
  * ## The negative controls
  *
- * There are **two**, and the reason is the point. The first draft had one — a
- * first-registered-wins registry — and it *passed* the `active` scenario by
- * accident: the inactive mount happened to be registered second, so picking
- * the first layer picked the right one for the wrong reason. A control that
- * gets a rule right by accident proves nothing about that rule. So each
- * mechanism now has a control that is blind to exactly it:
+ * There are two because the first draft had one — a first-registered-wins
+ * registry — and it *passed* the `active` scenario by accident: the inactive
+ * mount happened to be registered second, so picking the first layer picked the
+ * right one for the wrong reason. Each mechanism now has a control blind to
+ * exactly it:
  *
  * - `FirstWinsRegistry` is depth-blind (and so cannot do stacking).
  * - `StackRegistry` is depth-aware but `active`-blind.
  * - Neither samples on capture, so both fail the one-press-one-dismissal
  *   scenario — that mechanism is the one no naive shape gets right.
- *
- * The real registry must pass every scenario. Each control must fail exactly
- * the scenarios named against it: a control that passes one has had its
- * mechanism stop being load-bearing, and a name that is not a real scenario
- * means the list went stale, which is how a control comes to refuse its own
- * run.
  */
 
 import { expect, test } from "bun:test";

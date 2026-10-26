@@ -56,11 +56,8 @@ export interface AgentConfig {
    * Per-type content contracts, keyed exactly like `installTypes`. A type with no entry
    * declares no contract and installs as before.
    *
-   * Registered HERE, on the agent, rather than at each call site, so that every route into
-   * this resource's install path is gated by the same check: the in-game Lua event handled
-   * below, and any HTTP/admin route the consumer builds on `installFromData` directly. A
-   * contract enforced on only one of those is a contract an operator can walk around without
-   * knowing they did.
+   * Registered HERE, on the agent, rather than at each call site, so the in-game Lua event
+   * below and any HTTP/admin route built on `installFromData` are gated by the same check.
    *
    * See {@link ContentValidator} — reject by throwing, and write the message for the server
    * owner who will read it.

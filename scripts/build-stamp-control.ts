@@ -1,24 +1,15 @@
 #!/usr/bin/env bun
-// Negative control for the build stamp (shared/ts/build/core.ts, `stampBuildId`),
-// whose job is to let a diagnostic tell two releases apart. tLib v1.0 was
-// republished in place with a crash fix in it and no version change, and the
-// thing that cost support a thread was not a missing feature: it was that
-// `tLib 1.0.0` was a TRUE statement about both trees.
+// Negative control for the build stamp (shared/ts/build/core.ts, `stampBuildId`).
+// tLib v1.0 was republished in place with a crash fix in it and no version
+// change, so `tLib 1.0.0` was a TRUE statement about both trees.
 //
-// So the claim under control is not "prod printed a build id". It is four
-// properties, and a stamper can satisfy the first while failing any of the rest:
+// Four properties, and a stamper can satisfy the first while failing any of the rest:
 //
 //   distinguishes  one changed byte in one shipped file changes the id
 //   stable         an unchanged tree restamps to the SAME id
 //   idempotent     restamping a stamped tree does not compound
 //   versionSafe    `version` is untouched, so imports.lua's tlib_min_version
 //                  gate still accepts a consumer pinning '1.0'
-//
-// `properties()` below is the measurement. It is run against the real stamper,
-// which must satisfy all four, and then against four deliberately broken ones --
-// each of which must FAIL the property it breaks. Without those drills, "all four
-// green" is a claim about one implementation and says nothing about whether the
-// measurement can still go red.
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,8 +31,8 @@ function stage(adapters: string): string {
 
 /** Which of PROPERTIES this stamper fails. */
 function failures(stamp: Stamper): string[] {
-  // Three trees: two that differ by one byte in a shipped Lua file -- which is
-  // the whole of c9a8f8f -- and a third identical to the first.
+  // Three trees: two differing by one byte in a shipped Lua file, and a third
+  // identical to the first.
   const trees = [stage("before\n"), stage("after\n"), stage("before\n")];
   try {
     const [a, b, again] = trees.map((dist) => stamp(dist, DAY));
@@ -73,8 +64,8 @@ check(
   `failed: ${real.join(", ")}`
 );
 
-// One broken stamper per property. Each writes a plausible-looking id, so the
-// difference between these and the real one is invisible in a build log.
+// One broken stamper per property. Each writes a plausible-looking id, so in a
+// build log these are indistinguishable from the real one.
 const append = (dist: string, id: string) => {
   const path = join(dist, "fxmanifest.lua");
   writeFileSync(path, `${readFileSync(path, "utf8").trimEnd()}\n\ntlib_build '${id}'\n`);

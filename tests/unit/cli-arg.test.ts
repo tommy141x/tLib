@@ -4,9 +4,8 @@
  *
  * The negative controls here are not hypothetical broken drafts — they are the
  * exact bodies that were in tRadio's `scripts/panel-gallery/`, `radio-frames/`
- * and `watermark/` tools. Keeping them in the suite is what makes "the strict
- * one is the right one" a measurement rather than an assertion, and it means a
- * future "simplification" back toward any of them fails here.
+ * and `watermark/` tools, so a future "simplification" back toward any of them
+ * fails here.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";

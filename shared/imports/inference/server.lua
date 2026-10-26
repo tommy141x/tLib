@@ -44,15 +44,10 @@ function inference:lookup(capability, workload)
     return parsed
 end
 
---- Whether a BOOL native said yes.
----
---- FiveM Enhanced's BOOL natives (DoesEntityExist, NetworkDoesNetworkIdExist,
---- IsPedInAnyVehicle, IsEntityAVehicle, HasModelLoaded) return the NUMBER 1 to
---- Lua, not `true`, so `native(...) == true` is always false — this broke
---- screentarget's `exists` provider, rejecting every real vehicle, invisibly
---- to unit tests because their suites inject providers instead of real natives.
---- `not not v` is not the fix either: 0 is truthy in Lua, so it would turn
---- every "no" into a "yes".
+--- Whether a boolean-returning call said yes. A BOOL crossing the FiveM
+--- boundary arrives as the NUMBER 1, not `true`, so `== true` is always false;
+--- `not not v` is not the fix either, since 0 is truthy in Lua. The full
+--- measurement is above `nativeTruth` in platform/client.lua.
 local function nativeTruth(v)
     if v == true then return true end
     return type(v) == "number" and v ~= 0

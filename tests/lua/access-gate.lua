@@ -131,10 +131,9 @@ local recordedTimings = {}
 tlib = {
     permission = { has = function(src, key) return aceGrants[tostring(src) .. '|' .. tostring(key)] == true end },
     demo = { active = function() return demoOn end },
-    -- `tlib.telemetry.record` is called from the instrumented write path. A
-    -- RECORDER rather than a no-op, so this suite can assert that a slow write
-    -- is actually measured -- a stub that discarded the call would let the
-    -- instrumentation be deleted with every test still green.
+    -- A RECORDER rather than a no-op, so the evaluation-timing assertions at
+    -- the bottom of this file have something to read. A stub that discarded the
+    -- call would let the instrumentation be deleted with every test still green.
     telemetry = { record = function(op, budget, ms)
         recordedTimings[#recordedTimings + 1] = { op = op, budget = budget, ms = ms }
     end },
@@ -430,8 +429,7 @@ memoGate:invalidate(7)
 memoGate:allowed(7)
 assert(calls == 3, 'invalidate forces a recheck')
 
--- Memoisation is per player, not global -- sharing one answer across players
--- would be the worst possible bug in this file.
+-- Memoisation is per player, not global.
 reset()
 local seen = {}
 local perPlayer = access.gate({ mode = 'custom', custom = function(src) seen[#seen + 1] = src; return src == 7 end },
@@ -552,10 +550,8 @@ assert(liveBlock.job.police == 2, 'and the owner config table itself is untouche
 
 -- Fail closed when the framework cannot answer
 
--- A framework that is not loaded is not a reason to hand out the resource. This
--- is the same rule tRadar's sv_access.lua reached independently, and it is the
--- single most important default in this file, so it is pinned rather than left
--- to fall out of the implementation.
+-- A framework that is not loaded is not a reason to hand out the resource. The
+-- same rule tRadar's sv_access.lua reached independently.
 reset()
 local orphan = access.gate({ mode = 'job', job = { police = 0 } }, { key = 'x', label = 'the radar' })
 assert(access.framework() == nil and orphan:allowed(7) == false,
@@ -667,8 +663,7 @@ assert(sweepGate:allowed(13),
 -- A memo hit returns before `evaluate` and is not a measurement of anything, so
 -- recording it would bury every real framework round trip under thousands of
 -- near-zero samples and make the p95 meaningless. Deleting the record call
--- entirely leaves every case above green, which is why the second assertion
--- below exists at all.
+-- entirely leaves every case above green.
 local evaluations = 0
 for _, t in ipairs(recordedTimings) do
     if t.op == 'access:evaluate' then

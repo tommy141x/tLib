@@ -1,6 +1,5 @@
 /**
- * The elevation ladder in `shared/css/theme-tokens.css`, asserted rather than
- * described.
+ * The elevation ladder in `shared/css/theme-tokens.css`.
  *
  * Every component in `internal/shared-ts/ui/*` fills a control with `--input` and draws its
  * edge with `--input` or `--border`, on a panel filled with `--card`. So the file is
@@ -13,14 +12,6 @@
  * black outlines around things. That has shipped twice — tLS raised `--card`, then
  * tUnit did — and neither time did anything fail. Each token on its own is a
  * perfectly reasonable colour; only the ORDER is wrong, and nothing reads the order.
- *
- * This does. A new palette block (`.tlib-overlay`, or whatever comes after it) that
- * moves one rung without moving the ones around it fails here, at `bun test`, in the
- * repo that owns the tokens — which is the only place the mistake is cheap.
- *
- * Deliberately a TEXT parse of the CSS, not an import of a JS constant mirroring it.
- * A mirror is a second source of truth that can agree with the test while disagreeing
- * with the stylesheet the browser loads, which would make this pass over the bug.
  */
 
 import { describe, expect, test } from "bun:test";

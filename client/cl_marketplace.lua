@@ -36,9 +36,9 @@ end
 
 local function registerExports()
     --- `opts.resource` scopes the catalogue to one product; `opts.initialTab`
-    --- picks 'uis' or 'sounds'. There is no per-TYPE filter — `opts.type` was
-    --- forwarded here and documented for a while, and nothing in the browser
-    --- ever read it. See `OpenData` in shared/ts/marketplace/ui/types.ts.
+    --- picks 'uis' or 'sounds'. There is no per-TYPE filter: `opts.type` was
+    --- forwarded here for a while and nothing in the browser ever read it.
+    --- See `OpenData` in shared/ts/marketplace/ui/types.ts.
     Platform.export('tLib', 'OpenMarketplace', function(opts)
         opts = type(opts) == 'table' and opts or {}
         SendNUIMessage({ action = 'openMarketplace', data = buildPayload(opts) })

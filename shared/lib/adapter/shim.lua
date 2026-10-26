@@ -1,9 +1,9 @@
 -- Export/callback boundary. FiveM carries function references across VMs natively.
 -- Keep the public methods used by existing consumers without callback-key shims.
 
--- IT NOW ACTUALLY WRAPS. IT DID NOT, AND THE NAME SAID IT DID. The long
--- version of why is on the twin in shared/imports/platform/client.lua, which a
--- consumer VM loads; this is tLib's own copy and the two must not diverge.
+-- The pcall is the point: an export that throws returns nil to its caller, and
+-- the real error vanishes. The twin is shared/imports/platform/client.lua, which
+-- a consumer VM loads; the two must not diverge.
 --
 -- FiveM infers the resource from the manifest; the argument is retained for
 -- callers and used in the error line.

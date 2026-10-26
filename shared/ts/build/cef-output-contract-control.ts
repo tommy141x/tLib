@@ -1,23 +1,14 @@
 #!/usr/bin/env bun
 /**
- * The control for `cef-output-contract.ts`. Run it before trusting that gate.
+ * The control for `cef-output-contract.ts`.
  *
- * WHY A CONTROL AT ALL, AND WHY THIS SHAPE. A sibling gate's first control
- * passed GREEN while a whole reader had been deleted, because every fixture was
- * reachable by a second path — so "the gate failed" was satisfied by the wrong
- * rule. This control therefore asserts the EXACT rule id each fixture trips, and
- * asserts that no OTHER rule trips on it. A fixture that fires two rules is a
- * failure here even though it is "red", because then it proves nothing about the
- * rule it was written for.
+ * A sibling gate's first control passed GREEN while a whole reader had been
+ * deleted, because every fixture was reachable by a second path. So each fixture
+ * here asserts the EXACT rule id it trips and that no OTHER rule trips on it; a
+ * fixture that fires two rules is a failure even though it is red.
  *
- * Every defect fixture is built from `clean()`, which already clears both floors
- * (it is over the byte floor and it carries a legacy `min-width` query), so the
- * one difference between a fixture and a passing build is the defect itself.
- *
- * The two floor fixtures are the opposite case and are expected to be the ONLY
- * rule that fires: an empty output directory, and a stylesheet with a Level 4
- * query and nothing legacy — which is what a `target: "esnext"` regression
- * actually looks like, and which must trip R-MQ4-RANGE *and* R-MEDIA-FLOOR.
+ * Every defect fixture is built from `clean()`, which already clears both floors,
+ * so the one difference from a passing build is the defect itself.
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -27,10 +18,8 @@ import { checkCefOutput } from "./cef-output-contract.ts";
 
 /**
  * A stylesheet that must pass every rule: over the byte floor, and carrying a
- * legacy media query so R-MEDIA-FLOOR is satisfied.
- *
- * The padding is a comment rather than real rules so that adding a rule to the
- * gate later cannot accidentally match the padding.
+ * legacy media query so R-MEDIA-FLOOR is satisfied. The padding is a comment
+ * rather than real rules, so a rule added to the gate later cannot match it.
  */
 function clean(): string {
   const padding = `/*${"x".repeat(2400)}*/`;

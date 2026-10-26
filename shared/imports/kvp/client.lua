@@ -77,8 +77,7 @@ end
 --- `opts.prefix` is an extra namespace applied INSIDE the community prefix, for a
 --- resource that wants its own keys grouped (`tafk:`). `opts.serverScoped` is what
 --- appends this server's tag; WITHOUT IT THE KEY IS SHARED ACROSS EVERY SERVER
---- the player visits, which is the module's documented default and not an
---- oversight. See the header.
+--- the player visits, which is this module's default. See the header.
 ---
 --- An empty server tag leaves a scoped key unscoped rather than appending `_`: a
 --- dev session that never resolved an endpoint then keeps what the player tuned
@@ -109,7 +108,6 @@ end
 ---
 ---     local fx = tlib.kvp.view({ serverScoped = true })
 ---     fx.getJson('radio_setting_fx_overrides') --> this server's tuning only
----
 local function buildAccessors(into, opts)
     local function k(key)
         return kvp.key(key, opts)

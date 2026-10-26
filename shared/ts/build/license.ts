@@ -1,26 +1,20 @@
 /**
  * Dependency licence gate.
  *
- * -- Why this was rewritten (2026-10-23) -------------------------------------
- *
- * The previous version could not fail for any of the reasons it existed. It
+ * The version this replaced could not fail for any of the reasons it existed. It
  * read ONLY the root `package.json`'s `dependencies` — 5 packages in tRadio,
- * exactly one (`ws`) in tLib — and tRadio's ~110 bundled packages live in the
- * `client/web`, `server/web`, `shared/ui` and `client/dm32/web` workspaces,
- * none of which it opened. It never walked transitives, so the 80 `@zag-js/*`
- * packages that reach the artifact through `@ark-ui/solid` were invisible. It
- * returned `true` when there was no `package.json` and `true` again when the
- * dependency list was empty, so "I read nothing" and "everything is approved"
- * were the same green. A bare `catch {}` around the per-package read made "not
- * installed" indistinguishable from "approved". The net effect: tRadio's
- * release gate classified 5 of ~110 shipped packages and could not go red.
+ * exactly one (`ws`) in tLib — while tRadio's ~110 bundled packages live in the
+ * `client/web`, `server/web`, `shared/ui` and `client/dm32/web` workspaces, none
+ * of which it opened. It never walked transitives, so the 80 `@zag-js/*` packages
+ * that reach the artifact through `@ark-ui/solid` were invisible. It returned
+ * `true` when there was no `package.json` and `true` again when the dependency
+ * list was empty, so "I read nothing" and "everything is approved" were the same
+ * green. A bare `catch {}` around the per-package read made "not installed"
+ * indistinguishable from "approved". Net: 5 of ~110 shipped packages classified,
+ * and it could not go red.
  *
- * So the three changes that matter are not the SPDX table — that part was fine
- * — they are WHERE the package set comes from, and the floors underneath it:
- * zero packages examined is a FAILURE, an unreadable manifest is a FAILURE,
+ * So: zero packages examined is a FAILURE, an unreadable manifest is a FAILURE,
  * and an unresolvable package is a FAILURE rather than a shrug.
- *
- * -- What the package set is, and what it is not -----------------------------
  *
  * Nothing in this estate ships `node_modules`: every workspace is bundled
  * (Vite for the two web UIs, `bun build` for the server), so the artifact's
@@ -35,18 +29,13 @@
  * a SUPERSET of the artifact — tree-shaking can drop a package whose code never
  * lands — which is the safe direction for a licence gate: it can accuse a
  * package that did not ship, never miss one that did. `method` and `confidence`
- * on the report say this in the output rather than leaving a reader to assume
- * the numbers are exact. The known gaps are listed on `confidence` itself.
+ * on the report say so in the output, and the known gaps are listed on
+ * `confidence` itself.
  *
- * -- Why `RESTRICTED_LICENSES` still contains LGPL-2.1 -----------------------
- *
- * tRadio deliberately ships codec2 under LGPL-2.1. Deleting the id to make the
- * build green would have quietly approved every future LGPL dependency, and
- * leaving it while the product breached it made the set a lie. Instead a
- * breach is recorded per component, with a reason and a review date, in the
- * product's `license-policy.json`, and a vendored exception must point at a
- * licence file that exists on disk — so the exception list cannot become
- * decorative either.
+ * `RESTRICTED_LICENSES` still contains LGPL-2.1 even though tRadio deliberately
+ * ships codec2 under it. The breach is recorded per component, with a reason and
+ * a review date, in the product's `license-policy.json`, and a vendored exception
+ * must point at a licence file that exists on disk.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -512,8 +501,7 @@ export function checkLicenses(opts: LicenseOptions = {}): LicenseReport {
     });
   }
 
-  // The floor that the whole rewrite exists for: an empty result set is the
-  // shape every one of the old gate's false passes had.
+  // An empty result set is the shape every one of the old gate's false passes had.
   if (packages.length === 0) {
     failures.push({
       code: "NO_PACKAGES",

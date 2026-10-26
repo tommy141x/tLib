@@ -4,18 +4,11 @@
 // The gate it replaced was green on every tree it was ever pointed at, because
 // each of its defects turned a defect into silence: a missing package.json, an
 // empty dependency list, a package absent from node_modules and every workspace
-// in the product all read as "approved". So the thing worth proving is not that
-// the gate passes on a clean tree — it is that it still goes RED, with the
-// right reason code, on each of those shapes.
+// in the product all read as "approved". Each case below is one of those shapes,
+// and must go red with the right reason code.
 //
-// Every case is a synthetic tree built under the OS temp directory: nothing is
-// written inside the repo, nothing is installed, and no network is touched, so
-// this belongs in the fast `controls` chain rather than behind a build.
-//
-// Revert any single behaviour in the gate and a named case here flips: drop the
-// workspace walk and `workspace-only-dep` goes quiet; drop the transitive walk
-// and `transitive-dep` does; restore either vacuous `return true` and
-// `empty-dependency-set` or `no-manifest` does.
+// Every case is a synthetic tree under the OS temp directory: nothing installed,
+// no network, nothing written inside the repo.
 
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

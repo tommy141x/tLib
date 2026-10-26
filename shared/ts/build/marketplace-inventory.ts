@@ -26,12 +26,11 @@ export interface MarketplaceReleaseMetadata {
 }
 
 /**
- * Opt-in post-staging/pre-package hook. Validates the ENTIRE explicit staging tree
- * against the approved build manifest, then exclusively publishes release metadata.
- * Does not invoke builds, package archives, clean dist, or alter staged payloads.
- * The canonical manifest digest avoids self-referencing the final ZIP hash. The
- * pipeline must distribute/attest this metadata and embed its policy in the agent;
- * merely finding this file on mutable runtime disk must never authorize adoption.
+ * Opt-in post-staging/pre-package hook. Validates the explicit staging tree against
+ * the approved build manifest, then writes release metadata. The digest is over the
+ * canonical manifest rather than the final ZIP, which would self-reference. Finding
+ * this file on mutable runtime disk must never authorize adoption — the pipeline has
+ * to distribute and attest it.
  *
  * NOTHING CALLS THIS TODAY, and nothing reads the `.marketplace-release.json`
  * it writes. Measured 2026-10-08: the only importer is

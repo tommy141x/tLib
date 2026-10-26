@@ -1,6 +1,5 @@
 // The marketplace error envelope. Requests themselves live in `./http.ts`,
-// which has its own client and its own `toError` — a second, uncalled HTTP
-// client was removed from this file for that reason.
+// which has its own client and its own `toError`.
 
 /** The envelope the website returns on 4xx/5xx. */
 export class MarketplaceError extends Error {

@@ -1,44 +1,26 @@
 #!/usr/bin/env bun
 /**
- * The control for `runtime-state-contract.ts`. Run it before trusting that gate.
+ * The control for `runtime-state-contract.ts`.
  *
- * WHY A CONTROL, AND WHY THIS SHAPE. A sibling gate's first control passed
- * GREEN while a whole reader had been deleted, because every fixture was
- * reachable by a second path — so "the gate failed" was satisfied by the wrong
- * rule. This control therefore asserts the EXACT rule id each fixture trips and
- * that no OTHER rule trips on it. A fixture that fires two rules is a failure
- * here even though it is red, because then it proves nothing about the rule it
- * was written for.
+ * A sibling gate's first control passed GREEN while a whole reader had been
+ * deleted, because every fixture was reachable by a second path. So each fixture
+ * here asserts the EXACT rule id it trips and that no OTHER rule trips on it; a
+ * fixture that fires two rules is a failure even though it is red.
  *
  * Every defect fixture is built from a `clean()` tree that already clears both
- * floors — it is over the file count and it carries an `fxmanifest.lua` — so the
- * one difference between a fixture and a passing release is the defect itself.
- * Both floors are also asserted directly: an empty tree and a directory with
- * files but no `fxmanifest.lua` must each refuse the run.
+ * floors, so the one difference from a passing release is the defect itself.
  *
- * A LOOKALIKES fixture — `config.json`, `mydata.json`, `data.json5`,
- * `data.jsonc`, `data-json.bak` — is required to stay GREEN. A gate that fails a
- * release over `config.json` is a gate that acquires a skip flag.
+ * The LOOKALIKES fixture (`config.json`, `mydata.json`, `data.json5`,
+ * `data.jsonc`, `data-json.bak`) must stay GREEN: a gate that fails a release
+ * over `config.json` is a gate that acquires a skip flag.
  *
- * ## What the `tlib_modules` half plants
+ * One `tlib_modules` fixture declares a module referenced ONLY inside a Lua
+ * comment — real: every `tlib.diag` in tLS's `cl_env.lua` is commented out.
+ * Another points at a wrong tLib path, which makes every declared name a ghost
+ * and must trip the floor rather than report a screen of confident lies.
  *
- * A typo'd name; a `shared/imports` directory with no loadable file in it; a
- * declaration referenced ONLY inside a Lua comment (real: every `tlib.diag` in
- * tLS's `cl_env.lua` is commented out); a commented-out declaration, which must
- * NOT be read as one; and a wrong tLib path, which makes every declared name a
- * ghost and must therefore trip the floor rather than report a screen of
- * confident lies.
- *
- * ## The broken-gate drill
- *
- * A red verdict is not evidence that the RULE caused it. So the last phase
- * narrows the matcher so it cannot match, and requires the fixture that was red
- * to go GREEN. Without that, a gate whose regex had rotted into matching
- * everything would pass this control on every fixture.
- *
- * The drill is run by re-checking a fixture with the matching rule in `skip`,
- * which exercises the real `skip` plumbing rather than a stub — and `skip` is
- * how a consumer silences a rule in production, so it is worth knowing it works.
+ * The drill narrows the matcher via the real `skip` plumbing, which is also how a
+ * consumer silences a rule in production.
  *
  * Nothing is written outside the OS temp dir.
  */
@@ -75,11 +57,8 @@ function report(name: string, want: string[], got: string[], why: string) {
 
 /**
  * A staged tree that must pass every rule: an fxmanifest at the root, and
- * comfortably over the file-count floor.
- *
- * The filler files are `.lua` with nothing in them rather than realistic
- * content, so that adding a rule to the gate later cannot accidentally match
- * the padding.
+ * comfortably over the file-count floor. The filler files are empty `.lua` rather
+ * than realistic content, so a rule added to the gate later cannot match them.
  */
 function clean(dir: string) {
   mkdirSync(join(dir, "server"), { recursive: true });
@@ -162,10 +141,8 @@ const STAGED: StagedFixture[] = [
       "merely untidy.",
   },
   {
-    // The successor to the deleted `R-TELEMETRY-INSTALL-ID` fixture. The id
-    // moved inside `data.json`, so this is the evidence that removing that rule
-    // left no gap: the id's new home is caught by `R-DATA-FILE` at the root and
-    // at depth, and the old standalone file is now just another lookalike.
+    // The per-install id lives inside `data.json`, so `R-DATA-FILE` must catch it
+    // at the root and at depth; the old standalone file is just another lookalike.
     name: "the retired install-id file is no longer special",
     plant: ["telemetry-install-id.txt"],
     expect: [],
@@ -235,13 +212,9 @@ for (const fixture of STAGED) {
   );
 }
 
-// Part 1b: the broken-gate drill
-//
-// Every red above could also be produced by a matcher that had rotted into
-// matching everything — `lookalikes stay green` is one guard against that, and
-// this is the other, from the opposite side: take the rule away and the fixture
-// that was red MUST go green. Without both, a red verdict is not evidence that
-// the rule caused it.
+// Part 1b: the broken-gate drill. Every red above could also come from a matcher
+// that had rotted into matching everything; take the rule away and the fixture
+// that was red MUST go green.
 
 console.log("\n  broken-gate drill — the rule removed, the same fixture must go green");
 
@@ -445,8 +418,8 @@ for (const fixture of MODULES) {
   }
 }
 
-// `failing()` is the thing the CLI and every prod.ts actually branch on, so it
-// is asserted directly rather than inferred from an exit code.
+// `failing()` is what the CLI and every prod.ts branch on, so it is asserted
+// directly rather than inferred from an exit code.
 {
   const soft = [{ rule: "R-MODULE-UNUSED", file: "f", detail: "", soft: true }];
   const hard = [{ rule: "R-DATA-FILE", file: "f", detail: "" }];

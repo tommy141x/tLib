@@ -381,11 +381,9 @@ function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
 }
 
 /**
- * A theme, shown on the dispatch panel it restyles. Used to be a screenshot over swatches
- * on the theory that a faithful render can't happen inside a preview that is also the
- * panel — false once tRadio shipped an offline panel from the same graph, since this frame
- * is `cfx-nui-tLib`, not the panel itself. `previewKind` now prefers `panel` over
- * `thumbnail`; the screenshot stays the fallback for a non-tRadio host with no panel to mount.
+ * A theme, shown on the dispatch panel it restyles — tRadio's offline panel, mounted in
+ * this frame (`cfx-nui-tLib`, not the panel itself). The screenshot stays the fallback for
+ * a non-tRadio host with no panel to mount.
  */
 function ThemePreview(props: { item: MarketplaceItem; panelPreviewUrl?: string | null }) {
   const [definition, setDefinition] = createSignal<PanelThemeDefinition | null>(null);
@@ -403,8 +401,7 @@ function ThemePreview(props: { item: MarketplaceItem; panelPreviewUrl?: string |
   );
 
   // Solid 2: only `compute` tracks, so slug/URL are read there. Braces on `apply` are
-  // load-bearing — a bare setter-call return is taken for a cleanup function and takes
-  // the reactive graph down with it.
+  // load-bearing — see `frameReady`'s effect below.
   createEffect(
     () => (props.panelPreviewUrl ? props.item.slug : null),
     (slug) => {
@@ -489,11 +486,10 @@ function UiPreviewFrame(props: {
 }) {
   const [html, setHtml] = createSignal<string | null>(null);
   /**
-   * The reason (not a boolean) plus a retry. Was `createSignal(false)` + a bare
-   * "Preview unavailable", discarding the broker's person-worded reason
+   * The reason, not a boolean, so the broker's person-worded one survives
    * (`request_timed_out`, `preview_too_large`, `http_404`) — the first of which a
-   * second press fixes, and without this the only retry path was Back + re-find + re-press,
-   * which also lost the grid's scroll position.
+   * second press fixes. Without the retry the only path back was Back + re-find +
+   * re-press, which also lost the grid's scroll position.
    */
   const [loadError, setLoadError] = createSignal<string | null>(null);
 

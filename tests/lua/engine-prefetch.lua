@@ -303,9 +303,7 @@ list(drainPasses(), { 'alpha:one', 'alpha:one' }, 'so a resting cursor is not a 
 -- The settle window is long enough for the menu to have closed inside it, and a
 -- page projected into a browser that is no longer showing anything is work done for
 -- nobody. What this pins is the abandonment: closing clears the pending selection,
--- so the window that outlives the session resolves to nothing at all. (The `visible`
--- test inside prefetchDestination is a second lock on the same door -- it is not
--- separately reachable, and deliberately not claimed here.)
+-- so the window that outlives the session resolves to nothing at all.
 
 highlight({ menuId = 'alpha:one', itemId = 'alpha:go2', contextKey = browser['alpha:one'].contextKey }, function() end)
 pump()

@@ -10,9 +10,7 @@ import {
 /**
  * A dispatch-panel theme, shown on the REAL dispatch panel.
  *
- * Why there is no drawing of a panel anywhere in here.
- *
- * Because a theme is not a picture. It is a set of CSS variables and — for the
+ * A theme is not a picture. It is a set of CSS variables and — for the
  * ones that actually look different — `data-rd-*` markup that is inert until a
  * dispatch view model is pushed through it. Every surface in this estate used to
  * reduce that to a swatch strip or to the creator's screenshot, so two recolours
@@ -116,8 +114,7 @@ export function PanelPreviewFrame(props: {
    * There is no pending queue on purpose: the `ready` handler above sends
    * `props.theme` outright, so a frame that boots — or re-boots, which this
    * component cannot observe — gets the CURRENT theme rather than whatever a slot
-   * was holding. A held copy is a second copy of state, and the copy is what goes
-   * stale. Measured in tWeb as nine of thirteen tiles stuck on stock `dark`.
+   * was holding. Measured in tWeb as nine of thirteen tiles stuck on stock `dark`.
    *
    * Only `compute` tracks under Solid 2, so both reads are up there; the braces
    * on `apply` are load-bearing, since a returned setter result is taken for a

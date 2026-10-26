@@ -285,12 +285,10 @@ function evict(): void {
 }
 
 /**
- * Reset the cache. Its consumer is the test suite, not a surface — stated plainly so this
- * doesn't read as a production API waiting for a caller. The obvious candidate caller,
- * `MarketplaceBrowser.applyOpenData` clearing on every panel open in case a slug was
- * republished, is wrong: closing/reopening the panel is the commonest thing a player does,
- * and clearing there throws the cache away in exactly the case it exists for. Restaging
- * under one slug is rare; paying 1.75 MB again on every reopen is not.
+ * Reset the cache. Its consumer is the test suite, not a surface. Do not call it from
+ * `MarketplaceBrowser.applyOpenData`: closing and reopening the panel is the commonest
+ * thing a player does, and clearing there throws the cache away in exactly the case it
+ * exists for. Restaging under one slug is rare; paying 1.75 MB again on every reopen is not.
  */
 export function clearPreviewCache(): void {
   previewCache.clear();

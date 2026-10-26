@@ -16,8 +16,8 @@
 --   resultCallback({ ok = true })              -> body {"ok":true}      -> object
 --   resultCallback(json.encode({ ok = true })) -> body "{\"ok\":true}"  -> string
 --
--- What made that survive a full green run is worth stating plainly: the menu still
--- rendered. The tree arrives by SendNUIMessage, which is one-way and was never
+-- It survived a full green run because the menu still rendered: the tree arrives
+-- by SendNUIMessage, which is one-way and was never
 -- double-encoded; only the ANSWERS came back through here. So the menu drew itself
 -- correctly and then failed on the first action, navigation or close -- visibly
 -- broken to a player, invisible to every suite.
@@ -140,9 +140,9 @@ equal(secondReceived.already, 'parsed', 'a table body is not re-decoded')
 
 -- And the encoder was never touched on the reply path
 --
--- The assertion that makes this suite exclusive rather than inclusion-only: every
--- reply above could carry the right fields and still be wrong if the adapter
--- serialized it on the way out. Nothing in these paths may call json.encode.
+-- Every reply above could carry the right fields and still be wrong if the
+-- adapter serialized it on the way out. Nothing in these paths may call
+-- json.encode.
 equal(encodeCalls, 0, 'the adapter never encodes a reply itself -- resultCallback does that')
 
 -- Outbound messages are unaffected

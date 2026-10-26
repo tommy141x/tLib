@@ -94,9 +94,8 @@ export function registerBridge(
       return { ok: false, error: result.error };
     }
 
-    // No success line. The URL a mount produces is returned right here, and
-    // every consumer puts it in its OWN startup banner (`Admin:` in tDB,
-    // `Panel:` in tRadio) one line later. The FAILURE above stays loud.
+    // No success line: the consumer prints this URL in its own startup banner
+    // one line later.
     return { ok: true, url: `${current.publicUrl}${result.mount.mount}` };
   });
 

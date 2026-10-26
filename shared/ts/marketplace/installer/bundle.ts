@@ -23,7 +23,7 @@ export interface ItemMetadata {
 /**
  * The version written when the caller did not supply one.
  *
- * Not a guess dressed up as a fact. `0.0.0` reads as "nobody told us", which is
+ * `0.0.0` reads as "nobody told us", which is
  * the truth for a raw audio item: the marketplace ships the bytes and keeps the
  * version in its own database, so there is nothing in the bundle to read. A
  * sound published as a ZIP carries its own `module.json` and never reaches this.
@@ -230,10 +230,9 @@ export function prepareBundle(
   // artwork or an alternate encoding. On a FiveM resource only the audio exists,
   // so the manifest is read, parsed and kept in memory for the validator, the
   // declared audio becomes the flat payload, and ANYTHING ELSE IN THE BUNDLE IS
-  // DROPPED. That last part is said out loud rather than discovered: a publisher
-  // who ships a cover image will not find it on disk, and the alternative —
-  // refusing the bundle — would reject a module that is perfectly valid in the
-  // studio.
+  // DROPPED — a publisher who ships a cover image will not find it on disk.
+  // Refusing the bundle instead would reject a module that is perfectly valid in
+  // the studio.
   if (sound && zip) {
     const manifestBytes = files.get(MODULE_MANIFEST);
     if (!manifestBytes) throw new Error(`zipped sound "${c.name}" has no ${MODULE_MANIFEST}`);

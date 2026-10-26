@@ -101,15 +101,10 @@ if _TLIB_IS_FIVEM then
         if mode == 1 then
             SetNuiFocus(true, true)
         else
-            -- Clear keepInput on BOTH sides of the release. This used to clear it
-            -- only afterwards, on the premise that a prior setKeepInputActive(true)
-            -- otherwise leaks into the next focus cycle — while the comment on
-            -- setKeepInputActive just below asserts the opposite premise ("no-op
-            -- until focus has been granted"), under which clearing afterwards is
-            -- what leaks. Neither claim carries a measurement, this stack has no
-            -- offline NUI focus oracle, and the two natives are not in the native
-            -- reference. So do both; it is idempotent either way. Full reasoning
-            -- and the in-game oracle are on `releaseNuiFocus` in
+            -- keepInput is cleared on BOTH sides of the release because it is
+            -- unknown which side matters: SetNuiFocusKeepInput is not in the
+            -- native reference and there is no offline oracle for NUI focus.
+            -- Clearing twice is idempotent. Same in `releaseNuiFocus` in
             -- `shared/imports/platform/client.lua`.
             SetNuiFocusKeepInput(false)
             SetNuiFocus(false, false)

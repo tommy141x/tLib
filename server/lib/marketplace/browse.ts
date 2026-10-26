@@ -27,17 +27,10 @@ const BROWSE_TIMEOUT_MS = 10_000;
  */
 export const MAX_PREVIEW_BYTES = 10 * 1024 * 1024;
 
-/**
- * An alias, not a definition: the shape and the conversion live in
- * `shared/ts/marketplace/item.ts` so tRadio's admin server can reach them too.
- * The name is kept so this module's callers do not have to change.
- */
+// Aliases under this file's names, which the Lua bridge and the panel both
+// spell. The shapes and the conversion live in `shared/ts/marketplace/item.ts`
+// so tRadio's admin server can reach them too.
 export type BrowseItem = MarketplaceItem;
-
-/**
- * Aliased rather than re-declared so the two cannot drift, under this file's
- * historical name because the Lua bridge and the panel both spell it that way.
- */
 export type BrowseParams = CatalogueParams;
 
 export interface BrowseResult {
@@ -118,9 +111,8 @@ export async function previewHtml(slug: string): Promise<string> {
  * a second place the theme contract is spelled out. `parsePanelThemeDefinition`
  * in `shared/ts/marketplace/ui/preview-frame.ts` is that one place.
  *
- * The same `MAX_PREVIEW_BYTES` backstop applies: a definition is a few KB in
- * practice, but it crosses the Lua VM and a NUI message exactly as a document
- * does, and that is what the ceiling is about.
+ * The same `MAX_PREVIEW_BYTES` backstop applies — it crosses the Lua VM and a
+ * NUI message exactly as a document does.
  */
 export async function themeJson(slug: string): Promise<string> {
   if (!slug) throw new MarketplaceError("slug_required", 0);

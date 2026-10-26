@@ -12,12 +12,9 @@
  * Lua the runtime redactor uses — rather than listed again here. A hand-listed
  * array of names is how `Advanced.S3.AccessKey` went uncovered.
  *
- * THIS FILE LIVES IN tLib AND IS RUN BY ALL OF THEM. The per-resource part
- * is a `.githooks/pre-commit` shim, the `secrets:*` `package.json` scripts and
- * a CI workflow — nothing that can drift. The precedent is tUnit's `scan:solid2`,
- * which already runs `../tLib/scripts/solid2-scan.ts` for exactly this reason:
- * "a rule that has drifted reports zero, and zero reads exactly like a finished
- * migration".
+ * Every resource runs THIS file. The per-resource part is a `.githooks/pre-commit`
+ * shim, the `secrets:*` `package.json` scripts and a CI workflow — nothing that
+ * can drift into reporting zero.
  *
  * Usage
  *
@@ -36,13 +33,10 @@
  * Not in the tracked file. The tracked `config.lua` holds blanks permanently
  * and the real values live in a gitignored sidecar next to it
  * (`config.local.lua`), which `tlib.secrets` overlays onto `Config` at server
- * start. That is the answer to the question every other mechanism gets wrong:
- * a clean/smudge filter or a strip-on-commit leaves the committed blob blank
- * and the working tree holding a value, so the next `git checkout` or `pull`
- * that touches `config.lua` OVERWRITES the developer's credential with the
- * blank — silently, and with no copy anywhere. With the sidecar there is
- * nothing to strip, nothing to restore, and a pull cannot reach the value
- * because git has never heard of the file.
+ * start. A clean/smudge filter or a strip-on-commit instead leaves the committed
+ * blob blank and the working tree holding a value, so the next `git checkout` or
+ * `pull` that touches `config.lua` OVERWRITES the developer's credential with the
+ * blank — silently, and with no copy anywhere.
  */
 
 import * as fs from "node:fs";
@@ -145,9 +139,7 @@ type ReadFiles = {
  * instead, and said so. "Is this blank at HEAD" is vacuous for a file that is
  * not at HEAD yet, and the staged blob is the thing that is about to become
  * HEAD — so the fallback is strictly more coverage, never less. Without it a
- * repo mid-migration (tDB, exactly) gets a permanent exit 2 from its own
- * `verify`, and a gate that is red for a reason nobody can fix is a gate that
- * gets deleted.
+ * repo mid-migration (tDB, exactly) gets a permanent exit 2 from its own `verify`.
  *
  * Reading NONE of the files it identified is still a refusal (exit 2).
  */

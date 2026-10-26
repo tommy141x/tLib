@@ -1,27 +1,10 @@
 /**
  * The one undo primitive, and the keyboard registry in front of it.
  *
- * Three things here are not ordinary unit coverage and are worth saying why:
- *
- * 1. **The five `LayoutHistory` scenarios are re-proven, not retired.** They
- *    lived in `layout.test.ts` against `client/web/src/layout/history.ts`, which
- *    is deleted. Deleting a class whose behaviour nothing else asserts is how a
- *    capability quietly stops existing, so each of its scenarios is replayed
- *    against `UndoHistory` below under the heading that names where it came
- *    from. One of them — "no-op gestures do not clear redo" — is the only test
- *    in the tree that ever pinned that rule down.
- *
- * 2. **The nested-editor case is a real pairing, not a thought experiment.**
- *    tRadio's settings app hosts tLib's shared `PropEditor` inside itself. The
- *    module-level singleton this replaced would have given them one stack, so
- *    the test asserts two histories stay independent AND that one Ctrl+Z
- *    reaches only the inner one.
- *
- * 3. **There is a negative control for the registry's depth rule**, because
- *    that rule is the whole of point 2 and a depth-blind registry passes a
- *    carelessly-written version of the test. `FirstScopeWins` must fail exactly
- *    the nested scenarios and pass the rest; a control that passes everything
- *    has had its mechanism stop being load-bearing.
+ * The five cases marked "Ported from `layout.test.ts`" came from
+ * `client/web/src/layout/history.ts`'s `LayoutHistory`, which is deleted. One of
+ * them — "no-op gestures do not clear redo" — was the only test in the tree that
+ * ever pinned that rule down.
  */
 
 import { describe, expect, test } from "bun:test";

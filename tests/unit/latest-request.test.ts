@@ -8,17 +8,11 @@
  * primitive under different names and neither was a superset of the other:
  * tDetector had the A→B→A identity case and the "late old failure cannot clear
  * a newer success" case, tLS had the "abort is observable on the superseded
- * signal" case. All of them are here.
+ * signal" case.
  *
- * Why the negative controls exist
- *
- * Every check below is written as a standalone function so it can be run
- * against a DELIBERATELY BROKEN implementation as well as the real one. A
- * passing assertion proves nothing on its own: an assertion that observes the
- * wrong layer passes against any implementation, including one with the fence
- * removed. So each break is paired with the checks it must make fail, and the
- * test asserts the failure. If a future refactor makes a check pass against a
- * broken variant, this file fails — which is the point.
+ * Every check below is a standalone function so it can be run against the
+ * deliberately broken implementations at the bottom of the file as well as the
+ * real one.
  */
 
 import { describe, expect, test } from "bun:test";

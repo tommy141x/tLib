@@ -109,16 +109,12 @@ function headers(): Record<string, string> {
  * from the Lua VM works, so the split moved: Lua performs the request, this
  * module keeps the two pure halves that have tests — what to send
  * (`buildBody`, `endpointFor`, `headers`) and what the answer means
- * (`classify`). `telemetry/fivem.ts` and `marketplace/fivem.ts` reach for the
- * same global; neither is changed here.
+ * (`classify`).
  */
 
 let installed = false;
 
-/**
- * Two exports, both for `server/sv_feedback.lua`: what to send, and what the
- * answer meant. Neither performs the request — see the note above.
- */
+/** Two exports, both for `server/sv_feedback.lua`: what to send, and what the answer meant. */
 export function installFeedback(): void {
   if (installed) return;
   installed = true;

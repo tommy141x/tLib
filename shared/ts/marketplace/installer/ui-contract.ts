@@ -1,25 +1,15 @@
 // What a `ui` marketplace item has to be, for every product that installs one.
 //
-// Why this is in tLib rather than written four times
-//
 // The installer establishes that a bundle is SAFE TO EXTRACT — zip slip, case
 // aliasing, entry counts, declared-vs-actual sizes, compression methods,
 // encryption, digests. It cannot establish that the bundle is a usable layout,
-// because only a consumer knows what that means. Measured 2026-10-15, exactly one
-// of the four consumers had a `ui` contract at all:
+// because only a consumer knows what that means. Without this floor, a bundle
+// containing no `ui.html` — or an `install.lua` — installs with a success, and
+// the only place left to find out is render time on a player's machine, where
+// the symptom is a device that draws nothing and the operator has no reason to
+// suspect the thing they just bought.
 //
-//   tRadio     server/lib/ui-item-contract.ts, thorough
-//   tDetector  none
-//   tRadar     none
-//   tLS       none
-//
-// For the three with none, a bundle containing no `ui.html` — or an `install.lua`
-// — installed with a success, and the only place left to find out was render time
-// on a player's machine, where the symptom is a device that draws nothing and the
-// operator has no reason to suspect the thing they just bought.
-//
-// The part that is genuinely shared is the part all four need, and it is settled
-// by the corpus rather than by taste. All ten shipped layouts across tDetector,
+// The floor is what the corpus shows: all ten shipped layouts across tDetector,
 // tRadar and tLS are `ui.html` + `module.json` at the archive root plus `.png`
 // assets (tLS's WCC nests its under `icons/`). So: a ZIP, with `ui.html` at the
 // top level, carrying only the file types a layout legitimately ships.

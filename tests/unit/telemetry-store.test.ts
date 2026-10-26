@@ -1,15 +1,10 @@
 /**
  * The queue, and the three bounds that make the offline rule real.
  *
- * WHAT THIS SUITE IS ACTUALLY DEFENDING. `tWeb` must be able to go totally
- * offline with nothing in this estate degrading. The failure modes a queue
- * invites are all of the "it works until it matters" kind:
- *
- *   • an array that grows while the sink is unreachable is a leak whose size is
- *     a function of how long someone else's website is down;
- *   • a drop that is silent is a gap in the data nobody knows about;
- *   • one client in a render loop evicting everybody else's faults means the
- *     feed goes blind precisely when something is wrong.
+ * `tWeb` must be able to go totally offline with nothing in this estate
+ * degrading. Unbounded, an array that grows while the sink is unreachable is a
+ * leak whose size is a function of how long someone else's website is down, and
+ * one client in a render loop evicts everybody else's faults.
  */
 
 import { describe, expect, test } from "bun:test";

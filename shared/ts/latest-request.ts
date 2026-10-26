@@ -1,9 +1,7 @@
 /**
- * "Only the newest in-flight request may touch anything" — one async fence.
- * Three resources (tLS's `createHudRequest`, tDetector/tRadar's
- * `createLatestLayoutRequest`) had arrived at this independently and
- * identically, down to which nouns differed — nothing resource-specific to
- * preserve, only three places to fix if the fence turns out wrong.
+ * "Only the newest in-flight request may touch anything" — one async fence,
+ * behind tLS's `createHudRequest` and tDetector/tRadar's
+ * `createLatestLayoutRequest`.
  *
  * `AbortController` alone is not sufficient: abort is best-effort and races —
  * `fetch` can already have resolved, or be mid-`.json()`, when `abort()`

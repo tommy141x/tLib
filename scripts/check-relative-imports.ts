@@ -25,9 +25,7 @@ const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", ".d.ts", ".js", ".jsx", ".json", 
  *
  * Without this the scan reads prose as code. Measured: the sentence
  * ``// `export { a, b as c } from "./x"` — the EXPORTED name …`` in
- * solid-compat-surface-suite.ts was reported as an unresolved specifier, and
- * the only ways out were to reword a comment that is the valuable part or to
- * leave the gate red. A specifier inside a comment imports nothing.
+ * solid-compat-surface-suite.ts was reported as an unresolved specifier.
  *
  * A state machine rather than a regex because a naive `//` strip eats the `//`
  * in a URL inside a string literal, silently removing real code after it.

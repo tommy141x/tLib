@@ -3,8 +3,7 @@
  *
  * Every case below is a bug this detector actually shipped, and each one failed
  * the same way: it reported source text that is not a class name, which is the
- * failure that gets a check switched off. A detector nobody trusts is worse
- * than no detector, so the noise cases matter at least as much as the hits.
+ * failure that gets a check switched off.
  */
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -65,9 +64,8 @@ describe("findDeadClasses", () => {
   });
 
   test("ignores a class name quoted inside a comment", async () => {
-    // A comment naming a class that was tried and rejected is documentation.
-    // Without stripComments the quoted name is harvested and reported, so the
-    // check punishes the act of explaining why something is not used.
+    // Without stripComments the quoted name is harvested and reported, so
+    // writing down why a class was rejected is what trips the check.
     const source = '<div class={cn("flex", /* was "old-dead-class" */ x)} />';
     expect(await deadIn(source, ["flex"])).toEqual([]);
   });

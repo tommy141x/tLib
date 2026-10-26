@@ -9,9 +9,7 @@
  * `unoMerge(clsx(...))`.
  *
  * Token order is deliberately not asserted except where noted — the cascade never reads order
- * from the attribute, and the shield appends held-back utilities after the merged ones, so an
- * order assertion would test the implementation rather than the contract. `toContain` on the
- * split string asserts set-membership instead.
+ * from the attribute, and the shield appends held-back utilities after the merged ones.
  */
 import { describe, expect, test } from "bun:test";
 

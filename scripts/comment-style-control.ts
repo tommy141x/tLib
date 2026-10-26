@@ -1,25 +1,10 @@
 #!/usr/bin/env bun
 /**
- * Negative control for `scripts/comment-style-gate.ts`.
+ * Negative control for `scripts/comment-style-gate.ts`. The rules themselves are
+ * in `docs/CODE-STYLE.md`.
  *
- * Covers: a missing path reporting nothing rather than failing loud (so no
- * case here trusts a zero alone, and the file-set floor is asserted both
- * ways); correct code that must stay green (an emoji/box-drawing banner
- * inside string literals in all three languages -- real code, e.g.
- * `server/sv_demo.lua` -- plus a licence-headed file skipped whole); a naive
- * any-line-containing-the-character reader that must go RED on that same
- * fixture, so the green case is proven to exercise the string-awareness
- * rather than pass for free; a broken-gate drill per rule, removing it via
- * the real `skip` plumbing; both sides of both ratio thresholds (an off-by-one
- * in `split("\n").length` counting the trailing terminator was caught this
- * way); the licence exemption proven not to be mere silence (an identical
- * file minus the header goes red); and all four directions of the baseline
- * ratchet, including the two that demand an entry be deleted -- no ratchet
- * case hard-codes a count, each asks the gate for the fixture's own.
- *
- * Proves the rules discriminate, not that the rule set is complete or that
- * any given comment is worth keeping -- that judgement lives in
- * `docs/CODE-STYLE.md`.
+ * The ratio cases cover both sides of both thresholds: an off-by-one in
+ * `split("\n").length` counting the trailing terminator was caught that way.
  */
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -224,9 +209,8 @@ try {
       .map((f) => f.file),
     []
   );
-  // A trailing comment on a line of code is not a whole-line comment and must
-  // not count: the standard says so, and counting it would push every densely
-  // annotated file over without any wall of prose in it.
+  // A trailing comment beside code must not count towards the ratio; counting it
+  // would push every densely annotated file over with no wall of prose in it.
   const trailing = plant(
     "trailing.ts",
     `${Array.from({ length: RATIO_MIN_LINES }, (_, i) => `export const t${i} = ${i}; // why`).join("\n")}\n`
@@ -285,9 +269,8 @@ ${ratioFile(RATIO_MIN_LINES, RATIO_MIN_LINES - 4)}`
     []
   );
 
-  // 7b. The ratchet: the baseline is the part of this gate that can rot (a
-  // sibling resource's ledger once claimed five live bugs, three long fixed),
-  // so all four directions are required, including the two that demand deletion.
+  // 7b. The ratchet. The baseline is the part that can rot: a sibling resource's
+  // ledger once claimed five live bugs, three of them long fixed.
   setCheck(
     "a pinned file at its pinned count is green",
     run({ root, files: [over], baseline: { [over]: countOf(over) } }).findings.map((f) => f.rule),
@@ -321,15 +304,13 @@ ${ratioFile(RATIO_MIN_LINES, RATIO_MIN_LINES - 4)}`
     ),
     []
   );
-  // The shipped baseline is held to the same rule as the fixtures: it must parse,
-  // and `check:comments` is what asserts every entry in it is still live.
   check(
     `the shipped ${BASELINE_PATH.split(/[\\/]/).pop()} parses and pins only line counts`,
     Object.values(loadBaseline()).every((n) => Number.isInteger(n) && n >= 0)
   );
 
   // 8. String-awareness drill: a naive any-line reader must go red on the
-  // correct fixture. If it agrees with the gate, case 3 proves nothing.
+  // correct fixture.
   const naive: string[] = [];
   for (const rel of correctFiles) {
     const src = await Bun.file(join(root, rel)).text();

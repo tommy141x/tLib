@@ -376,10 +376,10 @@ end
     the audio goes silent with nothing in any console.
 
     Shared here because the wording is the part worth sharing across every t*
-    resource that ships merge-forward files. THE HONEST LIMIT: it compares two
-    numbers, one of which is in a file a human edits -- it cannot detect a rename
-    and does not say which call broke, so the caller still reports its own hook
-    failures. `declared` goes through tonumber() and never a type test: a copy
+    resource that ships merge-forward files. It compares two numbers, one of
+    which is in a file a human edits: it cannot detect a rename and does not say
+    which call broke, so the caller still reports its own hook failures.
+    `declared` goes through tonumber() and never a type test: a copy
     predating the constant has nil, a hand-edited one may have "3", and garbage
     must degrade to "old" rather than throw inside a startup path.
 ]]
@@ -431,8 +431,7 @@ function configMod.generation(opts)
     end
 
     -- Yellow, not red: the resource still starts and the operator's copy still
-    -- works. Printed rather than returned-only, since the shared wording is the
-    -- point of this living in tLib.
+    -- works.
     print(('^3[%s] %s^7'):format(resource, string.rep('-', 60)))
     for _, line in ipairs(verdict.lines) do
         print(('^3[%s] %s^7'):format(resource, line == '' and ' ' or line))

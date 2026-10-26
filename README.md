@@ -55,7 +55,7 @@ lands in `declaredOwner`).
 | `default` | The shared look. The same controls, checkboxes, sliders and face as tLib's dialogs and toasts. |
 | `vmenu` | The legacy vMenu-styled presentation, kept switchable for a test or a side-by-side comparison. |
 
-`theme` names a theme registered with `AddTheme`, which is where full CSS-variable control lives — referenced rather than duplicated, so there is one theme registry and not two. To make a menu, its toasts and its dialogs match, register **one** theme id setting the `nui-*` variables (see the Theme System section) and pass that id as the menu's `theme`, as `ShowDialog`'s `theme` option, and as `ShowToast`'s `theme` argument.
+`theme` names a theme registered with `AddTheme`, which is where full CSS-variable control lives. To make a menu, its toasts and its dialogs match, register **one** theme id setting the `nui-*` variables (see the Theme System section) and pass that id as the menu's `theme`, as `ShowDialog`'s `theme` option, and as `ShowToast`'s `theme` argument.
 
 **Client — behaviour**
 - `RegisterMenuActions(handlers)` — `{ [name] = function(value, context) end }`, registered as one table: all of it installs or none of it does.
@@ -497,9 +497,6 @@ TypeScript contract — the studio generates it, the marketplace installer consu
 on a FiveM resource a sound is a flat audio file in `layouts/sounds/`, so an operator can
 drag a `.wav` in with no manifest to author. The installer reads a sound module and writes
 only its audio.
-
-**Replaces `tlib.layouts`, which never shipped outside this tree** — see
-`docs/content/import-modules.mdx` for what a consumer writes instead.
 
 ---
 

@@ -902,7 +902,6 @@
 :where(.tlib-menu) .notice {
   animation: tlibmenu-in-down calc(120ms * var(--motion, 1)) var(--nui-ease-entrance) both;
 }
-/* Runs only while that row's own request is genuinely in flight. */
 :where(.tlib-menu) .is-pending .action-mark svg {
   animation: tlibmenu-spin calc(1000ms * var(--motion, 1)) linear infinite;
   transform-origin: 50% 50%;
@@ -937,9 +936,6 @@
   }
 }
 
-/* Do not add .tlib-nui-surface here: its --border/--muted aliases are HSL
-   channels. tokens.css restates the --nui-* contract from the menu's own colours
-   instead, which is what lets the shared controls render in a row. */
 :where(.tlib-menu) .menu-row:not(.is-active):not(.is-disabled):not(.is-pending):hover {
   background: var(--menu-hover);
 }

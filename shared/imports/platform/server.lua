@@ -220,11 +220,10 @@ function platform.publishExportsAs(legacyResource)
     for name, fn in pairs(_published) do answerAs(legacyResource, name, fn) end
 end
 
--- Now actually wraps — it didn't before, despite the name: a throw inside an
--- export body doesn't cross the FiveM boundary, so ~40 call sites that
--- adopted this as a guard never had one. `resource` is unused for
--- registration, only for the error line. `table.pack`/`unpack` because
--- `ok, reason` is the house shape.
+-- A throw inside an export body does not cross the FiveM boundary, so ~40 call
+-- sites adopted this as a guard while it was still a no-op wrapper. `resource`
+-- is unused for registration, only for the error line. `table.pack`/`unpack`
+-- because `ok, reason` is the house shape.
 function platform.wrapExport(resource, name, fn)
     local wrapped = function(...)
         local result = table.pack(pcall(fn, ...))

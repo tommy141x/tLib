@@ -52,11 +52,7 @@ export function installHttp(): void {
     // not a separate log line; a failure still logs loudly.
     //
     // A detected address names itself and the convar (`tlib_http_public_url`) in
-    // the same row. Printing a detected URL bare used to read as fact rather
-    // than a guess — when the guess was wrong it surfaced later as a CORS
-    // refusal or an unreachable OAuth redirect, far from the cause, and v7
-    // moved public routing off a config key onto convars, so operators kept
-    // searching config.lua for a setting that no longer lived there.
+    // the same row — see `status.ts` on why a guess must not read as a fact.
     if (status.ready) {
       fEmit(
         "tlib:vcInfo:hub",

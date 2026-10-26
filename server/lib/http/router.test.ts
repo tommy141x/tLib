@@ -89,9 +89,8 @@ interface Echo {
 }
 
 /**
- * `Response.json()` is typed `Promise<unknown>`, so every `body.path` in here was
- * a type error that nothing reported — `server/` had no typecheck until now. One
- * assertion of the upstream's contract beats nine casts at the call sites.
+ * `Response.json()` is typed `Promise<unknown>`, so every `body.path` in here
+ * was a type error nothing reported until `server/` got a typecheck.
  */
 const echo = async (path: string, headers: Record<string, string> = {}): Promise<Echo> =>
   (await get(path, headers)).json() as Promise<Echo>;

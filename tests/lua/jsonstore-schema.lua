@@ -387,10 +387,8 @@ end
 
 -- 6. A migration may not delete, unless it says so
 --
--- "Never delete" enforced rather than intended, matching the tlib_demo
--- convention of resetting by dropping writes and never deleting. A removal that
--- is deliberate is declared, which puts the one destructive act a migration can
--- perform in the diff where a reviewer sees it.
+-- Matches the tlib_demo convention of resetting by dropping writes and never
+-- deleting. A deliberate removal has to be declared in `allowRemove`.
 
 reset()
 onDisk({ props = { a = 1 }, soundWavMap = { BLIP = 'blip.wav' } }, { tProbe = 1 })

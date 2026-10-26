@@ -1,15 +1,14 @@
 /**
  * Scrubbing. The half of this feature that cannot be undone.
  *
- * WHY THIS SUITE IS THE IMPORTANT ONE. The destination store is Cloudflare
- * Analytics Engine, which has no DELETE and no UPDATE — the only eraser is a
- * three-month expiry. A value that reaches it is there until it expires. So a
- * scrubber that silently stops matching does not produce a visible failure; it
- * produces a readable report with a credential in it, for three months.
+ * The destination store is Cloudflare Analytics Engine, which has no DELETE and
+ * no UPDATE — the only eraser is a three-month expiry. So a scrubber that
+ * silently stops matching does not produce a visible failure; it produces a
+ * readable report with a credential in it, for three months.
  *
- * AND IT PINS BOTH DIRECTIONS. A redactor that blanks everything passes every
+ * BOTH DIRECTIONS ARE PINNED. A redactor that blanks everything passes every
  * "the secret is gone" assertion and is useless, because the report it produces
- * has no diagnostic content left. Half the tests below assert what SURVIVES.
+ * has no diagnostic content left.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";

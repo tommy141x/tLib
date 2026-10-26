@@ -1,11 +1,5 @@
-// fivem.ts — typed handles to the FiveM runtime globals.
-//
-// Why this exists: bun's CJS bundler wraps non-entry files in module scopes
-// where `exports` is the CommonJS module-exports object, which shadows
-// FiveM's global `exports(name, fn)` function. Calling `exports(...)` from a
-// non-entry file bundles to `exports_bridge(...)` or similar and crashes at
-// runtime. We resolve the globals through `globalThis` so the bundler leaves
-// them alone.
+// Typed handles to the FiveM runtime globals, resolved through globalThis.
+// See ../http/fivem.ts for why that indirection is required.
 
 type ExportsFn = (name: string, fn: (...args: unknown[]) => unknown) => void;
 type EmitFn = (event: string, ...args: unknown[]) => void;

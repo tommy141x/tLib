@@ -148,7 +148,6 @@ end
 
 --- Keep an OPEN Sounds tab current.
 ---
----
 --- A no-op when no dialog is open, which is what makes it safe to call from an
 --- unconditional event handler.
 ---

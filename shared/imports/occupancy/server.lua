@@ -130,6 +130,7 @@ local function attach(src, seat, netId)
 end
 
 --- Move a player to a seat (or out of one), announcing every vehicle the move
+--- touched -- the one they left as well as the one they joined.
 local function setSeat(src, seat, netId)
     local cur = byPlayer[src]
     local vacating = (seat == nil or netId == nil)
@@ -339,8 +340,7 @@ function occupancy.startSweep(intervalMs)
             local tracked = {}
             for src in pairs(byPlayer) do tracked[#tracked + 1] = src end
             -- refreshOccupant, not refresh: both repair the cache identically,
-            -- but the sweep exists to keep the cache true and the occupant form
-            -- is the one whose name says so.
+            -- but this one records the rear tier instead of discarding it.
             for i = 1, #tracked do occupancy.refreshOccupant(tracked[i]) end
         end
     end)

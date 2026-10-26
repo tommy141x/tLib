@@ -1,11 +1,11 @@
 --[[
     tLib — shared 3D prop editor (Lua half)
 
-    Loaded into the CONSUMER's client VM, like every other module under
-    shared/imports/: `tlib.propeditor`. It has to run there rather than inside
-    tLib's own VM because it registers NUI callbacks against the consumer's
-    `ui_page`, sends NUI messages to the consumer's page, and creates and owns
-    objects the consumer's own prop lifecycle then tracks.
+    Loaded into the CONSUMER's client VM as `tlib.propeditor`. It has to run
+    there rather than inside tLib's own VM because it registers NUI callbacks
+    against the consumer's `ui_page`, sends NUI messages to the consumer's
+    page, and creates and owns objects the consumer's own prop lifecycle
+    then tracks.
 
         local editor = tlib.propeditor.create({ ... descriptor ... })
 
@@ -198,9 +198,9 @@ function orbit.zoom(s, factor)
     return s
 end
 
---- The camera commands that need nothing but this state table — sixteen of the
---- eighteen. `focusSelected`, `focusAll`, `viewDriverPov` and `togglePersp` need
---- the vehicle or the cam handle and are handled by the Editor.
+--- The camera commands that need nothing but this state table.
+--- `focusSelected`, `focusAll`, `viewDriverPov` and `togglePersp` need the
+--- vehicle or the cam handle and are handled by the Editor.
 --- @return boolean handled
 function orbit.command(s, cmd)
     local STEP = orbit.ORBIT_STEP
@@ -926,7 +926,7 @@ function PropEditor.create(descriptor)
         end
     end)
 
-    -- NUI callbacks (all eleven)
+    -- NUI callbacks
 
     RegisterNUICallback(event('openPropEditor'), function(_, cb)
         cb(1)
@@ -1001,9 +1001,8 @@ function PropEditor.create(descriptor)
         pushCam()
     end)
 
-    -- One wheel notch from the page. Same reason as the drag above: under
-    -- SetNuiFocus(true, true) the wheel never reaches the pad at all, so the
-    -- browser sends it. See `applyScrollZoom`.
+    -- One wheel notch from the page; see `applyScrollZoom` for why the pad
+    -- never sees it.
     RegisterNUICallback(event('propEditorCamZoom'), function(data, cb)
         cb(1)
         if not active then return end
@@ -1059,8 +1058,7 @@ function PropEditor.create(descriptor)
         --- use this one, not a driver of its own: one prop moves between
         --- editor and lifecycle via takeProp/giveProp, and two drivers would
         --- both believe they owned its matrix -- a prop that flickers
-        --- between two transforms, with nothing logged, exactly like two
-        --- resources streaming one model name.
+        --- between two transforms, with nothing logged.
         driver = driver,
         --- Sends an arbitrary action to the editor page, namespaced.
         send = function(payload)

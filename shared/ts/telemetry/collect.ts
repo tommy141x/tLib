@@ -66,8 +66,8 @@ export const FLUSH_INTERVAL_MS = 15_000;
 export const MAX_BUFFERED_EVENTS = 64;
 
 /**
- * One report per fingerprint per this long, and the most important number in the
- * file. A throw inside a Solid render effect re-throws on every reactive update —
+ * One report per fingerprint per this long. A throw inside a Solid render effect
+ * re-throws on every reactive update —
  * 60 times a second in a HUD — so without dedupe the first broken install
  * saturates the buffer, the server's ring and then the daily budget inside a
  * second, evicting every other player's events.
@@ -212,7 +212,7 @@ export function installDiagnostics(opts: InstallOptions): Diagnostics {
     // a name, and grouping on that gives every occurrence its own group.
     if (!admit(`warning:${id}`)) return;
     // Logged and not sent — the event declares no text field, so there is nowhere
-    // for it to go. Said out loud rather than silently dropped.
+    // for it to go.
     if (message) console.warn(`[${opts.resource}] ${id}: ${scrub(message)}`);
     pushEvent({
       event: "tlib.warning_reported",
@@ -286,7 +286,6 @@ export function installDiagnostics(opts: InstallOptions): Diagnostics {
     measures: environment.measures,
   });
 
-  /** `addEventListener('error')` and NOT `window.onerror = ...`. */
   const onError = (e: ErrorEvent) => {
     // `e.error` carries the stack; `e.message` alone, which is all a bare
     // `window.onerror` gets, has no fingerprint. Still better than dropping it.

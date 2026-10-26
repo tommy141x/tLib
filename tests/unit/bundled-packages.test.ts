@@ -6,10 +6,6 @@
  * "contains no third-party code" while `adm-zip` had been compiled into it for three
  * releases — through tLib's marketplace installer, out of tLib's own `node_modules`, so
  * no manifest in tDetector's repo could have revealed it.
- *
- * The third test is the one that matters most: a gate pointed at a path that does not
- * exist found nothing, and "found nothing" is indistinguishable from "clean" unless it
- * is made to throw.
  */
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";

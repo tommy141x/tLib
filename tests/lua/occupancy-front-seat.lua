@@ -112,8 +112,7 @@ assert(occupancy.isFrontSeat(2, 10) == true, 'the passenger keeps their seat and
 -- Rear seats: present, addressable, and powerless
 -- The third tier. A rear passenger is now a distinct case rather than being
 -- indistinguishable from a player on foot — but every existing question about
--- them answers exactly as it did when they were invisible. What they gain is
--- perception; what they gain in control is nothing.
+-- them answers exactly as it did when they were invisible.
 
 seats[4] = { seat = 2, netId = 10 }
 occupancy.refresh(4)
@@ -313,7 +312,7 @@ assert(occupancy.isFrontSeat(2, 30) == false)
 assert(occupancy.isControllerOf(2, 30) == false, 'a player on foot controls nothing')
 
 -- A rear passenger is refused by both ACTION gates and admitted by the
--- perception one. This is the whole three-tier model in four lines.
+-- perception one.
 seats[4] = { seat = 2, netId = 30 }
 assert(occupancy.isFrontSeat(4, 30) == false)
 assert(occupancy.isControllerOf(4, 30) == false, 'a rear seat is not a front seat')

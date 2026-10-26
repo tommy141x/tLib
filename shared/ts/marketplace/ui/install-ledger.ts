@@ -19,17 +19,9 @@
  * offered Install for something now on disk — the same report `../local-name.ts`
  * exists to answer, arriving by a different route.
  *
- * WHY A MODULE, AND WHY NOT A HOST REFRESH.
- *
  * THIS FILE IS THE SCOPE. A listener has to outlive the component to see a result
- * the component is not mounted for, and module scope is the only scope that does;
- * giving it a module of its own rather than a corner of `./browse.ts` is what
- * states that, and keeps that file's one concern the request/reply wrapper.
- *
- * The obvious alternative is a "re-send what is installed" callback each consumer
- * answers, and it is a new contract across four resources for a problem that is
- * entirely tLib's. The host's payload stays the snapshot it is; this is the patch
- * over it.
+ * the component is not mounted for, and module scope is the only scope that does.
+ * The host's payload stays the snapshot it is; this is the patch over it.
  *
  * Only CONFIRMED outcomes are recorded. A failed install changed nothing on disk,
  * and the card's own `done`/`retry` state is the one part that genuinely should

@@ -1,14 +1,10 @@
 /**
  * The per-install id — the generation semantics, the storage, and the header.
  *
- * THIS SUITE IS THE SUCCESSOR TO THE INSTALL-ID BLOCK IN
- * `telemetry-consent.test.ts`. The id used to be minted only when telemetry
- * consent was on and lived in `telemetry-install-id.txt`, so its tests lived
- * with consent's. It now lives inside tLib's own `data.json` and rides on every
- * tWeb-bound request regardless of `tlib_telemetry`, so the one thing that must
- * NOT get lost in the move is the generation contract: minted once, 25
- * characters of base36, validated strictly, and never re-randomised per boot.
- * Every assertion that was there is here.
+ * The id lives inside tLib's own `data.json` and rides on every tWeb-bound
+ * request regardless of `tlib_telemetry`. The generation contract is the whole
+ * value of it: minted once, 25 characters of base36, validated strictly, and
+ * never re-randomised per boot.
  *
  * WHAT THIS CANNOT PROVE: that tWeb accepts the header. Its
  * `analytics.ingest` flag is off and the route answers 503, and nothing here

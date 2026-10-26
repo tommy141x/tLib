@@ -254,13 +254,12 @@ export function startSessionLog(opts: SessionLogOptions): SessionHandle {
       // This used to print the verdict line, a JSON state dump and up to 30
       // trend samples on EVERY boot, in both branches. Six resources carry this
       // ledger, so an ordinary restart put about forty lines of heap readings
-      // and six JSON blobs into F8 before the player had done anything — and a
-      // console that is noisy when nothing is wrong is one nobody reads when
-      // something is. The crash REPORT was already gated on `!orderly` a few
-      // lines below; the console output simply never followed it.
+      // and six JSON blobs into F8 before the player had done anything. The
+      // crash REPORT was already gated on `!orderly` a few lines below; the
+      // console output simply never followed it.
       if (orderly) return;
 
-      // IT DOES NOT SAY "CRASHED", AND THAT IS A CORRECTION, NOT A HEDGE.
+      // IT DOES NOT SAY "CRASHED".
       //
       // The only thing observed here is the absence of a clean-exit marker. A
       // renderer kill produces that — and so does the player quitting the game,
@@ -275,11 +274,12 @@ export function startSessionLog(opts: SessionLogOptions): SessionHandle {
         )} — normal if the game was closed; worth reading below if it was not`
       );
       if (prev.lastState) banner(`state at that point: ${JSON.stringify(prev.lastState)}`);
-      // The trajectory, not just the final reading. A heap climbing toward the
+      // The whole trajectory, not just the final reading: a heap climbing toward
+      // the limit reads as a leak, where one reading at the limit does not.
       for (const s of trend) banner(`  ${formatSample(s)}`);
       if (allNotes.length > 0) banner(`^3verdict: ${verdict} — ${allNotes.join("; ")}^7`);
 
-      // REPORTED ONLY WHEN IT WAS NOT ORDERLY. A `restart tRadio` is not a
+      // Reported only when it was not orderly: a `restart tRadio` is not a crash.
       if (!orderly) {
         opts.onCrash?.({
           session: prev.n,

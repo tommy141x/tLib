@@ -1,24 +1,17 @@
 // Reading what a layout declares and what it binds, out of its `ui.html` SOURCE.
 //
-// Why a text scanner exists next to HudBinder
-//
 // `HudBinder` answers the same question against a live DOM, which means a
 // browser. This one is regex over the source text, so it runs under `bun test`
 // with nothing loaded — which is what lets a layout lint check every shipped
 // skin, and any skin a player installs from the marketplace, before it is ever
-// rendered. That is worth having, because a mistyped key is SILENT at runtime:
+// rendered. A mistyped key is SILENT at runtime:
 // `data-hud-text="front.targetTxt"` paints an empty string forever with no
-// error anywhere. Comparing what a layout binds against what the engine
-// produces turns that into a build failure instead of a window that never lights.
+// error anywhere.
 //
-// Why it is here rather than in each resource
-//
-// Three copies existed: tRadar's (complete), tDetector's layout lint (comments
-// only) and tDetector's screenshot tool. Only tRadar's stripped `<style>`, and
-// that omission is not cosmetic — tRadio's layouts address `data-hud-*` by CSS
-// selector, so a scan that reads style blocks harvests keys that no element
-// binds and the lint then passes on bindings that do not exist. Whichever copy
-// a fourth resource had happened to start from decided whether its lint worked.
+// Of the three hand-written copies this replaced, only one stripped `<style>`.
+// tRadio's layouts address `data-hud-*` by CSS selector, so a scan that reads
+// style blocks harvests keys no element binds, and the lint then passes on
+// bindings that do not exist.
 //
 // Everything resource-specific is a parameter: the declaration prefix
 // (`data-<prefix>-width` and friends) and the device classes that prefix allows.

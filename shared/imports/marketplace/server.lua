@@ -122,11 +122,6 @@ function marketplace.removeSound(installedSounds, toneWavMap, slug, scopedMaps)
 end
 
 
--- The sound-overwrite warning is sent only to the installing admin (`meta.src`,
--- nil if they disconnected mid-install), never broadcast. Registration below is
--- pcall'd because a server may run without `tlib_module { 'marketplace' }`,
--- in which case the bridge answers false rather than raising.
-
 local DEFAULT_LAYOUT_PATH = 'layouts'
 local DEFAULT_SOUND_PATH = 'layouts/sounds'
 
@@ -155,7 +150,8 @@ function marketplace.registerType(kind, installPath, warn)
     return false
 end
 
---- The sound-overwrite warning: logged always, shown to the installing admin.
+--- The sound-overwrite warning: logged always, and sent only to the installing
+--- admin (`meta.src`, nil if they disconnected mid-install), never broadcast.
 --- `conflict` is the slug that already owned the filename; `warnEvent` must be
 --- a client event the consumer HAS a handler for.
 --- @return boolean told  true if a client was actually told

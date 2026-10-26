@@ -472,8 +472,6 @@ function Gate:describe()
 
     local line = ('%s: %s'):format(self.label, table.concat(parts, ' OR '))
     if self.broken then line = line .. '  [DISABLED -- config errors above]' end
-    -- Last, and phrased as an override, because it is: the configured rule above
-    -- is still what this gate will decide by the moment tlib_demo goes away.
     if tlib.demo.active() then line = line .. '  [OVERRIDDEN -- demo mode grants everyone]' end
     return line
 end

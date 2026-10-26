@@ -78,23 +78,15 @@ export function ItemCard(props: {
       <InstallError state={s()} />
 
       <div class="mp-card-footer">
-        {/*
-         */}
         <div class="mp-card-stats flex items-center gap-2 min-w-0">
-          {/*
-           */}
           <For each={stats()}>
             {(stat) => (
               <Switch>
                 <Match when={stat.key === "downloads"}>
-                  {/*
-                   */}
                   <span class="text-sm mp-muted">{CARD_COPY.downloads(String(stat.value))}</span>
                 </Match>
 
                 <Match when={stat.key === "likes"}>
-                  {/*
-                   */}
                   <Show
                     when={like() === "button"}
                     fallback={
@@ -107,9 +99,10 @@ export function ItemCard(props: {
                     <NuiButton
                       class="mp-action mp-like"
                       aria-label={props.item.liked ? "Remove your like" : "Like this item"}
-                      // only thing a sighted user has; a screen reader needs the
-                      // attribute. A real string, not a boolean — under Solid 2
-                      // `aria-pressed={true}` serialises to the empty string.
+                      // The filled heart is the only cue a sighted user gets; a
+                      // screen reader needs the attribute. A real string, not a
+                      // boolean — under Solid 2 `aria-pressed={true}` serialises
+                      // to the empty string.
                       aria-pressed={props.item.liked ? "true" : "false"}
                       aria-busy={props.likePending ? "true" : "false"}
                       disabled={props.likePending}
@@ -166,19 +159,12 @@ export function ItemCard(props: {
             />
           </Show>
 
-          {/*
-             STILL RENDERED FOR A BUILT-IN, as a disabled "Built in". The
-            alternative considered was hiding it, and it is worse: the card would
-            then carry a radio the owner can see in game, a preview button, and
-            no statement at all about why it offers nothing. "Present, and not
-            ours to remove" is a fact the card has to say out loud — this is the
-            quiet built-in state the brief asked for, chosen over "installed
-            minus the destructive action" precisely because that variant still
-            reads as a thing the marketplace manages.
+          {/* STILL RENDERED FOR A BUILT-IN, as a disabled "Built in". Hidden, the
+              card carries a radio the owner can see in game, a preview button, and
+              no statement about why it offers nothing.
 
-            `canInstall` folds `busy` in, so this is one predicate rather than
-            `busy() || builtin()` spelled out on two surfaces.
-          */}
+              `canInstall` folds `busy` in, so this is one predicate rather than
+              `busy() || builtin()` spelled out on two surfaces. */}
           <NuiButton
             class="mp-action"
             tone={s().state === "installed" || builtin() ? "default" : "primary"}

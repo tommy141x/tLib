@@ -107,8 +107,7 @@ _ENV.tlib = tlib
 
 --- Modules whose LOADING IS THEIR WIRING, loaded by tLib itself: their file
 --- scope registers the handler, and a consumer may have no Lua call to trigger
---- the lazy load. `studioOnly` is a default, not a permission. See
---- docs/internal/imports-entrypoint.md.
+--- the lazy load. `studioOnly` is a default, not a permission.
 local AUTOLOAD = {
     { name = 'occupancy' },
     { name = 'telemetry', studioOnly = true },
@@ -166,7 +165,7 @@ end
 --
 -- Load-bearing only for `realtime`, which tLib's server bundle reads off the
 -- manifest to decide whether to install the realtime hub. Otherwise an auditable
--- parts list. See docs/internal/imports-entrypoint.md.
+-- parts list.
 for _, key in ipairs({ 'tlib_module', 'tlib_modules' }) do
     local declared = GetNumResourceMetadata(resourceName, key)
     for index = 0, declared - 1 do

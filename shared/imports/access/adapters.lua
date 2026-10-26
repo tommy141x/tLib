@@ -124,9 +124,9 @@ local frameworks = {
 -- Inventories: "how many of this item does the player have"
 --
 -- Ordered by deployment, ox_inventory first. Each returns a NUMBER, never a
--- boolean: a boolean cannot answer `count = 2`. Answering a different question
--- than the one asked is how community_bridge's origen adapter tested `>` instead
--- of `>=`, denying a player holding exactly the one item required.
+-- boolean: a boolean cannot answer `count = 2`. community_bridge's origen
+-- adapter tested `>` instead of `>=`, denying a player holding exactly the one
+-- item required.
 
 local inventories = {
     {

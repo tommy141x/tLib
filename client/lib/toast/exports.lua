@@ -30,9 +30,8 @@ end
 -- idiomatic second-return name), so mapping them closes the class rather than
 -- patching each instance.
 --
--- The log stays for anything else: an alias is a spelling of a type that
--- exists, a typo is still a typo, and silently rendering it as info is what
--- hid these three for as long as it did.
+-- The log stays for anything else: silently rendering an unknown type as info
+-- is what hid these three for as long as it did.
 local ALIASES = { warn = 'warning', err = 'error' }
 
 local function resolveType(value)

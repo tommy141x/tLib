@@ -6,20 +6,17 @@
  * laggy. The test is density, not element type — if you meet six of a thing in a
  * row, its hover has to land on the frame the cursor arrives, not 100-200ms later.
  *
- * Why this is asserted and not just commented. These classes are consumed through
- * `@tlib/internal` by tLS, tUnit, tRadio, tAFK and tCAD, so one `transition-colors`
- * put back here for "polish" re-slows six products at once, in a repo whose own
- * tests would all still pass. Nothing else reads the decision.
+ * These classes are consumed through `@tlib/internal` by tLS, tUnit, tRadio, tAFK
+ * and tCAD, so one `transition-colors` put back here for "polish" re-slows six
+ * products at once, in a repo whose own tests would all still pass.
  *
- * The kept cases are asserted too, in the same file. A gate that only bans things
- * reads as "transitions are forbidden", and the next person deletes the slide off
- * the Tabs indicator or the thumb off the Switch. The boundary IS the rule, so
- * both sides of it are evidence.
+ * The kept cases are asserted too, so the next person does not read this as
+ * "transitions are forbidden" and delete the slide off the Tabs indicator or the
+ * thumb off the Switch.
  *
- * A text parse of the shipped source, deliberately — not an import of the cva
- * objects. `cva()` hands back a function; reading its base would mean trusting a
- * mirror that can agree with this test while disagreeing with the string UnoCSS
- * actually scanned.
+ * A text parse of the shipped source, not an import of the cva objects: `cva()`
+ * hands back a function, so reading its base would mean trusting a mirror that can
+ * agree with this test while disagreeing with the string UnoCSS actually scanned.
  */
 
 import { describe, expect, test } from "bun:test";

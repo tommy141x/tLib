@@ -17,12 +17,10 @@
    every tLib dialog, menu and toast drew Hanken Grotesk while every resource's
    own NUI drew whatever it had, and the typeface changed the moment a player
    went from /tls to the LED editor or /tafk to the sequence editor. Eight
-   resources were on the wrong side of that; the one that was not had been fixed
-   by hand, which is the tell.
+   resources were on the wrong side of that.
 
    Here and not in fonts.css because fonts.css is imported by tLib alone —
-   consumers import THIS file. Same bargain surface.css is imported on above:
-   adopting the tokens adopts what they assume.
+   consumers import THIS file.
 
    ~35 KB per consumer bundle. Only this face, not Inter or JetBrains Mono from
    fonts.css, because a resource that self-hosts those already would otherwise
@@ -46,28 +44,17 @@
    source order. */
 
 :root {
-  /* THE NEUTRALS CARRY A HUE. They were `0 0%` across the board — a pure
-     achromatic ramp, which is the single most-cited tell of a UI nobody chose
-     the colours for, and it sat under all eight products at once. Worse, it was
-     not even consistent: `--muted-foreground` alone drifted to hue 214, so seven
-     rungs were untinted and the eighth was blue against them.
+  /* The neutrals carry hue 214, one degree off `--primary`/`--ring`/`--accent`
+     at 211, with saturation in the 6-10% band — a tint, not a colour cast.
+     `--primary-foreground` and friends stay `0 0% 100%`, since at 100%
+     lightness every hue is the same white.
 
-     Hue 214 for all of them, which is where that one rung already was and one
-     degree off `--primary`/`--ring`/`--accent` at 211 — so the greys now sit on
-     the same axis as the accent instead of beside it. Saturation stays in the
-     6-10% band: this is a tint, not a colour cast, and a surface that reads as
-     blue rather than as dark grey would be a different and worse mistake.
+     HSL triplets and not `oklch()`: CEF 103 drops an `oklch()` declaration
+     entirely, function and all. Pick in a perceptual space, ship HSL.
 
-     EVERY LIGHTNESS IS UNCHANGED, to the digit. The elevation ladder
-     (background <= card < input = popover < border) is what every control in
-     internal/shared-ts/ui/* is drawn against and what tests/unit/theme-ladder.test.ts
-     enforces; touching only H and S means this change cannot move it.
-
-     The guide this came from asks for OKLCH. CEF 103 drops `oklch()` entirely
-     — the whole declaration, not just the function — so the achievable version
-     is to pick in a perceptual space and ship the HSL triplets, which is what
-     these are. `--primary-foreground` and friends stay `0 0% 100%`: at 100%
-     lightness every hue is the same white, so a hue there would be noise. */
+     Move lightness and you move the elevation ladder
+     (background <= card < input = popover < border), which every shared
+     control is drawn against and tests/unit/theme-ladder.test.ts enforces. */
   --background: 214 6% 6.67%;
   --foreground: 214 9% 93.33%;
   --card: 214 6% 6.67%;
@@ -98,24 +85,17 @@
   /* THE REDUCED-MOTION SWITCH, AND IT IS A TOKEN BECAUSE THE MEDIA QUERY DOES
      NOT WORK HERE. CEF reports `prefers-reduced-motion: no-preference` whatever
      the host OS is set to — measured — so `@media (prefers-reduced-motion:
-     reduce)` is not a weaker option in a FiveM NUI, it is a dead one. Every such
-     block in this estate was coverage that could never fire.
+     reduce)` is not a weaker option in a FiveM NUI, it is a dead one.
 
      Set to 0 for a zero-motion build. Every animation and transition duration in
-     the shared sheets multiplies through it, so one write disables all of them
-     without any rule needing a second spelling.
-
-     It lives here, on :root in the sheet every consumer's NUI imports, and NOT
-     on `.tlib-menu` where it started: declared on a subtree it governs only that
-     subtree, and a menu-scoped copy would have SHADOWED a root value for the one
-     surface that already had the mechanism. Dialog, toast and marketplace had no
-     escape hatch at all.
+     the shared sheets multiplies through it. It must stay on `:root`: declared on
+     a subtree it governs that subtree alone and shadows the root value.
 
      The writer is `UIEffects.setReduceMotion` on the Lua side, fed by the
      `tlib_reduce_motion` convar and by a per-player toggle. A consumer with its
      own ui_page owns its own document, so it applies the same answer to its own
      root — `exports.tLib:GetReduceMotion()` and the `tlib:reduceMotion` event
-     are how it reads it. See docs/internal/theming-tokens.md. */
+     are how it reads it. */
   --motion: 1;
 
   /* BOTH FONT TOKENS LIVE HERE AND IN NO OTHER SHEET. Declaring either one in a
@@ -140,17 +120,13 @@
 }
 
 /* The elevation ladder: --background ≤ --card < --input = --popover < --border. Every
-   component in internal/shared-ts/ui/* assumes that order, so never re-declare one of those five
-   alone — if --card rises above --input, every field edge turns darker than its panel.
+   shared control assumes that order, so never re-declare one of those five alone — if
+   --card rises above --input, every field edge turns darker than its panel.
    tests/unit/theme-ladder.test.ts fails any block here that breaks the order. */
 
 /* For a transparent overlay page, where --background is never painted and a --card panel
    would read flat. Shifts the whole ladder up one step instead of raising --card. */
 .tlib-overlay {
-  /* Same hue and the same lightnesses as :root above — an overlay palette that
-     stayed achromatic while the base one gained a tint would read as a colder
-     panel floating on a warmer page, which is the exact inconsistency the
-     change was for. */
   --background: 214 6% 7%;
   --card: 214 6% 10.5%;
   --card-foreground: 214 9% 93.33%;

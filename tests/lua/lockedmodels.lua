@@ -1,10 +1,8 @@
 -- shared/imports/lockedmodels: the read-only vehicle set.
 --
 -- The security property under test is that the set comes from the convar and
--- from nowhere else. There is no "unlock" entry point to exercise, and that
--- absence is the design -- so what these assert is the matching behaviour and
--- the fact that an unset convar locks nothing, which is the state every
--- customer runs in.
+-- from nowhere else: the matching behaviour, and that an unset convar locks
+-- nothing, which is the state every customer runs in.
 
 -- Stub host
 

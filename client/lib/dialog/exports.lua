@@ -95,11 +95,9 @@ local function serialiseField(f)
         s.variant = type(f.variant) == 'string' and f.variant or 'default'
         -- The confirmation question. `variant = 'destructive'` is colour only, so
         -- a delete button looked dangerous but was still one click from firing.
-        -- This serialiser is a whitelist — an unnamed key never reaches the page
-        -- — which is why this line is the whole feature. Bounded at 512, same
-        -- key and meaning as a menu row's `confirm`, rendering the same two
-        -- buttons on both surfaces. An empty string means nil, not a question
-        -- with no text.
+        -- Bounded at 512, same key and meaning as a menu row's `confirm`,
+        -- rendering the same two buttons on both surfaces. An empty string means
+        -- nil, not a question with no text.
         s.confirm = type(f.confirm) == 'string' and f.confirm ~= ''
             and #f.confirm <= 512 and f.confirm or nil
     end

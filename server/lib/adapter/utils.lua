@@ -1,6 +1,4 @@
--- tLib/server/lib/adapter/utils.lua
 -- HTTP fetch and misc utils
-
 
 if _TLIB_IS_FIVEM then
     function Platform.Fetch(opts, callback)

@@ -13,8 +13,6 @@
 local JsonStore = {}
 
 local Store = {}
--- Forward declaration so SCHEMA_KEY below can be published on the module table
--- without the release gate having to hard-code the string a second time.
 Store.__index = Store
 
 --- resource .. '|' .. file -> Store. The whole point: one writer per document.
@@ -287,8 +285,8 @@ function Store:ensure(schema)
 end
 
 --- The body of `ensure`, minus the per-owner memoisation. Split out so every
---- failure branch can simply `return`: threading the cache write through twelve
---- early returns is how one of them ends up missing it.
+--- failure branch can simply `return`: threading the cache write through every
+--- early return is how one of them ends up missing it.
 function Store:_ensure(schema, owner)
     local assume = checkSchema(schema)
     local target = schema.version
@@ -380,7 +378,7 @@ function Store:_ensure(schema, owner)
     found = found or assume
 
     if found > target then
-        -- The downgrade. See the header: readable, never written, never reset.
+        -- The downgrade: readable, never written, never reset.
         local result = self:_refuse(owner, 'refused',
             ('%s records schema v%d for "%s" but this build only understands up to v%d. '
             .. 'That file was written by a NEWER version of this resource — most likely a '

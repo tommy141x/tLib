@@ -156,12 +156,8 @@ function dirOf(relative: string): string {
   return cut === -1 ? "" : relative.slice(0, cut);
 }
 
-// The first-party family
-//
-// Hardcoded, not operator configuration: a config file here would just move
-// four `server.cfg` lines into a fifth file an operator-who-can-edit-it could
-// already edit server.cfg from. The consolidation removes the per-resource
-// grant the operator writes, not makes the grant itself editable.
+// The first-party family. Hardcoded on purpose: this list is the grant, and it
+// must not become operator configuration.
 
 export const FAMILY: Caller[] = [
   {
@@ -329,12 +325,6 @@ export const FAMILY: Caller[] = [
     ],
   },
 ];
-
-// Two PowerShell-based probes (resolve a PID's executable, count physical
-// cores) were removed in favor of callers answering in-process, cross-platform
-// — not because they were exploitable, but because a public MIT library
-// shipping `powershell.exe` is a reader stopper, and most FiveM hosting is
-// Linux containers anyway. Do not re-add one; find the in-process answer.
 
 export function findCaller(resource: string): Caller | undefined {
   return FAMILY.find((c) => c.resource === resource);

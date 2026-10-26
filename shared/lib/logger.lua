@@ -37,11 +37,9 @@ local function _format(source, lvl, args, n)
     -- empty labelled line.
     if text == '' then return nil end
 
-    -- `source` when the caller pinned one, `_side` otherwise. It was taken and
-    -- then dropped: every `Logger.create('tLib/menu')` line printed `[server]`,
-    -- so thirty-odd modules were indistinguishable in the console and the
-    -- docstring on `create` described behaviour that did not happen.
-    -- `Logger.log` passes nil and still reads `[server]` / `[client]`.
+    -- `source` when the caller pinned one, `_side` otherwise. Dropping it once
+    -- made every `Logger.create('tLib/menu')` line print `[server]`, leaving
+    -- thirty-odd modules indistinguishable in the console.
     local label = _labels[lvl] or 'INFO'
     return string.format('[%s][%s] %s', source or _side, label, text)
 end

@@ -1,6 +1,4 @@
--- tLib/shared/lib/adapter/events.lua
--- platform event system abstractions
-
+-- Platform event system abstractions.
 
 local log = Logger.create('tLib/adapter/events')
 

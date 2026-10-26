@@ -9,9 +9,8 @@
 -- value" pointing at the consumer. These tests assert the trap still behaves that way
 -- (so the docs on `has` stay true) AND that `has` answers correctly either side of it.
 --
--- imports.lua is loaded as real source with mocked natives rather than reimplemented,
--- so this is an oracle for the shipped file. A stand-in would keep passing while the
--- real proxy changed shape, which is the entire failure this guards.
+-- imports.lua is loaded as real source with mocked natives rather than
+-- reimplemented, so this is an oracle for the shipped proxy.
 
 local report = print
 local passed = 0

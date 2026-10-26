@@ -3,18 +3,17 @@
 // `internal` carries the private half — the provenance engine under internal/
 // and the .gitea/ workflows that name the private org — and `main` neither.
 //
-// WHY A SCRIPT AND NOT A HOOK ALONE. Every commit on `internal` contains those
-// paths, and no refspec, filter or hook publishes "the same commit minus a
-// directory": the public branch has to be a DIFFERENT commit, with a different
-// tree and sha. Replay is per-commit so the public history stays real, and a
-// private-only commit is skipped rather than landing empty. The high-water
-// mark is `refs/publish/last-internal`, a local ref — a file tracking publish
-// state would itself have to ship in the public tree.
+// No refspec, filter or hook publishes "the same commit minus a directory": the
+// public branch has to be a DIFFERENT commit, with a different tree and sha.
+// Replay is per-commit so the public history stays real, and a private-only
+// commit is skipped rather than landing empty. The high-water mark is
+// `refs/publish/last-internal`, a local ref — a file tracking publish state would
+// itself have to ship in the public tree.
 //
-// WHY A THROWAWAY WORKTREE. `internal/` is absent from `main`, so
-// `git checkout main` DELETES it from disk and every sibling resource that
-// imports `tLib/internal/...` relatively breaks at once with `Cannot find
-// module`. That happened. `main` is only touched inside a temporary worktree.
+// `main` is only ever touched inside a THROWAWAY WORKTREE. `internal/` is absent
+// from `main`, so `git checkout main` DELETES it from disk and every sibling
+// resource that imports `tLib/internal/...` relatively breaks at once with
+// `Cannot find module`. That happened.
 //
 // Usage:  bun run publish:public [--dry-run]
 // Exit 1 = a replay conflicted and the worktree was left for inspection.
@@ -26,9 +25,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const REPO = join(import.meta.dirname, "..");
-// Directories, plus single files. Both readers cope with a file: the skip test
-// is `p === d || p.startsWith(`${d}/`)`, the removal an existsSync + rmSync.
-// `scripts/deck-publish.ts` is listed unguarded because nothing references it.
+// Directories, plus single files; both readers cope with either.
 //
 // WARNING: A TEST OF PRIVATE CODE IS PRIVATE. The test files below import from
 // `internal/`, which this script strips — so publishing them put an import of a
@@ -229,13 +226,10 @@ try {
     `publish-public: ${published} published, ${skipped} private-only skipped. ` +
       `${PUBLISHED} is now ${git(["rev-parse", "--short", PUBLISHED])}.`
   );
-  // BOTH REMOTES, AND GITEA IS THE ONE THAT GETS FORGOTTEN -- but ORIGIN is the
-  // one the website reads. Docs do NOT reach tWeb from a gitea push: tWeb's own
-  // `sync-github-docs.yml` PULLS them from github.com/tommy141x/tLib on a
-  // schedule, so a doc edit committed but not on GitHub's `main` never appears,
-  // and a run of that workflow rolls the site back to what GitHub last saw.
-  // gitea still wants both branches: CI runs there and the private half lives
-  // there. Nothing fails when that push is missed, hence saying it out loud.
+  // Nothing fails when one of the two pushes is missed, hence saying it out loud.
+  // tWeb's `sync-github-docs.yml` PULLS docs from github.com/tommy141x/tLib on a
+  // schedule, so a gitea-only push leaves the edit invisible, and the next run of
+  // that workflow rolls the site back to what GitHub last saw.
   console.log("  Push it with:  git push origin main && git push gitea main");
   console.log("  origin is what the website reads: tWeb pulls docs/ from GitHub on a schedule.");
   console.log("  gitea is where CI runs and where the private half lives.");

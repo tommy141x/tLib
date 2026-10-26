@@ -6,8 +6,6 @@
 -- shared implementation that namespaced them even slightly differently would
 -- pass every behavioural test and silently reset everyone's settings on
 -- upgrade, which is the expensive way to find out.
---
--- Negative controls are at the bottom and are run, not described.
 
 local checks = 0
 local function check(value, message)

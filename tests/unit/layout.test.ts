@@ -19,13 +19,6 @@ import {
   scaleLayout,
 } from "../../shared/ts/hud-geometry";
 
-// The `gesture history` block that used to live at the bottom of this file
-// covered `client/web/src/layout/history.ts`'s `LayoutHistory`. That class is
-// deleted — the estate has one undo primitive now — and all five of its
-// scenarios are re-proven against `shared/ts/undo.ts` in `undo.test.ts`, under
-// the heading that names where they came from. They are not here because they
-// were never about the geometry this file checks.
-
 const base: Layout = { x: 0, y: 0, scale: 1, visible: true, anchor: "top-left" };
 const component: Component = {
   key: "test:status",

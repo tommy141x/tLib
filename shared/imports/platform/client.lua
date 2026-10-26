@@ -451,21 +451,6 @@ function platform.getResourceId()
     return GetCurrentResourceName()
 end
 
--- Now actually wraps — it didn't before, despite the name: a Lua error
--- inside an export body doesn't propagate across the FiveM export boundary,
--- so the call returned `undefined`, the real message was lost, and it
--- resurfaced elsewhere as `"undefined" is not valid JSON`. ~40 call sites
--- across tRadio, tRadar, tAFK and tChirp had adopted this as a throw guard
--- and gotten none.
---
--- `resource` is accepted for signature symmetry and ignored for
--- registration (`exports(name, fn)` always registers under the calling
--- resource); it's used only in the error line.
---
--- `table.pack`/`unpack`, not a plain `return fn(...)`: several exports
--- return more than one value (`ok, reason` is the house shape), and
--- truncating to the first would be a new bug in place of the old.
---
 -- The two halves of `publishExportsAs`, below. Kept as state because the
 -- calls can arrive in either order and both orders have to work.
 local _legacyNames = {}
@@ -504,6 +489,21 @@ function platform.publishExportsAs(legacyResource)
     for name, fn in pairs(_published) do answerAs(legacyResource, name, fn) end
 end
 
+--- Registers an export with its body wrapped in a pcall.
+---
+--- A Lua error inside an export body does not propagate across the FiveM
+--- export boundary: the call returns `undefined`, the real message is lost,
+--- and it resurfaces elsewhere as `"undefined" is not valid JSON`. ~40 call
+--- sites across tRadio, tRadar, tAFK and tChirp adopted this as a throw guard
+--- while it was still a no-op wrapper.
+---
+--- `resource` is accepted for signature symmetry and ignored for registration
+--- (`exports(name, fn)` always registers under the calling resource); it is
+--- used only in the error line.
+---
+--- `table.pack`/`unpack`, not a plain `return fn(...)`: several exports return
+--- more than one value (`ok, reason` is the house shape), and truncating to
+--- the first would be a new bug in place of the old.
 function platform.wrapExport(resource, name, fn)
     local wrapped = function(...)
         local result = table.pack(pcall(fn, ...))

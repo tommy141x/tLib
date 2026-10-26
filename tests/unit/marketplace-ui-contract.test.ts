@@ -6,14 +6,11 @@
  * tRadar and tLS — so a bundle with no `ui.html`, or with an `install.lua` in
  * it, installed with a success and went wrong later on a player's machine.
  *
- * The half of this file that matters most is `the shipped corpus still installs`:
- * a gate that refuses a layout which would have rendered is worse than no gate,
- * so the directory listings of all ten shipped layouts are asserted to pass. They
- * are fixtures rather than a `readdir` of the sibling resources because tLib is
- * published on its own and must test without them on disk — the lists were
- * measured from the tree on 2026-10-15.
- *
- * Pure, so it is tested directly rather than through an install.
+ * `the shipped corpus still installs` holds the other direction — a gate that
+ * refuses a layout which would have rendered is worse than no gate. The ten
+ * directory listings are fixtures rather than a `readdir` of the sibling
+ * resources because tLib is published on its own and must test without them on
+ * disk; they were measured from the tree on 2026-10-15.
  */
 
 import { describe, expect, test } from "bun:test";

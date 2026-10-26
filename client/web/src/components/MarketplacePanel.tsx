@@ -1,15 +1,13 @@
 /**
  * The STANDALONE marketplace modal: backdrop, panel surface, title, close
- * button, and the `openMarketplace` / `closeMarketplace` NUI lifecycle.
+ * button, and the `openMarketplace` / `closeMarketplace` NUI lifecycle. This is
+ * how `exports.tLib:OpenMarketplace` opens the marketplace with no host dialog
+ * around it — tRadio's in-game path.
  *
- * The browsing UI itself is no longer here — it is
- * `./marketplace/MarketplaceBrowser.tsx`, because it now has a second mount
- * that must NOT be a modal: `Dialog.tsx` renders the same component inside a
- * dialog tab declared `view: "marketplace"`. That header file explains the
- * split and why browse/preview/install go through Lua rather than fetch.
- *
- * This path stays because it is still how `exports.tLib:OpenMarketplace` opens
- * the marketplace with no host dialog around it — tRadio's in-game path.
+ * The browsing UI is `./marketplace/MarketplaceBrowser.tsx`, which also mounts
+ * un-modal inside a dialog tab declared `view: "marketplace"`. Its header
+ * explains the split and why browse/preview/install go through Lua rather than
+ * fetch.
  */
 
 import type { OpenData } from "@tlib/shared/marketplace/ui";

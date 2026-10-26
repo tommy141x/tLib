@@ -12,7 +12,7 @@
 // tests/fixtures/module-manifest-cases.lua, which tests/lua/modules.lua
 // dofiles and checks against the Lua validator. A rule added to one side and
 // not the other fails here or in modules.lua; a rule added with no case is
-// the gap this can't close, so cases are grouped by field for visibility.
+// the gap this can't close.
 //
 // Regenerate the Lua fixture after editing CASES:
 //   MODULE_CASES_WRITE=1 bun test tests/unit/module-manifest.test.ts

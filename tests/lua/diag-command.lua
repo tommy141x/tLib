@@ -102,9 +102,7 @@ local function must(condition, message)
 end
 
 --- Asserts a VALUE-redaction property -- the layer `redact` governs: required
---- with the default, and required to be ABSENT under the control. That
---- inversion is the whole point. It is how this suite proves it can fail at all,
---- and it is why the control's verdict is "the secret leaked, as it had to".
+--- with the default, and required to be ABSENT under the control.
 ---
 --- Only the value filter and `ctx.message`'s name-withholding are governed by
 --- `redact`. The name-keyed layer in `describe`/`ctx.kv` is unconditional and is
@@ -181,9 +179,8 @@ for _, name in ipairs({ 'band', 'maxRange', 'speedUnit', 'acePermission', 'frequ
                         'dispatchNacId', 'publicKey', 'keybind', 'accessRank',
                         'keyboardLayout', 'licensePlate_x', 'tokenise' }) do
     if name == 'licensePlate_x' or name == 'tokenise' then
-        -- Documented false positives, kept here so they are a known cost rather
-        -- than a surprise: substring matching cannot tell `license` in
-        -- `licensePlate` from `license` in `licenseKey`. Nothing in this tree
+        -- Documented false positives: substring matching cannot tell `license`
+        -- in `licensePlate` from `license` in `licenseKey`. Nothing in this tree
         -- uses either name; if something ever does, the gate's per-resource
         -- allow map is the escape, not a narrowing of the pattern list.
         must(Diag.isSecretName(name),
@@ -541,13 +538,9 @@ if CONTROL then
     -- something the `redact` flag does not actually control -- which is how the
     -- first draft of this file came to "pass" its own control while three of
     -- its five redaction checks were measuring an unrelated layer.
-    -- RAISE THIS WHEN YOU ADD A `redactsValue`. 43cc768 added the two
-    -- unquoted-numeric-credential cases and left the count at 7, so the control
-    -- reported "9 of 7 ... flipped" and REFUSED the run -- a control that cannot
-    -- pass gets ignored, which is how the gate it guards stops being proved.
-    -- The direction mattered in diagnosing it: MORE assertions flipped than the
-    -- counter expected, so nothing had stopped measuring; only the counter was
-    -- stale. There are 9 `redactsValue` call sites in this file.
+    -- RAISE THIS WHEN YOU ADD A `redactsValue`. One edit added two cases and
+    -- left the count at 7, so the control reported "9 of 7 ... flipped" and
+    -- refused the run. There are 9 `redactsValue` call sites in this file.
     local expected = 9
     if flipped ~= expected or #failures > 0 then
         realPrint(('CONTROL FAILED: %d of %d value-redaction assertions flipped with redact=false.')

@@ -1,9 +1,7 @@
 /**
  * One Escape owner for the whole page: a registry (so depth is explicit and a
  * layer need not be an element), capture-sample-then-bubble-decide (so one press
- * dismisses one thing), and an internal-first/`active` contract. Five resources
- * had arrived at three different mechanisms and each knew something the others
- * did not; this is all three at once.
+ * dismisses one thing), and an internal-first/`active` contract.
  *
  * The capture sample is the non-obvious half: a panel that closes itself on
  * keydown would otherwise leave the keyup looking at a page with nothing open and

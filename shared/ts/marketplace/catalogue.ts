@@ -409,8 +409,7 @@ export async function setCatalogueLike(
   let body = "";
   try {
     const res = await fetch(`${marketplaceApiV2()}/items/${encodeURIComponent(slug)}/like`, {
-      // POST adds, DELETE withdraws. The backend route takes no body at all, so
-      // there is nothing for a caller to get wrong.
+      // POST adds, DELETE withdraws. The backend route takes no body.
       method: next ? "POST" : "DELETE",
       headers: marketplaceHeaders(identityHeaders(identity)),
       signal: controller.signal,
@@ -456,8 +455,8 @@ export const ITEM_RESOURCE_UNKNOWN = "item_resource_unknown";
 export const ITEM_RESOURCE_MISMATCH = "item_resource_mismatch";
 
 /**
- * One catalogue item, by slug — the ONLY way a caller can learn which product owns
- * one, which is why it exists. Server-side only, like `browseCatalogue`.
+ * One catalogue item, by slug — the only way a caller can learn which product
+ * owns one. Server-side only, like `browseCatalogue`.
  *
  * Throws `CatalogueError`. A 404 is not translated, because a caller that wants to
  * tell "no such item" from "wrong product" needs the status.

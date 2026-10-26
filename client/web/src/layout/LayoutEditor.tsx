@@ -117,12 +117,10 @@ export default function LayoutEditor() {
     | { pointer: number; x: number; y: number; left: number; top: number; target: HTMLElement }
     | undefined;
   /**
-   * One instance, scoped to this editor. Replaces the old hard-typed
-   * `LayoutHistory` class; `@tlib/shared/undo`'s `UndoHistory` carries the
-   * same `remove(key)` and no-op guard (`sameLayout`, passed per tag at
-   * `register()`) as general capabilities instead. One tag per component
+   * One instance, scoped to this editor. One tag per component
    * (`layout:<key>`) is what makes `remove(key)` meaningful: this editor is
    * the one surface where the host can unregister a component mid-session.
+   * The no-op guard is `sameLayout`, passed per tag at `register()`.
    */
   const history = new UndoHistory({ label: "hud-layout" });
   const [undoState, setUndoState] = createSignal<UndoState>(history.state());

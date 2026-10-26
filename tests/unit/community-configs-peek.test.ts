@@ -1,18 +1,13 @@
 /**
  * `peekConfig` is `importConfig` minus the counting, and the counting is the
- * only difference. These tests exist to make that sentence enforceable.
+ * only difference.
  *
- * The property under test is not local to this repo: the counter lives in the
- * Worker, and what decides whether a read is counted is WHICH ENDPOINT this
- * file asks for. So the assertions are about the request — path, method,
- * headers — rather than about a return value, because the return values of the
- * two calls are identical by design and a test on them would pass even if peek
- * were silently re-pointed at `/import`.
- *
- * That re-pointing is the exact regression this guards: someone tidying two
- * near-identical functions into one, or "fixing" a 404 during a deploy by
- * reusing the endpoint that is known to work. Either would make tLS's
- * marketplace tab inflate every listing's import count on hover.
+ * The counter lives in the Worker, so what decides whether a read is counted is
+ * WHICH ENDPOINT this file asks for. The assertions are therefore about the
+ * request — path, method, headers — not about a return value: the two calls
+ * return identical payloads by design, so a test on those would pass with peek
+ * silently re-pointed at `/import`, which makes tLS's marketplace tab inflate
+ * every listing's import count on hover.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 

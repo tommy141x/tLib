@@ -247,9 +247,8 @@ check(fileTable('tLib', 'export-staging/other/' .. tostring(bPath)) == nil,
 -- The three steps. There is deliberately NO "one-time grant" line any more:
 -- `add_filesystem_permission tLib write *` was measured and does not lift the
 -- refusal, because the sandbox objects to which resource is writing. These
--- assertions used to require that advice; they now require its ABSENCE, so a
--- future edit cannot quietly put false instructions back in front of operators.
--- See the banner at the top of server/sv_discovery.lua.
+-- assertions used to require that advice and now require its absence. See the
+-- banner at the top of server/sv_discovery.lua.
 check(#(info.steps or {}) == 3, 'three concrete steps are handed back')
 check(info.steps[1]:find('export-staging/vehicle/demo.json', 1, true), 'step 1 names the source file')
 check(info.steps[1]:find('vehicle/demo.json', 1, true), 'step 1 names the destination')

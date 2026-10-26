@@ -16,9 +16,7 @@
 --     changes a model.
 --
 -- The module is loaded FOR REAL against host stubs, with the REAL
--- `tlib.propeditor` under it, rather than being re-implemented here. A suite
--- that reimplements its subject asserts that two copies agree and notices
--- nothing when the shipped one changes.
+-- `tlib.propeditor` under it, rather than being re-implemented here.
 --
 -- Run via `bun run test:lua`.
 

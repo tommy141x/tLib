@@ -30,9 +30,7 @@ type Shimmed = (typeof SHIMMED_SPECIFIERS)[number];
 
 /**
  * The subset of a test runner's API this suite uses, declared structurally so a
- * consumer passes vitest's own objects with no cast. Typing it as `unknown` and
- * casting inside would defeat the point: the whole reason these are injected is
- * that the real ones must come from the consumer.
+ * consumer passes vitest's own objects with no cast.
  */
 interface Matchers {
   toEqual(expected: unknown): void;
@@ -49,7 +47,7 @@ export interface SurfaceSuiteApi {
 }
 
 export interface SurfaceSuiteOptions {
-  /** The consumer's `VENDOR_PACKAGES`. Required; it is the whole point. */
+  /** The consumer's `VENDOR_PACKAGES`. */
   vendorPackages: readonly string[];
 
   /**
@@ -106,11 +104,8 @@ export interface SurfaceSuiteOptions {
    * `@solid-primitives/rootless`, `@solid-devtools/logger`, etc.) — a
    * per-project "unused" verdict is a false failure for a shared layer.
    *
-   * Asserted as an exact set rather than an allowlist: a name that becomes
-   * locally wanted must be removed, a newly orphaned export must be added —
-   * an allowlist would only grow and would silence the `createResource` case
-   * this suite exists to catch. An export is only dead when it appears in
-   * every consumer's list, which no single repo can see.
+   * An exact set, not an allowlist: a name that becomes locally wanted must be
+   * removed from here, and a newly orphaned export added.
    */
   exportsWantedOnlyByOtherConsumers: readonly string[];
 }
@@ -198,8 +193,7 @@ function shimLocalExports(file: string): string[] {
 
 /**
  * Exports that exist for the SHIM ITSELF rather than for a vendor importer,
- * with the reason each is not dead code. Shared, because it is a fact about this
- * layer and not about any consumer's tree.
+ * with the reason each is not dead code.
  */
 const INTERNAL_OR_CORRECTIVE: Record<string, string> = {
   // Re-exported between shim files (`-web.ts` and `-store.ts` both pull from
@@ -310,12 +304,9 @@ export function solidCompatSurfaceSuite(api: SurfaceSuiteApi, options: SurfaceSu
       .flatMap((file) => shimLocalExports(file))
       .filter((name) => !wanted.has(name) && !(name in INTERNAL_OR_CORRECTIVE));
 
-    /*
-     * One assertion over all three files rather than one per file: an export is
-     * shared between the shim files on purpose, so "which file declares it" is
-     * not the question — "does any vendor anywhere want it" is. Asserting per
-     * file also split the declared set three ways and made it unreadable.
-     */
+    // One assertion over all three files rather than one per file: an export is
+    // shared between the shim files on purpose, so "which file declares it" is
+    // not the question — "does any vendor anywhere want it" is.
     test("exports with no vendor consumer in THIS tree are exactly the declared set", () => {
       expect([...new Set(orphaned)].sort()).toEqual([...exportsWantedOnlyByOtherConsumers].sort());
     });

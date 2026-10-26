@@ -14,8 +14,8 @@
 --     not hand back the live record, or merely READING a placement rewrites it
 --     in memory and the next save persists the rewrite.
 --
--- Neither guard is sufficient alone, and the composition test at the bottom is
--- the one that says so.
+-- Neither guard is sufficient alone; the composition test at the bottom is for
+-- the two together.
 
 local PropEditor = dofile('shared/imports/propeditor/client.lua')
 
@@ -51,8 +51,8 @@ assert(PropEditor.savedModelFor({ x = 1, model = 'retired_model' }, isRegistered
 assert(PropEditor.savedModelFor({ x = 1, model = 12345 }, isRegistered) == nil,
     'a non-string model is not a model')
 
--- The whole point, stated as the comparison that matters: the preserved value
--- and the resolved value are different objects and must never be conflated.
+-- The preserved value and the resolved value are different objects and must
+-- never be conflated.
 local legacy = { x = 1, y = 2, z = 3 }
 assert(resolve(legacy.model) == DEFAULT, 'sanity: resolution does answer for a legacy record')
 assert(PropEditor.savedModelFor(legacy, isRegistered) ~= resolve(legacy.model),

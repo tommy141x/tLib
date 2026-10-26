@@ -410,8 +410,7 @@ export default function Menu() {
   });
   // Solid 2 has no `createSelector`, so this is a plain comparison: every
   // row's `active` prop gets notified instead of just the two that changed.
-  // Accepted — a menu page is tens of rows, not thousands, so the lost O(1)
-  // narrowing has no visible behaviour cost.
+  // A menu page is tens of rows, not thousands.
   const isSelected = (id: string | undefined) => selectedId() === id;
   const selectedIndex = createMemo(() => items().findIndex((item) => item.id === selectedId()));
   const selected = createMemo(() => items()[selectedIndex()]);
@@ -1196,8 +1195,6 @@ export default function Menu() {
   // Only the page vanishing matters: tracking the fallback lookup too would make
   // this effect re-run its own setMenuId write.
   createEffect(menu, (current) => {
-    // No `untrack` needed any more: the apply half does not track at all, which
-    // is exactly what the comment above was asking `on()` for.
     if (current) return;
     const fallback = nearestAncestor(menuId(), parents, state.menus);
     setConfirmation(undefined);
@@ -1242,8 +1239,6 @@ export default function Menu() {
     },
     ({ id, page, index }) => {
       if (index >= 0) positions.set(page, index);
-      // The guard reads the store path this effect writes. It needs no `untrack`
-      // now: apply does not track, so reading it here subscribes to nothing.
       if (selections[page] !== id)
         setSelections((draft) => {
           draft[page] = id;
@@ -1287,8 +1282,6 @@ export default function Menu() {
         else panel?.focus();
       });
     },
-    // `defer` is an option on the two-argument form now, rather than a third
-    // argument to `on()`. Same meaning: skip the first run.
     { defer: true }
   );
   createEffect(

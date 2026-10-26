@@ -8,11 +8,9 @@
  * `data.json.bak` can't help since the replacement parses cleanly and recovery only fires
  * on a file that doesn't. This happened: tRadio shipped one, replacing every zone, codeplug,
  * alert, tower and tone mapping plus `settings.generatedAdminPassword` — the developer's own
- * admin-panel password, handed to every customer. Five of seven data-file resources already
- * exclude it three different ways (tLS/tAFK allowlist, tCAD named forbidden list, tRadio's
- * `assertNoRuntimeStateStaged`); this generalises tRadio's and asserts the built artifact, so
- * a post-staging copy can't sail past a staging-time check. Matched by basename at any
- * depth: tCAD's temp file is `data.json.tmp-<pid>`, so a bare `data.json.tmp` pattern matches
+ * admin-panel password, handed to every customer. It asserts the BUILT artifact, so a
+ * post-staging copy can't sail past a staging-time check. Matched by basename at any depth:
+ * tCAD's temp file is `data.json.tmp-<pid>`, so a bare `data.json.tmp` pattern matches
  * nothing real (measured with `git check-ignore -v`), and `data.json` isn't always at the root.
  *
  * `checkDeclaredModules`: `tlib_modules` only makes a load eager, but matters because tLib's
@@ -21,8 +19,7 @@
  * through a script. Worse, the eager loop's `loadModule` returns nil with no error for a name
  * resolving to no file, so a typo in `tlib_modules` is silent. Does NOT flag `tlib.<name>`
  * used without declaring it — legal lazy-loading, and only a bug at file scope (runs before
- * any lazy load could happen), which needs a Lua parser to detect and this gate has a regex;
- * a rule wrong about most uses teaches everyone to skip it.
+ * any lazy load could happen), which needs a Lua parser to detect and this gate has a regex.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -102,9 +99,6 @@ export const FORBIDDEN_RUNTIME_STATE: Array<{ rule: string; match: RegExp; why: 
       "default is off and a stored `true` would silently opt an install in. It is written " +
       "beside the resource at runtime; a new install correctly has none.",
   },
-  // `R-TELEMETRY-INSTALL-ID` was deleted, not disabled: the per-install id moved into tLib's
-  // own `data.json` (`shared/ts/install-id.ts`), already covered by `R-DATA-FILE` above at
-  // any depth — a second rule here could never go red.
   {
     rule: "R-DATA-CORRUPT",
     match: /^data\.json\.corrupt\..*$/,
@@ -175,9 +169,8 @@ export function checkStagedTree(options: StagedTreeOptions): StagedTreeResult {
     }
   }
 
-  // Without these floors the gate passes perfectly on an empty directory, and "no
-  // data.json" and "no staged tree" read as the same green — a failed build, a cleaned
-  // `.build/`, or a path typo all produce exactly that shape.
+  // Without these floors "no data.json" and "no staged tree" read as the same green —
+  // a failed build, a cleaned `.build/`, or a path typo all produce that shape.
   if (files.length < minFiles && !skip.includes("R-FILE-FLOOR")) {
     findings.push({
       rule: "R-FILE-FLOOR",

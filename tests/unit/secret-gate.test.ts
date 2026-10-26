@@ -1,11 +1,9 @@
 /**
  * The secret gate's unit oracle.
  *
- * The load-bearing test in this file is the FIRST one: the TypeScript pattern
- * list and the Lua one must be the same SET OF NAMES, proved by running a real
- * Lua VM over the real `shared/imports/diag/shared.lua` and comparing. Every
- * other test here is about the scanner; that one is about the thing the whole
- * design rests on, which is that there is only one list.
+ * The whole design rests on there being only one pattern list, so the first test
+ * runs a real Lua VM over the real `shared/imports/diag/shared.lua` and compares
+ * its names against the TypeScript ones. The rest is about the scanner.
  *
  * Coverage is asserted as a SET OF NAMES, never as a count. Three precedents
  * in this tree for why: a control that passed by accident, one with a stale

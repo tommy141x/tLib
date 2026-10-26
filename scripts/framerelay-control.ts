@@ -1,29 +1,19 @@
-// Negative control for tests/lua/framerelay-election.lua.
+// Negative control for tests/lua/framerelay-election.lua, which builds a
+// two-client world by hand — the kind of fixture that can agree with the code by
+// construction. Two defects, each planted in the real code path:
 //
-// The frame relay's correctness only shows up with TWO PLAYERS IN ONE VEHICLE, so the
-// suite that covers it builds a two-client world — and a two-client world built by
-// hand is exactly the kind of fixture that can agree with the code by construction.
-// This runs the real suite twice with a defect planted, and requires BOTH runs to go
-// red for the right reason.
-//
-//   election   both clients report themselves the controller. This is planted in the
-//              REAL CODE PATH: publishTick computes `mine` from
-//              tlib.occupancy.isController(), so the module genuinely admits two
-//              writers on one statebag key. It is the pre-election bug, replayed.
+//   election   both clients report themselves the controller. publishTick computes
+//              `mine` from tlib.occupancy.isController(), so the module genuinely
+//              admits two writers on one statebag key. The pre-election bug, replayed.
 //   clock      the world's clock stops advancing — the module's only notion of time,
 //              and the one way a relay reasoned entirely about elapsed milliseconds
 //              can look perfect while measuring nothing.
 //
-// The suite itself requires an EXACT set of assertions to flip and names any that did
-// not, so a control whose expected set has gone stale refuses its own run. What this
-// script adds is the half the suite cannot check about itself: that each mode exits
-// NON-ZERO, which is all CI reads, and that it does so with the control's own summary
-// line rather than with an unrelated crash — a planted defect that makes the suite
-// die on a syntax error or a nil call proves nothing about the assertions.
+// The suite checks its own assertion set; what this adds is that each mode exits
+// NON-ZERO (all CI reads) and reaches the control's own summary line rather than
+// dying on a syntax error or a nil call.
 //
-// `test:lua:control` is a chain of three runners: this one, runtimetxd-control.ts
-// and primitives-control.ts. Each requires its suite GREEN at baseline before
-// planting anything, without which no red result is attributable.
+// `test:lua:control` chains this, runtimetxd-control.ts and primitives-control.ts.
 //
 //   bun run test:lua:control
 
@@ -68,8 +58,8 @@ for (const mode of MODES) {
   }
 }
 
-// Also prove the suite is GREEN with nothing planted. A control pair that is red in
-// both modes and red at baseline too would be indistinguishable from this one.
+// Green with nothing planted: a pair red in both modes AND red at baseline would be
+// indistinguishable from a working control.
 const baseline = Bun.spawnSync(
   ["bunx", "--bun", "--package", "fengari-node-cli", "fengari", "scripts/run-lua-suite.lua", SUITE],
   { cwd: root }

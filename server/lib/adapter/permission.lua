@@ -16,9 +16,6 @@ function Platform.registerPermissionResolver(fn)
     _resolver = fn
 end
 
--- Single source of the per-key decision; hasPermission and hasPermissionBatch both
--- call this instead of each carrying their own copy of the rule.
---
 -- demoActive/resolver are passed in so a batch samples them ONCE for the whole
 -- list, not per key -- otherwise a demo toggle or resolver registration mid-list
 -- could answer half the keys under one rule and half under another.
@@ -85,10 +82,8 @@ Platform.export('tLib', 'HasPermission', function(source, key)
     return Platform.hasPermission(source, key)
 end)
 
--- Additive: HasPermission is unchanged, so a consumer unaware of the batch export
--- is unaffected. This export and shared/imports/permission/server.lua's `hasBatch`
--- ship in the same tLib release, so they can't disagree about existing; hasBatch
--- fails closed if this export doesn't answer.
+-- shared/imports/permission/server.lua's `hasBatch` fails closed if this export
+-- does not answer.
 Platform.export('tLib', 'HasPermissionBatch', function(source, keys)
     return Platform.hasPermissionBatch(source, keys)
 end)

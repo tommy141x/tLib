@@ -73,8 +73,7 @@ const { previewMarketplaceHtml, clearPreviewCache, previewCacheStats } = await i
 );
 
 // A separate MODULE, not a corner of `browse.ts`: its listener has to outlive the
-// component. Imported here because both halves need the same `shared/ts/nui`
-// mock, and `mock.module` replaces a module for the rest of the test process.
+// component. Imported here because both halves need the same `shared/ts/nui` mock.
 const { clearInstallLedger, installLedger, patchInstalledNames } = await import(
   "../../shared/ts/marketplace/ui/install-ledger"
 );
@@ -215,12 +214,8 @@ describe("the byte budget", () => {
 });
 
 /**
- * THE SAME FILE ON PURPOSE, despite the name.
- *
- * `shared/ts/nui` has to be mocked for both, and `mock.module` replaces a module
- * for the rest of the `bun test` PROCESS — this file's own header says so — so a
- * second suite mocking it would race this one over which fake the ledger's
- * load-time subscription was bound to. One mock, one file.
+ * In this file despite the name: a second suite mocking `shared/ts/nui` would race
+ * this one over which fake the ledger's load-time subscription was bound to.
  */
 describe("the install ledger", () => {
   /** Deliver a coordinator reply the way `cl_marketplace.lua` does. */

@@ -1,6 +1,5 @@
-// Typed handles to FiveM runtime globals used by the marketplace module.
-// Same rationale as realtime/fivem.ts — the bundler shadows `exports` in
-// non-entry files so we reach through globalThis.
+// Typed handles to the FiveM runtime globals, resolved through globalThis.
+// See ../http/fivem.ts for why that indirection is required.
 
 type ExportsFn = (name: string, fn: (...args: unknown[]) => unknown) => void;
 type OnFn = (event: string, handler: (...args: unknown[]) => void) => void;

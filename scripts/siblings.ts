@@ -1,22 +1,12 @@
 /**
  * Which sibling resources are checked out beside tLib.
  *
- * tLib is published standalone under MIT, and several gates in this directory
- * are estate-wide by design: they exist because tLib is the only repo that can
- * see every sibling. A clone of tLib on its own has none of them, and each of
- * those gates would otherwise either die (`found 0 sibling resource(s)`) or
- * report a pass over nothing.
- *
- * Zero siblings is therefore its own case, distinct from "fewer than expected".
- * A gate reads it as "this check does not apply here" and exits 0 saying so;
- * any non-zero count keeps the gate's existing behaviour, failures included —
- * some-but-too-few is exactly the broken-discovery case those floors were
- * written to catch.
- *
- * One rule in one place rather than a copy per gate, for the same reason
- * `secret-gate-provision.ts` generates the per-resource wiring: four copies of
- * a detection is four chances for one to be the stale one, and a stale gate is
- * silent.
+ * Several gates in this directory are estate-wide, so a standalone MIT clone of
+ * tLib would make them either die (`found 0 sibling resource(s)`) or pass over
+ * nothing. Zero siblings is therefore its own case, distinct from "fewer than
+ * expected": a gate reads it as "does not apply here" and exits 0 saying so,
+ * while any non-zero count keeps its existing floors, which exist to catch the
+ * some-but-too-few broken-discovery case.
  */
 
 import { existsSync, readdirSync } from "node:fs";

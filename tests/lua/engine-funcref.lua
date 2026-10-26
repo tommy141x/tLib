@@ -86,10 +86,8 @@ local function equal(actual, expected, message)
     end
 end
 
--- The simulation is itself worth pinning
---
--- If this drifted into being an ordinary function, every assertion below would
--- keep passing while testing nothing.
+-- If the simulation drifted into being an ordinary function, every assertion
+-- below would keep passing while testing nothing.
 
 local probe = funcref(function(a, b) return (a or 0) + (b or 0), 'ok' end)
 equal(type(probe), 'table', 'a funcref is a table, not a function')

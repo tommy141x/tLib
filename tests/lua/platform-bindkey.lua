@@ -13,8 +13,7 @@
 --     raw RegisterKeyMapping), `pair = false` for one-shot commands, `when` gating,
 --     composed labels, the registry, and conflict detection.
 --
--- The REAL module is loaded with mocked natives rather than reimplemented. A stand-in
--- would keep passing while the shipped file changed shape.
+-- The REAL module is loaded with mocked natives rather than reimplemented.
 
 local report = print
 local passed = 0

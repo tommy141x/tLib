@@ -195,9 +195,8 @@ function ServerSettings.create(opts)
             if type(changes) ~= "table" then return end
             deepMerge(settings, changes)
             saveToFile()
-            -- INFO, not WARN. An admin changing server settings is an audit
-            -- line, and the handler is already admin-gated -- tinting it yellow
-            -- claimed a problem where the feature had simply been used.
+            -- INFO, not WARN: an admin changing server settings is an audit
+            -- line, not a problem.
             log("Server settings updated by player " .. src, 2)
             inst:broadcast()
         end)

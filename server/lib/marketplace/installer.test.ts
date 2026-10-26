@@ -690,11 +690,6 @@ describe("explicit verified legacy adoption", () => {
     expect(fs.readdirSync(base()).sort()).toEqual([".marketplace-demo.json", "demo"]);
     expect(uninstallItem("test", "ui", "demo").ok).toBe(true);
   });
-  // "ambiguous" is no longer in this list. It wrote a flat `demo.wav` beside the
-  // `demo/` directory, which was a second candidate destination when a sound
-  // could install as a bare file. With one candidate per slug it is not a
-  // candidate at all, so the case cannot reach the hazard it was written for and
-  // keeping it would be a test that passes without exercising anything.
   test.each(["modified", "extra", "missing"])("refuses %s content without a receipt", (kind) => {
     const data = bundle();
     legacy(data);

@@ -63,8 +63,8 @@
          those trees either; they simply never hand an Ark part `children`.
 
          This redirect re-exports the real package and adds only the missing
-         namespace. Nothing is widened to `any`, so vendor props stay checked.
-         It is the arrangement ha-dash already uses, for the same reason.
+         namespace. It is the arrangement ha-dash already uses, for the same
+         reason.
 
          Delete this, src/types/solid-js.d.ts and patches/ together when
          @ark-ui/solid publishes Solid 2 types. */

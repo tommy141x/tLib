@@ -3,18 +3,8 @@
  * Negative control for the secret gate, end to end in a real git repository.
  * `bun run scripts/secret-gate-control.ts`
  *
- * Uses a real `git init`, `.githooks/pre-commit`, `git commit` and
- * `git show HEAD:` -- no stubs -- asserts coverage as a SET of key names
- * (never a count), and runs a broken-gate drill (the same planted credential
- * with the pattern list narrowed so it can't match) that must go green;
- * without that last part a red verdict isn't evidence the rule caused it.
- *
- * Proves, in both directions: PLANTED (a credential-shaped key with a value)
- * is caught by the pre-commit hook (exit 1, names the key, leaves the
- * working tree intact) and by both the staged and HEAD gates; CLEAN (same
- * repo, value in a gitignored sidecar, or a non-credential key with a value)
- * passes; DRILL (pattern list narrowed) makes the PLANTED case pass, pinning
- * the red verdict on the rule.
+ * Real `git init`, `.githooks/pre-commit`, `git commit` and `git show HEAD:` --
+ * no stubs. Coverage is asserted as a SET of key names, never a count.
  *
  * Every planted value here is obviously synthetic. This is only half of
  * `secrets:control` -- the other half is the Lua overlay suite under
@@ -151,7 +141,7 @@ console.log("\n0. preconditions");
 check(hookIsCurrent(tlibRoot), "tLib's own .githooks/pre-commit is the canonical bytes");
 check(secretPatterns().length >= 18, "the pattern list parsed from Lua is non-trivial");
 
-// 1. CLEAN: the baseline must be green, or nothing below means anything
+// 1. CLEAN: the baseline must be green, or nothing below means anything.
 
 console.log("\n1. CLEAN — a blank tracked config, value in the gitignored sidecar");
 {
@@ -212,9 +202,9 @@ let plantedRepo = "";
     "utf8"
   );
 
-  // The two keys planted, asserted as a SET of names. `AccessKey` is here
-  // deliberately: it is the one credential name the hand-written lists missed,
-  // and a count-based assertion would have been satisfied without it.
+  // Asserted as a SET of names. `AccessKey` is here deliberately: it is the one
+  // credential name the hand-written lists missed, and a count would have been
+  // satisfied without it.
   const found = coverage([
     { file: "config/config.lua", content: fs.readFileSync(configPath, "utf8") },
   ]);
@@ -299,9 +289,9 @@ console.log("\n2b. STAGED-ADD — a brand-new config file, never yet committed")
   check(blanked.code === 0, "and the same staged-add file passes once the value is blank");
 }
 
-// 3. The drill: break the rule and the planted case must pass. The gate
-// derives its patterns from the Lua file, so this narrows that file in a
-// COPY of tLib and re-runs the same planted repo against it.
+// 3. The drill: break the rule and the planted case must pass, which pins the red
+// verdict above on the rule. The gate derives its patterns from the Lua file, so
+// this narrows that file in a COPY of tLib and re-runs the same planted repo.
 
 console.log("\n3. DRILL — pattern list narrowed; the planted case must go GREEN");
 {
@@ -324,9 +314,8 @@ console.log("\n3. DRILL — pattern list narrowed; the planted case must go GREE
   const luaPath = path.join(drillRoot, "shared/imports/diag/shared.lua");
   const lua = fs.readFileSync(luaPath, "utf8");
   // Narrow the list to patterns that cannot match any key in the fixture. The
-  // substitution is asserted to have changed the file: a gsub that matched
-  // nothing would hand the drill the real list and it would then assert that a
-  // working gate works.
+  // substitution is asserted to have changed the file: a gsub that matched nothing
+  // would hand the drill the real list.
   const narrowed = lua.replace(
     /Diag\.SECRET_PATTERNS = \{[^}]*\}/,
     "Diag.SECRET_PATTERNS = {\n    'nothinghere',\n}"

@@ -7,10 +7,9 @@
 -- limits. The two must agree, hence one copy.
 --
 -- Free of every tLib global -- no Platform, no Logger -- so it can be loaded
--- standalone into a consumer's Lua VM through LoadResourceFile, the way
--- shared/imports/menu/shared.lua loads shared/lib/menu/schema.lua. Keep it dependency-free and
--- keep it in `shared_scripts` and `files`, or one side silently ends up with no
--- rule at all.
+-- standalone into a consumer's Lua VM through LoadResourceFile. Keep it
+-- dependency-free and keep it in `shared_scripts` and `files`, or one side
+-- silently ends up with no rule at all.
 --
 -- Branding policy, not an authenticity boundary: manifests are editable, so any
 -- resource can claim the studio. Nothing may use it to decide who is ALLOWED to
@@ -50,19 +49,12 @@ end
 --- `resource`'s human-visible title: its manifest `name` directive, falling back
 --- to the resource name when that is absent, empty or unreadable.
 ---
---- TEXT AND ONLY TEXT. Branding policy, not an authenticity boundary:
---- manifests are editable, so any resource can claim the studio. Nothing may use
---- it to decide who is ALLOWED to do something -- that is what ACEs are for.
---- Nor is it ever an identifier: not a slug, ACE object, event name, command,
---- statebag or KVP key, filename, cache key, wire field or lookup index. Those
---- stay the resource name. Which is also why the fallback is the resource name
---- rather than an error -- a caller only ever gets a LABEL back, so there is no
---- shape of failure here that can be mistaken for identity.
+--- TEXT AND ONLY TEXT. Never an identifier: not a slug, ACE object, event name,
+--- command, statebag or KVP key, filename, cache key, wire field or lookup
+--- index. Those stay the resource name.
 ---
---- Falls back rather than throwing when the metadata natives are absent, the
---- same way isStudioResource above lands on a safe path instead of crashing
---- startup. `name` is declared at most once per manifest, so index 0 is all of
---- it; repeated entries are not a thing the way they are for `author`.
+--- `name` is declared at most once per manifest, so index 0 is all of it, unlike
+--- `author`.
 function StudioBranding.displayName(resource)
     if type(resource) ~= 'string' or resource == '' then return '' end
     if type(GetResourceMetadata) ~= 'function' then return resource end

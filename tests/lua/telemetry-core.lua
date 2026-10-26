@@ -7,14 +7,12 @@
 -- the same group, and the only failure mode is silent: two groups of one, on a
 -- dashboard, forever. So the literals below are also pinned in
 -- tests/unit/telemetry-payload.test.ts, and `fnv1a('')` / `fnv1a('a')` are the
--- published FNV-1a 32-bit test vectors — which makes this an oracle rather
--- than a snapshot of whatever the code happened to do.
+-- published FNV-1a 32-bit test vectors rather than this code's own output.
 --
 -- The module is loaded without RegisterNetEvent, CreateThread or
 -- RegisterNUICallback defined, deliberately: every wiring block is guarded on
 -- `type(...) == 'function'`, and this suite proves the primitives are
--- reachable in a VM that has none of them. A module that only loaded inside a
--- live FXServer could not be tested at all.
+-- reachable in a VM that has none of them.
 --
 -- Run via `bun run test:lua`.
 

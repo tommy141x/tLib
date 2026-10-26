@@ -31,8 +31,7 @@ is in `check:regression`, so it runs in `verify`.
 A comment naming a line number, a file path, a count or a version is a
 liability. In a sibling resource a ledger of "five live bugs" had three already
 fixed and every line number stale by hundreds of lines, and an agent was nearly
-sent to fix working code from it. Name a symbol, not a location. A comment that
-says *why* stays true; one that says *what the code does* goes wrong.
+sent to fix working code from it. Name a symbol, not a location.
 
 ## Move knowledge, do not delete it
 
@@ -57,9 +56,9 @@ A file of 200+ lines may not be more than 30% whole-line comments. The gate
 measures whole-line comments only — a trailing `// why` on a line of code does
 not count against it.
 
-30% is not a target. It is the point past which a file is prose with code in it.
-When the gate was written tLib averaged 24.8%, and the worst single file was 77%
-comment. A file that needs more explanation than that needs a README beside it.
+30% is not a target. When the gate was written tLib averaged 24.8%, and the
+worst single file was 77% comment. A file that needs more explanation than the
+ceiling allows needs a README beside it.
 
 ### The ratchet
 
@@ -69,7 +68,7 @@ not an allowlist:
 
 - A pinned file may only shrink. Growing one fails the gate.
 - The moment a pinned file is at or under the ceiling, the gate demands its entry
-  be **deleted**. The ledger cannot outlive what it describes.
+  be **deleted**.
 - An entry naming a file the gate no longer measures fails too.
 
 A new file is never pinned. `--write-baseline` regenerates the file; use it only

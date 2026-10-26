@@ -1,14 +1,9 @@
-/**
- * Version extraction and synchronization utilities.
- * Reads version from fxmanifest.lua and syncs it to other files.
- */
+/** Reads the version out of fxmanifest.lua and syncs it to every other target. */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-/**
- * Extract the version string from fxmanifest.lua (e.g. "v4.4" → "4.4").
- */
+/** `version 'v4.4'` → `"4.4"`. */
 export async function getManifestVersion(
   manifestPath = "./fxmanifest.lua"
 ): Promise<string | null> {
@@ -21,10 +16,7 @@ export async function getManifestVersion(
   }
 }
 
-/**
- * Normalize a version like "4.4" or "3" to semver "x.x.x".
- * "v4.4" → "4.4.0", "v3" → "3.0.0", "4.4.1" → "4.4.1"
- */
+/** `"v4.4"` → `"4.4.0"`, `"v3"` → `"3.0.0"`, `"4.4.1"` → `"4.4.1"`. */
 export function toSemver(version: string): string {
   const clean = version.replace(/^v/i, "");
   const parts = clean.split(".");
@@ -32,10 +24,7 @@ export function toSemver(version: string): string {
   return parts.slice(0, 3).join(".");
 }
 
-/**
- * Sync a version into a TypeScript file by replacing a const pattern.
- * Example pattern: /export const PANEL_VERSION = ["']([^"']+)["']/
- */
+/** Pattern shape: `/export const PANEL_VERSION = ["']([^"']+)["']/`. */
 export async function syncVersionToTsConst(
   filePath: string,
   pattern: RegExp,
@@ -62,9 +51,6 @@ export async function syncVersionToTsConst(
   }
 }
 
-/**
- * Sync a semver version into a Cargo.toml file.
- */
 export async function syncVersionToCargoToml(filePath: string, version: string): Promise<void> {
   try {
     let content = await fs.promises.readFile(filePath, "utf8");

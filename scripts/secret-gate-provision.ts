@@ -3,17 +3,11 @@
  * Install (or re-install, or verify) the secret gate's per-resource wiring in
  * every sibling resource.
  *
- * Why a provisioner and not eleven hand edits
- *
  * The gate itself is one implementation in tLib. The per-resource part is four
  * small things — a `.githooks/pre-commit`, three `package.json` scripts, a
- * `.gitignore` line and a CI workflow — and four small things times eleven
- * repos is forty-four chances for one to be the stale one. A stale copy of a
- * gate is silent, which is the whole failure mode being designed against here.
- *
- * So the wiring is generated, and `--check` asserts every repo's copy is
- * current. That check belongs in tLib's own `verify`: tLib is the only repo
- * from which all the siblings are visible.
+ * `.gitignore` line and a CI workflow — across eleven repos, so it is generated
+ * and `--check` asserts every repo's copy is current. That check lives in tLib's
+ * own `verify`, the only place all the siblings are visible.
  *
  * Usage:
  *   bun run scripts/secret-gate-provision.ts            # write/refresh
@@ -92,9 +86,7 @@ function provision(repo: string, repoRoot: string, check: boolean): Change[] {
   // Inserted TEXTUALLY, immediately after `"scripts": {`, never by
   // parse-and-restringify. Several of these package.json files have hand-set
   // indentation, and a round-trip through `JSON.stringify` reformats the whole
-  // file. A one-line change that arrives as a 150-line diff
-  // does not get reviewed, and in a tree where other work is in flight it is a
-  // conflict for no reason.
+  // file: a one-line change arrives as a 150-line diff.
   const packagePath = path.join(repoRoot, "package.json");
   if (fs.existsSync(packagePath)) {
     const text = fs.readFileSync(packagePath, "utf8");

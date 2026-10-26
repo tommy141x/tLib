@@ -19,10 +19,6 @@
  *   @zag-js/solid            mergeProps, onMount
  *   lucide-solid             solid-js/web, splitProps                (3700 files)
  *
- * 2026-10-23: removed solid-motionone (zero importers, no longer declared) and the two
- * packages reachable only through it, @solid-primitives/refs and
- * @solid-primitives/transition-group.
- *
  * Deliberately excluded: @solid-primitives/keyed and @solid-primitives/utils, both hit
  * before the upgrade, both moved to Solid-2-native pins (3.0.0-next.2 / 7.0.0-next.4).
  * `utils` matters beyond tidiness — keyed@3 imports INTERNAL_OPTIONS from it, and

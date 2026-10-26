@@ -20,12 +20,11 @@
 //! added one visible top-level window titled with node's own path; WITH it, zero
 //! new windows.
 //!
-//! The predecessor of this file was a `bun build --compile --windows-hide-console`
-//! binary, which is also GUI-subsystem and also correct -- but it embeds the Bun
-//! runtime, so the published download went from 0.1 MB to 52 MB, broke
-//! Cloudflare Workers' 25 MiB asset cap, and shipped Node, V8, OpenSSL, libuv,
-//! ICU, zlib, llhttp, nghttp2 and brotli with no notice file anywhere in the
-//! bundle. This binary embeds nothing.
+//! `bun build --compile --windows-hide-console` is also GUI-subsystem and also
+//! works, but it embeds the Bun runtime: 0.1 MB became 52 MB, over Cloudflare
+//! Workers' 25 MiB asset cap, and shipped Node, V8, OpenSSL, libuv, ICU, zlib,
+//! llhttp, nghttp2 and brotli with no notice file in the bundle. This embeds
+//! nothing.
 //!
 //! ## Finding the runtime
 //!
@@ -38,13 +37,12 @@
 //! declared major (newest patch), then the newest runtime of any major, then
 //! `node.exe` on `PATH`.
 //!
-//! The fallbacks are the difference between this and a fragile launcher: with
-//! `CodePathWin` pointing at an executable, whether the host still provisions the
-//! declared major is unverified -- it could not be tested here, because Stream
-//! Deck is not installed on the build machine. When nothing is found at all the
-//! failure is written to `logs/launcher.log` beside the plugin and to stderr,
-//! which Stream Deck captures into its own log, rather than being a plugin that
-//! merely never appears.
+//! Whether the host still provisions the declared major when `CodePathWin` points
+//! at an executable is UNVERIFIED -- Stream Deck is not installed on the build
+//! machine -- hence the fallbacks. When nothing is found at all the failure is
+//! written to `logs/launcher.log` beside the plugin and to stderr, which Stream
+//! Deck captures into its own log, rather than being a plugin that merely never
+//! appears.
 
 #![windows_subsystem = "windows"]
 

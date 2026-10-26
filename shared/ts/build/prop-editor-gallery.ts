@@ -2,8 +2,7 @@
  * Every prop-editor state, screenshotted into one folder, against a consumer's real NUI
  * bundle. Shared because chrome is themed by token VALUES, not names — tRadio sets its own
  * on `.radio-settings-root`, tRadar/tDetector inherit tLib's from `theme-tokens.css` on
- * `:root` — so each host is a genuinely different picture. Moved out of
- * `tRadio/scripts/propeditor-gallery/gallery.ts` once tRadio stopped being the only host.
+ * `:root` — so each host is a genuinely different picture.
  *
  * Every input is a real FiveM message (`locale:init`, `<prefix>:propEditorInit`,
  * `setCameraPosition`) except two synthesised fixtures: `vehicleMatrix` is a real GTA basis

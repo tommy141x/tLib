@@ -136,7 +136,6 @@ function VehicleProp.create(descriptor)
 
     local instance = {}
 
-    --
     -- `models` is a stable table for the same reason the placement tables are:
     -- a consumer hands it to a settings UI once. `setRegistry` refills it.
     local models = {}
@@ -328,8 +327,8 @@ function VehicleProp.create(descriptor)
         editor.markOwnedProp(prop)
 
         -- Unit scale attaches; anything else is DRIVEN. `AttachEntityToEntity`
-        -- cannot carry a scale -- measured, with the full write-up and the
-        -- handedness invariant at propeditor/client.lua's `TWO MECHANISMS` block.
+        -- cannot carry a scale -- measured, with the full write-up above
+        -- `reattach` in propeditor/client.lua.
         if tlib.drivenprop.isUnitScale(placement.scale) then
             AttachEntityToEntity(
                 prop, vehicle, 0,
@@ -412,7 +411,6 @@ function VehicleProp.create(descriptor)
     end
 
     --- Drops tracking for props whose vehicle or prop handle has gone away.
-    ---
     function instance.reconcile()
         for vehicle, prop in pairs(attached) do
             if not DoesEntityExist(vehicle) or not prop or not DoesEntityExist(prop) then
@@ -446,7 +444,6 @@ function VehicleProp.create(descriptor)
         end)
     end
 
-    --
     -- One pass over the vehicle pool every 2.5s, attaching props to configured
     -- models and clearing stale entries. A poll rather than an event because
     -- there is no event: a vehicle streaming in near the player is not
@@ -455,7 +452,7 @@ function VehicleProp.create(descriptor)
     -- door, on a device other people are supposed to be able to see from
     -- outside the car.
 
-    --- True until the first completed pass. See the reclaim at the end of `tick`.
+    --- False until the first completed pass. See the reclaim at the end of `tick`.
     local firstPassDone = false
 
     --- One pass. Exposed so a suite can drive it without a thread.

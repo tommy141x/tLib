@@ -1,8 +1,8 @@
 --[[
     tLib — runtime TXD lifetime: create once, never again.
 
-    Loaded into the consumer's VM like every other module under shared/imports/:
-    `tlib.runtimetxd`. Client only — every native it touches is a graphics native.
+    Loaded into the consumer's VM as `tlib.runtimetxd`. Client only — every
+    native it touches is a graphics native.
 
         local txds = tlib.runtimetxd.create('tdet_scr_txd')
         local txd  = txds.ensure()

@@ -3,33 +3,11 @@
  * `shared/ts/build/css-contract.ts`, which ride inside every resource's
  * `check:classes`.
  *
- * Why this file exists in this shape, and not as three `expect` calls:
- *
- *   • These gates are cheap to fool by accident. `walkCss` returns `[]` for a
- *     directory that does not exist, so a renamed `src/`, a wrong cwd or a
- *     widened skip rule all print "No surface.css class collisions." and exit 0
- *     in milliseconds. So the first thing asserted is that the fixtures the
- *     control planted are actually BEING READ -- by requiring named findings
- *     from them, never by trusting a zero.
- *
- *   • A gate that fires on correct code gets switched off by the next person,
- *     which is worse than no gate. Half the fixture is deliberately CORRECT
- *     usage -- `.panel .toolbar`, a hard-edged zero-blur shadow -- and is
- *     required to produce nothing.
- *
- *   • Findings are asserted as an exact SET OF NAMES, not a count. A count is
- *     satisfied by the wrong finding and goes stale the moment surface.css
- *     gains a class.
- *
- *   • The last case is a BROKEN-GATE drill: `subjectClasses` is the one piece of
- *     judgement in gate 1 (rightmost compound only), and a control that never
- *     removes it cannot tell whether the correct-usage case passed because the
- *     rule works or because nothing was looking. So the drill re-runs the
- *     correct-usage fixture through a deliberately naive "every class in the
- *     selector" reading and REQUIRES it to go red. If that reading also passes,
- *     the fixture is not exercising the rule and this control is theatre.
- *
- * It proves the gates discriminate. It cannot prove the gate set is complete.
+ * `walkCss` returns `[]` for a directory that does not exist, so a renamed
+ * `src/`, a wrong cwd or a widened skip rule all print "No surface.css class
+ * collisions." and exit 0 in milliseconds. Every case here therefore requires
+ * findings BY NAME rather than trusting a zero, and half the fixture is
+ * deliberately correct usage that must produce nothing.
  */
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -65,11 +43,8 @@ function setCheck(name: string, actual: string[], expected: string[]): void {
   );
 }
 
-// Fixture
-//
-// Written to the OS temp dir rather than into the repo: a fixture under `src`
-// would be swept up by the very gate it is testing, and by every other
-// resource's `check:classes` too.
+// Fixtures go in the OS temp dir: one under `src` would be swept up by the very
+// gate it is testing, and by every other resource's `check:classes` too.
 
 mkdirSync(root, { recursive: true });
 
@@ -172,8 +147,7 @@ try {
   );
   // `.list-row.selected` is the one compound subject in surface.css. Harvesting
   // both of its classes put bare `selected` in the guarded set and reported
-  // tLS's unrelated `.selected` -- the only false positive in a nine-bundle
-  // sweep. A state modifier compounded onto something is not a forkable rule.
+  // tLS's unrelated `.selected` -- the only false positive in a nine-bundle sweep.
   setCheck(
     "a state modifier from a compound subject is not guarded on its own",
     [...surface].filter((n) => n === "selected"),
@@ -212,9 +186,7 @@ try {
       .map((c) => c.name),
     ["panel", "prop-input", "list-row", "segment", "field-hint"]
   );
-  // Its own case rather than left implicit in the green fixture above: this is
-  // the rule the gate was corrected for after the first consumer met it, and a
-  // regression here is the gate going back to firing on correct CSS.
+  // The rule the gate was corrected for after the first consumer met it.
   setCheck(
     "a scoped or compounded use of a surface class is NOT a redeclaration",
     findSurfaceCollisions(correct)
@@ -239,11 +211,8 @@ try {
     ["prop-input", "list-row", "field-hint"]
   );
 
-  // 5. Broken-gate drill
-  //
-  // The rightmost-compound rule is the only judgement in gate 1. Replace it
-  // with the naive reading and the CORRECT fixture must go red -- otherwise case
-  // 2 above passed for free and proves nothing.
+  // 5. Broken-gate drill. The rightmost-compound rule is the only judgement in
+  // gate 1; with the naive reading in its place the CORRECT fixture must go red.
   const naive = (selectorList: string): string[] => [
     ...new Set([...selectorList.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)].map((m) => m[1] as string)),
   ];
@@ -256,9 +225,8 @@ try {
     [...naiveHits],
     ["panel", "prop-input", "list-row", "segment"]
   );
-  // The two readings must DISAGREE on this fixture. If they ever agree, the
-  // green case above stopped exercising the rule and proves nothing — which is
-  // the whole reason a drill is here rather than only a passing assertion.
+  // The two readings must DISAGREE on this fixture; if they ever agree, the green
+  // case above has stopped exercising the rule.
   check(
     "DRILL: the real gate finds none of what the naive reading finds there",
     naiveHits.size > 0 &&
@@ -266,8 +234,6 @@ try {
         collision.sites.every((site) => !site.includes("correct.css"))
       )
   );
-  // And the subject rule itself still holds on its own, for the forms where the
-  // subject is the whole selector.
   setCheck(
     "DRILL: the subject of `.editor .list-row` is the row, not the editor",
     subjectClasses(".editor .list-row"),
@@ -285,7 +251,6 @@ try {
     /box-shadow:[^;]*[1-9][0-9]*px [1-9]/.test("box-shadow: inset 2px 4px #000") &&
       blurredShadow("inset 2px 4px #000") === undefined
   );
-  // The three shadows tLib actually ships, each required to pass.
   setCheck(
     "tLib's own zero-blur shadows all pass the predicate",
     [

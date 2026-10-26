@@ -13,28 +13,22 @@
  * request is built (`shared/ts/marketplace/catalogue.ts`), and the request path
  * cannot wait on a round trip into another VM for a header.
  *
- * So this is a direct read-modify-write, and it is safe for a reason worth
- * stating rather than assuming: **tLib's own `data.json` has exactly one
- * writer, and it is this file.** `tlib.jsonstore`, `CreateServerSettings` and
- * `CreateDiscovery` all write the *invoking* resource's document — tDetector's,
- * tLS's — never tLib's. Nothing in tLib opens a store on tLib.
+ * So this is a direct read-modify-write. It is safe because **tLib's own
+ * `data.json` has exactly one writer, and it is this file** — `tlib.jsonstore`,
+ * `CreateServerSettings` and `CreateDiscovery` all write the *invoking*
+ * resource's document, tDetector's or tLS's, never tLib's.
  *
  * IF THAT EVER CHANGES, it still holds, but only because this write MERGES:
- * it re-reads the whole document, sets one key and writes it back, which is the
- * same contract `Store:write` honours in the other direction ("the consumer
- * keeps unrelated sections in it"). Do not simplify it into a plain write of
- * `{ installId }`. The failure is silent and total: every other section gone,
- * and only a restart shows it.
+ * it re-reads the whole document, sets one key and writes it back. Do not
+ * simplify it into a plain write of `{ installId }`. The failure is silent and
+ * total: every other section gone, and only a restart shows it.
  *
- * MINTED ON DEMAND, NOT ON CONSENT
- *
- * It used to be minted lazily and **only when telemetry consent was on**, so an
- * install that never opted in had no id on its disk at all. That property is
- * gone by decision, not by accident: the id is now on marketplace browse, on the
+ * MINTED ON DEMAND, NOT ON CONSENT: the id is on marketplace browse, on the
  * version check and on community-configs, all of which run regardless of
- * `tlib_telemetry`. The first of those mints it. Pretending otherwise would mean
- * either a request with no id or a fresh random one per restart, and the second
- * makes the only figure the id exists for silently wrong.
+ * `tlib_telemetry`, and the first of those mints it. The alternative is a fresh
+ * random id per restart, which makes the only figure the id exists for — one
+ * install making a thousand requests against a thousand installs making one —
+ * silently wrong.
  */
 
 import * as fs from "node:fs";

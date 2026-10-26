@@ -15,15 +15,12 @@
  * shared/ts did. A sibling copy would drift from the control fixture, and a rule
  * that has drifted reports zero — which reads as a finished migration.
  *
- * The control is read from THIS repo either way, so pointing `--root` elsewhere
- * cannot weaken it: the fixture never moves and all 7 rules must still trip on it.
- *
- * THE CONTROL IS THE POINT. Every rule below is also run against
- * `scripts/solid2-scan-control.fixture.tsx`, a file that is deliberately still
- * written in Solid 1. If a rule stops matching there, the whole run fails —
- * even if the real tree reports clean. Without that, a pattern that silently
- * drifted (a renamed import, a reformatted call) reports zero findings, and
- * zero findings reads exactly like "the migration is finished".
+ * Every rule below is also run against `scripts/solid2-scan-control.fixture.tsx`,
+ * deliberately still written in Solid 1. If a rule stops matching there the whole
+ * run fails, even if the real tree reports clean — a pattern that drifted (a
+ * renamed import, a reformatted call) reports zero, and zero reads exactly like
+ * "the migration is finished". The fixture is read from THIS repo either way, so
+ * pointing `--root` elsewhere cannot weaken it.
  *
  * Exit codes: 0 pass, 1 an assertion failed, 2 the control broke, 3 bad usage.
  */
@@ -330,7 +327,7 @@ function scan(files: { file: string; src: string }[]): Finding[] {
   return out;
 }
 
-// ---------------------------------------------------------------- the control
+// The control
 
 const controlSrc = readFileSync(CONTROL, "utf8");
 ORIGINAL.set(CONTROL, controlSrc);
@@ -353,7 +350,7 @@ if (deadRules.length > 0) {
   process.exit(2);
 }
 
-// ----------------------------------------------------------------- the scan
+// The scan
 
 const files = walk(SCAN_ROOT).map((file) => {
   const src = readFileSync(file, "utf8");
@@ -376,7 +373,7 @@ if (process.argv.includes("--list")) {
   }
 }
 
-// ------------------------------------------------------------- the assertions
+// The assertions
 
 const argMin = process.argv.indexOf("--min");
 if (argMin !== -1) {

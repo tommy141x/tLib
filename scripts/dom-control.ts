@@ -2,39 +2,22 @@
 /**
  * `bun run test:dom:control` — the negative control for the DOM suite.
  *
- * What a control here can and cannot prove
+ * A control that cannot reach the hazard reads as a clean bill of health. tUnit's
+ * first control broke a synchronous mirror and the proof PASSED, because the only
+ * path it exercised was a slider burst whose commit lands 400ms later, by which
+ * time the store has flushed and the trap cannot bite. So every defect in the
+ * `DEFECTS` table declares the code `path` it travels and the EXACT named set of
+ * tests it reddens.
  *
- * A PASSING CONTROL PROVES THE ASSERTION STILL FIRES. IT DOES NOT PROVE THE
- * RULE SET IS COMPLETE, and — the sharper half — it does not prove the assertion
- * covers the path where the defect would really occur. tUnit learned the second
- * one the expensive way: its first control broke a synchronous mirror and the
- * proof PASSED, because the only path that control exercised was a slider burst
- * whose commit lands 400ms later, by which time the store has flushed and the
- * trap cannot bite. A control that cannot reach the hazard reads as a clean bill
- * of health.
+ * Two traps for whoever adds a defect to that table:
  *
- * So every defect in `client/web/tests/_setup.ts`'s `DEFECTS` table declares the
- * code `path` it travels, and this runner asserts the EXACT named set of tests
- * it reddens. A defect that reddens nothing, or reddens something other than
- * what it declared, is a failed control — not a pass.
- *
- * How the defect is planted
- *
- * In the REAL source bytes, in memory, through the loader — not in a copy of the
- * logic rewritten inside a test, and nothing is written to disk (this tree has
- * other agents working in it). Each entry declares how many times its `find`
- * must match, because A SUBSTITUTION THAT MATCHES NOTHING HANDS THE SUITE THE
- * UNMODIFIED MODULE and the control then asserts that correct code is correct.
- *
- * Two traps for whoever adds a defect to that table
- *
- * A multi-line `find` has to match its target's own line endings: PropEditor.tsx
+ * A multi-line `find` has to match its target's own line endings — PropEditor.tsx
  * is CRLF and LayoutEditor.tsx is LF, and two anchors matched nothing because of
- * it. And a defect's blast radius can far exceed the file it was planted in —
- * `spread-arity-verbatim` reddens most of the suite, because the Solid 1
- * `spread` arity bug throws inside a render effect and Solid 2 halts the
- * reactive graph for the whole PROCESS, so files that never import lucide-solid
- * go red too. Declare the radius you measured, not the one you expect.
+ * it. And a defect's blast radius can far exceed the file it was planted in:
+ * `spread-arity-verbatim` reddens most of the suite, because the Solid 1 `spread`
+ * arity bug throws inside a render effect and Solid 2 halts the reactive graph for
+ * the whole PROCESS, so files that never import lucide-solid go red too. Declare
+ * the radius you measured, not the one you expect.
  *
  * Exit codes
  *
@@ -66,8 +49,7 @@ function runSuite(env: Record<string, string> = {}): Run {
   });
   const output = proc.stdout.toString() + proc.stderr.toString();
   const failures = [...output.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm)].map((m) =>
-    // bun prints `describe > describe > test`; the leaf name is what the table
-    // declares, because a describe block's wording is prose and will be edited.
+    // bun prints `describe > describe > test`; the table declares the leaf name.
     m[1]!.split(" > ").pop()!.trim()
   );
   return { exitCode: proc.exitCode ?? 1, output, failures };
@@ -79,10 +61,8 @@ const say = (ok: boolean, line: string) => {
   if (!ok) bad++;
 };
 
-// 0. The baseline must be GREEN
-//
-// Without this, every red result below is unattributable: a suite that is
-// already failing reddens the named tests whatever is planted.
+// 0. The baseline must be GREEN: a suite that is already failing reddens the
+// named tests whatever is planted.
 {
   const base = runSuite();
   say(base.exitCode === 0, `baseline is green (exit ${base.exitCode})`);
@@ -96,12 +76,8 @@ const say = (ok: boolean, line: string) => {
   }
 }
 
-// 1. The broken-gate drill
-//
-// `drill-cannot-match`'s `find` is not in the file. The preload MUST throw
-// rather than hand the suite an unpatched module and a green run. Without this
-// case, "every defect reddened something" is not evidence that the patcher is
-// wired up at all.
+// 1. The broken-gate drill. `drill-cannot-match`'s `find` is not in the file, so
+// the preload MUST throw rather than hand the suite an unpatched module.
 {
   const drill = runSuite({ DOM_CONTROL: "drill-cannot-match" });
   const refused = drill.exitCode !== 0 && /matched 0 time\(s\)/.test(drill.output);
@@ -121,10 +97,9 @@ for (const [name, defect] of Object.entries(DOM_CONTROL_DEFECTS)) {
   if (defect.reddens.length === 0) continue; // the drill, handled above
   const run = runSuite({ DOM_CONTROL: name });
 
-  // The defect must have been APPLIED. A file the suite never imports cannot be
-  // patched, and a green control would then read as "the defect did not matter"
-  // when it means "the defect was never applied". The preload prints this line;
-  // a global could not be read across the process boundary.
+  // A file the suite never imports cannot be patched, and a green control then
+  // reads as "the defect did not matter" when it means "never applied". The
+  // preload prints this line; a global cannot be read across the process boundary.
   const planted = run.output.includes(`PLANTED DOM_CONTROL=${name} in ${defect.file}`);
   say(planted, `${name}: the defect was planted in ${defect.file}`);
 
@@ -139,8 +114,6 @@ for (const [name, defect] of Object.entries(DOM_CONTROL_DEFECTS)) {
   );
   say(missing.length === 0, `${name}: reddens all ${expected.size} declared test(s)`);
   if (missing.length) console.error(`  missing: ${JSON.stringify(missing, null, 2)}`);
-  // Over-reach, as a measured total rather than a list of prose titles — see
-  // `Defect.total` in `_defects.ts` for why that trade is made this way.
   say(
     run.failures.length === defect.total,
     `${name}: blast radius is ${defect.total} test(s), measured ${run.failures.length}`
@@ -148,11 +121,10 @@ for (const [name, defect] of Object.entries(DOM_CONTROL_DEFECTS)) {
   if (run.failures.length !== defect.total) {
     console.error(`  all failures: ${JSON.stringify(run.failures, null, 2)}`);
   }
-  // `extra` is the tests that went red but are NOT named in `reddens` -- the complement,
-  // not the declaration. It used to print as "declared blast radius", which reads as the
-  // `total` on the line above disagreeing with itself, and sent an investigation at the
-  // wrong defect: a PASSING `export-unconfirmed` line (6 === 6) carrying "(declared blast
-  // radius: 5)" was taken for the failure, while the real one was `spread-arity-verbatim`.
+  // `extra` is the complement of `reddens`, not the declaration. It used to print
+  // as "declared blast radius", which sent an investigation at the wrong defect: a
+  // PASSING `export-unconfirmed` line (6 === 6) carrying "(declared blast radius:
+  // 5)" was taken for the failure, while the real one was `spread-arity-verbatim`.
   if (extra.length) console.log(`  (also red, not named in reddens: ${extra.length})`);
 }
 

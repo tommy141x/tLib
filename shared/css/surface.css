@@ -7,9 +7,7 @@
  * are poor" has been reported against tLS and tUnit with both faces correctly
  * loading, and both times the cause was a panel whose whole vocabulary was 8-10px
  * at a fractional `--muted-foreground`. CEF 103 renders that with almost no stem
- * left, and the eye reads it as a bad FACE rather than as small dim text.
- * So, two rules, and they are the whole reason this file is in tLib rather than
- * copied a fourth time:
+ * left, and the eye reads it as a bad FACE rather than as small dim text. So:
  *
  *   1. Nothing below 11px. Not in a utility, not in a variant table.
  *   2. Body text never uses a FRACTIONAL `--muted-foreground`. The hierarchy is
@@ -23,13 +21,11 @@
  * Not a shadow, because FiveM's CEF does not composite blur or drop shadows
  * usefully: a 24px blur over a moving 3D scene costs a compositor pass every frame
  * and buys nothing visible. Every focus affordance below is an `outline`, which is
- * hard-edged, composites, and states what it is. There is no `box-shadow` in this
- * file at all — deliberately, so nobody has to check whether a blur radius is zero.
+ * hard-edged and composites.
  *
  * UnoCSS emits its utilities UNLAYERED, and an unlayered declaration beats a
  * layered one regardless of source order. Putting these in a layer is what makes
- * `class="panel !bg-secondary"` behave the way anyone reading it expects. tLS uses
- * the same layer for the same classes.
+ * `class="panel !bg-secondary"` behave the way anyone reading it expects.
  * Every `font-family` names `var(--font-mono)` or `var(--font-sans)` — the same
  * values the `font-mono`/`font-sans` UTILITIES resolve, provided the consumer points
  * `theme.fontFamily` at the tokens (see fonts.css). Naming a face directly here is
@@ -104,9 +100,6 @@
   .prop-input:focus-visible,
   .prop-input[data-state="open"] {
     border-color: hsl(var(--ring));
-    /* An `outline`, not a 0-blur `box-shadow`. The two render identically, but an
-       outline states what this is — a hard ring — and keeps the bundle off the
-       shadow path entirely rather than relying on a reader noticing a zero. */
     outline: 2px solid hsl(var(--ring) / 0.4);
     outline-offset: -1px;
   }
@@ -177,9 +170,7 @@
     border: 1px solid hsl(var(--border));
   }
 
-  /* One selectable row of a list — an LED in tLS, a text element in tUnit. Named
-     for its shape rather than its contents, which is the only reason the two
-     resources had two classes. */
+  /* One selectable row of a list — an LED in tLS, a text element in tUnit. */
   .list-row {
     display: flex;
     align-items: center;

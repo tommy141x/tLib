@@ -12,10 +12,7 @@
 //   1. shared/ts/package.json's `exports` map — the DECLARED public surface.
 //      `nui-kit`, `marketplace/ui` and several hud-* modules are named there
 //      and imported by nothing in this estate; a graph-only gate calls them
-//      dead. The measured case was the ui/ kit, before it moved to internal/:
-//      ui/card, ui/color-picker, ui/meta, ui/progress and ui/tabs were each
-//      exported and imported nowhere, and a graph-only gate called all five
-//      dead. The kit is out of this gate's scope now; the reasoning is not.
+//      dead.
 //   2. scripts/public-entries.json — the measured record of deep paths
 //      consumers import by relative path outside that map. 61 of them:
 //      build/*, fs/server, secrets/release, modules/*, telemetry/*.
@@ -124,12 +121,10 @@ class Gate {
   }
 
   // shared/ts/package.json's `exports` map: the DECLARED public API, which
-  // outranks anything inferred from imports. The measured case was ui/card,
-  // ui/color-picker, ui/meta, ui/progress and ui/tabs — each exported and
-  // imported by nothing anywhere in this estate, and a gate reading only the
-  // import graph called all five dead. That kit has since moved to internal/,
-  // which this gate excludes, but the same holds for what is still exported
-  // here and that is the reason this reader exists.
+  // outranks anything inferred from imports. Measured on the ui/ kit before it
+  // moved to internal/ — ui/card, ui/color-picker, ui/meta, ui/progress and
+  // ui/tabs were each exported and imported by nothing anywhere in this estate,
+  // and a gate reading only the import graph called all five dead.
   exportMapEntries(): string[] {
     if (this.skips.has("export-map")) return [];
     const p = join(this.root, "shared/ts/package.json");
@@ -144,19 +139,13 @@ class Gate {
     return out;
   }
 
-  // The deep paths consumers import directly. tLib is a published MIT library,
-  // so a file with no caller inside tLib is the normal case and the import
-  // keeping it alive lives in another resource or in a third party's tree.
-  // "No importer" can therefore never be the verdict on its own, and the
-  // public surface has to be a recorded fact rather than an inference.
+  // The deep paths consumers import directly. scripts/public-entries.json is the
+  // record, measured from the sibling resources by `--write-baseline` and checked
+  // in because a fresh clone has no siblings.
   //
-  // scripts/public-entries.json is that record, measured from the sibling
-  // resources by `--write-baseline` and checked in because a fresh clone has
-  // no siblings. It is deliberately NOT a ratchet: an entry no consumer here
-  // imports any more may still be imported outside this estate, so
-  // `--list-consumer-entries` reports the difference and nothing fails on it.
-  // Deleting an entry is a judgement about a published API, and no regex
-  // gets to make that one.
+  // Deliberately NOT a ratchet: an entry no consumer here imports any more may
+  // still be imported outside this estate, so `--list-consumer-entries` reports
+  // the difference and nothing fails on it.
   baselineEntries(): string[] {
     if (this.skips.has("baseline")) return [];
     const p = join(this.root, "scripts/public-entries.json");
@@ -277,10 +266,8 @@ export { Gate };
 
 function cli(argv: string[]): number {
   const root = argv.find((a) => a.startsWith("--root="))?.slice(7);
-  // Control-only. The floors exist to catch a collapsed file set in the real
-  // repo, where both numbers are far above anything a fixture can reach — so
-  // the control lowers them, and also asserts that WITHOUT the flag a fixture
-  // trips them. The flag is therefore itself covered rather than a hole.
+  // Control-only. The floors are far above anything a fixture can reach, so the
+  // control lowers them — and asserts that WITHOUT the flag a fixture trips them.
   const floors = argv.find((a) => a.startsWith("--floors="))?.slice(9);
   const [minFiles, minEntries] = floors ? floors.split(",").map(Number) : [250, 50];
   const skips: Skips = new Set(argv.filter((a) => a.startsWith("--skip=")).map((a) => a.slice(7)));

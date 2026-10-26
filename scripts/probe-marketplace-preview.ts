@@ -54,9 +54,9 @@ const ONLY = process.argv.find((a) => a.startsWith("--only="))?.slice(7);
  * the manifests can only report the unrehosted cost. `--from` points at a
  * directory of documents fetched from `/api/marketplace/items/:slug/ui-html`
  * (slug = filename stem), run before/after a backfill against the live
- * route, and also makes "will a rehosted document's cross-origin `<img>`
- * resolve inside a `sandbox="allow-scripts"` frame" measurable instead of
- * reasoned about, via the `imgs/decoded` counts the frame reports itself.
+ * route. It also measures whether a rehosted document's cross-origin `<img>`
+ * resolves inside a `sandbox="allow-scripts"` frame, via the `imgs/decoded`
+ * counts the frame reports itself.
  */
 const FROM_DIR = process.argv.find((a) => a.startsWith("--from="))?.slice(7);
 

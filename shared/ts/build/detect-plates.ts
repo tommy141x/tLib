@@ -8,11 +8,6 @@
  * was hand-measuring 29 rectangles in an image editor, which is wrong the moment a
  * plate is re-exported at a different size -- and wrong silently.
  *
- * In tLib because it describes ELGATO HARDWARE, not any one product, and two
- * resources each had a byte-identical copy kept in step by a README. In `build/`
- * and not `deck/` because `deck/` is managed vendoring into each plugin's own
- * bundle, and this is a build-time tool that imports `node:fs`.
- *
  * `decode` is a PARAMETER rather than an `import sharp`: sharp is a native-binary
  * dependency tLib has no other use for, only one consumer has it, and importing it
  * here would stop the other type-checking its own scripts.

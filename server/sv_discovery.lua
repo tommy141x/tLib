@@ -98,8 +98,7 @@ local function _saveFile(resource, path, content)
     -- Cross-resource writes work by having the write originate IN the target:
     -- `exports[resource]:WriteResourceFile`, not `exports[tLib]`. Every resource
     -- bundling tLib's shared/ts calls `registerWriteResourceFile()` in its own
-    -- server/main.ts. Only a target with no server bundle at all (a plain vehicle
-    -- asset pack) is genuinely unwritable -- the callers below stage a file for that.
+    -- server/main.ts.
     local bridged, bridgeRes = pcall(function()
         return exports[resource]:WriteResourceFile(resource, path, content)
     end)
@@ -315,7 +314,7 @@ function Discovery.create(opts)
     -- CreateDiscovery before any handler registered and took the resource offline.
 
     -- `skipAutoSave`: the owning resource writes its own file instead of
-    -- SaveResourceFile reaching in from tLib's runtime. Every write path must honour it.
+    -- SaveResourceFile reaching in from tLib's runtime.
     --- Returns ok, err, kind. `kind == 'skipped'` is not a failure: the owner
     --- writes its own file and is expected to. Any other falsey return IS one,
     --- and callers must not report success over it.
@@ -515,8 +514,6 @@ function Discovery.create(opts)
                             .. "' ships, delete the '" .. tostring(model) .. "' entry from " .. shadowPath
                             .. " and restart the server.", 3)
                     else
-                        -- DEBUG: "which copy am I running" is the question this branch
-                        -- answers, and this line is the only place that's visible.
                         configs[model] = cfg
                         log("[" .. tag .. "] '" .. tostring(model) .. "' from '" .. resName
                             .. "' has replaced an older copy in " .. shadowPath
@@ -554,12 +551,7 @@ function Discovery.create(opts)
                         configs[canonical] = configs[model]
                         configs[canonical]._local = true
                         externalSources[canonical] = nil
-                        -- Both DEBUG: hash-vs-spawn-name collapsing is internal
-                        -- bookkeeping in a vocabulary that exists only in this
-                        -- file, it runs at every boot, and it is one line per
-                        -- affected model -- so it scales with how many configs
-                        -- the server ships. Nothing for an operator to do
-                        -- either way.
+                        -- Both DEBUG: one line per affected model on every boot.
                         log("[" .. tag .. "] Local hash '" .. model .. "' promoted to '" .. canonical .. "'", 1)
                     else
                         log("[" .. tag .. "] Removed duplicate hash '" .. model .. "' (canonical: " .. canonical .. ")", 1)
@@ -623,9 +615,8 @@ function Discovery.create(opts)
                 -- not something this function may claim.
                 return false, err, kind
             end
-            -- DEBUG. Every way this write can fail already reports itself at
-            -- WARN or ERROR just above, so the success line adds nothing an
-            -- operator can act on -- and it fires on every lightbar save.
+            -- DEBUG: fires on every lightbar save, and every failure above
+            -- already reports itself at WARN or ERROR.
             log("[" .. tag .. "] Saved '" .. model .. "' → " .. ext.resource .. "/" .. ext.filePath, 1)
         else
             config._local = true
@@ -756,7 +747,7 @@ function Discovery.create(opts)
     --- Ordering: nothing that could lose the config happens before the
     --- destination write succeeds. Committing first risked a refused write
     --- leaving the entry marked local-but-unowned while the picker claimed an
-    --- export that never happened. Write first, commit second.
+    --- export that never happened.
     function inst:exportConfig(model, targetResource)
         model = resolveModel(model)
         local config = configs[model]
@@ -838,7 +829,7 @@ function Discovery.create(opts)
 
         -- committed from here: the destination has the config
         info.status = 'exported'
-        -- DEBUG: the handler below logs the same export at INFO with the player who asked, which is the audit line worth keeping.
+        -- DEBUG: the handler below logs the same export at INFO, with the player who asked.
         log("[" .. tag .. "] Wrote '" .. tostring(model) .. "' → " .. targetResource .. "/" .. targetPath, 1)
 
         local oldExt = externalSources[model]

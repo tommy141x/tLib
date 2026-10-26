@@ -85,7 +85,6 @@ describe("feedback body", () => {
     expect(body?.message).toHaveLength(MESSAGE_MAX);
   });
 
-  // The whole privacy claim, asserted rather than described.
   test("attaches nothing identifying of its own", () => {
     const body = buildBody({
       baseUrl: "https://timmygstudios.com",

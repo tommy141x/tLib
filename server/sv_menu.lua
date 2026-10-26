@@ -86,7 +86,6 @@ end
 --   * It only ever sees rows their own owner tagged with a domain.
 --   * It cannot wedge dispatch: the check runs under pcall, an error is an
 --     abstain, and one that blocks past the request timeout is unregistered.
---   * With nothing registered the feature is one `#authorities == 0` test.
 
 local authorities = {}
 

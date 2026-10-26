@@ -1,6 +1,5 @@
--- tLib/shared/imports/marketplace/client.lua
--- Client-side marketplace open helper. Centralizes slug combining + OpenMarketplace call.
--- Loaded into consumer VM via tlib.marketplace.* (not an export).
+-- Client-side marketplace open helper: slug combining plus the OpenMarketplace
+-- call. Loaded into the consumer's VM via tlib.marketplace.* (not an export).
 
 local marketplace = {}
 

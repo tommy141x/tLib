@@ -21,25 +21,21 @@
  * serialises to `@media not all` -- so every responsive utility was dead and the
  * marketplace grid computed to one 1290px column instead of three.
  *
- * A GREEN RESULT IN A MODERN HEADLESS CHROME SAYS NOTHING ABOUT ANY OF THIS, which
- * is the whole problem: a visual A/B, a screenshot diff and a Lighthouse run are
- * all blind to it. tLib does ship a real Chromium 103 harness and a visual check
- * there is better EVIDENCE -- it is not better as a GATE, because it costs a
- * browser launch per run and can only see the rules the one page it loads uses.
+ * A green result in a modern headless Chrome says nothing about any of this: a
+ * visual A/B, a screenshot diff and a Lighthouse run are all blind to it. tLib's
+ * real Chromium 103 harness is better evidence but worse as a gate, since it costs
+ * a browser launch per run and only sees the rules its one page uses.
  *
- * THE TWO FLOORS ARE WHAT MAKE THE GATE MEAN ANYTHING. "No Level 4 media queries"
- * and "no media queries at all" are indistinguishable from the outside, so a gate
- * that only looks for bad strings passes perfectly on an empty file -- which is
- * the exact failure that matters, because an UnoCSS scan that silently stops
- * matching produces a tiny stylesheet and no error. `R-MEDIA-FLOOR` requires a
- * legacy query to be present and `R-SIZE-FLOOR` a byte floor.
+ * The two floors are what make this mean anything: "no Level 4 media queries" and
+ * "no media queries at all" are indistinguishable from the outside, and an UnoCSS
+ * scan that silently stops matching produces a tiny stylesheet and no error. So
+ * `R-MEDIA-FLOOR` requires a legacy query to be present and `R-SIZE-FLOOR` a byte
+ * floor.
  *
- * It deliberately does NOT check JS syntax (every feature a bundler emits at
- * `esnext` predates Chromium 103; the post-103 additions are library methods a
- * type-checker sees), and it reports blurred shadows and `backdrop-filter` as an
- * informational count without failing -- `NUI_BLOCKLIST` and `css-contract.ts`
- * already gate those, and a second rule answering the same question a different
- * way is how a legitimate carve-out turns into a gate everyone skips.
+ * It does NOT check JS syntax -- every feature a bundler emits at `esnext` predates
+ * Chromium 103, and the post-103 additions are library methods a type-checker sees.
+ * Blurred shadows and `backdrop-filter` are an informational count only;
+ * `NUI_BLOCKLIST` and `css-contract.ts` already gate those.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";

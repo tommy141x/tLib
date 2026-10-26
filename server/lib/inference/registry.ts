@@ -10,7 +10,7 @@
 // and the consumer then talks to U directly. That is what keeps this generic
 // enough to live in tLib without tLib knowing anything about models.
 //
-// Two rules are enforced rather than documented:
+// Two rules, both enforced here:
 //
 //   Loopback only. An advertised URL that is not on 127.0.0.1 is rejected, so
 //   no resource can use the registry to publish an unauthenticated model

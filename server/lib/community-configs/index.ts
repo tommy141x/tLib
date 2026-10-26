@@ -1,7 +1,5 @@
 // Community-configs module entry. Called once from server/main.ts, and eager
-// for the same reason the marketplace module is: the `cc*` exports must exist
-// before any consumer resource's Lua runs, and initialising from
-// onResourceStart lost that race.
+// for the same reason ../marketplace/index.ts is.
 
 import { registerCommunityConfigsBridge } from "./bridge";
 

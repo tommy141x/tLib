@@ -246,10 +246,8 @@ export function owned(c: Context): Receipt | null {
   // finds `bgDog` when asked for `bgdog` and refuses. On Linux — which is a
   // first-class target for these resources — it does not, so without this an
   // install of slug `bgdog` would quietly create a second module beside the
-  // shipped `bgDog` and the two would differ only by case. That is not a
-  // destructive outcome, but it is an unexplainable one, and "protected
-  // everywhere except in the container the customer actually runs" is not a
-  // property worth claiming.
+  // shipped `bgDog` and the two would differ only by case. Not destructive, but
+  // unexplainable.
   //
   // EVERY destination, not just the module directory. This was handed `c.name`,
   // so it covered the folder (`bgDog`) and NONE of the three flat audio names a

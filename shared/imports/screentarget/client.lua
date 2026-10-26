@@ -22,7 +22,6 @@
 --
 -- Every native is an injectable provider, so tests/lua/screentarget-arbitration
 -- drives THIS file rather than a re-implementation of it.
---
 
 local screentarget = {}
 
@@ -56,7 +55,6 @@ screentarget.SOURCE_OWN     = "own"
 screentarget.SOURCE_NEAREST = "nearest"
 
 -- Native providers
---
 
 local function defaultVehicles()
     return GetGamePool("CVehicle")

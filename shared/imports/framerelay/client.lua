@@ -38,15 +38,12 @@
 local FrameRelay = {}
 
 --- How often a publisher looks at whether it owes the vehicle a write, in ms.
----
 FrameRelay.PUBLISH_MS = 250
 
 --- How long a publisher will go without writing anything at all, in ms.
----
 FrameRelay.HEARTBEAT_MS = 1000
 
 --- How long a value may go without its `seq` moving before it is leftovers, in ms.
----
 FrameRelay.STALE_MS = FrameRelay.HEARTBEAT_MS * 3
 
 --- @param descriptor table
@@ -83,7 +80,6 @@ function FrameRelay.create(descriptor)
     local publishedAt      = 0
 
     --- Withdraw whatever we published, if anything. Idempotent.
-    ---
     function instance.withdraw()
         local vehicle = publishedVehicle
         publishedVehicle, publishedFrame = nil, nil
@@ -128,7 +124,7 @@ function FrameRelay.create(descriptor)
 
     function instance.publishedVehicle() return publishedVehicle end
 
-    --- The sequence number of the last write. Same purpose.
+    --- The sequence number of the last write, for manual cross-checking.
     function instance.publishedSeq() return publishSeq end
 
     -- Read side

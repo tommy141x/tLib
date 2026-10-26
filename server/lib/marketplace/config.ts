@@ -8,8 +8,7 @@
 //
 // The base URL, its default and its normalisation come from
 // shared/ts/marketplace/catalogue.ts, which is the single TypeScript definition;
-// the Lua VMs read the matching one in shared/sh_api.lua. This file used to hold
-// its own copy of the literal.
+// the Lua VMs read the matching one in shared/sh_api.lua.
 
 import { marketplaceBaseUrl } from "../../../shared/ts/marketplace/catalogue";
 

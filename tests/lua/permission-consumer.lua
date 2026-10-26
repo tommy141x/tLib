@@ -203,10 +203,9 @@ assert(permission.level(nil) == 0, 'demo mode still answers 0 for a nil source')
 demoOn = false
 assert(permission.level(7) == 0, 'and level drops back the moment demo mode is off')
 
--- has() deliberately carries NO demo branch: it round-trips to tLib, whose own
--- Platform.hasPermission grants in demo mode. Asserting the absence here is what
--- stops someone "fixing" the asymmetry by adding a second override that would
--- then be impossible to turn off from tLib's side.
+-- has() carries no demo branch: it round-trips to tLib, whose own
+-- Platform.hasPermission grants in demo mode. A second override here would be
+-- impossible to turn off from tLib's side.
 demoOn = true
 hasPermission = function() return false end
 assert(not permission.has(7, 'tRadar.use'),

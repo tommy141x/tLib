@@ -1,34 +1,14 @@
 /**
- * Ordering a catalogue that is already in memory — and, above all, knowing when
- * NOT to.
+ * Ordering a catalogue that is already in memory.
  *
- * The rule three files restated
+ * The server ranks the catalogue before it sends it; tRadio asks for that
+ * ranking explicitly (`sort=downloads`, which the backend reads as its
+ * type-interleaved order) so the best layout and the best theme reach the first
+ * screen instead of sitting behind every sound. A client-side re-sort silently
+ * undoes that, which is what `SERVER_ORDER` exists to prevent.
  *
- * The server ranks the catalogue before it sends it. tRadio asks for that
- * ranking explicitly (`sort=downloads` in `server/lib/http.ts`, which the
- * backend reads as its type-interleaved order) so that the best layout and the
- * best theme reach the first screen instead of sitting behind every sound.
- *
- * A client-side re-sort silently undoes that. So every surface grew a sort key
- * that means "leave it alone", and each wrote its own comment explaining why:
- *
- *   - tRadio: `DEFAULT_SORT` / the `"recommended"` case in `filteredItems`
- *     (`server/web/src/admin/pages/PageMarketplace.tsx`)
- *   - tLS: the `if (sort === "recommended") return kept` early return in
- *     `visibleCards` (`client/web/src/store/marketplace-store.ts`)
- *
- * `SERVER_ORDER` is that rule, named once. `applySort` honours it, and honours
- * it for an unrecognised key too — see below.
- *
- * Generic over the item, by comparator table
- *
- * The two surfaces sort different shapes by different fields and offer
- * different key sets (tRadio six, tLS four). What is identical is the
- * machinery: pick a comparator, copy, sort, never mutate, and fall back to a
- * tie-breaker so the order does not reshuffle between refreshes. So the keys
- * stay each surface's business and the machinery lives here.
- *
- * Headless: no JSX, no class names, no Solid.
+ * Each surface keeps its own key set and comparators; only the machinery is
+ * here. Headless: no JSX, no class names, no Solid.
  */
 
 /**
@@ -46,16 +26,12 @@ export type Comparator<T> = (a: T, b: T) => number;
  * Order a list by one of a surface's own comparators.
  *
  * Returns the input UNCHANGED for `SERVER_ORDER`, and for any key with no
- * comparator. The second half is deliberate and is not defensive padding: a key
- * that arrives from a URL, a saved preference or a locale file can outlive the
- * comparator it was added for, and the useful failure mode there is "the
- * catalogue is in the server's order" rather than a thrown error that blanks
- * the grid or an arbitrary order nobody chose.
+ * comparator: a key that arrives from a URL, a saved preference or a locale
+ * file can outlive the comparator it was added for, and falling back to the
+ * server's order beats a throw that blanks the grid.
  *
- * Never mutates. Both call sites previously copied by hand before sorting;
- * one of them documented that it must, because the array it is handed is a
- * reactive store's own and sorting in place would mutate state outside a
- * setter. Copying here means no caller has to remember.
+ * Never mutates — a caller's array is a reactive store's own, and sorting in
+ * place would write state outside a setter.
  */
 export function applySort<T>(
   items: readonly T[],
@@ -71,9 +47,8 @@ export function applySort<T>(
 /**
  * Highest number first, treating a missing value as 0.
  *
- * The zero is the point, and tRadio's comment says why: `downloads` is
- * optional on the wire, and an item the API has no count for must sort as 0
- * rather than poisoning the comparison. `undefined - number` is `NaN`, a
+ * `downloads` is optional on the wire, and an item the API has no count for
+ * must sort as 0 rather than poisoning the comparison. `undefined - number` is `NaN`, a
  * comparator returning `NaN` is treated as "equal", and the result is an order
  * that is neither sorted nor stable — with nothing logged.
  */
@@ -152,10 +127,10 @@ export function byRank<T>(
  * Run comparators in order until one of them discriminates.
  *
  * This is what makes a sort STABLE ACROSS REFRESHES, which is a different
- * property from `Array.prototype.sort` being stable. tRadio's comment records
- * the case: ties on `downloads` fall back to name, so two items with the same
- * count keep the same relative order every time the catalogue is re-fetched
- * instead of reshuffling because the server returned them the other way round.
+ * property from `Array.prototype.sort` being stable: ties on `downloads` fall
+ * back to name, so two items with the same count keep the same relative order
+ * every time the catalogue is re-fetched instead of reshuffling because the
+ * server returned them the other way round.
  */
 export function thenBy<T>(...comparators: readonly Comparator<T>[]): Comparator<T> {
   return (a, b) => {

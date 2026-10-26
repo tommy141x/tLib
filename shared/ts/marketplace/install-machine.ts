@@ -1,11 +1,9 @@
 /**
- * What state an install is in, and what the button should therefore say. Pulled out because
- * every Install surface re-derived the same three questions from the same union and drifted:
- * `busy` was declared identically in three components, `installLabel` verbatim in two, and
- * the failure fallback read "Could not install this item" in one and "...Try again." in
- * another — one item describing its own failure two ways. (tRadio's admin panel is a fourth
- * surface that doesn't use this union at all, carrying its own `marketplaceInstalling`
- * string; that's the next consumer, not fixed here.)
+ * What state an install is in, and what the button should therefore say. Every Install
+ * surface used to re-derive these questions from the union and drifted: the failure fallback
+ * read "Could not install this item" in one component and "...Try again." in another, so one
+ * item described its own failure two ways. tRadio's admin panel still carries its own
+ * `marketplaceInstalling` string and does not use this union.
  *
  * Headless on purpose — no JSX, class names or Solid — since it's imported by the NUI
  * component graph (CEF 103), tRadio's Node server bundle, and potentially a Workers build.
@@ -25,8 +23,7 @@
  * the bug this exists to end — as `idle` the card offered Install for something already on
  * disk; as `installed` it offered Delete, which addresses `<installPath>/<slug>` and so forms
  * `layouts/tradio-qrx-720` for a shipped `QRX-720`, matching nothing and failing. A built-in
- * gets neither control. It's a state, not a flag on `installed`, because a flag each surface
- * could read or forget is exactly how the original three copies of `busy` drifted.
+ * gets neither control.
  */
 export type InstallState =
   | { state: "idle" }
@@ -63,10 +60,9 @@ export function isBuiltin(state: InstallState): boolean {
 }
 
 /**
- * Whether a Delete control may be drawn at all. Replaces `isInstalled(s) || s.state ===
- * "uninstalling"`, hand-written in two components — two chances to forget excluding
- * `builtin`. `uninstalling` stays included since the button must survive its own press,
- * rendering the "Deleting…" spinner.
+ * Whether a Delete control may be drawn at all. Named rather than spelled out at each call
+ * site, which is how `builtin` came to be offered a Delete. `uninstalling` is included
+ * because the button must survive its own press, rendering the "Deleting…" spinner.
  */
 export function canUninstall(state: InstallState): boolean {
   return state.state === "installed" || state.state === "uninstalling";

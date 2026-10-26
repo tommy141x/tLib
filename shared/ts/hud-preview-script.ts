@@ -1,29 +1,23 @@
 // The binder, as a self-contained script string, for a preview document that
 // cannot import anything.
 //
-// Why this exists at all, given HudBinder is right next door
-//
 // The in-game marketplace preview renders a fetched layout in
 // `<iframe srcdoc sandbox="allow-scripts">`. Without `allow-same-origin` that
 // frame is an OPAQUE origin: it shares no realm with the NUI bundle, cannot be
 // reached into from outside, and cannot fetch our chunks back — they are
 // cross-origin to it even though they sit on the same server. So the binder has
-// to arrive as text, inside the document. That constraint is real and this file
-// does not argue with it.
+// to arrive as text, inside the document.
 //
-// What this file fixes
-//
-// It used to live inline in `PreviewOverlay.tsx` as a second, smaller binder
-// that handled five of the nine attributes and looked every key up FLAT —
-// `s[key]`, no dot paths. Measured against the shipped layouts that blanked 56%
-// of tRadar's bindings and 11% of tRadio's: the preview showed a device with
+// It is a SECOND implementation of `HudBinder`'s grammar, so it must stay a
+// complete one. A smaller inline version handled five of the nine attributes and
+// looked every key up FLAT (`s[key]`, no dot paths), which blanked 56% of
+// tRadar's shipped bindings and 11% of tRadio's: the preview showed a device with
 // empty readouts while the same markup worked perfectly in game, which reads to
 // a skin author as a broken skin rather than a broken preview.
 //
-// Keeping it beside `hud-template.ts` is not decoration. `hud-preview-script`'s
-// test renders the SAME markup and state through both this script and a real
-// `HudBinder` and compares the resulting DOM, so a grammar added to one and not
-// the other is a failing test rather than a silent divergence.
+// `hud-preview-script`'s test renders the SAME markup and state through both this
+// script and a real `HudBinder` and compares the resulting DOM, so a grammar
+// added to one and not the other is a failing test rather than a divergence.
 //
 // `data-hud-btn` is deliberately NOT implemented. A preview is a still: there
 // is no engine behind it to act on a press, and wiring a click that does nothing
@@ -46,16 +40,16 @@ export const HUD_PREVIEW_ATTRS = HUD_BINDING_ATTRS.filter((a) => a !== "data-hud
  *             before the binder ship one; it may register asynchronously, hence
  *             the retry.
  *
- * It runs IN ADDITION to `bind()`, not instead of it, because that is
- *             what the runtime does: `HudPanel.tsx` calls `binder.update(state)` and
- *             then `window.__tlsLayoutUpdate?.(state, root)` on the same tick, and
- *             a layout that ships an update function still carries `data-hud-*` on
- *             the elements that function does not touch. This used to `return` after
- *             calling `fn`, which blanked every declarative binding on exactly the
- *             layouts that have their own script — tLS's WCC2 lost its pattern-name
- *             readout and its lit HEAD/MAIN SIREN keys while its script-drawn tone
- *             keys painted fine, so half the device was live and half was dead.
  * @param state The dummy state to paint, already the nested shape the runtime sends.
+ *
+ * `fn` runs IN ADDITION to `bind()`, not instead of it, because that is what the
+ * runtime does: `HudPanel.tsx` calls `binder.update(state)` and then
+ * `window.__tlsLayoutUpdate?.(state, root)` on the same tick, and a layout that
+ * ships an update function still carries `data-hud-*` on the elements that
+ * function does not touch. Returning after calling `fn` blanked every declarative
+ * binding on exactly the layouts that have their own script — tLS's WCC2 lost its
+ * pattern-name readout and its lit HEAD/MAIN SIREN keys while its script-drawn
+ * tone keys painted fine, so half the device was live and half was dead.
  */
 export function hudPreviewScriptSource(
   fn: string | null | undefined,

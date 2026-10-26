@@ -102,11 +102,8 @@ end
 -- control run points it at a copy with ONE line substituted. The copy is produced by
 -- scripts/runtimetxd-control.ts, outside the repo, because fengari ships no `io` --
 -- the patching cannot happen here, and a control that substituted a STUB instead
--- would only prove the stub was wrong.
---
--- The runner asserts each substitution matched exactly once, which is the half that
--- matters: a gsub that matched nothing yields the unmodified module and a control
--- that passes having planted nothing.
+-- would only prove the stub was wrong. The runner asserts each substitution
+-- matched exactly once; see the header.
 local SOURCE_PATH = os.getenv('RUNTIMETXD_SOURCE')
 if SOURCE_PATH == nil or SOURCE_PATH == '' then
     SOURCE_PATH = 'shared/imports/runtimetxd/client.lua'

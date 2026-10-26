@@ -1,64 +1,20 @@
 #!/usr/bin/env bun
 /**
- * Negative control for `deck-stale.ts`. Proves the gate can go red, and that it
- * goes red for the reason it claims.
+ * Negative control for `deck-stale.ts`.
  *
  *   bun run ../tLib/scripts/deck-stale-control.ts --id com.timmyg-studios.tradio
  *
- * Why this is here
+ * It builds a synthetic resource root in the OS temp directory: the real plugin
+ * project copied in, plus a `docs/public/<id>.streamDeckPlugin` of arbitrary bytes
+ * and a stamp computed from the real library. No Elgato CLI, no `bun install`, no
+ * network. That works because the gate never opens the artifact as a zip, and it
+ * must not: a zip carries entry timestamps, so no two packs of one tree are
+ * byte-identical.
  *
- * Because the gate's green output and a gate that measured nothing look
- * identical. `deck-stale` prints a file count and two hashes; a copy of the
- * plugin tree that silently came out empty, a skip list that widened to swallow
- * `src/`, or a stamp comparison wired so both sides read the same value would
- * all print a tick. This estate has shipped that shape repeatedly, so the gate
- * does not get to be trusted on its own say-so.
- *
- * How it works, and why it needs no Elgato CLI and no network
- *
- * It builds a SYNTHETIC resource root in the OS temp directory: the real plugin
- * project copied in, plus a `docs/public/<id>.streamDeckPlugin` of arbitrary
- * bytes and a stamp computed from the real library. That is sound rather than a
- * shortcut, because the gate's entire contract is about hashes — it never opens
- * the artifact as a zip, and it must not, since a zip carries entry timestamps
- * and no two packs of one tree are byte-identical. So the control can assert the
- * whole rule set without running `streamdeck pack`, without `bun install`, and
- * without touching anything inside the repo.
- *
- * The cases
- *
- * A BASELINE that must be green, with a floor under the file count (an empty
- * copy would make every case below red for the wrong reason), then one planted
- * defect at a time:
- *
- *   source-edited      a byte changed in an .sdPlugin file   → 1
- *   source-added       a new file in src/                    → 1
- *   source-deleted     a source file removed                 → 1
- *   artifact-missing   the published download is gone        → 1
- *   artifact-tampered  the artifact's bytes changed          → 1
- *   stamp-missing      no stamp beside the plugin            → 1
- *   stamp-wrong-id     stamp copied from another plugin      → 1
- *   no-sdplugin        the .sdPlugin tree renamed away       → 2  (cannot run)
- *   no-src             src/ removed                          → 2  (cannot run)
- *
- * and two DECOYS that must stay green, each of which documents a decision:
- *
- *   bin-edited         build output changed, source did not  → 0
- *   mtime-only         a source file touched, bytes the same → 0
- *
- * The `no-*` pair is the one that matters most: a 2 is the gate saying it could
- * not measure, and reading a 2 as a pass is how a gate that measures nothing
- * stays green forever.
- *
- * STILL UNPROVEN, and it says so here rather than nowhere
- *
- * One tamper passes: edit a source file, then rewrite the stamp from the edited
- * tree without re-packing. Both hashes then agree and the published artifact is
- * stale. That is a deliberate two-step forgery rather than an accident — the
- * accident this gate exists to catch is forgetting to pack at all — but closing
- * it would need the stamp to be derivable from the ARTIFACT's contents, and the
- * artifact is a zip whose entry timestamps differ on every pack. No case below
- * covers it, and no case below pretends to.
+ * STILL UNPROVEN: edit a source file, then rewrite the stamp from the edited tree
+ * without re-packing. Both hashes then agree and the published artifact is stale.
+ * Closing it would need the stamp derivable from the ARTIFACT's bytes, which the
+ * zip timestamps rule out. No case below covers it.
  *
  * Exit 0 all cases behaved; 1 a case did not; 3 bad usage.
  */
@@ -102,10 +58,9 @@ const repo = resolve(flag("--repo") ?? process.cwd());
 const pluginDir = flag("--plugin-dir") ?? "client/stream-deck";
 
 /**
- * A floor, not a formality. If the fixture copy produced 3 files, every red case
- * below would still be red and the run would still print nine ticks — while
- * proving nothing about a real plugin. All three deck plugins have well over
- * this many; the smallest measured 29.
+ * If the fixture copy produced 3 files, every red case below would still be red
+ * while proving nothing about a real plugin. The smallest of the three deck
+ * plugins measured 29 source files.
  */
 const MIN_SOURCE_FILES = 15;
 
@@ -267,9 +222,9 @@ try {
   });
 
   // A stamp copied in from the wrong plugin — the shape a merge resolution or a
-  // copy-paste between the three resources produces. Caught by name rather than
-  // by hash, because the hashes would tell you nothing: they would simply both
-  // be wrong, and the message would send someone looking for a stale pack.
+  // copy-paste between the three resources produces. Caught by name rather than by
+  // hash: both hashes would simply be wrong, and the message would send someone
+  // looking for a stale pack.
   check("stamp-wrong-id", 1, (root) => {
     const paths = deckPaths({ root, pluginId, pluginDir });
     const stamp = JSON.parse(readFileSync(paths.stamp, "utf8"));

@@ -85,7 +85,7 @@ the product becomes *darker* than the panel it sits on, which reads as black
 outlines drawn around things. It has happened twice, and nothing warns you —
 each token on its own still looks like a reasonable colour.
 
-**The rule, and it is the only one:** never re-declare one of `--background`,
+**The rule:** never re-declare one of `--background`,
 `--card`, `--input`, `--popover` or `--border` on its own. Move the ladder or
 move nothing. If a surface needs to separate from the one behind it, use
 `--border`, which is above every fill and cannot invert anything.

@@ -1,8 +1,5 @@
 // Typed handles to the FiveM runtime globals, resolved through globalThis.
-//
-// Same reason as server/realtime/fivem.ts: bun's CJS bundler wraps non-entry
-// files in a scope where `exports` is the module object, which shadows FiveM's
-// global `exports(name, fn)`.
+// See ../http/fivem.ts for why that indirection is required.
 
 type ExportsFn = (name: string, fn: (...args: unknown[]) => unknown) => void;
 type OnFn = (event: string, handler: (...args: unknown[]) => void) => void;

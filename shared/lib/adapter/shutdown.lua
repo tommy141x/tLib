@@ -1,6 +1,4 @@
--- tLib/shared/lib/adapter/shutdown.lua
--- resource shutdown / cleanup hooks
-
+-- Resource shutdown / cleanup hooks.
 
 local log = Logger.create('tLib/adapter/shutdown')
 

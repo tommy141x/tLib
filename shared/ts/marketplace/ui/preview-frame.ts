@@ -13,11 +13,9 @@ export { parsePreviewCanvasSize };
  * Which preview an item gets. Branch order is the contract; `none` is a real answer that
  * draws a placeholder tile rather than collapsing the card. See ../README.md.
  *
- * `panel` precedes `thumbnail` on purpose: that branch used to run before everything but
- * `sound`, so a theme shipping a screenshot showed the picture instead of the live panel —
- * "there should be no 'thumbnail' for dispatch-panel previews". Reordering fixes that without
- * touching other types. Deleting the thumbnail kind instead was tried and broke
- * `server/web`'s typecheck in tRadio at HEAD, which still passes `thumbFailed` into it.
+ * `panel` precedes `thumbnail` on purpose: with `thumbnail` first, a theme shipping a
+ * screenshot showed the picture instead of the live panel. Deleting the `thumbnail` kind
+ * instead breaks tRadio's `server/web` typecheck, which still passes `thumbFailed` in.
  *
  * `thumbFailed`/`panelPreview` are parameters because only the host knows its `<img>` errored
  * or whether it can mount tRadio's offline panel (tWeb vendors it, tRadio's admin serves it,

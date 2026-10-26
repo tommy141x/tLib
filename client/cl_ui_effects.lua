@@ -140,8 +140,6 @@ if type(RegisterCommand) == 'function' then RegisterCommand('tlibmotion', functi
     elseif arg == 'off' or arg == 'reduce' then UIEffects.setReduceMotion(true)
     elseif arg == 'default' then UIEffects.setReduceMotion(nil)
     else UIEffects.setReduceMotion(not reduceMotion) end
-    -- Says the resulting state rather than "toggled", so the no-argument form
-    -- answers the question the player actually has.
     log(('Interface motion is now %s.'):format(reduceMotion and 'reduced' or 'full'), 1)
 end, false) end
 

@@ -1,20 +1,10 @@
 import type { InspectionRequest, InspectionSummary } from "./inspection";
 
 /**
- * Re-exported, NOT redeclared.
- *
- * This file used to carry its own copy of the interface, which made four
- * definitions of one backend concept across the codebase (here,
- * `server/lib/marketplace/api.ts`, `server/lib/marketplace/browse.ts`, and
- * tRadio's admin store). A mismatch between any two of them is silent — reading
- * `creator_name` off a camelCase object yields `undefined`, not an error — and
- * tRadio's store records what that cost: sound cards stopped rendering a player
- * and theme cards stopped rendering their swatches, both falling through to the
- * placeholder tile with nothing logged.
- *
- * The copies also drifted in ways that mattered. This one was missing
- * `preview_colors` entirely, so theme swatches were dropped on the way into the
- * panel even though the wire carried them.
+ * Re-exported, never redeclared. A second declaration of the wire shape fails
+ * silently — reading `creator_name` off a camelCase object yields `undefined`,
+ * not an error — and the symptom is a card falling through to the placeholder
+ * tile with nothing logged.
  */
 export type { MarketplaceItem } from "../item.ts";
 
@@ -24,21 +14,9 @@ export interface InstalledSound {
 }
 
 /**
- * The payload a host hands the browser when it opens or feeds it.
- *
- * THERE IS NO `type` FIELD, and there was one until it was measured. It was
- * declared here, forwarded by `client/cl_marketplace.lua`'s `buildPayload`, and
- * documented in `docs/content/exports.mdx` as "`{ type = 'ui-radio' }` filters it
- * on open" — and nothing ever read it. `MarketplaceBrowser.applyOpenData` reads
- * every other field on this interface and not that one, `shared/imports/
- * marketplace/client.lua`'s `buildOpts` never put it on the payload in the first
- * place, so the two documented call shapes could not even deliver it, and
- * `ui-radio` is not one of the three types the panel browses (`ui`, `sound`,
- * `theme`) — it is a name from before the type vocabulary settled.
- *
- * What a host actually has is `initialTab`, which picks the UIs or Sounds tab,
- * and `resource`, which scopes the catalogue to one product. If a per-type filter
- * is ever wanted it needs a tab or a control to express it, not a silent field.
+ * The payload a host hands the browser when it opens or feeds it. A host scopes
+ * the catalogue with `resource` and picks a tab with `initialTab`; there is no
+ * per-type filter, and one would need a control to express it.
  */
 export interface OpenData {
   /** Marketplace site base URL (no /api/v1 suffix). */
@@ -86,15 +64,7 @@ export interface OpenData {
   panelPreviewUrl?: string;
 }
 
-/**
- * Re-exported, NOT redeclared — same rule as `MarketplaceItem` above.
- *
- * The union moved to `../install-machine` along with the three predicates every
- * surface was deriving from it by hand. It is re-exported here because the
- * components next door import their types from this file and because
- * `./index.tsx` is the package's public surface; the declaration lives in one
- * place.
- */
+/** Declared in `../install-machine` beside the predicates that read it. */
 export type { InstallState } from "../install-machine.ts";
 
 export type InspectionState = {
