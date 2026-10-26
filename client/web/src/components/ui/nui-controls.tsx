@@ -1,22 +1,10 @@
-// THE MENU-ROW CONTROL SET. Not a component library, and not an alternative to
-// one -- see the rule at the top of `internal/shared-ts/ui/meta.ts`, which names this
-// file as the single permitted exception to it.
-//
-// A checkbox box and a range input, drawn once, with one --nui-* theming
-// contract shared between here and nui.css. No interaction behaviour of their
-// own, deliberately.
-//
-// That is the whole constraint, and it is structural rather than cosmetic: the
-// menu is server-authoritative and driven by keyboard and controller through
-// Menu.tsx's navigateCommand; a row is a single <button> whose value only the
-// row changes. Wrapping a row in Ark's Checkbox.Root or Slider.Root would nest
-// a focusable element inside that button -- invalid content, and it breaks the
-// navigation model. So the menu takes the rendered control and its theming and
-// keeps aria-pressed, the draft and pending flow, onCycle and changeSlider for
-// itself.
-//
-// Anything that is NOT a menu row uses `internal/shared-ts/ui/*`. A second surface
-// wanting a bare control is a signal to re-read that rule, not to add one here.
+// The menu-row control set — the single permitted exception to the no-component-library
+// rule for `internal/shared-ts/ui/*`. A checkbox box and range input, drawn once with
+// one --nui-* theming contract shared with nui.css, deliberately with no interaction of
+// their own: a menu row is a single <button> driven by Menu.tsx's navigateCommand, and
+// wrapping it in Ark's Checkbox.Root/Slider.Root would nest a focusable element inside that
+// button, breaking the navigation model. Anything that is not a menu row uses
+// `internal/shared-ts/ui/*` instead of adding a control here.
 
 import type { JSX } from "@solidjs/web";
 import Check from "lucide-solid/icons/check";

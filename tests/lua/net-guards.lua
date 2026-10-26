@@ -30,8 +30,6 @@ GetGameTimer = function() return now end
 local ratelimit = dofile('shared/imports/ratelimit/server.lua')
 tlib = { ratelimit = ratelimit }
 
---  CLIENT: fromServer
-
 local client = dofile('shared/imports/net/client.lua')
 
 local got
@@ -43,7 +41,7 @@ registered['tls:serverDefaults']('quality', 4)
 assert(got and got[1] == 'quality' and got[2] == 4,
     'a server-triggered event runs the handler with its own arguments')
 
--- THE SECURITY PROPERTY. Each spoof below is a plausible WEAKENING of the
+-- The security property: each spoof below is a plausible weakening of the
 -- guard rather than a stray value, which is what makes the set worth asserting:
 --   * nil passes `if source and source ~= 65535 then return end`
 --   * the string '65535' passes a tostring comparison
@@ -104,8 +102,6 @@ local ok, err = pcall(client.fromClient, 'x', function() end)
 assert(not ok and tostring(err):find('server-side only', 1, true),
     'fromClient on the client says where it lives')
 
---  SERVER: fromClient
-
 local server = dofile('shared/imports/net/server.lua')
 
 local function fire(name, src, ...)
@@ -113,7 +109,6 @@ local function fire(name, src, ...)
     registered[name](...)
 end
 
--- The source guard ----------------------------------------------------------
 ratelimit.reset()
 local seenSrc, seenArgs
 server.fromClient('tradar:requestServerSettings', function(src, a) seenSrc, seenArgs = src, a end)
@@ -132,10 +127,10 @@ now = now + 5000
 fire('tradar:requestServerSettings', nil)
 assert(seenSrc == nil, 'a nil source is not a player')
 
--- The rate limit, on by default ---------------------------------------------
--- 1000 ms, because that is what every tlib.ratelimit.bucket call site in this
--- tree already passes and because an unlimited request-shaped handler is a free
--- amplifier: a few bytes in, a framework job lookup and a panel payload out.
+-- The rate limit, on by default: 1000ms, because that is what every
+-- tlib.ratelimit.bucket call site in this tree already passes and because an
+-- unlimited request-shaped handler is a free amplifier — a few bytes in, a
+-- framework job lookup and a panel payload out.
 ratelimit.reset()
 local calls = 0
 registered = {}
@@ -157,7 +152,7 @@ assert(calls == 2, 'and served again once the floor has passed')
 fire('tradar:requestOpenSettings', 8)
 assert(calls == 3, 'another player has their own floor')
 
--- Refusal is SILENT, and that is a contract rather than an oversight.
+-- Refusal is silent, and that is a contract rather than an oversight.
 -- tRadar's and tDetector's cl_settings.lua both reopen their dialog WITHOUT
 -- going through the request path precisely because the second call inside a
 -- second is dropped and the player would otherwise get nothing back. A line per
@@ -176,8 +171,7 @@ now = 20000
 for _ = 1, 5 do fire('tradar:tick', 7) end
 assert(free == 5, 'rateLimit = 0 serves every call')
 
--- allow ---------------------------------------------------------------------
--- fromClient without `allow` is a SOURCE GUARD AND A RATE LIMIT, not a
+-- fromClient without `allow` is a source guard and a rate limit, not a
 -- permission gate. The two handlers in this tree that captured `local src =
 -- source` and never used it in a decision are what `allow` is for.
 ratelimit.reset()
@@ -217,7 +211,7 @@ fire('tradar:loose', 7)
 release()
 assert(loose == 0, 'a truthy non-boolean from allow is not a grant')
 
--- An allow that THROWS denies. An owner function erroring must never become an
+-- An allow that throws denies. An owner function erroring must never become an
 -- open event — the rule tlib.access applies to its own `custom` mode.
 ratelimit.reset()
 registered = {}
@@ -248,7 +242,6 @@ local okDenied = pcall(fire, 'tradar:deniedthrows', 7)
 release()
 assert(okDenied, 'a throwing onDenied does not escape the handler')
 
--- Arity flex and validation -------------------------------------------------
 ratelimit.reset()
 registered = {}
 local flex = 0

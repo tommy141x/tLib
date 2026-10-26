@@ -13,16 +13,10 @@ local VALID_FIELD_TYPES = {
     checkbox = true,
     radio    = true,
     button   = true,
-    -- Text, not a control. Added 2026-10-16 after five resources each invented
-    -- their own way to show a sentence in a dialog, because there was no type
-    -- for it: tChirp drew SEVEN of its ten rows as disabled buttons, tAFK drew
-    -- its section headings the same way, tRadar put its manual chapters in a
-    -- disabled textarea, tDetector's empty state (in this repo's own
-    -- shared/imports/soundfields) was a disabled and empty text input, and tUnit
-    -- concatenated a status note onto a live field's label. Every one of those
-    -- renders at `opacity: 0.5` with `cursor: not-allowed` -- the stack's
-    -- language for "you may not touch this" -- on content that is the whole
-    -- point of the screen.
+    -- Text, not a control: added because consumers kept faking a sentence with a
+    -- disabled button, textarea or empty input — all of which render at
+    -- `opacity: 0.5` / `cursor: not-allowed`, "you may not touch this" styling
+    -- on content that is the whole point of the screen.
     display  = true,
 }
 
@@ -70,10 +64,9 @@ local function serialiseField(f)
         fieldType == 'password' or fieldType == 'textarea' then
         s.placeholder  = type(f.placeholder) == 'string' and f.placeholder or nil
         s.defaultValue = type(f.defaultValue) == 'string' and f.defaultValue or nil
-        -- A cap the PAGE enforces, not only the server. tUnit set this and it
-        -- never arrived, because this serialiser is a whitelist and nothing
-        -- named it: the player typed past the limit, pressed Apply, and
-        -- server/sv_sources.lua dropped the value and returned without a reply.
+        -- Enforced on the page too, not only the server: this serialiser is a
+        -- whitelist, so an unnamed cap never reaches the page — once let a
+        -- player's over-limit submission through to a silent server drop.
         s.maxLength    = type(f.maxLength) == 'number' and f.maxLength > 0
             and math.floor(f.maxLength) or nil
         if fieldType == 'number' then
@@ -81,9 +74,9 @@ local function serialiseField(f)
             s.max = type(f.max) == 'number' and f.max or nil
         end
         if fieldType == 'textarea' then
-            -- Was hard-coded to 3 in nui-field.tsx with no way through. tRadar's
-            -- manual chapters are 20-40 lines and rendered in a ~90px box inside
-            -- an xl dialog whose panel floor is 360px.
+            -- Was hard-coded to 3 with no way through; tRadar's manual chapters
+            -- run 20-40 lines, rendered in a ~90px box inside an xl dialog with
+            -- a 360px panel floor.
             s.rows = type(f.rows) == 'number' and f.rows >= 1
                 and math.min(math.floor(f.rows), 40) or nil
         end
@@ -100,17 +93,13 @@ local function serialiseField(f)
         s.defaultValue = f.defaultValue == true
     elseif fieldType == 'button' then
         s.variant = type(f.variant) == 'string' and f.variant or 'default'
-        -- The confirmation question. `variant = 'destructive'` is COLOUR and
-        -- nothing else, so a button that deletes something looked like one and
-        -- was still one click away from doing it.
-        --
-        -- This serialiser is a WHITELIST -- a key it does not name never reaches
-        -- the page -- which is why this line is the whole feature on the Lua
-        -- side, and why `view` on a tab had to be added for the same reason a
-        -- few lines below. Bounded at 512 like a menu row's `confirm` in
-        -- `shared/lib/menu/schema.lua`: it is the same key with the same meaning
-        -- on a different surface, and the page renders the same two buttons for
-        -- both. An empty string is nil, not a question with no text.
+        -- The confirmation question. `variant = 'destructive'` is colour only, so
+        -- a delete button looked dangerous but was still one click from firing.
+        -- This serialiser is a whitelist — an unnamed key never reaches the page
+        -- — which is why this line is the whole feature. Bounded at 512, same
+        -- key and meaning as a menu row's `confirm`, rendering the same two
+        -- buttons on both surfaces. An empty string means nil, not a question
+        -- with no text.
         s.confirm = type(f.confirm) == 'string' and f.confirm ~= ''
             and #f.confirm <= 512 and f.confirm or nil
     end
@@ -138,12 +127,11 @@ local function serialiseDialog(id, opts)
         for _, t in ipairs(opts.tabs) do
             if type(t) == 'table' and type(t.id) == 'string' and t.id ~= '' then
                 -- `view` names a built-in panel the page renders in place of this
-                -- tab's fields (see DialogTab.view in client/web/src/components/
-                -- dialog-model.ts). It was missing from this serialiser, so every
-                -- `view` tab a consumer declared reached the page as an ordinary
-                -- content tab and drew an EMPTY panel -- the tab was there, the
-                -- browser was not. Whitelisted rather than passed through: an
-                -- unknown view would fall into the same silent blank panel.
+                -- tab's fields (`DialogTab.view`). Once missing from this
+                -- serialiser, so a `view` tab reached the page as an ordinary
+                -- content tab and drew an empty panel — the tab was there, the
+                -- browser was not. Whitelisted, not passed through: an unknown
+                -- view falls into the same blank panel.
                 local view = t.view == 'marketplace' and t.view or nil
                 if t.view ~= nil and not view then
                     log('ShowDialog: tab "' .. t.id .. '" has unknown view "' ..
@@ -171,28 +159,22 @@ local function serialiseDialog(id, opts)
         submitLabel = type(opts.submitLabel) == 'string' and opts.submitLabel or nil,
         cancelLabel = type(opts.cancelLabel) == 'string' and opts.cancelLabel or nil,
         size        = size,
-        -- Opt OUT of "reopen where you left it". The page remembers the active
-        -- tab, each tab's scroll offset and where the panel was dragged to,
-        -- keyed by dialog id, so a dialog that closes for a detour (a world
-        -- editor, a HUD reposition) comes back on the tab the button was on.
-        -- A caller that genuinely wants a first-run dialog passes
-        -- `resetState = true`. Sent only when true, and whitelisted here on
-        -- purpose: `view` was once absent from this serialiser and reached the
-        -- page as nothing at all, silently.
+        -- Opt out of "reopen where you left it": the page remembers the active
+        -- tab, scroll offsets and drag position per dialog id, so a dialog
+        -- closing for a detour comes back where it was. `resetState = true`
+        -- forces a first-run dialog instead. Sent only when true, on the same
+        -- whitelist discipline as `view` above.
         resetState  = opts.resetState == true or nil,
         blur        = opts.blur ~= false,
         theme       = (type(opts.theme) == 'string' and opts.theme ~= '') and opts.theme or nil,
     }
 end
 
--- Taking NUI focus is a one-way door: only the dialog component's submit/cancel
--- callbacks lead back to unlockPlayerInput. If the page never loads, focus goes to
--- a layer that cannot return it and the player is locked out until they reconnect.
--- That happens for real: .gitignore excludes client/ui/assets/, so a source-archive copy
--- ships an index.html whose script tag 404s and the page never mounts.
---
--- Hence two guards, both inert for a healthy dialog: focus is deferred behind the
--- onNUIReady handshake, and a watchdog covers the page mounting and then dying.
+-- Taking NUI focus is a one-way door: only the dialog's submit/cancel callbacks
+-- lead back to unlockPlayerInput, and a page that never loads (a source-archive
+-- build ships UI assets that 404) locks the player out until they reconnect.
+-- Hence two guards, both inert for a healthy dialog: focus is deferred behind
+-- the onNUIReady handshake, and a watchdog covers the page mounting then dying.
 
 -- Long enough to absorb a cold disk or a heavy join; the bundle normally readies
 -- within a second of resource start.

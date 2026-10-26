@@ -5,24 +5,20 @@
 # internal/, and the .gitea/ workflows that name the private org — lives on a
 # Gitea-only branch. Nothing enforces that but this hook and branch discipline.
 #
-# This replaced a STRUCTURAL guard, and that is why it exists. internal/ used to
-# be a nested repository of its own: `git add -f` on it recorded a gitlink
-# rather than its contents, and `git clean -xdf` skipped it entirely. As
-# ordinary tracked content on a branch it has neither property, so one merge of
+# This replaced a structural guard. internal/ used to be a nested repository, so
+# `git add -f` recorded a gitlink rather than its contents and `git clean -xdf`
+# skipped it. As ordinary tracked content it has neither property, so one merge of
 # the private branch into a published one puts the code in the public object
 # database permanently — a revert does not remove it, only a history purge does.
 #
-# TWO CHECKS, AND NEITHER IS "every tree in the range".
-#
-#   1. The TIP TREE of each pushed ref — the state being published.
-#   2. Paths ADDED anywhere in the pushed range — catches add-then-remove, where
+# Two checks:
+#   1. The tip tree of each pushed ref — the state being published.
+#   2. Paths added anywhere in the pushed range — catches add-then-remove, where
 #      the tip is clean but the blob still ships inside the history.
 #
-# Scanning every tree instead was the first version and it is unusable here:
-# `.gitea/` is already present in commits that are already on GitHub, so that
-# check refused every push forever. A gate that must be bypassed to work is not
-# a gate, and the one that cries wolf is the one that gets --no-verify'd. The
-# job is to stop `.gitea/` coming BACK and to stop `internal/` ever arriving.
+# Not "every tree in the range", which was the first version: `.gitea/` is already
+# present in commits already on GitHub, so it refused every push forever. The job
+# is to stop `.gitea/` coming BACK and `internal/` ever arriving.
 #
 # Bypass with --no-verify only if you can say which commit you checked by hand.
 

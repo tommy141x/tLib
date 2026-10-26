@@ -287,8 +287,8 @@ h.show('owned', { fields = {
     { id = 'choice', type = 'select', options = { { value = 'a', label = 'A' } } },
     { id = 'locked', type = 'button', disabled = true },
     { id = 'action', type = 'button' },
-    -- The confirmation question, which the serialiser is a WHITELIST over: an
-    -- unnamed key never reaches the page at all, so a `confirm` that survives
+    -- The confirmation question, which the serialiser allowlists: an unnamed
+    -- key never reaches the page at all, so a `confirm` that survives
     -- normalisation is the whole Lua side of the feature.
     { id = 'guarded', type = 'button', confirm = 'Really?' },
     { id = 'blankConfirm', type = 'button', confirm = '' },
@@ -311,7 +311,7 @@ eq(result, nil, 'other owner cannot reuse active public id')
 eq(DialogState.get('owned'), owned, 'cross-owner close does not remove state')
 -- 9, not 5: four `confirm` fixtures were added to the schema above. The count
 -- is incidental here -- what this asserts is that the cross-owner
--- `UpdateDialogFields({})` did NOT empty it.
+-- `UpdateDialogFields({})` did not empty it.
 eq(#owned.schema.fields, 9, 'cross-owner field replacement rejected')
 eq(owned.schema.fields[5].label, '', 'cross-owner field patch rejected')
 h.owner = 'consumer'

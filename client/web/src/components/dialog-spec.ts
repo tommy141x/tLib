@@ -1,12 +1,10 @@
 import type { DialogData } from "./dialog-model";
 
-/**
- * Authoring mistakes in a dialog SPEC. These dialogs are DATA — a field list declared in
- * a resource's Lua, drawn by one renderer — so they look alike while drifting apart in
- * content, where no stylesheet reaches. Measured 2026-10-24: tLS declared three
- * `variant:"primary"` fields (four blue buttons with the footer's); tDetector and tAFK
- * described every control, tLS none. Warns, never throws: an ugly dialog must open.
- */
+// Authoring mistakes in a dialog spec. Dialogs are data — a field list declared in a
+// resource's Lua, drawn by one renderer — so they drift apart in content where no
+// stylesheet reaches: tLS has shipped three `variant:"primary"` fields (four blue
+// buttons counting the footer's) and no field descriptions. Warns, never throws: an
+// ugly dialog must still open.
 export function dialogSpecWarnings(dialog: DialogData): string[] {
   const warnings: string[] = [];
 

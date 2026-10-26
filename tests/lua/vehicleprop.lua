@@ -244,8 +244,6 @@ tlib.propeditor = dofile('shared/imports/propeditor/client.lua')
 
 local VehicleProp = dofile('shared/imports/vehicleprop/shared.lua')
 
---  THE PURE RULES
-
 -- Archetype names that reach a native
 --
 -- An archetype name goes to GetHashKey and then to CreateObject. A path
@@ -258,8 +256,6 @@ end
 if VehicleProp.normaliseModelName('  rdx4000  ') ~= 'rdx4000' then
     fail('surrounding whitespace was not trimmed off an archetype name')
 end
-
--- The registry
 
 local list, index, default = VehicleProp.buildRegistry('rdx4000', nil)
 if #list ~= 1 or list[1].model ~= 'rdx4000' or default ~= 'rdx4000' then
@@ -342,8 +338,6 @@ if target.installedSounds ~= nil or target.soundWavMap ~= nil or target['456'] ~
 end
 VehicleProp.replacePlacements(target, nil)
 if next(target) ~= nil then fail('a nil payload did not clear the placements') end
-
---  THE INSTANCE
 
 local notifications = {}
 local gizmoSeen = {}
@@ -486,8 +480,6 @@ if props.getPlacement(999999) ~= nil then
     fail('getPlacement answered for a vehicle that does not exist')
 end
 
---  THE LIFECYCLE PASS
-
 local attachedAlias = props.attached
 
 props.tick()
@@ -615,18 +607,15 @@ end
 TriggerEvent('onResourceStop', 'tTest')
 if next(props.attached) ~= nil then fail('onResourceStop did not clean up') end
 
---  UNIFORM SCALE — WHICH OF THE TWO MECHANISMS THE LIFECYCLE PICKS
+-- Which of the two mechanisms the lifecycle picks for a scaled prop.
 --
--- `AttachEntityToEntity` cannot carry a scale. Measured on a live client: a prop
--- attached and then given a scaled matrix reads 3.000 in the same tick and 1.000
--- on the next frame, because the attach recomputation rewrites the basis from
--- the parent's matrix every frame and has no notion of scale. Driving the matrix
--- every frame while attached does not rescue it either — it survived one frame
--- and 300ms of sampling and then lost the scale anyway.
---
--- So the lifecycle has to choose, and choosing wrong is SILENT: a scaled prop
--- that got attached appears at the right place in the wrong size, one frame
--- after a check that read the right size.
+-- `AttachEntityToEntity` cannot carry a scale: a prop attached and then given a
+-- scaled matrix reads 3.000 in the same tick and 1.000 the next frame, because
+-- the attach recomputation rewrites the basis from the parent every frame.
+-- Driving the matrix while still attached doesn't rescue it either — measured
+-- losing the scale again after one frame and 300ms of sampling. So the
+-- lifecycle must choose, and choosing wrong is silent: the prop appears at the
+-- right place in the wrong size, one frame after a check read the right size.
 
 local SCALED = spawn('CVehicle', 'police5')
 local SCALED_KEY = tostring(GetEntityModel(SCALED))
@@ -681,14 +670,11 @@ if math.abs(lastWrite.scale - 2.5) > 1e-4 then
     fail('the written basis does not carry the requested scale; got ' .. tostring(lastWrite.scale))
 end
 
--- THE ORPHAN SWEEP MUST NOT EAT A SCALED PROP
---
--- The sweep used to ask `attached[GetEntityAttachedTo(obj)] ~= obj`. A scaled
--- prop is deliberately attached to NOTHING, so that reads 0, `attached[0]` is
--- nil, and every scaled prop on the server is deleted as an orphan — appearing
--- and then vanishing, with nothing logged, and only for the placements that had
--- been given a scale. This is the regression that cost the most to reason about
--- and it is invisible to every other assertion in this file.
+-- Regression: the sweep used to ask `attached[GetEntityAttachedTo(obj)] ~= obj`.
+-- A scaled prop is deliberately attached to nothing, so that reads 0,
+-- `attached[0]` is nil, and every scaled prop on the server gets deleted as an
+-- orphan — appearing and vanishing with nothing logged. Invisible to every
+-- other assertion in this file.
 props.reclaimOrphans()
 if world[scaledProp].deleted then
     fail('the orphan sweep deleted a tracked SCALED prop')
@@ -709,7 +695,6 @@ if world[FOREIGN].deleted then
     fail("the orphan sweep deleted another resource's object")
 end
 
--- detach takes the prop off the driver as well as out of the world
 props.detach(SCALED)
 if not world[scaledProp].deleted then fail('detach did not delete the scaled prop') end
 attachCalls, matrixWrites = {}, {}

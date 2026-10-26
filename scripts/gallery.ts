@@ -1,46 +1,24 @@
 /**
- * `bun run gallery` — every surface tLib draws, photographed, into one flat folder.
+ * `bun run gallery [-- --only dialog,toast] [--viewport 1920x1080] [--out D:/art] [--rebuild]`
+ * — every surface tLib draws, photographed into `assets/gallery/` (git-ignored,
+ * safe to regenerate): `menu--`, `dialog--`, `toast--`, `marketplace--`,
+ * `layout--<id>.png`, plus `propeditor/<host>/`.
  *
- *   assets/gallery/menu--<id>.png         a menu page per row kind, per skin, per accent
- *   assets/gallery/dialog--<id>.png       each dialog size and every field type
- *   assets/gallery/toast--<id>.png        each toast type, and the stack
- *   assets/gallery/marketplace--<id>.png  each catalogue tab
- *   assets/gallery/layout--<id>.png       the HUD layout editor
- *   assets/gallery/propeditor/<host>/     the shared 3D prop editor, once per host
+ * The prop editor is shot differently on purpose: `@tlib/internal/prop-editor`
+ * isn't in tLib's own NUI, tLib only ships the component while tRadio/tRadar/
+ * tDetector mount it, and its appearance comes from token NAMES whose VALUES
+ * are per-resource. So it's three pictures, each driven out of a consumer's
+ * own shipped bundle via that consumer's own `bun run gallery -- --only
+ * propeditor` (same driver, `shared/ts/build/prop-editor-gallery.ts`), not one
+ * synthetic tLib-only page that would hide the per-resource token values.
  *
- * ## The prop editor is the odd one out, and deliberately so
- *
- * Every other surface here is drawn by tLib's OWN bundle, so one bundle photographs all
- * of them. `@tlib/internal/prop-editor` is not in tLib's NUI at all — tLib ships the
- * component, tRadio, tRadar and tDetector mount it — and its whole appearance comes from
- * token NAMES whose VALUES are per-resource (tRadio scopes its own set to
- * `.radio-settings-root`; the other two inherit tLib's `theme-tokens.css` from `:root`).
- * So the honest picture of it is three pictures, each out of a consumer's real shipped
- * bundle. This surface drives each consumer's own `bun run gallery -- --only propeditor`,
- * which is the same command and the same driver
- * (`shared/ts/build/prop-editor-gallery.ts`) they use on their own.
- *
- * Shooting a synthetic tLib-only page instead was the alternative and is worse: it would
- * photograph a page nothing ships, and the per-resource token values — the one thing
- * worth looking at three times — would be exactly what it could not show.
- *
- * Pictures and nothing else: no contact sheet, no report.json. What could not be shot is
- * printed as a flag at the end, which is the only thing a run is worth reading for.
- *
- *   bun run gallery
- *   bun run gallery -- --only dialog,toast
- *   bun run gallery -- --viewport 1920x1080 --out D:/art
- *   bun run gallery -- --rebuild          # force a fresh client/ui bundle first
- *
- * `assets/` is git-ignored and is not shipped, so this is safe to regenerate at will.
- *
- * This drives the REAL built bundle with a mocked NUI transport, exactly as
- * `tests/browser/*.ts` do — same `GetParentResourceName` stub, same `https://tlib/**` route,
- * same `{name, args:[payload]}` envelope. The fixtures are the difference: `gallery-fixtures.ts`
- * is representative content, those harnesses use content chosen to break things.
- *
- * Every shot asserts its surface is actually on screen before the shutter. Without that, a
- * payload the UI silently rejected photographs as an empty page that looks like a real result.
+ * Pictures only -- no contact sheet, no report.json; what couldn't be shot is
+ * a flag printed at the end. Drives the real built bundle with a mocked NUI
+ * transport, the same stub/route/envelope `tests/browser/*.ts` use; the
+ * difference is `gallery-fixtures.ts` is representative content, not content
+ * chosen to break things. Every shot asserts its surface is actually on
+ * screen first, since a payload the UI silently rejected would otherwise
+ * photograph as an empty page indistinguishable from a real result.
  */
 
 import { mkdirSync, readdirSync, rmSync, unlinkSync } from "node:fs";
@@ -63,12 +41,9 @@ const SURFACES = ["menu", "dialog", "toast", "marketplace", "layout", "propedito
 type Surface = (typeof SURFACES)[number];
 
 /**
- * The resources that mount `@tlib/internal/prop-editor`, and where each puts the shots.
- *
- * Sibling directories of tLib, which is how every resource in `[tScripts]` already
- * reaches the others (`tRadar/scripts/gallery.ts` imports `../../tLib/...`). A host that
- * is not checked out is skipped with a flag rather than failing the run — this folder is
- * frequently a partial checkout.
+ * Resources that mount `@tlib/internal/prop-editor`, as sibling directories of
+ * tLib (how every `[tScripts]` resource reaches the others). A host not
+ * checked out is flagged, not failed -- this folder is often a partial checkout.
  */
 const PROP_EDITOR_HOSTS = ["tRadio", "tRadar", "tDetector"] as const;
 
@@ -83,17 +58,14 @@ const only = cliArg("only", SURFACES.join(","))
 for (const s of only) {
   if (!SURFACES.includes(s)) throw new Error(`--only must be from ${SURFACES.join(",")}, got ${s}`);
 }
-/** The NUI is transparent over the game. On a white page half of it is invisible; this is a
- *  neutral mid-grey so both the light and the dark parts of every surface can be judged.
- *
- *  `--transparent` shoots on transparency instead, the way tAFK's and tUnit's galleries do by
- *  default. That is what a composite wants: the surfaces are small panels on a large empty page,
- *  so any fill at all — even one matching the destination — lands as a rectangle around the
- *  component rather than as the component. Needs BOTH halves: the page must not paint a
- *  background AND the screenshot must not composite one in.
- *
- *  A flag rather than `--background ""`, because `cliArg` rejects an empty value on purpose —
- *  it reads one as a typo rather than as an instruction. */
+/**
+ * The NUI is transparent over the game; a white page hides half of every
+ * surface, so this defaults to a neutral mid-grey instead. `--transparent`
+ * shoots on real transparency (needs both the page not painting a background
+ * AND the screenshot not compositing one in) for a composite, where any fill
+ * at all lands as a rectangle around the component. A flag rather than
+ * `--background ""`, since `cliArg` rejects an empty value as a likely typo.
+ */
 const background = cliArg("background", "#3a3f47");
 const transparent = process.argv.includes("--transparent");
 
@@ -102,14 +74,11 @@ const want = (s: Surface) => only.includes(s);
 const flags: string[] = [];
 const written: string[] = [];
 
-// The prop editor: one run per host, out of that host's own bundle
-// First, and in its own block, because it is the one surface that does not come out of
-// tLib's bundle — everything below this point is about tLib's own NUI, and a
-// `--only propeditor` run has no reason to build it or open a browser on it.
-// A missing host is already a flag rather than a failure, but a tree with NO
-// host at all is a standalone clone of tLib rather than a partial checkout, and
-// three flags saying so plus a `--only propeditor` run that exits 1 is a broken
-// gallery, not a report.
+// The prop editor, one run per host out of that host's own bundle: the one
+// surface not drawn from tLib's own bundle, so `--only propeditor` has no
+// reason to build it or open a browser on tLib's NUI. A tree with no host at
+// all is a standalone tLib clone, not a partial checkout, and is reported as
+// such rather than as a run that exits 1.
 const standalone = isStandaloneClone(ROOT);
 if (want("propeditor") && standalone) {
   console.log(
@@ -233,13 +202,11 @@ const MAX_VIEWPORT_H = 3000;
 
 /**
  * Worst scrollable overflow anywhere inside the surface, in CSS pixels.
- *
- * "Visible" is not the same as "all of it is visible". The dialog caps itself at `max-height:85vh`
- * and scrolls its field area, so on the default 900px viewport a tall fixture photographs as a
- * complete-looking panel — sticky footer and all — with its last fields simply scrolled off. That
- * is how `dialog--every-field` came to be missing its checkbox and button while both rendered
- * correctly: the shot was clipped, not the render. `fullPage` would not have helped, because the
- * overflow is inside an element rather than the document.
+ * "Visible" isn't "all of it is visible": the dialog caps at `max-height:85vh`
+ * and scrolls its field area, so `dialog--every-field` once photographed as a
+ * complete-looking panel with its last fields scrolled off -- clipped, not
+ * mis-rendered. `fullPage` wouldn't help; the overflow is inside an element,
+ * not the document.
  */
 async function clippedBy(selector: string): Promise<number> {
   return await page
@@ -260,16 +227,13 @@ async function clippedBy(selector: string): Promise<number> {
 }
 
 /**
- * Shoot, but only once the surface is provably on screen and provably whole.
- *
- * A payload the UI rejected photographs as the empty page behind it, which is indistinguishable
- * from a good shot — hence the visibility gate. The clip gate is the same argument one level in:
- * a surface that scrolls is showing you part of itself, and nothing in the image says so.
- *
- * On a clipped surface the viewport GROWS and the shot is retaken rather than the fixture being
- * shrunk to fit. The surfaces are sized in `vh`, so the room gained per pixel is less than one and
- * this converges rather than solving in a single step. The viewport is restored afterwards so one
- * tall fixture cannot silently rescale every shot that follows it.
+ * Shoot only once the surface is provably on screen and provably whole: the
+ * visibility gate catches a rejected payload (indistinguishable from a good
+ * shot otherwise), the clip gate catches a scrolling surface silently showing
+ * only part of itself. A clipped surface grows the viewport and retakes
+ * rather than shrinking the fixture; surfaces are sized in `vh` so this
+ * converges rather than solving in one step. Viewport is restored afterwards
+ * so one tall fixture can't rescale every shot that follows it.
  */
 async function shoot(name: string, selector: string): Promise<void> {
   try {
@@ -283,8 +247,7 @@ async function shoot(name: string, selector: string): Promise<void> {
   let over = await clippedBy(selector).catch(() => 0);
   while (over > CLIP_TOLERANCE_PX) {
     const current = page.viewportSize()?.height ?? vpH;
-    // Surfaces are sized in `vh`, so a pixel of viewport buys less than a pixel of room and this
-    // has to over-ask to converge rather than creep.
+    // `vh`-sized surfaces gain less than 1px of room per 1px of viewport, so over-ask to converge.
     const height = Math.min(MAX_VIEWPORT_H, Math.ceil(current + over / 0.85) + 16);
     if (height <= current) {
       flags.push(
@@ -296,19 +259,16 @@ async function shoot(name: string, selector: string): Promise<void> {
     await page.waitForTimeout(250);
     grown = true;
 
-    // Stop on what the growth MEASURED, not on an attempt budget. A surface with a fixed pixel
-    // height does not grow with the viewport at all — `.mp-panel` is 650px tall at both 900px and
-    // 1788px of viewport, and its list overflows by the same 112px either way. Against a fixed
-    // budget that spends every attempt, gains nothing, and then takes the shot without flagging:
-    // silently wrong, and it produced a marketplace shot twice as tall as it needed to be with the
-    // same card still cut off. If a bigger viewport did not buy room, it is the wrong lever.
+    // Stop on measured growth, not an attempt budget: `.mp-panel` is 650px tall
+    // at both 900px and 1788px of viewport (fixed height), so a budget that
+    // spends every attempt would silently take a shot twice as tall with the
+    // same card still cut off.
     const after = await clippedBy(selector).catch(() => 0);
     if (after > CLIP_TOLERANCE_PX && after >= over) {
       flags.push(
         `${name}: ${after}px of it is scrolled out of the shot, and a taller viewport does not help` +
           ` — this surface has a fixed height, so the shot shows only part of its content`
       );
-      // A taller viewport bought nothing, so keep the composition the rest of the run uses.
       await page.setViewportSize({ width: vpW, height: vpH });
       await page.waitForTimeout(250);
       grown = false;

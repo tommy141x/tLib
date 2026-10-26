@@ -2,10 +2,11 @@
 
 # tLib
 
-A shared utility library for FiveM resources. Provides a UI component suite (menus, dialogs, toasts, themes), 40 reusable Lua import modules (access, permission, config, KVP, settings, platform, and more), and TypeScript/NUI utilities (undo system, coordinate helpers) that other resources can depend on.
+A shared utility library for FiveM resources: one NUI menu, dialog and toast system with
+themes, 40 Lua import modules (access, permission, config, KVP, settings, platform and the
+rest), and TypeScript/NUI utilities for resource frontends.
 
-FiveM is the only supported runtime. Everything goes through an internal `Platform`
-adapter, so a second runtime could be added without touching the subsystems above it.
+FiveM is the only supported runtime. Everything goes through an internal `Platform` adapter.
 
 ---
 
@@ -16,12 +17,10 @@ adapter, so a second runtime could be added without touching the subsystems abov
 One NUI menu, shared by every resource on the server. tLib owns the screen, the
 keyboard and the permission check; a consumer declares pages and handles rows.
 
-The API is **declarative, and split across the two sides deliberately**. Pages are
-registered on the **server**, because what a player may see is a server decision: the
-server answers every open with that player's own ACE-filtered tree, so there is no
-path to a row the player is not entitled to. The **client** side registers what turns
-that tree into behaviour — the handlers, the presenters that fill rows in at the
-moment they are shown, and the hooks that react to entering or leaving a page.
+The API is declarative and split across the two sides. Pages register on the **server**,
+which answers every open with that player's own ACE-filtered tree, so there is no path to a
+row the player is not entitled to. The **client** registers behaviour: handlers, presenters
+that fill rows in as they are shown, and hooks for entering or leaving a page.
 
 Menu IDs are namespaced: every page a resource registers must be `owner:name`. Every
 export below takes an optional trailing `declaredOwner`, used only where the platform
@@ -136,7 +135,7 @@ All fields share: `id` (required), `type`, `label`, `description`, `required`, `
 
 ### Toast / Notification System
 
-Lightweight, non-interactable toast notifications that stack in the corner of the screen.
+Non-interactable notifications that stack in the corner of the screen.
 
 - `ShowToast(id, toastType, title, description, duration, theme)` — Show a toast. Returns the resolved `id`.
 - `UpdateToast(id, changes)` — Merge changes into a live toast in place (ideal for resolving a `"loading"` toast).
@@ -234,23 +233,21 @@ The in-game panel for browsing and installing content a resource publishes.
 - `OpenMarketplace(opts)` / `CloseMarketplace()` — Client. `{ type = 'ui-radio' }` filters the
   panel on open.
 
-The marketplace needs **no credential and no setup** — it works on a fresh install.
-The only convar here is optional, and only if you self-host:
+The marketplace needs **no credential and no setup** — it works on a fresh install. The one
+convar here is optional, and only if you self-host:
 
 ```cfg
 setr tlib_api_base_url "https://timmygstudios.com"   # only to self-host
 ```
-Unset, browse/preview/install and community-config publish refuse and log the convar
-name once rather than falling back to a shared built-in value. `tlib_api_base_url`
-is the opposite case: client Lua reads it too, so it needs `setr` or the in-game panel
-keeps talking to the default host while the server talks to yours.
 
-It is a **single** switch for the whole TIMMYG Studios API, not just the marketplace:
-browse, preview, install downloads, community configs and the startup version check with
-its changelog all follow it, so pointing it at a local `wrangler dev` worker moves all of
-them together. A trailing slash or a trailing `/api…` path is trimmed, nothing caches the
-value, and the GitHub release check is deliberately unaffected. See
-`docs/content/convars.mdx`.
+It is a **single** switch for the whole TIMMYG Studios API: browse, preview, install
+downloads, community configs and the startup version check with its changelog all follow
+it, so pointing it at a local `wrangler dev` worker moves all of them together. The GitHub
+release check is unaffected.
+
+Use `setr`, not `set` — client Lua reads it too, and with `set` alone the in-game panel
+keeps talking to the default host while the server talks to yours. A trailing slash or
+`/api…` path is trimmed, and nothing caches the value. See `docs/content/convars.mdx`.
 
 ---
 
@@ -288,13 +285,14 @@ log('Something went wrong', 4)  -- ERROR
 
 ### Public HTTP hub and application mounts
 
-`tLib` owns one public HTTP listener and the hub at `/`. Apps own their routes and
-login/authorization; registering an app does **not** add shared authentication.
-The listener starts with tLib even when no consumer opts into web publication.
-Exposure and hub visibility are separate: zero visible destinations shows an empty
-state, exactly one redirects to that destination, and multiple destinations show
-sibling cards. GET and HEAD use the same status/headers (HEAD has no body). A
-single visible Radio Admin destination therefore redirects `/` to `/dispatch/admin`.
+`tLib` owns one public HTTP listener and the hub at `/`. Apps own their routes and their own
+login — registering an app adds no shared authentication. The listener starts with tLib even
+when no consumer opts into web publication.
+
+Exposure and hub visibility are separate. Zero visible destinations shows an empty state,
+exactly one redirects to it, several show sibling cards — so a single visible Radio Admin
+destination redirects `/` to `/dispatch/admin`. GET and HEAD share status and headers; HEAD
+has no body.
 
 Configure networking once in `server.cfg`, before starting tLib:
 
@@ -305,34 +303,34 @@ set tlib_http_host "0.0.0.0"
 set tlib_http_public_url "192.0.2.10"
 ```
 
-Defaults are port `7777`, bind host `0.0.0.0`, and an empty public-URL override.
-Bare IP/localhost shorthand uses HTTP and the listener port; `example.com` uses
-`https://example.com`; an explicit URL is honored. A public URL is an advertised
-address, not a request to bind that address or provision TLS. For HTTPS, terminate
-TLS at your proxy/tunnel and forward to tLib's actual HTTP listener. Use an origin
-without an extra path prefix for the built-in `/dispatch` and `/db` integrations.
-Only open/forward the listener if browser access is wanted; app-internal loopback
-ports are never firewall settings. A configured URL is not proof of external
-reachability—verify through the actual public edge separately.
+Defaults are port `7777`, bind host `0.0.0.0`, and an empty public-URL override. Bare
+IP/localhost shorthand uses HTTP and the listener port; `example.com` becomes
+`https://example.com`; an explicit URL is honoured.
+
+`tlib_http_public_url` is **advertised, never bound** — it provisions no TLS. For HTTPS,
+terminate TLS at your proxy or tunnel and forward to tLib's HTTP listener. The built-in
+`/dispatch` and `/db` integrations need an origin with no extra path prefix. Setting it also
+proves nothing about reachability; verify through the real public edge.
+
+Only the listener port needs opening or forwarding, and only for browser access —
+app-internal loopback ports are not firewall settings.
 
 Consumer exposure is a separate startup decision:
 
-- **tRadio:** `Config.exposeWeb = false` by default. `true` additionally publishes
-  `/dispatch` (including admin, API, federation and desktop access). Native
-  in-game radio/panels do not require it. `useLegacySocketTransport` is a separate,
-  deprecated transport choice, not an automatic consequence of publication.
-  `Config.showDispatchInHub = true` and `Config.showAdminInHub = false` independently
-  control its Dispatch and Radio Admin cards. These are startup settings; neither
-  enables exposure, changes authentication, nor removes a direct URL.
-- **tDB:** the current `Config.ExposeAdmin = true` publishes the **PocketBase admin
-  and API**, not just a login page. `/db` redirects to `/db/_/`. Set it explicitly
-  to `false` to keep local PocketBase private; internal database consumers still
-  work. A missing setting defaults to false. Remote PocketBase mode is not
-  published through tLib. `Config.ShowInHub = true` controls the Database card
-  independently; false hides it but does not unpublish `/db` when ExposeAdmin is true.
+- **tRadio:** `Config.exposeWeb = false` by default; `true` publishes `/dispatch`, including
+  admin, API, federation and desktop access. In-game radio and panels work without it.
+  `Config.showDispatchInHub = true` and `Config.showAdminInHub = false` control its two
+  cards independently — hub cards only, so neither enables exposure, changes authentication
+  or removes a direct URL. `useLegacySocketTransport` is a separate deprecated transport
+  choice.
+- **tDB:** `Config.ExposeAdmin = true` publishes the **PocketBase admin and API**, not just
+  a login page, and `/db` redirects to `/db/_/`. Set it to `false` to keep local PocketBase
+  private; internal database consumers keep working. Missing defaults to false, and remote
+  PocketBase mode is never published through tLib. `Config.ShowInHub` controls the Database
+  card alone — `false` hides the card without unpublishing `/db`.
 
-Restart the relevant resource to apply its exposure setting. Neither app owns a
-public port, and disabling its mount does not shut down tLib's hub or other apps.
+Restart the relevant resource to apply its exposure setting. Neither app owns a public port,
+and disabling its mount leaves tLib's hub and the other apps running.
 
 **Server exports**
 
@@ -359,20 +357,20 @@ hubLinks = {
 },
 ```
 
-Each child supports `id`, `path`, `title`, `listed` (default true), `icon`,
-`description`, and `accent`. IDs are stable within a mount (ASCII letters, digits,
-underscore or hyphen, 1–64 characters; `root` is reserved). Paths are literal,
-canonical, mount-relative paths such as `/admin`: no schemes, protocol-relative
-URLs, percent escapes, traversal, backslashes, query strings or fragments.
-Invalid child entries are omitted without taking the app offline; at most 16 are
-considered. Duplicate IDs and destination paths do not create extra cards or
-change root counting. Primary destinations honor a valid `index` entrypoint.
-Hiding the primary destination does not hide an explicitly listed child. **Hidden
-is not authenticated or private**—only the app's auth rules control access.
+Each child supports `id`, `path`, `title`, `listed` (default true), `icon`, `description`
+and `accent`. IDs are stable within a mount — ASCII letters, digits, underscore or hyphen,
+1–64 characters, `root` reserved. A `path` is a literal canonical mount-relative path such
+as `/admin`: no schemes, protocol-relative URLs, percent escapes, traversal, backslashes,
+query strings or fragments. At most 16 children are considered, an invalid entry is omitted
+rather than taking the app offline, and duplicate IDs or paths add no cards and do not
+change root counting. A primary destination honours a valid `index` entrypoint, and hiding
+it leaves an explicitly listed child visible.
 
-With prefix stripping, tLib also rewrites cookie paths and root-relative
-redirects; URLs in response bodies and browser-generated paths remain the app's
-responsibility. Overlapping mounts are rejected, not silently replaced.
+**Hidden is not private.** Only the app's own auth rules control access.
+
+With prefix stripping, tLib rewrites cookie paths and root-relative redirects; URLs in
+response bodies and browser-generated paths stay the app's responsibility. Overlapping
+mounts are rejected, not silently replaced.
 
 **Readiness and retry lifecycle**
 
@@ -404,11 +402,10 @@ from `GetHubUrl()`.
 5. Stopping the app removes its mounts automatically. Rebinding while the app
    stays running requires unregistering before registering the new port.
 
-Failed automatic IP discovery does not advertise localhost or create speculative
-OAuth callbacks. Set `tlib_http_public_url` to a reachable address (explicit
-`localhost` is valid for development), then restart tLib and let consumers
-re-register. Listener bind failures are reported separately and require fixing
-the local bind configuration before retrying.
+When automatic IP discovery fails, nothing is advertised. Set `tlib_http_public_url` to a
+reachable address (explicit `localhost` is valid for development), then restart tLib and let
+consumers re-register. Listener bind failures are reported separately and need the local
+bind configuration fixed before a retry.
 
 ### HTTP Helper
 
@@ -442,7 +439,7 @@ local coords = tlib.coords
 
 ### coords
 
-Vehicle coordinate math helpers for transforming positions between local and world space, including bone attachment support.
+Vehicle coordinate maths: local ↔ world, including bone-relative transforms.
 
 - `Coords.localToWorld(right, fwd, up, pos, lx, ly, lz)` — Vehicle-local → world
 - `Coords.worldToLocal(right, fwd, up, pos, wx, wy, wz)` — World → vehicle-local
@@ -495,11 +492,11 @@ Server-side content discovery. A module is a self-contained folder plus a
 inside `layouts/` and cannot be module ids. A `kind` that disagrees with the
 directory it sits in is refused rather than loaded.
 
-⚠️ **This module discovers `layout` and `theme` only.** `kind: "sound"` is valid
-in the TypeScript contract — the studio generates it and the marketplace
-installer consumes it — but on a FiveM resource a sound is a flat audio file in
-`layouts/sounds/`, so that an operator can drag a `.wav` in with no manifest to
-author. The installer reads a sound module and writes only its audio.
+**This module discovers `layout` and `theme` only.** `kind: "sound"` is valid in the
+TypeScript contract — the studio generates it, the marketplace installer consumes it — but
+on a FiveM resource a sound is a flat audio file in `layouts/sounds/`, so an operator can
+drag a `.wav` in with no manifest to author. The installer reads a sound module and writes
+only its audio.
 
 **Replaces `tlib.layouts`, which never shipped outside this tree** — see
 `docs/content/import-modules.mdx` for what a consumer writes instead.
@@ -512,7 +509,7 @@ tLib ships a set of TypeScript modules (`@tlib/shared`) for use in resource NUI 
 
 ### Undo (`@tlib/shared/undo`)
 
-Registry-based undo/redo system decoupled from any specific store or framework.
+Registry-based undo/redo, independent of any particular store.
 
 - `registerUndoable(tag, capture, restore)` — Register a store for snapshot tracking
 - `withUndo(label, tags, fn)` — Wrap a mutation in a single undo checkpoint
@@ -533,7 +530,7 @@ Converts between FiveM's coordinate system (Z-up) and Three.js (Y-up) for web ed
 
 1. Download the latest release and extract `tLib` into your server's resources directory.
 2. Add `ensure tLib` to your `server.cfg` **before** any resource that depends on it.
-3. That's it — nothing else is required. The marketplace needs no configuration.
+Nothing else is required; the marketplace needs no configuration.
 
 Every convar tLib reads — name, unit, default, and whether it needs `set` or `setr` — is
 listed in one place: [`docs/content/convars.mdx`](docs/content/convars.mdx).

@@ -390,16 +390,12 @@ print('PASS discovery-export: the player is told the truth over the wire (' .. c
 
 -- 12. a shipped config beats a stale UNMARKED local copy, and `_local` still wins
 --
--- The branch this pins used to leave precedence alone and only report the shadow, on the
--- reasoning that "saveLocal drops the entry on the next write". It does -- but only when
--- somebody saves THAT model, so a vehicle nobody edits keeps its stale local copy forever.
--- Measured in the field 2026-10-23: a pack shipping 30 patterns was shadowed by an 18-pattern
--- copy in the consumer's data file, updating the pack changed nothing in game, and the only
--- fix was hand-editing the data file -- the exact outcome the reporting existed to prevent.
---
--- Both arms are asserted together on purpose. "Pack wins" is only correct if the deliberate
--- `_local` override survives it, and a test for one without the other would pass against a
--- change that broke the other.
+-- "saveLocal drops the entry on the next write" is true only once somebody saves
+-- that model -- a vehicle nobody edits keeps a stale local copy forever. In the
+-- field, an 18-pattern local copy permanently shadowed a 30-pattern pack update;
+-- the only fix was hand-editing the data file. Both arms below are asserted
+-- together: "pack wins" is only correct if the `_local` override still beats it,
+-- and testing one without the other would pass a change that broke the other.
 files.consumer['data.json'] = env.json.encode({ vehicles = { car = { siren = { maxHz = 745 } } } })
 files.vehicle['demo.json'] = env.json.encode({ car = { siren = { maxHz = 999 } } })
 env.logs = {}

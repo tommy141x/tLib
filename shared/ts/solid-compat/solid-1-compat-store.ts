@@ -1,99 +1,30 @@
 /// <reference path="./solid-1-compat-virtual.d.ts" />
 /*
- * SOLID 1 -> 2 COMPATIBILITY LAYER  ·  THE `solid-js/store` SHIM
- *
- * One shared copy, kept in tLib and consumed by five projects. `README.md` in
- * this directory documents the layer as a whole: what it solves, what each of
- * the five modules does, how a project adopts it, what `vendorPackages` is for
- * and how to derive one, and the debug environment variables. Read that first.
- *
- * TWO CONVENTIONS HOLD THROUGHOUT THESE FILES
- *
- *  · EVERY CLAIM WITH A NUMBER BEHIND IT IS A MEASUREMENT, and the number is
- *    the reason the code below is the shape it is. Several of them record
- *    failures that were expensive to diagnose and are silent when they recur.
- *    Re-measure before changing the code a number justifies; do not delete the
- *    number because the prose around it reads as history.
- *  · A MEASUREMENT IS STATED AT THE SCOPE IT WAS TAKEN AT. "Across the
- *    supported set" means every consumer's installed `node_modules` tree. A
- *    claim about `src/` is a claim about the consuming project's own `src/`,
- *    and a named project appears as the EVIDENCE for a claim, never as its
- *    subject. Re-measure at the union of all consumers before inheriting a
- *    conclusion into this shared copy.
- *
- * FORMATTING
- *
- * `tLib/biome.json` excludes this directory, deliberately. biome and the
- * consumers' formatter (oxfmt, via `vp fmt`) disagree on import order and line
- * breaking here — measured, biome wants to rewrite all seven files — and the
- * churn would bury the annotations that are the only record of why each shim
- * is the shape it is.
- *
- * NOTHING FORMATS OR LINTS THIS DIRECTORY TODAY, AND THAT IS A GAP RATHER
- * THAN A DESIGN. Measured: every consumer's `fmt`/`lint` script names only its
- * own `src` and configs, and `vp fmt` refuses a path containing `..`, so a
- * consumer cannot point it here even by hand. Match the surrounding style when
- * you edit, and do not assume a green `vp fmt --check` in a consumer says
- * anything about these files. See README.md § Formatting.
+ * The `solid-js/store` shim — one of five modules in this Solid 1 -> 2 compat
+ * layer. See README.md for what it solves, module roles and adoption steps.
  */
 /**
- * VENDOR COMPATIBILITY ONLY. Not reachable from `src/`.
+ * Vendor compatibility only — not reachable from `src/`. Companion to
+ * solid-1-compat.ts for the `solid-js/store` subpath, which no longer exists
+ * in 2.0 (store APIs moved into `solid-js` core). `{ createStore, reconcile }`
+ * imported from here get the same legacy-call-shape-compatible versions as
+ * bare `solid-js` (see solid-1-compat.ts).
  *
- * Companion to solid-1-compat.ts for the `solid-js/store` subpath, which no
- * longer exists in 2.0 (store APIs moved into the main `solid-js` package).
- * Vendor code importing `{ createStore, reconcile } from "solid-js/store"`
- * redirects here and gets the same legacy-call-shape-compatible `createStore`
- * as everything importing from bare `solid-js` (see solid-1-compat.ts).
- *
- * NO `produce` RE-EXPORT, AND IT IS NOT AN OVERSIGHT
- *
- * There was one. It is gone because the `produce`
- * shim it re-exported is gone: see the block comment where `produce`/`isProducer`
- * used to be in solid-1-compat.ts for why (the mutation form IS the native
- * setter in 2.0, so the wrapper was an identity function, and both of its
- * supposed consumers turned out to be imaginary).
- *
- * Re-measured here rather than inherited from that file's argument, because
- * this is the subpath a `produce` consumer would actually import from. Measured
- * across the supported set:
- *
- *  · VENDORS. Exactly ONE file under the whole `VENDOR_PACKAGES` set mentions
- *    `solid-js/store` at all — `@tanstack/solid-virtual/src/index.tsx:18` — and
- *    it imports `{ createStore, reconcile }`. No vendor file imports `produce`
- *    from this subpath, and none mentions `isProducer`.
- *  · OURS. `src/` does not reach this file by construction (the resolve-time
- *    throw in solid-1-compat-plugin.ts), and has no `produce` call site either:
- *    the last one, `theme-editor/editor.tsx`, now passes a bare draft mutator
- *    and carries its own `migration.txt` citation for why.
- *
- * The two names below are therefore the complete set of what anything actually
- * asks this module for. Re-adding a third is one line, and should be done when
- * a consumer appears rather than in anticipation of one.
+ * No `produce` re-export: its shim was removed from solid-1-compat.ts once
+ * both its supposed consumers turned out to be imaginary (counted per-name
+ * across the vendor tree and `src/`; see that file's tombstone). This is the
+ * only subpath a `produce` consumer could import from, so the count was
+ * re-run here specifically rather than inherited.
  */
 /**
- * BOTH NAMES COME FROM THE SHIM, AND `reconcile` DOING SO IS A REVERSAL.
- *
- * It used to read `export { reconcile } from "virtual:solid-1-compat-real/
- * solid-js"`, on the argument that Solid 2 kept `reconcile` unchanged and
- * merely moved it out of this subpath into core, so there was nothing to
- * adapt. That argument held while no installed vendor passed the Solid 1
- * options-object second argument. One does now — `@tanstack/solid-virtual`
- * calls `reconcile(items, { key: "index" })` twice — and Solid 2 reads that
- * second parameter as the key itself, so the object reaches the diff walk and
- * is called: `TypeError: keyFn is not a function`, inside a store setter
- * inside a tracked callback, which halts the whole reactive system.
- *
- * THIS SUBPATH IS THE ONLY PATH THOSE CALLS TRAVEL — `@tanstack/solid-virtual`
- * imports `{ createStore, reconcile }` from `solid-js/store` and nothing else
- * — so a wrapper in `solid-1-compat.ts` that this file does not re-export is a
- * wrapper that is never reached. See that file's `reconcile` block for the
- * measurement and for what the wrapper does and does not translate.
- *
- * THE OLD SPELLING ALSO GUARDED AGAINST A REAL TS2305, and that hazard is
- * gone rather than ignored: `solid-1-compat.ts` now DEFINES `reconcile` as a
- * named export, so `tsc` resolves it without falling back to the wildcard
- * re-export that only the bundler accepted. Run a consumer's `tsc --noEmit`
- * and not only its build after touching this file; the two gates still see
- * different things here.
+ * Both names come from the shim, not real `solid-js/store` — `reconcile`
+ * re-exporting the real one was reverted once `@tanstack/solid-virtual`
+ * started calling `reconcile(items, { key: "index" })`: Solid 2 reads that
+ * second argument as the key itself, so the options object reaches the diff
+ * walk and gets called, throwing `TypeError: keyFn is not a function` inside
+ * a store setter inside a tracked callback. `@tanstack/solid-virtual` imports
+ * `{ createStore, reconcile }` only from this subpath, so a wrapper defined
+ * in `solid-1-compat.ts` but not re-exported here is never reached — see that
+ * file's `reconcile` block for the fix.
  */
 export { createStore, reconcile } from "./solid-1-compat";

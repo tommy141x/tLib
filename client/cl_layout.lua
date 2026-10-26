@@ -302,18 +302,14 @@ function H.init(webui)
         defaults = { x = -24 / 1080, y = 24 / 1080, scale = 1, visible = true, anchor = 'top-right' } }, function(data)
         Platform.sendUIEvent(ui, 'toastLayout', data)
     end)
-    -- There is NO GetHudLayoutCapabilities export, and do not reintroduce one.
-    -- It returned eight flags (consumerPersistence, minVisibility,
-    -- universalMinVisibility, referenceOffsets, layoutVersion, separateDefaults,
-    -- resetExport, liveLayoutWrite), every one of them a hardcoded `true` naming a
-    -- tLib release that introduced something. Only 0.6 was ever released and it has
-    -- none of them, so the flags could not distinguish anything a consumer could
-    -- reach -- while four consumers each carried a pcall-wrapped probe of it and
-    -- collapsed `layout` into `defaults` when it did not answer, which is exactly
-    -- the bug that made the shared editor unrecoverable for tRadio. The contract is
-    -- now unconditional: RegisterHudComponent takes `layout` (where the widget is)
-    -- alongside `defaults` (where Reset puts it back), x/y are ratios of a 1080px
-    -- reference height on both axes, and SetHudLayout/ResetHudLayout exist.
+    -- No GetHudLayoutCapabilities export, and do not re-add one: it returned a
+    -- set of hardcoded `true` flags naming features no released tLib actually
+    -- had, so it could not distinguish anything a consumer could reach — and
+    -- consumers' pcall probes of it collapsed `layout` into `defaults` on no
+    -- answer, which broke the shared editor for tRadio. The contract is now
+    -- unconditional: RegisterHudComponent takes `layout` (current position)
+    -- alongside `defaults` (Reset target), x/y as ratios of a 1080px reference
+    -- height, and SetHudLayout/ResetHudLayout exist.
     Platform.export('tLib', 'RegisterHudComponent', function(id, options, fn)
         local name = owner()
         if not name then return false, 'Cannot identify calling resource' end
@@ -456,19 +452,12 @@ function H.init(webui)
                         end
                     end
                     if reason and active == session then
-                        -- WARNING: THE DRAFT SURVIVES AN INVOLUNTARY CLOSE. It used to be
-                        -- thrown away, which made a momentary focus blip cost a player
-                        -- every adjustment they had made -- and `IsNuiFocused()` is a
-                        -- GLOBAL signal, so any other resource clearing NUI focus trips
-                        -- it. Reported 2026-10-19 against ZSX UI V2: "position is
-                        -- buggy", "says the UI isn't in focus when it is", "you have to
-                        -- reset the position" were all this, at a 1.5s grace.
-                        --
-                        -- Closing is still right and must stay: the watchdog exists so
-                        -- a player who cannot interact is not left holding a cursor
-                        -- they cannot use, which `tests/lua/hud-layout.lua` pins. What
-                        -- was never right is answering an AMBIGUOUS signal by deleting
-                        -- work. Reopening restores it.
+                        -- The draft survives an involuntary close: it used to be
+                        -- discarded, costing a player every edit on a momentary focus
+                        -- blip, since `IsNuiFocused()` is a global signal any other
+                        -- resource's NUI focus trips. Closing itself must stay — a
+                        -- stuck cursor is worse, and a Lua test pins that — but an
+                        -- ambiguous signal must not delete work; reopening restores it.
                         recovered = { owner = session.owner, draft = S.copy(session.draft) }
                         log('HUD editor closed: ' .. reason
                             .. '. Your changes were kept -- reopen with /tlibhud to carry on.', 3)

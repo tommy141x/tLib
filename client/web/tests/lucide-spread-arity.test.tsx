@@ -1,60 +1,37 @@
 /**
- * `lucide-solid` renders REAL SVG through the compat shim's `spread`.
- *
- * What this file is for
- *
- * `shared/ts/solid-compat/solid-1-compat-web.ts` exports a Solid-1-arity
- * `spread` that maps onto Solid 2's. The two signatures disagree in position AND
- * meaning:
+ * `shared/ts/solid-compat/solid-1-compat-web.ts`'s `spread` maps Solid 1's
+ * signature onto Solid 2's, and the two disagree in position and meaning:
  *
  *   Solid 1:  spread(node, accessor, isSVG?, skipChildren?)
  *   Solid 2:  spread(node, accessor, skipChildren?, skip?, name?)
  *
- * so Solid 1's boolean fourth argument arrives in Solid 2's `skip`, which is a
- * PREDICATE Solid 2 calls as `skip("children")` before anything else. The one
- * live caller in the installed vendor tree is
- * `lucide-solid/dist/esm/Icon.mjs:37`:
+ * Solid 1's boolean 4th arg lands in Solid 2's `skip`, a predicate called as
+ * `skip("children")` — the one live caller is
+ * `lucide-solid/dist/esm/Icon.mjs:37`: `spread(_el$, mergeProps(...), true, true)`.
+ * A missing mapping throws `TypeError: skip is not a function` inside a
+ * render effect, which halts Solid 2's reactive graph process-wide
+ * (`[REACTIVITY_HALTED]`) — measured as an empty container here and a
+ * cascade of unrelated-looking failures afterward. This file exists to
+ * redden first, by name, instead of nine editor tests saying nothing.
  *
- *     spread(_el$, mergeProps(() => builtIcon()[1]), true, true)
+ * Assertions check content, not absence of a throw: a real `<svg>` in the
+ * SVG namespace; the attributes `spread` applies (the half `skip` can eat,
+ * since `collectProps` calls `skip(prop)` per property); and real child
+ * geometry (the half `skipChildren` governs — a missing `<path>` still looks
+ * like "an icon rendered" to a check that only counts the `<svg>`).
  *
- * Why the assertions are shaped the way they are
- *
- * WITHOUT THE SHIM EXPORT THIS DOES NOT FAIL WITH A MESSAGE ABOUT `spread`.
- * The `TypeError: skip is not a function` is raised inside a render effect, and
- * Solid 2 answers an uncaught render-effect throw by HALTING THE REACTIVE GRAPH
- * for the whole process (`[REACTIVITY_HALTED]`). Measured: the symptom is an
- * EMPTY container here and a cascade of unrelated-looking failures in every file
- * that runs afterwards. That is exactly why this file exists — one named,
- * one-component assertion that reddens first and says what broke, instead of
- * nine editor tests that say nothing.
- *
- * So the assertions are deliberately about CONTENT, not absence of a throw:
- *  · the element is a real `<svg>` in the SVG namespace, not a flight marker and
- *    not an empty container;
- *  · it carries the attributes `spread` is the only thing that applies — this is
- *    the half `skip` corrupts, since `collectProps` consults `skip(prop)` per
- *    property as well as for `"children"`;
- *  · it has real child geometry, which is the half `skipChildren` governs. An
- *    icon whose `<path>` children are missing still reads as "an icon rendered"
- *    to any check that only counts the `<svg>`.
- *
- * The arity mapping, asserted directly
- *
- * The last test calls the shim's `spread` itself at the Solid 1 arity. It is not
- * redundant with the icon tests: `skipChildren` is the argument the icon case
- * cannot distinguish (lucide inserts its children separately, so `true` is
- * correct AND a dropped argument would also look correct there), and getting
- * that one wrong is the quiet failure — duplicated children rather than a throw.
+ * The last test calls the shim's `spread` directly at Solid 1 arity, which
+ * the icon tests can't substitute for: `skipChildren` is the one argument a
+ * dropped value and a correct value both look right on an icon (lucide
+ * inserts children separately either way), so getting it wrong there is
+ * silent duplication, not a throw.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, render } from "@solidjs/testing-library";
-/**
- * The shim module, imported by the same path a rewritten vendor import resolves
- * to — `tests/_setup.ts` rewrites every vendor's `"solid-js/web"` to this exact
- * file. So the `spread` exercised below is the production-shaped module and not
- * a second copy of the logic.
- */
+// Imported by the same path a rewritten vendor import resolves to —
+// `tests/_setup.ts` rewrites every vendor's `"solid-js/web"` to this exact
+// file — so `spread` below is the production-shaped module, not a copy.
 import * as shim from "@tlib/shared/solid-compat/solid-1-compat-web";
 import { Anchor, Ban } from "lucide-solid";
 import { createRoot, createSignal, flush } from "solid-js";
@@ -128,13 +105,10 @@ describe("a real lucide-solid icon", () => {
 });
 
 describe("the shim's `spread` maps Solid 1's argument list onto Solid 2's", () => {
-  /**
-   * `createRoot`, NOT a bare call. `spread` installs a render effect, and an
-   * effect created with no owner is a different code path in Solid 2 — it warns
-   * and is never disposed, which is the owner bug `tests/_setup.ts`'s dedupe
-   * block documents at length. Rooting each case keeps it on the same path a
-   * rendered component takes, and disposes it.
-   */
+  // `createRoot`, not a bare call: `spread` installs a render effect, and an
+  // effect with no owner is a different Solid 2 code path (warns, never
+  // disposed — the owner bug `_setup.ts`'s dedupe block documents). Rooting
+  // keeps each case on the path a rendered component takes.
   function spreadInto(...args: unknown[]): SVGElement {
     const node = document.createElementNS(SVG_NS, "svg");
     const dispose = createRoot((d) => {

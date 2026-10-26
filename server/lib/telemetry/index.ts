@@ -71,11 +71,8 @@ export function installTelemetry(): void {
   });
   transport.start();
 
-  // And reaped. `start()` opens a 60s interval that nothing cancelled:
-  // `stop()` was on the Transport interface and implemented, and had no caller
-  // anywhere, so every tLib restart left the previous run's flush timer alive
-  // in the same Node VM — holding a store and a breaker that no longer belong
-  // to anything.
+  // `start()`'s 60s flush interval had no caller to `stop()` it, so every
+  // restart left the previous run's timer alive in the same Node VM.
   fOn("onResourceStop", (resource: unknown) => {
     if (resource === fGetCurrentResourceName()) transport.stop();
   });

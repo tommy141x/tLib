@@ -1,17 +1,11 @@
 import type { CatalogueItem } from "./item.ts";
 
 /**
- * The one marketplace catalogue transport, compiled into every resource's SERVER
- * bundle at build time. The shape is v2's camelCase verbatim, because it is the
- * wire; tLib's own snake_case NUI shape is an adapter in
- * `server/lib/marketplace/browse.ts` on top of this.
- *
- * SERVER-ONLY: it carries the tLib public key, so `shared/ts/index.ts`
- * deliberately does not re-export the marketplace subtree. Do not add it to that
- * barrel, and do not import it from any `client/` or `web/` tree.
- *
- * Design rationale, the public-key posture and the identity guarantees:
- * docs/internal/marketplace-transport.md
+ * The marketplace catalogue transport, compiled into every resource's server bundle. Shape
+ * is v2's camelCase wire verbatim; `server/lib/marketplace/browse.ts` adapts to tLib's
+ * snake_case NUI shape. Server-only — carries the tLib public key, so `shared/ts/index.ts`
+ * does not re-export this subtree; do not import it from `client/` or `web/`.
+ * Rationale: docs/internal/marketplace-transport.md
  */
 
 import { createHash } from "node:crypto";

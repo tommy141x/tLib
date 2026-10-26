@@ -20,10 +20,9 @@ local access = {}
 
 local RESOURCE = (GetCurrentResourceName and GetCurrentResourceName()) or 'resource'
 
--- How long an answer is reused for one player. This is not really a cache for
--- speed -- the underlying calls are local exports. It is a rate limit: a gate
--- answers a net event the client can fire, and `HasItem` on a large inventory is
--- not free. Short enough that going on duty is reflected within a moment.
+-- How long an answer is reused for one player. Not a speed cache -- it's a rate
+-- limit: a gate answers a net event the client can fire, and `HasItem` on a
+-- large inventory is not free. Short enough that going on duty still reads live.
 local ANSWER_TTL_MS = 250
 
 local VALID_MODES = { everyone = true, ace = true, job = true, item = true, custom = true }
@@ -31,11 +30,10 @@ local VALID_MODES = { everyone = true, ace = true, job = true, item = true, cust
 -- Adapter registry
 
 -- Ordered, not a map. Detection order is load-bearing: qbx_core declares
--- `provide 'qb-core'` AND registers the qb-core export names, so on a QBox server
--- `exports['qb-core']:GetCoreObject()` SUCCEEDS and hands back a deprecated
--- compatibility shim. Checking qb-core first would silently put every QBox server
--- on the legacy path. qbx is therefore checked first, and anything else that
--- shims an older framework must go ahead of the thing it shims.
+-- `provide 'qb-core'` and registers the qb-core export names, so on a QBox
+-- server `exports['qb-core']:GetCoreObject()` succeeds and hands back a
+-- deprecated shim. qbx is checked first; anything else that shims an older
+-- framework must go ahead of the thing it shims.
 local frameworks, inventories = nil, nil
 local extraFrameworks, extraInventories = {}, {}
 
@@ -114,7 +112,6 @@ local function detectOne(list)
     return nil
 end
 
---
 -- Detection is redone whenever ANY resource starts: a consumer's dependency on
 -- tLib says nothing about qbx_core or ox_inventory, and caching "nothing
 -- detected" would deny every player for the life of the server.
@@ -314,13 +311,10 @@ access.problems = problems
 local Gate = {}
 Gate.__index = Gate
 
---
---
---
 -- Every gate this resource has built, so a disconnect can drop that player's
--- memoised answer from all of them. WITHOUT THIS A GATE IS A SILENT MEMORY LEAK:
+-- memoised answer from all of them. Without this a gate is a silent memory leak:
 -- the TTL makes an entry stale, it does not remove it, so a gate holds one entry
--- per unique player for the life of the process. Weak KEYS so a dropped gate is
+-- per unique player for the life of the process. Weak keys so a dropped gate is
 -- collectable; one lazily-installed handler rather than one per gate.
 local liveGates = setmetatable({}, { __mode = 'k' })
 local gateSweepInstalled = false
@@ -338,12 +332,11 @@ end
 --- Recomputes from scratch. Never cached, never trusted from a client.
 function Gate:evaluate(src)
     if src == nil then return false end
-    -- Demo mode opens every gate, including a broken one. Ahead of `self.broken`
-    -- on purpose: a demo server's whole job is to be walked through, and a config
-    -- mistake in an access block the visitor cannot see or fix would otherwise
-    -- lock the demo out of a feature with no way to tell why from in-game.
-    -- Gate:report() surfaces it as `demo = true` so a diagnostic never mistakes
-    -- this for a gate that genuinely evaluates open.
+    -- Demo mode opens every gate, including a broken one. Checked ahead of
+    -- `self.broken` on purpose: a config mistake the visitor cannot see or fix
+    -- must not lock a demo out of a feature. Gate:report() surfaces it as
+    -- `demo = true` so a diagnostic never mistakes this for a gate that
+    -- genuinely evaluates open.
     if tlib.demo.active() then return true end
     if self.broken then return false end
 
@@ -387,13 +380,10 @@ function Gate:allowed(src)
     local memo = self.memo[key]
     if memo and (now - memo.at) < ANSWER_TTL_MS then return memo.value end
 
-    --
-    --
     -- Instrumented on the MISS path only. `evaluate` calls out to whichever
-    -- framework and inventory the customer runs, and that is one of the few
-    -- costs in this estate that depends on their server rather than ours -- a
-    -- profiler once attributed ~5.2 ms to one permission resolution. 50 ms,
-    -- because a privileged action waits on this.
+    -- framework and inventory the customer runs -- a profiler once attributed
+    -- ~5.2ms to one permission resolution, so the 50ms threshold below assumes
+    -- a privileged action is waiting on this.
     local value = self:evaluate(src)
     tlib.telemetry.record('access:evaluate', 50, ((GetGameTimer and GetGameTimer()) or 0) - now)
     self.memo[key] = { at = now, value = value }

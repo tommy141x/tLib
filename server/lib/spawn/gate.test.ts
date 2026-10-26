@@ -492,20 +492,16 @@ for (const shape of [POSIX, WINDOWS]) {
   });
 
   /**
-   * Loader-exec against direct-exec, which is one decision with two right
-   * answers rather than a feature with an off switch.
+   * Loader-exec against direct-exec: two right answers, not a feature with an
+   * off switch.
    *
-   * Upstream llama.cpp publishes one Linux x64 build and it is glibc-linked, so
-   * on a musl or old-glibc host the kernel cannot find the binary's interpreter
-   * and the exec fails before `main` — naming the *binary*, which reads as a
-   * corrupt or wrong-architecture download. The products answer that by
-   * shipping glibc's loader and its libraries inside the resource and running
-   * the binary through them.
+   * Upstream llama.cpp ships one glibc-linked Linux x64 build, so a musl or
+   * old-glibc host fails the exec before `main`, naming the *binary* — which
+   * reads as a corrupt download. The fix bundles glibc's loader and libraries
+   * inside the resource.
    *
    * No tRadio release carries that bundle yet, so **the fixture without a
-   * loader is production** and the assertions that it still execs directly are
-   * not the optional half of this block. A declaration that broke a working
-   * Debian host would be a worse bug than the one it fixes.
+   * loader is production**: the direct-exec assertions are not optional here.
    */
   describe(`${shape.label}: the bundled loader`, () => {
     const ENGINE_ARGS = [
@@ -567,10 +563,8 @@ for (const shape of [POSIX, WINDOWS]) {
       });
 
       it("puts the engine's own directory on the library path too", () => {
-        // `--library-path` REPLACES LD_LIBRARY_PATH rather than adding to it, and
-        // llama.cpp's 13 dlopen'd ggml CPU backends live beside the binary, not
-        // in the bundle. Dropping that directory starts a process with no
-        // backend at all, which looks like a broken model rather than a path.
+        // `--library-path` REPLACES LD_LIBRARY_PATH; llama.cpp's 13 dlopen'd
+        // ggml CPU backends live beside the binary, not in the bundle.
         const argv = (llama(probesPlus(shape, bundle, [libDir])) as Answer).argv;
         expect(argv[1]).toBe(`${libDir}:${engineDir}`);
       });
@@ -660,10 +654,9 @@ for (const shape of [POSIX, WINDOWS]) {
 /**
  * Case is where the two platforms genuinely disagree, so it gets its own block.
  *
- * `/opt/.../tdb` and `/opt/.../tDB` are different directories on Linux and the
- * same one on Windows. The containment check must therefore compare paths
- * exactly — case-folding them would accept a different directory on Linux while
- * also weakening the check on Windows, which is the worst of both.
+ * `/opt/.../tdb` and `/opt/.../tDB` are different directories on Linux, the
+ * same one on Windows — case-folding the comparison would accept a different
+ * Linux directory while weakening the Windows check too.
  */
 describe("case sensitivity", () => {
   it("refuses a binary whose real path differs from the root only in case", () => {

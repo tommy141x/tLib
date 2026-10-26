@@ -26,9 +26,8 @@ describe("feedback body", () => {
   });
 
   test("maps `+` in a version rather than losing the build metadata", () => {
-    // `+` is not in the ingest charset, so `1.14.2-rc.3+ab12cd34` is REFUSED
-    // outright by tWeb — and the refusal reads like a length problem. The whole
-    // string has to survive as something legal.
+    // `+` is not in tWeb's ingest charset; `1.14.2-rc.3+ab12cd34` would be
+    // refused outright rather than truncated.
     expect(
       buildBody({
         baseUrl: "https://x.test",
@@ -48,22 +47,15 @@ describe("feedback body", () => {
     });
     expect(body).toEqual({ message: "hi", source: "game", resource: "tcad" });
     expect(body).not.toHaveProperty("resourceVersion");
-    // No install id, because this install has none on disk — which is the state
-    // of every install that never opted into telemetry.
     expect(body).not.toHaveProperty("installId");
   });
 
-  // MEASURED, and not what it looks like from the field name: `slug` runs
-  // `scrubIdentifiers` and REDACTS an identifier shape rather than refusing it,
-  // so a forged `resource` arrives as the literal `redacted` — charset-legal,
-  // and therefore accepted by tWeb. Nothing leaks, and the attribution is
-  // meaningless, which is the right order of priorities.
-  //
-  // NOT special-cased here. The same input produces the same value on the
-  // telemetry path, and a local exception would be the two disagreeing about one
-  // field. The real guard is upstream: `server/sv_feedback.lua` only attributes
-  // a message to a resource that holds a menu namespace, so a forged name is
-  // dropped before it ever reaches this function.
+  // `slug` runs `scrubIdentifiers`, which redacts an identifier shape rather
+  // than refusing it — a forged `resource` arrives as the literal `redacted`,
+  // charset-legal and accepted by tWeb, with the attribution rendered
+  // meaningless rather than leaked. Not special-cased here: the real guard is
+  // upstream in sv_feedback.lua, which only attributes a message to a resource
+  // holding a menu namespace.
   test("an identifier-shaped resource is redacted, never passed through", () => {
     const body = buildBody({
       baseUrl: "https://x.test",
@@ -108,9 +100,8 @@ describe("feedback body", () => {
       "resourceVersion",
       "source",
     ]);
-    // AND THE MESSAGE IS NOT SCRUBBED. A player pastes what they pasted; a
-    // client that censored a complaint would quietly destroy the report about
-    // the thing being complained of.
+    // The message itself is not scrubbed — censoring a complaint would destroy
+    // the report about the thing being complained of.
     expect(body?.message).toContain("license:abc");
     expect(body?.message).toContain("192.168.8.141");
   });
@@ -162,12 +153,11 @@ describe("endpoint and status", () => {
 /**
  * What `fbPrepare` composes, tested through its three pure parts.
  *
- * It replaced `submit`, which owned the transport as well. That transport could
+ * It replaced `submit`, which owned the transport too. That transport could
  * never run: `PerformHttpRequest` is not a global in FXServer's server JS
- * runtime (measured 2026-10-16), so the suite below was the ONLY place the old
- * `submit` ever worked — it passed because the test injected its own `post`.
- * A green suite over an injected seam said nothing about the one real caller.
- * The request is Lua's now; see the note in index.ts.
+ * runtime, so the old suite only ever passed because the test injected its
+ * own `post` — a green suite over an injected seam, saying nothing about the
+ * one real caller. The request is Lua's now; see index.ts.
  */
 describe("prepare", () => {
   const prepare = (over: Record<string, unknown>) => {

@@ -15,10 +15,8 @@ import {
   Switch as MatchType,
   Show,
 } from "solid-js";
-// NuiButton moved into the shared package so tLS, tDetector and tRadar can
-// mount the marketplace components that use it; nothing in this app is
-// reachable from a sibling resource. Re-exported here so the existing import
-// sites in tLib keep working. nui.css comes along with it.
+// NuiButton lives in the shared package (tLib is unreachable from sibling resources);
+// re-exported here so existing tLib import sites keep working.
 import { NuiButton } from "../../../../../shared/ts/nui-kit/NuiButton";
 import type { DialogField, DialogValue } from "../dialog-model";
 import { NUI_CHECKBOX_CLASS, NuiCheckGlyph } from "./nui-controls";
@@ -61,18 +59,12 @@ export function NuiField(props: {
     "aria-invalid": props.error ? ("true" as const) : ("false" as const),
   });
   const [selectOpen, setSelectOpen] = createSignal(false);
-  // Plain `let`, not a signal: nothing renders from it. It only has to remember
-  // what was last put on the wire so an identical value is not put there twice.
-  //
-  // `previewSlider` CLEARS it, and that is what keeps the de-duplication honest
-  // without an effect watching `props.value`. The memory must not outlive the
-  // value it describes: commit 10, let Lua push the field back to 5 with
-  // `UpdateDialogField`, then drag to 10 again, and a bare `last === next` guard
-  // drops a commit the game is waiting for. zag moves the value through
-  // `onValueChange` before `onValueChangeEnd` on every path that actually changes
-  // it -- drag and keyboard alike -- so "the value moved" and "clear the memory"
-  // are the same event. The only path that reaches the commit WITHOUT it is a
-  // keypress against a boundary, which is exactly the one to drop.
+  // Plain `let`, not a signal — remembers the last value put on the wire, to dedupe.
+  // `previewSlider` clears it on every value-changing path (zag fires `onValueChange`
+  // before `onValueChangeEnd` for both drag and keyboard), so a later `UpdateDialogField`
+  // push from Lua can't leave a stale "already sent" guard blocking a real commit. The one
+  // path that skips the clear — a keypress against a boundary, where the value doesn't move —
+  // is exactly the one meant to be deduped.
   let committedSlider: number | undefined;
   const previewSlider = (value: number | undefined) => {
     committedSlider = undefined;
@@ -240,29 +232,15 @@ export function NuiField(props: {
             step={props.field.step ?? 1}
             value={[Number(props.value ?? props.field.min ?? 0)]}
             disabled={props.field.disabled}
-            /* The DISPLAY value only. zag fires this on every pointer move of a
-               drag, so committing from here was one `dialogChange` per step —
-               and `tRadar/client/cl_settings.lua` answers each one with an
-               `UpdateDialogField` push back, making a single drag a full
-               NUI→Lua→NUI round trip per pixel in every resource using a tLib
-               dialog. This is the only field type with that property; everything
-               else here fires once per discrete interaction. */
+            /* Display value only. zag fires this per pointer-move of a drag; committing here
+               would make every drag a full NUI→Lua→UpdateDialogField round trip per pixel.
+               Slider is the only field type with this property. */
             onValueChange={(d) => previewSlider(d.value[0])}
-            /* The commit. zag calls this on pointer-up AND on each keyboard
-               increment/decrement/home/end — verified in
-               `@zag-js/slider/dist/slider.machine.mjs`, where `invokeOnChangeEnd`
-               is an action on all of those transitions. So keyboard driving still
-               commits per keypress, which is what it always did, and only the
-               continuous pointer path is debounced to its end.
-
-               `commitSlider` drops a commit whose value equals the last one sent,
-               and that is not belt-and-braces. Measured on the drag probe: an
-               ArrowRight pressed with the thumb ALREADY at max used to send
-               nothing (zag fires no `onValueChange` when the value does not move)
-               and would now send one `dialogChange` per keypress, because
-               `invokeOnChangeEnd` runs on the transition whether the value moved
-               or not. Held against a boundary that is a stream of identical
-               writes, which is the bug this whole change is about, just slower. */
+            /* The commit. zag's `invokeOnChangeEnd` (slider.machine.mjs) fires on pointer-up
+               AND every keyboard increment/decrement/home/end, including a no-op press against
+               a boundary — so `commitSlider`'s dedupe against the last sent value is load-bearing,
+               not belt-and-braces: without it, holding a key at max sends one dialogChange per
+               keypress forever. */
             onValueChangeEnd={(d) => commitSlider(d.value[0])}
             onFocusOut={props.onBlur}
           >
@@ -279,11 +257,8 @@ export function NuiField(props: {
             </div>
           </Slider.Root>
         </Match>
-        {/*
-          Text, not a control — no input, no disabled styling, full opacity.
-          The label is the text itself, which is why the caption above is
-          suppressed for this type; `description` is the second line.
-        */}
+        {/* Text, not a control — no input, no disabled styling. Label is the text itself,
+            so the caption above is suppressed; `description` is the second line. */}
         <Match when={props.field.type === "display"}>
           <p class="tlib-nui-display">{props.field.label}</p>
         </Match>

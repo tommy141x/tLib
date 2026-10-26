@@ -47,7 +47,7 @@ local function fromServer(result)
     source = nil
 end
 
--- The seed ------------------------------------------------------------------
+-- The seed
 -- tLib's server only answers a request, and tLib's own client asks once at ITS
 -- resource start. A module that loads lazily on a consumer's first onChange has
 -- already missed that reply, so a handler with no seed would report 0 until
@@ -79,17 +79,17 @@ seedLevel = 'admin'
 p = load()
 assert(p.level() == 0 and #serverAsks == 1, 'a string seed is no seed either')
 
--- The source guard ----------------------------------------------------------
--- THE SECURITY PROPERTY. A server-triggered net event reaches the client
--- with source == 65535; a local TriggerEvent does not. Without this, any
--- resource or cheat menu in the process could promote the player to admin in
--- every consumer's cache at once.
+-- The source guard
+-- A server-triggered net event reaches the client with source == 65535; a
+-- local TriggerEvent does not. Without this, any resource or cheat menu in
+-- the process could promote the player to admin in every consumer's cache at
+-- once.
 
 seedLevel = 0
 p = load()
 assert(not p.isAdmin(), 'baseline: not an admin')
 
--- Each of these is a plausible WEAKENING of the guard, not just a stray value,
+-- Each of these is a plausible weakening of the guard, not just a stray value,
 -- which is what makes them worth asserting rather than one representative case:
 --   * a nil source passes `if source and source ~= 65535 then return end`
 --   * the string '65535' passes a tostring comparison
@@ -107,13 +107,12 @@ assert(not p.isAdmin(), 'a nil source must not grant admin')
 fromServer(2)
 assert(p.isAdmin() and p.level() == 2, 'and the server, with 65535, is believed')
 
--- A number, and only a number -----------------------------------------------
+-- A number, and only a number
 -- The three copies all accepted a boolean too, labelled "old servers sent a
--- boolean", and so did tLib's own cl_permission.lua until 2026-10-12. All of
--- them are gone: tLib's client and server ship in one resource and cannot
--- disagree about the shape, and every tagged release v0.1..v0.6 sends a number.
--- Anything that is not a number is 0, which is also the right answer for a
--- spoofed payload.
+-- boolean" -- tLib's client and server ship in one resource and cannot
+-- disagree about the shape, and every tagged release v0.1..v0.6 sends a
+-- number. Anything that is not a number is 0, which is also the right
+-- answer for a spoofed payload.
 
 p = load()
 fromServer(true)
@@ -123,7 +122,7 @@ assert(p.level() == 0, 'nor is a table')
 fromServer(1)
 assert(p.level() == 1 and p.isAdmin(), 'a number is')
 
--- onChange ------------------------------------------------------------------
+-- onChange
 
 seedThrows, seedLevel = true, nil
 p = load()
@@ -175,14 +174,14 @@ assert(p.onChange(nil) == nil and p.onChange('x') == nil, 'a non-function listen
 fromServer(0)
 assert(after == 2, 'and does not corrupt the list')
 
--- refresh -------------------------------------------------------------------
+-- refresh
 p = load()
 local before = #serverAsks
 p.refresh()
 assert(#serverAsks == before + 1 and serverAsks[#serverAsks] == REQUEST,
     'refresh asks the server')
 
--- The wire names are an implementation detail -------------------------------
+-- The wire names are an implementation detail
 -- This is what unblocks renaming tLib:receiveAdminPermission. The module's
 -- surface must name neither wire event, or a consumer can reach for one.
 for _, name in ipairs({ 'level', 'isAdmin', 'onChange', 'refresh' }) do

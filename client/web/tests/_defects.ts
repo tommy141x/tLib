@@ -1,21 +1,17 @@
 /**
- * The negative control's defect table — DATA ONLY, no side effects. Its own
- * module because `scripts/dom-control.ts` reads it and importing `_setup.ts`
- * would run the whole preload.
+ * The negative control's defect table — data only, no side effects. Its own
+ * module because `scripts/dom-control.ts` reads it without running the full
+ * `_setup.ts` preload.
  *
- * A substitution that matches nothing hands the suite the UNMODIFIED module, so
+ * A substitution matching nothing hands the suite the unmodified module, so
  * every entry declares its match `count` and a miscount is exit 2. A passing
- * control proves the assertion still fires; it does NOT prove the rule set is
- * complete, which is why every entry names the `path` it travels.
- *
- * What each entry proves, and what it cannot:
- * docs/internal/dom-control-defects.md
+ * control proves the assertion still fires, not that the rule set is
+ * complete — hence the `path` each entry names. Per-entry rationale:
+ * docs/internal/dom-control-defects.md.
  */
 
-// The negative control: planting a defect in the REAL source, in memory, on its
-// way through the loader. Nothing is written to disk.
-//
-//
+// Plants a defect in the real source, in memory, on its way through the
+// loader. Nothing is written to disk.
 export interface Defect {
   /** The file, relative to the repo root. */
   file: string;
@@ -154,9 +150,9 @@ export const DEFECTS: Record<string, Defect> = {
     path: "a real click on a real target row -> the row's own onClick -> onExport",
     reddens: ["choosing a target asks rather than exporting"],
   },
-  /** THE BROKEN-GATE DRILL. `find` cannot occur, so this must make the preload
-   *  THROW -- otherwise "every defect reddened something" is not evidence the
-   *  patcher fired at all. */
+  /** The broken-gate drill: `find` cannot occur, so this must make the
+   *  preload throw — otherwise "every defect reddened something" isn't
+   *  evidence the patcher fired at all. */
   "drill-cannot-match": {
     file: "internal/shared-ts/prop-editor/PropEditor.tsx",
     find: "this string is not in the file",

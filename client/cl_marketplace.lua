@@ -1,16 +1,11 @@
 -- Client-side entry for the marketplace panel: opens it, forwards install
 -- requests to the server and relays the results back.
 --
--- Browsing and UI previews are NOT fetched by the NUI any more. They used to
--- be, and it could not work: CEF's origin is `cfx-nui-tLib`, the marketplace
--- sends no Access-Control-Allow-Origin, so the browser refused the read and the
--- panel listed nothing in tDetector and tRadar. Both now go NUI → here → the
--- server bundle (`marketplaceBrowse` / `marketplacePreview` below), which also
--- lets them reach v2 and carry the resource filter.
---
--- The sound preview is the deliberate exception: it is an `<audio src>`, and an
--- element load is exempt from CORS. Do not "fix" that one into a fetch.
--- Anything that inspects or writes locally goes through the server.
+-- Browsing and previews route through the server (`marketplaceBrowse` /
+-- `marketplacePreview` below), not a direct NUI fetch: CEF's origin is
+-- `cfx-nui-tLib`, the marketplace sends no Access-Control-Allow-Origin, and a
+-- direct fetch returned a body the panel could not read. The one exception is
+-- the sound preview, an `<audio src>` — an element load is exempt from CORS.
 
 local log = Logger.create('tLib/marketplace')
 
@@ -56,11 +51,10 @@ local function registerExports()
     -- tab declared `view = "marketplace"` calls this when the server answers
     -- with what is installed; the browser then renders inside that tab.
     --
-    -- It deliberately does NOT touch NUI focus and does NOT send
-    -- `openMarketplace`. The host dialog already owns the focus and the
-    -- surface, and opening the modal on top of it is the overlay-on-an-overlay
-    -- this exists to replace. Same payload as OpenMarketplace, different
-    -- action, so a consumer can switch between the two by name alone.
+    -- Does not touch NUI focus or send `openMarketplace`: the host dialog
+    -- already owns the focus and surface, and stacking the modal on top of it
+    -- is the overlay-on-an-overlay this exists to replace. Same payload as
+    -- OpenMarketplace, different action, so a consumer can switch by name alone.
     Platform.export('tLib', 'ProvideMarketplaceData', function(opts)
         opts = type(opts) == 'table' and opts or {}
         SendNUIMessage({ action = 'marketplaceData', data = buildPayload(opts) })
@@ -109,19 +103,13 @@ RegisterNetEvent('tlib:marketplace:browseResult', function(result)
     SendNUIMessage({ action = 'marketplaceBrowseResult', data = result })
 end)
 
--- Liking goes through the server, and NOT because of CORS.
---
--- THE REASON IS IDENTITY, WHICH IS A STRONGER ONE. A like is de-duplicated by
--- the marketplace on the player's FiveM license, and that only stops one person
--- boosting a count if the license is something they cannot choose. This VM
--- cannot establish it — anything the NUI or the client knows is something the
--- player controls — so the payload below carries a slug and a desired state and
--- deliberately NO identity. `server/sv_marketplace.lua` resolves it from the
--- event's `source` with `GetPlayerIdentifierByType`.
---
--- Do not add a license, an identifier or a player name to this payload, even
--- to "save the lookup". It would hand every player the ability to like as
--- somebody else.
+-- Liking goes through the server for identity, not CORS: a like is
+-- de-duplicated on the player's FiveM license, which only works if the
+-- license is something they cannot choose. This VM cannot establish that —
+-- anything the NUI or client reports is player-controlled — so the payload
+-- carries only a slug and a desired state; the server resolves identity itself
+-- from the event's `source`. Never add a license, identifier or player name to
+-- this payload: it would let a player like as somebody else.
 RegisterNUICallback('marketplaceLike', function(data, cb)
     cb(1)
     if type(data) ~= 'table' or type(data.requestId) ~= 'string' or type(data.slug) ~= 'string' then return end
@@ -173,9 +161,8 @@ end)
 RegisterNetEvent('tlib:marketplace:installResult', function(result)
     SendNUIMessage({ action = 'marketplaceInstallResult', data = result })
     if type(result) == 'table' and result.ok then
-        -- Counts, not a path. The server no longer sends `installedAt` -- see the
-        -- note on `reply` in server/sv_marketplace.lua -- and these answer the
-        -- question an admin watching a progress spinner actually has.
+        -- Counts, not a path: the server no longer sends `installedAt`, and these
+        -- answer the question an admin watching a progress spinner actually has.
         log(('installed "%s" (%s file(s), %s bytes)'):format(
             tostring(result.slug),
             tostring(result.fileCount or '?'),

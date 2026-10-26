@@ -1,23 +1,15 @@
 /**
- * Reaping, with real processes.
+ * Reaping, with real processes. Mocks prove nothing here: the claim under test
+ * is "a child started from tLib's VM actually dies when its owner stops," and
+ * that's only visible with something really running. These spawn the test
+ * runner itself and check the PID with signal 0; `host.ts` never consults the
+ * catalog, so a harmless sleeper stands in for an engine.
  *
- * Mocks would prove nothing here. The claim under test is "a child started from
- * tLib's VM actually dies when its owner stops", and the failure it guards
- * against — an orphaned PocketBase holding port 8090 and a locked SQLite file —
- * is only visible if something really was running and really stopped. So these
- * spawn the test runner itself and then check the PID with signal 0.
- *
- * `host.ts` takes a resolved plan and never consults the catalog, which is what
- * lets these point at a harmless sleeper instead of an engine.
- *
- * **These run on whichever OS the suite runs on, and only that one.** Unlike
- * `gate.test.ts`, which drives both a POSIX and a Windows filesystem shape from
- * fixtures, there is no way to fake a real process. That is acceptable because
- * nothing in `host.ts` branches on the platform: it spawns an already-resolved
- * command with `shell: false`, and signals it with `SIGTERM` then `SIGKILL` —
- * which Windows collapses into `TerminateProcess` for both, so the escalation is
- * a no-op there rather than a second code path. The platform-shaped logic all
- * lives in `gate.ts`, which is covered under both.
+ * Runs only on whichever OS the suite runs on — there's no way to fake a real
+ * process the way `gate.test.ts` fakes a filesystem. Acceptable because
+ * `host.ts` doesn't branch on platform: `SIGTERM` then `SIGKILL`, which
+ * Windows collapses into `TerminateProcess` for both. All platform-shaped
+ * logic lives in `gate.ts`, covered under both shapes there.
  */
 
 import { describe, expect, it } from "bun:test";

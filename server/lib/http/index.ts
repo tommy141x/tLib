@@ -1,13 +1,10 @@
 // index.ts — starts the router at tLib boot.
 //
-// Unlike realtime (which opened its port lazily on first use), the router binds
-// EAGERLY. server/marketplace/index.ts:52-62 already documents why: a consumer
-// resource's Lua can run before tLib's own onResourceStart handler does. A
-// backend calling RegisterWebApp into a router that has not been installed yet
-// would lose its mount, and the failure would look like a routing bug.
-//
-// The cost of binding eagerly is one listening socket on a server where nobody
-// registers anything — which still serves the hub, so it is not wasted.
+// Unlike realtime (which opens its port lazily on first use), the router binds
+// eagerly: a consumer's Lua can run RegisterWebApp before tLib's own
+// onResourceStart handler does, and a router that isn't installed yet would
+// lose the mount silently. The cost is one idle listening socket, which still
+// serves the hub.
 
 import { resolvePublicIP } from "../realtime/public-ip";
 import { registerBridge } from "./bridge";
@@ -50,32 +47,16 @@ export function installHttp(): void {
 
   const cfg = resolveConfig();
   const readiness = new HttpReadiness(cfg.publicUrlOverride, cfg.port, (status) => {
-    // Server-local notification only. Subscribe then query GetHttpStatus so a
-    // consumer starting after this notification cannot miss readiness.
-    // The hub URL goes to tLib's STARTUP BANNER, not to its own log line.
-    // tLib already draws a banner, and this was one of six lines it printed
-    // around it at boot. A failure still logs loudly -- an operator who cannot
-    // reach the hub needs the reason in front of them, and a banner row that
-    // silently reads nothing is not that.
-    // WARNING: A DETECTED ADDRESS SAYS SO, AND NAMES THE CONVAR. The row used to
-    // print the URL bare, which reads as a statement of fact whether tLib was
-    // told the address or guessed it -- and those are very different things to
-    // an operator.
+    // Server-local notification; subscribe then query GetHttpStatus so a late
+    // consumer cannot miss readiness. The hub URL goes to tLib's startup banner,
+    // not a separate log line; a failure still logs loudly.
     //
-    // When it is guessed and wrong, nothing says so here. It surfaces later as
-    // a CORS refusal or an OAuth redirect to an address nobody can reach, far
-    // from the cause. Three tickets on 2026-10-19 were that exact shape: a
-    // panel reached by hostname through the host's reverse proxy while tLib
-    // published the detected IP. One of them had read the docs and still could
-    // not find the setting, because v7 moved public routing off a config key
-    // and onto convars that are documented in a code comment and a README
-    // table -- so they were searching config.lua for a key that no longer
-    // exists.
-    //
-    // Naming `tlib_http_public_url` in the row is the cheap half of the fix:
-    // the operator sees the guess and the remedy together, at boot, before a
-    // player ever hits it. A configured address prints bare, because there is
-    // nothing to act on.
+    // A detected address names itself and the convar (`tlib_http_public_url`) in
+    // the same row. Printing a detected URL bare used to read as fact rather
+    // than a guess — when the guess was wrong it surfaced later as a CORS
+    // refusal or an unreachable OAuth redirect, far from the cause, and v7
+    // moved public routing off a config key onto convars, so operators kept
+    // searching config.lua for a setting that no longer lived there.
     if (status.ready) {
       fEmit(
         "tlib:vcInfo:hub",
@@ -98,7 +79,6 @@ export function installHttp(): void {
   router.start();
 
   // Never publish implicit localhost while discovery is outstanding or failed.
-  // Invalid overrides retain the documented detection fallback, but say so.
   if (readiness.snapshot().publicUrlState === "resolving") {
     if (cfg.publicUrlOverride) {
       log("warn", "Invalid tlib_http_public_url; attempting public IP detection instead");
@@ -111,22 +91,18 @@ export function installHttp(): void {
 
   const selfName = fGetCurrentResourceName();
 
-  // Any resource stopping drops its mounts. Without this a restarted resource
-  // could not re-register, because the registry refuses collisions.
+  // Any resource stopping drops its mounts, or a restarted resource could not
+  // re-register since the registry refuses collisions.
   fOn("onResourceStop", (stopped: unknown) => {
     if (typeof stopped !== "string" || router !== installedRouter) return;
 
     if (stopped === selfName) {
       installedRouter.stop();
-      // A same-process restart must not collide with stale consumer mounts.
       clear();
       router = null;
       return;
     }
 
-    // Silent, like the mount in bridge.ts: a resource stopping and dropping
-    // its mounts is bookkeeping that always happens, and it printed a line per
-    // restart for every mounted resource.
     unregisterResource(stopped);
   });
 }

@@ -4,15 +4,15 @@
 --
 -- Two things are under test, and they fail differently:
 --
---   1. THE CONTRACT. Every case in tests/fixtures/module-manifest-cases.lua is
---      run through modules.validate. That file is GENERATED from the case list
+--   1. The contract: every case in tests/fixtures/module-manifest-cases.lua is
+--      run through modules.validate. That file is generated from the case list
 --      in tests/unit/module-manifest.test.ts, which runs the same cases through
 --      the TypeScript validator, so a rule that exists on one side only fails
 --      on one side or the other. Do not hand-edit it.
 --
---   2. THE SCAN. Discovery itself: the reserved-name guard, kind matching, the
---      cache rules, and the live-read fallback that makes a drop-in install
---      visible without a restart.
+--   2. The scan: discovery itself — the reserved-name guard, kind matching,
+--      the cache rules, and the live-read fallback that makes a drop-in
+--      install visible without a restart.
 --
 -- The real shipped file is loaded with mocked natives rather than reimplemented.
 
@@ -28,8 +28,6 @@ local function test(name, fn)
     passed = passed + 1
     report('PASS ' .. name)
 end
-
--- Host stubs
 
 -- `dirs[base]` is the directory listing; `files[path]` is file content. Two
 -- tables rather than one tree because that is exactly the split the runtime
@@ -158,8 +156,6 @@ local function layoutFor(id)
     return { schema = 1, kind = 'layout', id = id, name = id, version = '1.0.0' }
 end
 
--- 1. The shared contract cases
-
 test('every shared contract case gets the same verdict as the TypeScript validator', function()
     local cases = dofile('tests/fixtures/module-manifest-cases.lua')
     assert(#cases >= 40, 'the shared case list looks truncated: ' .. #cases)
@@ -178,8 +174,6 @@ test('every shared contract case gets the same verdict as the TypeScript validat
     end
 end)
 
--- 2. The reserved-name guard
---
 -- This is the collision the module shape exists to remove. Before it, the only
 -- reason `layouts/themes` was not picked up as a radio model was that it held no
 -- `ui.html`. Now every module folder holds the same `module.json`, so without an
@@ -250,8 +244,6 @@ test('both category names are reserved, and only those two', function()
     assert(modules.RESERVED.dark == nil and modules.RESERVED.default == nil)
 end)
 
--- 3. Kind matching
-
 test('a theme module sitting in layouts/ is refused with a message naming the mismatch', function()
     reset()
     place('layouts', 'QRX-720', LAYOUT)
@@ -283,8 +275,6 @@ test('scan refuses an unknown kind rather than scanning for nothing', function()
     local ok = pcall(modules.scan, 'layouts', 'skin')
     assert(not ok, 'an unknown kind is a programming error, not an empty result')
 end)
-
--- 4. What scan returns
 
 test('an empty directory never invents a default', function()
     reset()
@@ -321,11 +311,11 @@ end)
 
 -- The asymmetry, asserted from the Lua side.
 --
--- A sound is a FLAT AUDIO FILE on a FiveM resource -- `layouts/sounds/ptt.wav` --
--- so an operator can drag a `.wav` in and have it work with no manifest to
--- author. It is a module in the STUDIO and in the MARKETPLACE, where a folder and
--- a `module.json` carry its name, licence, duration and waveform peaks; the
--- installer reads that manifest and writes only the audio, flat.
+-- A sound is a flat audio file on a FiveM resource -- `layouts/sounds/ptt.wav`
+-- -- so an operator can drag a `.wav` in and have it work with no manifest to
+-- author. It is a module in the studio and in the marketplace, where a folder
+-- and a `module.json` carry its name, licence, duration and waveform peaks;
+-- the installer reads that manifest and writes only the audio, flat.
 --
 -- So asking this gate to scan for sounds is a programming error, and a studio
 -- sound manifest that somehow reached a resource is refused by name. Both are
@@ -359,8 +349,6 @@ test('a layout or theme manifest carrying sound facts is refused', function()
     assert(manifest == nil)
     assert(tostring(err):find('must not carry "sound"', 1, true), tostring(err))
 end)
-
--- 5. The cache, and the live-scan property
 
 test('an empty answer is not cached, so a late-starting tLib export is not fatal', function()
     reset()
@@ -404,8 +392,6 @@ test('a module dropped in while the resource runs is discovered without a restar
     assert(table.concat(modules.scan('layouts', 'layout'), ',') == 'DROPPED-IN,QRX-720',
         'a module written after start must still be found')
 end)
-
--- 6. load and hasFile
 
 test('load reads a file out of a module folder', function()
     reset()

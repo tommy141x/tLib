@@ -20,7 +20,7 @@ keyboard hints and the breadcrumb are tLib's; the page, its rows and what they d
 | --- | --- |
 | tLib | Schema, rendering, navigation, authority, dispatch, state/effects, the shared adapters. |
 | Consumer | Feature behaviour, menu declarations, configuration, commands, its own state. |
-| Optional host | Public slots, placement policy, allowlists, ordering. Hosting does not make it the engine. |
+| Optional host | Public slots, placement policy, allowlists, ordering. |
 
 `ConfigureMenuInterface` is shared player-UI policy, not plugin branding; use namespace or
 page themes for a consumer's visual identity.
@@ -151,11 +151,11 @@ link collection with `SetMenuLinks`. When the engine restarts, consumers recreat
 pages and host links: invalidate the host-link watcher when engine registrations are lost,
 then retry it after the page has registered.
 
-## Placement is not permission ancestry
+## Placement and permission are separate
 
 `RegisterMenu(page, { ace, actions, rootVisible = false })` suppresses only the automatic
-shared-root link. It does not hide the page from authorized direct access, host links or
-search, and it changes no permission. Omit it or use `true` for a root entry.
+shared-root link. The page is still reached by authorized direct access, host links and
+search, and no permission changes. Omit it or use `true` for a root entry.
 
 Keep an independently usable page parented to `main`. Parenting it to a host page also makes
 that host's ancestor permissions mandatory, including for direct command access.
@@ -166,21 +166,18 @@ tLib adds one row of its own to **every namespace's entry page** — the page wh
 is `main` or absent. You do not register it and cannot.
 
 <Callout type="warning">
-**It is not one of your rows.** It is a client-side synthetic row: no ACE, no action
-handler, no item id in your catalog, and it never reaches `resolveAction`. A parity test
-counting rows on an entry page sees one more than it registered.
+**It is a client-side synthetic row**, not one of yours: no ACE, no action handler, no item
+id in your catalog, and it never reaches `resolveAction`. A parity test counting rows on an
+entry page sees one more than it registered.
 </Callout>
 
 The dialog sends the player's message to TIMMYG Studios with the resource name, its manifest
 `version`, and tLib's random per-install id. Nothing else — no player name, licence, Steam
 or Discord id, no server name, no IP.
 
-- **It does not need telemetry consent** and is unaffected by `tlib_telemetry`. See
-  [Convars](/docs/tLib/convars#diagnostics).
-- **It is not permission-gated**, and no ACE hides it.
-
-It appears only on an entry page, is hidden while the player is filtering, and a page with
-no `owner:` prefix — the shared `main` root — gets no row.
+It runs whatever `tlib_telemetry` says (see [Convars](/docs/tLib/convars#diagnostics)) and
+no ACE hides it. It appears only on an entry page, is hidden while the player is filtering,
+and a page with no `owner:` prefix — the shared `main` root — gets no row.
 
 ## Verifying a consumer
 

@@ -6,17 +6,11 @@
         log('layout not installed, falling back', 3)   -- WARN
         log('armed', tlib.logger.DEBUG)
 
-    Why this is not shared/lib/logger.lua
-    ------------------------------------
-    That file is tLib's own and binds `Platform.getSide()` at load time. A
-    consumer VM has no such global: shared/imports/platform returns a *local* table and
-    does not expose getSide, so loading shared/lib/logger.lua here errors. tLib
-    also registers CreateLogger as an export from client.lua only, which leaves
-    every server-side consumer with nothing.
-
-    So this stands alone, on purpose, for the same reason imports.lua carries its
-    own copy of parseVer: it runs in the consumer's VM, not tLib's. Keep the
-    output format in step with shared/lib/logger.lua's `[scope][LEVEL] message`.
+    Not shared/lib/logger.lua: that file binds `Platform.getSide()` at load
+    time, which a consumer VM has no equivalent global for, and tLib only
+    exports CreateLogger from client.lua, leaving server consumers with
+    nothing. This runs in the consumer's own VM instead. Keep the output
+    format in step with shared/lib/logger.lua's `[scope][LEVEL] message`.
 ]]
 
 local Logger = {}

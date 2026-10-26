@@ -63,10 +63,9 @@ function marketplace.upsertSound(installedSounds, slug, meta)
 end
 
 --- Clear every tone mapping that points at `filename` -- one left pointing at a
---- deleted file 404s in the NUI rather than falling back, and the device is
+--- deleted file 404s in the NUI rather than falling back, and the device goes
 --- silent for that event. `flatMap` is `key -> filename`; each entry of
---- `scopedMaps` is `scope -> { key -> filename }`, the per-model and
---- per-pattern tone overrides.
+--- `scopedMaps` is `scope -> { key -> filename }` (per-model/per-pattern overrides).
 --- @return boolean changed
 function marketplace.forgetSoundFile(filename, flatMap, scopedMaps)
     if type(filename) ~= "string" or filename == "" then return false end
@@ -123,17 +122,10 @@ function marketplace.removeSound(installedSounds, toneWavMap, slug, scopedMaps)
 end
 
 
---[[
-    The sound-overwrite warning used to be broadcast to EVERY PLAYER about an
-    admin action, with no handler registered anywhere. tLib carries the
-    installing admin's id as `meta.src`, so only they are told; the server log
-    is unconditional and the client send is not, because `meta.src` is nil when
-    the admin disconnected mid-install.
-
-    Registration is pcall'd because a server may run without
-    `tlib_module { 'marketplace' }`: the bridge then answers false rather than
-    raising, and the resource still has to come up.
-]]
+-- The sound-overwrite warning is sent only to the installing admin (`meta.src`,
+-- nil if they disconnected mid-install), never broadcast. Registration below is
+-- pcall'd because a server may run without `tlib_module { 'marketplace' }`,
+-- in which case the bridge answers false rather than raising.
 
 local DEFAULT_LAYOUT_PATH = 'layouts'
 local DEFAULT_SOUND_PATH = 'layouts/sounds'
@@ -154,12 +146,9 @@ function marketplace.registerType(kind, installPath, warn)
     end)
     if ok and registered ~= false then return true end
     if type(warn) == 'function' then
-        -- NAME WHAT ACTUALLY FAILED. This used to advise adding `tlib_module
-        -- { 'marketplace' }` to the fxmanifest, which cannot fix it: imports.lua
-        -- lazy-loads on first access of `tlib.<name>`, so a resource reaching
-        -- this line has already loaded the module -- it is how it called this
-        -- function. The three things that CAN fail are named below, in the order
-        -- RegisterMarketplaceType checks them.
+        -- Used to advise adding `tlib_module { 'marketplace' }` to the
+        -- fxmanifest, which cannot fix this: modules lazy-load on first access,
+        -- so reaching this line means the module is already loaded.
         warn(("marketplace type '%s' was not registered. tLib's RegisterMarketplaceType refused it, for one of: an invalid installPath, an invoking resource it could not resolve, or its Node bridge rejecting the registration. tLib's console logs which. Declaring the module does NOT affect this -- modules lazy-load on first access.")
             :format(tostring(kind)))
     end

@@ -102,11 +102,9 @@ CreateThread(function()
     end
 end)
 
--- The consent API. `SetTelemetryConsent` is the one a consumer must call, not
--- the bundle's `DiagSetConsent`: this wrapper is what tells already-connected
--- clients. Nothing in tLib calls either, and no tLib surface may -- the hub's
--- index is public and unauthenticated. Not permission-gated here either; a
--- consumer must gate it at its own call site.
+-- The consent API. `SetTelemetryConsent`, not the bundle's `DiagSetConsent`, is
+-- what a consumer must call -- this wrapper also tells already-connected
+-- clients. Not permission-gated; a consumer must gate it at its own call site.
 -- See docs/internal/telemetry-consent.md.
 --   local c = json.decode(exports['tLib']:GetTelemetryConsent())
 --   -- { enabled, source, locked, convar, convarValue, queued, transport }

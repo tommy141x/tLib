@@ -1,8 +1,6 @@
--- cached coord index rebuilt every REFRESH_MS on both server and client.
---
--- The cached counterpart to tlib.platform.getNearbyPlayers, which iterates
--- every player on every call and says so. Anything querying at audio rates
--- wants this one.
+-- Cached coord index, rebuilt every REFRESH_MS on both server and client.
+-- Counterpart to tlib.platform.getNearbyPlayers, which iterates every player
+-- on every call; use this one for anything querying at audio rates.
 
 local spatial = {}
 

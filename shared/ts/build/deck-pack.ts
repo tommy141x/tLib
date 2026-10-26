@@ -1,30 +1,21 @@
 /**
- * Stream Deck plugin packing, and the staleness gate that keeps it honest.
+ * Stream Deck plugin packing, and the staleness gate that keeps it honest. Until this
+ * existed, nothing built the three resources' packed `.streamDeckPlugin`: one committed
+ * artifact held 29 files where a pack of the same tree produced 38, and nothing reported it.
  *
- * Three resources publish a packed `.streamDeckPlugin` from their own docs, and
- * until this existed nothing built it. Measured: one committed artifact held 29
- * files where a pack of the same tree produced 38 -- whole actions a customer
- * could not use -- and nothing reported it, because there was nothing to report.
+ * Output goes into the resource's own `docs/public/` — never `.build/dist/` (the plugin is a
+ * Node program the customer installs, not resource runtime, and staging would route it
+ * through `createZip`'s credential sanitizer) and never tWeb's tree (that's the website's own
+ * sync step).
  *
- * Output goes into the resource's own `docs/public/`. NEVER `.build/dist/`: the
- * plugin is a Node program the customer installs into their Stream Deck app, not
- * resource runtime, and staging it would route it through `createZip`'s
- * credential sanitizer. And never into tWeb's tree -- the site mirror is the
- * website's own sync step.
- *
- * THE GATE STAMPS CONTENT, NOT TIMESTAMPS, because git does not record mtimes: a
- * fresh clone writes every file at checkout time, so an mtime gate is green on
- * genuinely stale bytes and intermittently red on fresh ones. The recorded fact
- * is a HASH of the source set, written beside the plugin and recomputed by the
- * gate. It also records the artifact's own sha256, so a stale artifact needs a
- * forgery of two hashes rather than one edit. mtimes are still REPORTED, never
- * asserted on. (Re-packing and comparing is not an option either: a zip carries
- * per-entry timestamps, so two packs of an unchanged tree differ.)
- *
- * `scanDeckSources` THROWS on an empty source set rather than returning `[]` -- a
- * renamed directory would otherwise make the gate hash the empty string, agree
- * with itself forever and print a tick. `scripts/deck-stale-control.ts` plants
- * that defect among others and requires each one to go red.
+ * The gate stamps content, not timestamps: git doesn't record mtimes, so a fresh clone's
+ * checkout-time mtimes would make an mtime gate green on stale bytes and intermittently red
+ * on fresh ones. It hashes the source set and the artifact's own sha256 (so a stale artifact
+ * needs forging two hashes), reporting mtimes but never asserting on them. Re-packing and
+ * comparing isn't an option either — a zip's per-entry timestamps differ between two packs of
+ * an unchanged tree. `scanDeckSources` throws on an empty source set rather than returning
+ * `[]`, since a renamed directory would otherwise hash the empty string and agree with itself
+ * forever; `scripts/deck-stale-control.ts` plants that defect and requires it to go red.
  */
 
 import { createHash } from "node:crypto";
@@ -113,26 +104,16 @@ const DEFAULT_PUBLIC_DIR = "docs/public";
 const SKIP_DIRS = new Set(["bin", "logs", "node_modules"]);
 
 /**
- * The shared Windows launcher `CodePathWin` points at, and the files that decide
- * its bytes.
- *
- * ## It is built here because the thing it replaces was built nowhere
- *
- * Stream Deck starts a Node plugin with `node.exe`, a CONSOLE-subsystem binary,
- * and Windows gives a console process without a terminal to the default terminal
- * application -- a blank terminal window per plugin. The first answer to that was
- * `bun build --compile --windows-hide-console`, which is correct about the
- * subsystem and catastrophic about everything else: 114 MB of embedded Bun
- * runtime per plugin, 99.8% of the bundle, over Cloudflare Workers' 25 MiB asset
- * cap (it took the website's deploys down twice in one day), and Node, V8,
- * OpenSSL, libuv, ICU, zlib, llhttp, nghttp2 and brotli shipped with no notice
- * file at any path. And the command that produced it existed in NO script: it was
- * typed by hand, once, so only one machine could rebuild the download.
- *
- * `shared/rust/deck-launcher` is 0.2 MB, embeds nothing, and resolves the Node
- * the host would itself have used at launch time. Three resources share this
- * pack step, so building it here is what makes tRadio, tLS and tRadar all
- * correct rather than one of them.
+ * The shared Windows launcher `CodePathWin` points at, and the files that decide its bytes.
+ * Built here because the thing it replaces was built nowhere: Stream Deck starts a Node
+ * plugin with `node.exe`, a console-subsystem binary, so Windows opens a blank terminal
+ * window per plugin. The first fix, `bun build --compile --windows-hide-console`, embedded
+ * 114 MB of Bun runtime per plugin (99.8% of the bundle, over Cloudflare Workers' 25 MiB
+ * asset cap — it took deploys down twice in one day) with no notice file for any of Node,
+ * V8, OpenSSL, libuv, ICU, zlib, llhttp, nghttp2 or brotli, built by a hand-typed command in
+ * no script. `shared/rust/deck-launcher` is 0.2 MB, embeds nothing, and resolves the Node the
+ * host would itself have used. Three resources share this pack step, so building it here
+ * keeps tRadio, tLS and tRadar all correct rather than one of them.
  */
 const LAUNCHER_DIR = join(import.meta.dir, "../../rust/deck-launcher");
 const LAUNCHER_SOURCES = ["Cargo.toml", "build.rs", "src/main.rs"];
@@ -381,10 +362,8 @@ function buildDeckLauncher(
 ): void {
   step(`Building the Windows launcher for ${target}`);
 
-  // Bun.spawnSync THROWS ENOENT on a missing binary rather than returning a
-  // status, so without this the whole pack fails with a stack trace that names
-  // neither Rust nor what to do. tLS and tRadar share this step and neither has
-  // any other Rust in it.
+  // Bun.spawnSync throws ENOENT on a missing binary rather than returning a status, so
+  // without this the pack fails with a stack trace naming neither Rust nor what to do.
   if (!Bun.which("cargo")) {
     throw new Error(
       `${target} is a native launcher and cargo is not on PATH. Install Rust (rustup.rs) and ` +
@@ -449,15 +428,10 @@ export function packDeckPlugin(
     );
   }
 
-  // The PREVIOUS SOURCE HASH, not the previous artifact's bytes.
-  //
-  // `streamdeck pack` is Elgato's CLI and it embeds entry timestamps, so two
-  // packs of an identical tree are never byte-identical and we have no flag to
-  // pin them. Comparing artifact bytes therefore reported CHANGED on every
-  // single run: measured across three packs of one unchanged tree, `sourceHash`
-  // held at ea93c94… while the artifact sha came out 1b688404…, ca43bdbf… and
-  // 39dbf5e9…. That asked a human to commit a new binary each time, and twice
-  // in one day it was read as something writing files behind our back.
+  // The previous SOURCE hash, not the previous artifact's bytes: Elgato's `streamdeck pack`
+  // embeds entry timestamps with no flag to pin them, so three packs of one unchanged tree
+  // held `sourceHash` at ea93c94… while the artifact sha varied (1b688404…, ca43bdbf…,
+  // 39dbf5e9…) — comparing bytes asked for a new commit every run.
   const previousSource = readDeckStamp(cfg)?.sourceHash ?? null;
 
   if (cfg.install !== false) installDeps(paths.pluginRoot);

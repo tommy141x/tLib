@@ -39,9 +39,9 @@ end
 local function fixture()
     local mappings, commands = {}, {}
 
-    -- The module refuses to load outside FiveM (`client.lua:5` requires both of
-    -- these to be functions). Providing them is what makes this an oracle for the
-    -- shipped file rather than a test of a reimplementation.
+    -- The module refuses to load outside FiveM: it requires both of these to be
+    -- functions. Providing them is what makes this an oracle for the shipped
+    -- file rather than a test of a reimplementation.
     _ENV.IsDuplicityVersion = function() return false end
     _ENV.GetCurrentResourceName = function() return 'tTest' end
     _ENV.RegisterCommand = function(name, cb, restricted)
@@ -194,12 +194,11 @@ test('product and action compose to one house format', function()
 end)
 
 test('the label does not change when a key is unbound', function()
-    -- NEVER: The inverse of what this used to assert, and the reason is that
-    -- `RegisterKeyMapping`'s description is PERSISTED by FiveM at first sight.
-    -- A label that says "unbound" still says it after the player binds a key,
-    -- and editing a registered label registers a second row rather than
-    -- renaming the first. The label must therefore be a pure function of
-    -- product and action, identical bound or not.
+    -- `RegisterKeyMapping`'s description is PERSISTED by FiveM at first sight:
+    -- a label that says "unbound" still says it after the player binds a key,
+    -- and editing a registered label adds a second row rather than renaming
+    -- the first. The label must be a pure function of product and action,
+    -- identical bound or not.
     local platform, mappings = fixture()
     platform.bindKey{ id = 'blackout', product = 'ELS', action = 'Toggle Blackout',
                       default = '', press = function() end }

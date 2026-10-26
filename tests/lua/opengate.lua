@@ -235,9 +235,9 @@ assert(deniedCount == beforeDenied, 'nor fake a denial')
 assert(brokenCount == beforeBroken, 'nor fake a broken config')
 
 --  reopen() — the rate-limit trap, named
--- tRadar/client/cl_settings.lua:718-728: the request path is rate-limited to one
--- call per second on the server and drops the extra SILENTLY, so an admin who
--- opened the 3D prop editor and cancelled straight away would get nothing back.
+-- tRadar's cl_settings.lua: the request path is rate-limited to one call per
+-- second on the server and drops the extra SILENTLY, so an admin who opened
+-- the 3D prop editor and cancelled straight away would get nothing back.
 
 ratelimit.reset()
 local serverCalls = 0

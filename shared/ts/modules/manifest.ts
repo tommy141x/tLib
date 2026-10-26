@@ -1,13 +1,9 @@
-// The on-disk module contract: a folder plus a `module.json` that declares what it is.
-//
-//   layouts/QRX-720/module.json        kind: "layout"
-//
-// `kind` is DECLARED, not inferred from location: the old marker-file convention
-//
-// There is no declared asset list. A module declares its IDENTITY; its CONTENT is
-// `sound.file` and `theme.fonts[].file` are declared because nothing else can
-// know which of several files is meant, or what family a `.woff2` provides.
-//
+// The on-disk module contract: a folder plus a `module.json` declaring what it
+// is (e.g. `layouts/QRX-720/module.json`, kind: "layout"). `kind` is declared,
+// not inferred from location. There is no declared asset list — a module
+// declares its identity; `sound.file` and `theme.fonts[].file` are declared
+// individually because nothing else can know which file is meant, or what
+// family a `.woff2` provides.
 
 /** The manifest filename. One name, in every kind of module. */
 export const MODULE_MANIFEST = "module.json";
@@ -62,23 +58,15 @@ export interface ModuleThemeFont {
   style?: "normal" | "italic";
   /**
    * Bare filename of the licence that covers this file, beside it in `fonts/`.
-   *
-   * REQUIRED, not optional, and that is a decision rather than an oversight.
-   * This estate already pays the cost for its own two faces — `OFL-Poppins.txt`
-   * and `OFL-JetBrainsMono.txt` sit next to their `.woff2` on purpose, and the
-   * generated `fonts.css` header states the rule: "the license file must travel
-   * with the woff2 files". A theme module is a MARKETPLACE ARTEFACT: it is
-   * zipped, published and installed onto other people's servers, so a theme that
-   * redistributes a third-party font with no licence beside it is a legal defect
-   * the schema can refuse for free.
-   *
-   * Stated per FACE rather than once per family, because the licence attaches to
-   * the FILE being redistributed. Three weights of one family repeating
-   * `OFL-Inter.txt` is three true statements, not duplication.
-   *
-   * The existence of the file on disk is not checkable here — this validator
-   * reads a decoded object and touches no filesystem — so it is asserted by the
-   * consuming repo's gate. The NAME being declared is what makes that possible.
+   * Required, not optional: a theme module is a marketplace artefact, zipped
+   * and installed onto other people's servers, so redistributing a third-party
+   * font with no licence beside it is a legal defect the schema can refuse for
+   * free (`OFL-Poppins.txt`, `OFL-JetBrainsMono.txt` already do this). Stated
+   * per face, not per family, since the licence attaches to the file being
+   * redistributed — three weights repeating `OFL-Inter.txt` is three true
+   * statements. This validator touches no filesystem, so the file's actual
+   * existence is asserted by the consuming repo's gate; declaring the name is
+   * what makes that checkable.
    */
   license: string;
 }
@@ -116,32 +104,24 @@ const SLUG = /^[a-z0-9][a-z0-9_-]*$/;
 const TONE_KEY = /^[A-Z0-9_]+$/;
 const AUDIO = /\.(?:wav|ogg|mp3)$/i;
 /**
- * woff2 only.
- *
- * Not a shortage of imagination: every engine the panel runs in — including the
- * CEF 103 the game's NUI is — has supported woff2 since 2016, it is 25-30%
- * smaller than woff and several times smaller than the ttf/otf it was compressed
- * from, and one format means one `format()` string and one code path. A theme
- * that only has a ttf converts it once at authoring time; a theme that ships one
- * would make every consumer carry a second branch forever.
+ * woff2 only: every engine the panel runs in, including CEF 103, has supported
+ * it since 2016, and it's 25-30% smaller than woff. One format means one
+ * `format()` string and one code path; convert a ttf once at authoring time
+ * instead of making every consumer carry a second branch forever.
  */
 const FONT_FILE = /\.woff2$/i;
 /**
- * A face's `font-weight`: `400`, or a variable range `100 800`.
- *
- * 1..1000, which is css-fonts-4's range and not the 100..900 of the nine named
- * weights — a variable font may legally be instanced anywhere in it. Leading
- * zeros are refused because `0400` is not a number any `@font-face` matches and
- * is always a typo.
+ * A face's `font-weight`: `400`, or a variable range `100 800`. Range is
+ * 1..1000 (css-fonts-4), not the 100..900 of the nine named weights, since a
+ * variable font may be instanced anywhere in it. Leading zeros refused —
+ * `0400` is always a typo.
  */
 const FONT_WEIGHT = /^(?:[1-9]\d{0,2}|1000)(?: (?:[1-9]\d{0,2}|1000))?$/;
 /**
- * Characters a declared family name may not contain.
- *
- * `family` is interpolated into `@font-face { font-family: "<family>" }`, so a
- * quote or a brace could close the rule and inject another, and a COMMA would
- * silently make one declaration into two family names — which matches no face
- * and falls back exactly as loudly as the bug this whole feature exists to kill.
+ * Characters a declared family name may not contain. `family` is interpolated
+ * into `@font-face { font-family: "<family>" }`, so a quote or brace could
+ * close the rule and inject another, and a comma would silently split one
+ * declaration into two names that match no face.
  */
 const FONT_FAMILY_FORBIDDEN = /["'{};,\\]|^\s|\s$/;
 
@@ -174,14 +154,11 @@ export function soundModuleId(file: string): string {
 
 /**
  * Where a sound module's audio lives, relative to the sounds directory.
- *
- * Derivable from the filename alone, with no manifest read and no index lookup,
- * BECAUSE the contract requires the folder id to be the file's stem. That one
- * rule is what keeps `toneWavMap`, `modelToneWavMap`, `bgModeMappings` and the
- * admin UI all speaking bare filenames exactly as they did — an operator's saved
- * tone mapping did not have to be migrated, and nothing had to start shipping a
- * path. It is a declared rule, not a coincidence: `parseModuleManifest` refuses a
- * manifest where the two disagree.
+ * Derivable from the filename alone, no manifest read, because the contract
+ * requires the folder id to be the file's stem (`parseModuleManifest` refuses
+ * a manifest where they disagree) — which is what let `toneWavMap`,
+ * `modelToneWavMap`, `bgModeMappings` and the admin UI keep speaking bare
+ * filenames unmigrated.
  */
 export function soundModulePath(file: string): string {
   return `${soundModuleId(file)}/${file}`;
@@ -309,19 +286,16 @@ function themeFacts(value: unknown): ModuleTheme {
 }
 
 /**
- * Validate one parsed `module.json`.
+ * Validate one parsed `module.json`. Refuses by throwing, with a message
+ * written for the server owner reading it in the console.
  *
  * @param value   the decoded JSON
  * @param id      the folder name it was read from; the manifest must agree
  * @param kind    the kind the scanning base holds, when the caller knows it
  *
- * REFUSES BY THROWING, and the message is written for the server owner who
- * will read it in the console. A refusal is the right outcome for a kind/
- * directory mismatch rather than a warning: a `kind: "theme"` folder sitting in
- * `layouts/` that the layout loader accepts anyway will 404 on `ui.html` at
- * render time on a player's machine, which is the failure mode worth paying a
- * start-time error to avoid. The operator's fix is one move — put the folder in
- * the directory its kind names.
+ * A kind/directory mismatch is refused rather than warned: a `kind: "theme"`
+ * folder left in `layouts/` would otherwise 404 on `ui.html` at render time on
+ * a player's machine instead of at server start.
  */
 export function parseModuleManifest(value: unknown, id: string, kind?: ModuleKind): ModuleManifest {
   if (!value || typeof value !== "object" || Array.isArray(value))

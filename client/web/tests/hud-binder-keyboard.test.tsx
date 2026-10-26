@@ -1,30 +1,18 @@
 /**
- * A faceplate key must be operable by the keyboard, because it already claims to be.
+ * A faceplate key must be operable by the keyboard, because it already
+ * claims to be: `HudBinder.scan()` attached only a `click` listener per
+ * `[data-hud-btn]`, while all 65 shipped keys across tRadar's five heads and
+ * tDetector's three declare `role="button" tabindex="0"` — reachable by Tab
+ * but pressing Enter did nothing, silently. A `<div role="button">` inherits
+ * none of a real `<button>`'s key handling, and the faceplates can't be real
+ * buttons (absolutely-positioned transparent rects over a chassis render).
  *
- *  WHAT WAS WRONG
- *
- * `HudBinder.scan()` attached one `click` listener per `[data-hud-btn]` and
- * nothing else, while all 65 shipped keys across tRadar's five heads and
- * tDetector's three declare `role="button" tabindex="0"`. So every one of them
- * was reachable by Tab — put there deliberately, so it could be operated — and
- * pressing Enter on it did nothing at all. Nothing threw and nothing logged.
- *
- * A `<div role="button">` inherits none of a real `<button>`'s key handling.
- * The faceplates cannot be real buttons: they are absolutely-positioned
- * transparent rects laid over a chassis render, sized to the silkscreen.
- *
- *  WHY THIS LIVES IN THE DOM SUITE
- *
- * `tests/unit/hud-drag.test.ts` hand-rolls a `FakeElement` harness, and says so:
- * it is a harness, not a claim about a real selector engine or a real event
- * model. Key handling IS the event model — `e.repeat`, `preventDefault` on
- * Space, and the dispatch from `keydown` through `click` to the click listener
- * are all things a fake would simply agree with. These run against happy-dom,
- * which has the real ones.
- *
- * THE TESTS ASSERT `onAction` FIRED, NOT THAT A LISTENER IS ATTACHED. A test
- * that counted `addEventListener` calls would pass against a handler that
- * matched the wrong key, swallowed its own event, or looped.
+ * Runs against happy-dom rather than `tests/unit/hud-drag.test.ts`'s
+ * hand-rolled `FakeElement` harness, because key handling IS the event model
+ * (`e.repeat`, `preventDefault` on Space, the keydown-to-click dispatch) and
+ * a fake would simply agree with whatever it's told. Tests assert `onAction`
+ * fired, not that a listener is attached — the latter would pass against a
+ * handler matching the wrong key, swallowing its event, or looping.
  */
 
 import { describe, expect, test } from "bun:test";

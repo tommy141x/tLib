@@ -61,56 +61,16 @@ resource starts.
 | `tlib_telemetry` | `set` | boolean — `1`, `true`, `yes`, `on`, `enabled` / `0`, `false`, `no`, `off`, `disabled` | *(unset — off)* | Opt in to **diagnostics events**: errors, warnings, renderer crashes and slow-operation outliers from our own code, with machine context. This convar is the only control. |
 | `tlib_telemetry_key` | `set` | string | *(empty)* | Dev only: points the transport at a local ingest credential. There is nothing for an operator to supply. |
 
-**`tlib_telemetry` is the only way to turn diagnostics on or off.** An unreadable value
-(`maybe`) still counts as a decision, leaving diagnostics **off**. Unset is **off**. A
-consumer resource can store an answer of its own with `SetTelemetryConsent` (see
+**`tlib_telemetry` is the only way to turn diagnostics on or off.** Unset is **off**, and an
+unreadable value (`maybe`) still counts as a decision, leaving it **off**. A consumer
+resource can store an answer of its own with `SetTelemetryConsent` (see
 [Exports](/docs/tLib/exports)), and this convar, once set, overrides it.
 
-[Diagnostics](/docs/tLib/telemetry) is the page to read before deciding — what is sent,
-what is never sent, and why you might say yes. The rest of this section is the reference.
+`tlib_telemetry_status` in the server console reports what is enabled, what decided it, how
+much is queued, and whether the transport has given up for this session.
 
-### What this convar does *not* cover: the per-install id
-
-Marketplace browse, installs and previews, community configs and the startup update check
-all run **regardless of this setting**. Every one of them, and the diagnostics ingest,
-carries a random per-install id (`x-install-id`) so one server can be rate-limited or
-blocked on its own.
-
-The id is random, generated on your own server from no input, and is never an IP, a licence
-key, a server name or a player identifier. It lives in tLib's `data.json`; deleting it only
-mints a new one, which is not an opt-out.
-
-### Where to see the current state
-
-`tlib_telemetry_status` in the server console: what is enabled, what decided it, how much
-is queued, and whether the transport has given up for this session. tLib's hub at
-`http://<server>:7777/` neither shows nor changes it.
-
-### What is collected
-
-Faults in **our** code and performance on real machines — five event kinds, nothing else:
-
-| Event | Carries |
-| --- | --- |
-| `tlib.error_reported` | the resource and version, which VM the fault was in, an error kind, the error name, a file-and-line location, a hash of the normalised stack, and the scrubbed stack itself, stored once per hash per day |
-| `tlib.warning_reported` | the same context, a warning kind and a warning code. **No message:** a warning's text has nowhere to go |
-| `tlib.crash_reported` | a crash kind and how long the session survived. Sent on the NEXT start, because the renderer that died could not send anything |
-| `tlib.slow_operation` | which operation, how long it took, the budget it crossed. **Outliers only** — never one row per call |
-| `tlib.environment_reported` | once per boot: OS, a RAM bucket, GPU vendor and model, CPU threads |
-
-### What is deliberately not
-
-No IP, no `sv_licenseKey`, no server name, no server endpoint, no player name, licence,
-Steam or Discord id, and no player count. The only identifier is the random per-install id
-above.
-
-Before anything is sent: home-directory paths lose the account name, credential-shaped
-values are blanked, and anything shaped like a FiveM player identifier (`steam:`,
-`license:`, `discord:`, a bare Steam id or snowflake, an IP address) is removed.
-
-The RAM bucket caps at 8 GB, so it says "under 8 GB" or "cannot tell" and nothing between.
-
-`<resource>_diag` output is **not** routed into this. Those stay in your console.
+[Diagnostics](/docs/tLib/telemetry) is the whole account: the five event kinds, what is
+never sent, and the per-install id this convar does not control. Read it before deciding.
 
 ## Marketplace
 

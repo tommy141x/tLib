@@ -158,11 +158,10 @@ function dirOf(relative: string): string {
 
 // The first-party family
 //
-// Hardcoded, not operator configuration. Making this a config file would move
-// four `server.cfg` lines into a fifth file and gain nothing: an operator who
-// can edit that file can edit server.cfg, and a resource that can edit it has
-// already won. The point of the consolidation is that the *operator* stops
-// having to write a grant per resource — not that the grant becomes editable.
+// Hardcoded, not operator configuration: a config file here would just move
+// four `server.cfg` lines into a fifth file an operator-who-can-edit-it could
+// already edit server.cfg from. The consolidation removes the per-resource
+// grant the operator writes, not makes the grant itself editable.
 
 export const FAMILY: Caller[] = [
   {
@@ -233,15 +232,13 @@ export const FAMILY: Caller[] = [
         /**
          * The speech process: tAI's vendored Node running tAI's own sidecar.
          *
-         * Vendored rather than assumed on PATH — a server owner has no reason to
-         * have Node installed — which also means the runtime is inside tAI and
-         * the containment rule applies to it unchanged.
-         *
-         * This is the one duplex program: the caller and the child exchange
-         * length-prefixed binary frames, not lines, because audio is decoded and
-         * sent while the backbone is still generating. `prepend` is what keeps
-         * that from being a hole — tAI names `tts-sidecar` and tLib supplies the
-         * script, so "run this binary" never becomes "run this JavaScript".
+         * Vendored, not assumed on PATH, so the runtime sits inside tAI and the
+         * containment rule still applies to it. The one duplex program here:
+         * caller and child exchange length-prefixed binary frames (audio
+         * streamed while the backbone still generates), not lines. `prepend`
+         * is what keeps that duplex channel from being a hole — tAI names
+         * `tts-sidecar`, tLib supplies the script, so "run this binary" never
+         * becomes "run this JavaScript".
          */
         id: "tts-sidecar",
         paths: { win32: ["bin/win/node.exe"], linux: ["bin/linux/node"] },
@@ -266,14 +263,12 @@ export const FAMILY: Caller[] = [
   },
   {
     resource: "tRadio",
-    // tRadio ships the same three engines tAI's llama-server comes from, and
-    // execs them the same way: through the bundled loader when the release
-    // carries one, directly when it does not. The loader directory is per engine
-    // rather than one shared `server/bin/linux/lib`, for the reason
-    // vendor-local-engine.ts already keeps the engines apart — llama.cpp and
-    // whisper.cpp both ship a `libggml` built from different revisions, and the
-    // loser of a shared directory is handed a library it was not linked against.
-    // Three ~15 MB closures is the price of that not being a possibility.
+    // tRadio ships three engines, each execed through its bundled loader when
+    // the release carries one. Loader directory is per engine, not one shared
+    // `server/bin/linux/lib`: llama.cpp and whisper.cpp each ship a `libggml`
+    // built from a different revision, and a shared directory hands one of
+    // them a library it wasn't linked against. Three ~15 MB closures is the
+    // price of avoiding that.
     author: "TIMMYG Studios",
     programs: [
       llamaServer({
@@ -335,21 +330,11 @@ export const FAMILY: Caller[] = [
   },
 ];
 
-// There were two "probes" here: fixed PowerShell command lines tLib ran on a
-// caller's behalf, to resolve a live PID's executable and to count physical
-// cores. They are gone, and nothing replaced them — both questions are now
-// answered in-process by the callers themselves, the same way on every platform.
-//
-// Removed for two reasons, neither of which is that they were exploitable. They
-// were not: tLib owned every byte of those command lines and a caller supplied at
-// most one integer. But tLib is a public MIT library, and shipping *any*
-// `powershell.exe` invocation in one is a thing a reader stops at — which is a
-// real cost even when the code is fine. And they were Windows-only, so the same
-// question had two implementations, of which the Linux one is the one nobody
-// exercises on a Windows dev box. Most FiveM hosting is Linux containers. One
-// cross-platform path beats two correct ones.
-//
-// Do not add another. If a caller needs an OS fact, find the in-process answer.
+// Two PowerShell-based probes (resolve a PID's executable, count physical
+// cores) were removed in favor of callers answering in-process, cross-platform
+// — not because they were exploitable, but because a public MIT library
+// shipping `powershell.exe` is a reader stopper, and most FiveM hosting is
+// Linux containers anyway. Do not re-add one; find the in-process answer.
 
 export function findCaller(resource: string): Caller | undefined {
   return FAMILY.find((c) => c.resource === resource);

@@ -1,74 +1,36 @@
 /**
- * How long does opening a marketplace preview actually cost, and where?
+ * How long does opening a marketplace preview cost, and where?
+ * `bun run probe:preview [--json] [--control] [--from=<dir>] [--only=<substr>]`
  *
- *   bun run probe:preview            measure
- *   bun run probe:preview --json     machine-readable
+ * Stage A (bun): the exact string pipeline `UiPreviewFrame` applies to a
+ * fetched document -- the `src|href` rewrite, centering-CSS splice, binder
+ * splice, `parsePreviewCanvasSize`. Stage B runs in the pinned Chromium 103
+ * CEF actually is, because `srcdoc` parse and image decode don't happen in
+ * bun; timed in-page via `performance.now()` around a real `load` event (CDP
+ * round trip excluded), with each frame reporting image/decode counts back
+ * by postMessage since a sandboxed opaque-origin frame can't be read from
+ * outside. Stage C times the JSON encode/parse the document pays crossing
+ * into the NUI as a message field.
  *
- * The owner reports the in-game marketplace preview as "slow to load and laggy,
- * especially on low-end machines". This is the instrument that says WHERE the
- * time goes, because every candidate explanation for that sentence is cheap to
- * believe and none of them were measured.
+ * Corpus is real, not synthetic: `backups/marketplace-import/manifest.json`'s
+ * 18 imported UI heads plus `manifest-held.json`'s 3 large ones -- the
+ * finding is about their size distribution.
  *
- * What is measured, and in what
+ * `--control` strips every asset reference (inline `data:` payloads, and
+ * remote `/api/storage/` references via `src=`/`href=`/`url()`) and
+ * re-measures, to make the verdict attributable to asset size rather than
+ * something else. The remote form is not optional: after the rehost lifted
+ * inlined images onto R2, a `data:`-only stripper measured 138ms->189ms
+ * (went UP) on the 21 published documents because the "control" still
+ * fetched every image. So a control that comes out byte-identical to the
+ * real document for any item now fails the whole run rather than printing a
+ * number (see the inertness guard below). `@font-face` blocks are deleted
+ * rather than pointed at a GIF substitute, since a GIF is not a font and
+ * would just measure a parse failure instead of zero asset loads.
  *
- * Stage A runs in bun: the exact string pipeline `PreviewOverlay.tsx`'s
- * `UiPreviewFrame` applies to a fetched document — the `src|href` rewrite, the
- * centering-CSS splice, the binder splice, and `parsePreviewCanvasSize`.
- *
- * Stage B runs in the PINNED CHROMIUM 103 that CEF is (`shared/ts/build/
- * nui-chromium.ts`), because the thing under suspicion is `srcdoc` parse and
- * image decode and neither of those happens in bun. Every number in stage B is
- * taken in-page with `performance.now()` around a real `load` event, so the CDP
- * round trip is outside the measured window. Every frame REPORTS ITSELF back by
- * postMessage — image count, decoded count, whether the injected script ran, body
- * width — because a sandboxed opaque-origin frame cannot be read from outside and
- * a mode that rendered nothing would otherwise time as fast.
- *
- * Stage C times the JSON encode and parse the document pays crossing into the NUI
- * as a message field.
- *
- * The corpus is the REAL one: `backups/marketplace-import/manifest.json`, the
- * 18 UI heads that were actually imported into the marketplace, plus
- * `manifest-held.json`'s 3 large ones. Not synthetic documents — the whole
- * finding here is about their size distribution, which no synthetic fixture
- * would have reproduced.
- *
- * The control
- *
- * `--control` strips every ASSET REFERENCE out of each document and re-measures.
- * It is not an optimisation proposal — it is the thing that makes the verdict
- * attributable: if the stripped document loads in the same time as the real one,
- * then the assets are NOT the cost and every conclusion drawn from their size is
- * wrong. It is reported beside the real number rather than instead of it.
- *
- * "Asset reference" means BOTH forms, because a document can carry either:
- *
- *   - an inline `data:[type];base64,…` payload, replaced by a 1x1 GIF;
- *   - a REMOTE reference whose target contains `/api/storage/` — a `src=`/`href=`
- *     attribute or a CSS `url()` — likewise replaced by the 1x1 GIF.
- *
- * The second form is not an extension, it is a repair. The rehost lifted every
- * inlined image onto R2 and rewrote the document to reference it by https URL, so
- * a `data:`-only stripper stopped removing anything: MEASURED on the 21 published
- * documents, the control went from 138ms (against 4,020ms real) to 189ms — it
- * went UP, because the "control" document still fetched every image. A control
- * that cannot fail is worse than no control, so the control now also refuses to
- * run: if the control document comes out byte-identical to the real one for any
- * item, the probe exits non-zero instead of printing a number (see `INERT`
- * below), and the `stripped` column reports per item how many references went.
- *
- * `@font-face` is the one case where the 1x1 GIF is the WRONG substitution — a
- * GIF is not a font, so the browser would still pay a fetch-free but real
- * font-parse failure and the measurement would be of that failure rather than of
- * nothing. The whole `@font-face` block is deleted instead: the family then does
- * not resolve, text falls to the next stack entry, and no font asset is loaded at
- * all, which is exactly the "same layout, zero asset loads" document wanted.
- *
- * NOT in `verify` or `check:regression`: `nui-chromium.ts` is Windows-only (a
- * `Win_x64` snapshot, `chrome-win/chrome.exe`, `powershell Expand-Archive`) and
- * `verify` must run on Linux. Same exemption, for the same reason, as
- * `probe:focus`. It also reads a corpus that lives outside this resource, so a
- * fresh clone has nothing to measure — it exits 2 (cannot run), never 0.
+ * Not in `verify`/`check:regression`: `nui-chromium.ts` is Windows-only,
+ * same as `probe:focus`, and the corpus lives outside this resource, so a
+ * fresh clone exits 2 (cannot run) rather than 0.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -84,29 +46,17 @@ const JSON_OUT = process.argv.includes("--json");
 const WITH_CONTROL = process.argv.includes("--control");
 const ONLY = process.argv.find((a) => a.startsWith("--only="))?.slice(7);
 /**
- * `--from=<dir>` measures `<dir>/*.html` INSTEAD of the import manifests, and
- * it exists because the manifests are the PRE-publish payloads — they are what
- * was handed to the catalogue, not what the catalogue now serves.
- *
- * Those two diverged the moment anything rehosted. `rehostEmbeddedImages` lifts
- * every `data:` image onto R2 and rewrites the document to reference it by URL,
- * so a published item's document is a fraction of the manifest entry it came
- * from — measured on the three that went in through a rehosting path: 12.9 MB →
- * 27 KB, 8.6 MB → 21 KB, 2.8 MB → 84 KB. A probe pinned to the manifests can
- * therefore only ever report the unrehosted cost, which is exactly the number
- * the rehost is supposed to change.
- *
- * So the before/after of a backfill is `--from=<dir of documents fetched from
- * /api/marketplace/items/:slug/ui-html>`, run twice against the same live route.
- * The slug is the filename stem, which is how the fetch loop writes them.
- *
- * It also makes the remote-image question measurable, which is the part that
- * cannot be reasoned about. A rehosted document's images are `https:` URLs on
- * another origin, and the frame is `sandbox="allow-scripts"` with no
- * `allow-same-origin` — an opaque origin. Whether an `<img>` resolves from there
- * is a browser behaviour, not a documented one, and the Control table below
- * already reports `imgs/decoded` as counted by the frame itself. Pointing this
- * at rehosted documents turns "will remote images load" into a number.
+ * `--from=<dir>` measures `<dir>/*.html` instead of the import manifests,
+ * which hold the PRE-publish payload -- `rehostEmbeddedImages` lifts every
+ * `data:` image onto R2 and rewrites the reference to a URL, so a published
+ * document is a fraction of its manifest entry (measured: 12.9MB->27KB,
+ * 8.6MB->21KB, 2.8MB->84KB on the three rehosted items). A probe pinned to
+ * the manifests can only report the unrehosted cost. `--from` points at a
+ * directory of documents fetched from `/api/marketplace/items/:slug/ui-html`
+ * (slug = filename stem), run before/after a backfill against the live
+ * route, and also makes "will a rehosted document's cross-origin `<img>`
+ * resolve inside a `sandbox="allow-scripts"` frame" measurable instead of
+ * reasoned about, via the `imgs/decoded` counts the frame reports itself.
  */
 const FROM_DIR = process.argv.find((a) => a.startsWith("--from="))?.slice(7);
 
@@ -177,12 +127,10 @@ const REMOTE_ASSET = /\/api\/storage\//i;
 function stripAssetRefs(html: string): { html: string; removed: number } {
   let removed = 0;
 
-  // FIRST, and as a whole-block delete rather than a substitution: a 1x1 GIF is
-  // not a font. Pointing an `@font-face` `src` at one keeps a real cost in the
-  // control (the browser still parses the bytes and still fails) and measures
-  // that failure instead of measuring nothing. Deleting the block leaves the
-  // family unresolved, so text takes the next entry in the stack and NO font
-  // asset is loaded — the honest "no asset loads" document.
+  // Whole-block delete, not a GIF substitution: a GIF-sourced @font-face
+  // still pays a real parse failure, measuring that instead of zero loads.
+  // Deleting it leaves the family unresolved so text falls to the next stack
+  // entry.
   let out = html.replace(/@font-face\s*\{[^}]*\}/gi, (block) => {
     if (!/data:/i.test(block) && !REMOTE_ASSET.test(block)) return block;
     removed++;
@@ -264,10 +212,9 @@ const HARNESS = `<!doctype html><meta charset="utf-8"><title>preview probe</titl
 <script>
 window.__docs = {};
 window.__canvas = {};
-// What the frame reports back about ITSELF. A sandboxed frame with no
-// allow-same-origin cannot be read from here, so the only honest check that a
-// mode actually rendered is one the frame posts out. Keyed by mode so a blob
-// run cannot be credited with a srcdoc run's report.
+// A sandboxed frame with no allow-same-origin can't be read from here, so the
+// frame posts its own render report. Keyed by mode so blob can't be credited
+// with srcdoc's report.
 window.__reports = {};
 addEventListener('message', (e) => {
   if (e.data && e.data.__previewProbe) window.__reports[e.data.mode] = e.data;
@@ -276,20 +223,17 @@ window.probe = {
   async load(slug, canvasW, canvasH){
     const r = await fetch('/doc/' + encodeURIComponent(slug));
     window.__docs[slug] = await r.text();
-    // The shipped wrapper is EXACTLY the canvas, then transformed — see
-    // previewBoxStyle. Reproduced here because the frame's viewport size is
-    // an input to layout, and a 700x400 stand-in measures a different document
-    // from the one that ships.
+    // The shipped wrapper sizes the frame to the canvas (see previewBoxStyle);
+    // a 700x400 stand-in would measure a different document from the one that ships.
     window.__canvas[slug] = { w: canvasW, h: canvasH };
     return window.__docs[slug].length;
   },
   /** One open: build the frame, set srcdoc, wait for load. Returns ms. */
   open(slug, mode){
     delete window.__reports[mode];
-    // ⚠️ APPENDED, not spliced before </body>. MEASURED: not one of the 21 real
-    // marketplace documents contains a <body> tag at all — they are bare
-    // fragments — so a splice-before-</body> injected nothing and every mode
-    // read "no report", which looks exactly like a mode that rendered nothing.
+    // Appended, not spliced before </body>: none of the 21 real marketplace
+    // documents contain a <body> tag, so a before-</body> splice injected
+    // nothing and every mode read "no report".
     const reporter =
       '<' + 'script>setTimeout(function(){var i=document.images,ok=0;' +
       'for(var k=0;k<i.length;k++)if(i[k].naturalWidth>0)ok++;' +
@@ -406,11 +350,9 @@ async function main(): Promise<number> {
   const controls = new Map<string, string>();
   const removedCounts = new Map<string, number>();
   if (WITH_CONTROL) {
-    // The INERTNESS GUARD. A control document identical to the real one is not a
-    // weak control, it is a second measurement of the same document — it reports
-    // a plausible number that no change to the corpus can ever falsify. That is
-    // precisely how the `data:`-only stripper survived the rehost. So this fails
-    // the whole run rather than printing the number.
+    // Inertness guard: a control byte-identical to the real document is a
+    // second measurement of the same document, reporting a plausible number
+    // nothing can falsify -- how the `data:`-only stripper survived the rehost.
     const inert: string[] = [];
     for (const it of corpus) {
       const stripped = stripAssetRefs(it.html);
@@ -473,8 +415,6 @@ async function main(): Promise<number> {
       );
 
     for (const it of corpus) {
-      // The SHIPPED canvas resolver, so the frame is laid out at the size the
-      // real wrapper gives it.
       const canvas = parsePreviewCanvasSize(docs.get(it.slug) as string);
       await page.evaluate(
         `window.probe.load(${JSON.stringify(it.slug)}, ${canvas.w}, ${canvas.h})`
@@ -489,15 +429,13 @@ async function main(): Promise<number> {
       if (!json.ok) throw new Error(`${it.slug}: JSON round trip lost bytes`);
 
       const first = await openOnce(it.slug, "srcdoc");
-      // The in-frame reporter posts at +400ms; wait for it before clearing, or
-      // the frame is gone before it can answer and every mode reads "no report"
-      // — which would look exactly like a mode that rendered nothing.
+      // The in-frame reporter posts at +400ms; wait before clearing or the
+      // frame is gone before it can answer.
       await new Promise((r) => setTimeout(r, 600));
       const srcdocReport = await page.evaluate<FrameReport | null>('window.probe.report("srcdoc")');
       await page.evaluate("window.probe.clear()");
-      // A SECOND open of the same document, with the frame destroyed between —
-      // this is what "close the preview and open it again" costs, and whether
-      // Chromium's image cache survives a data: URI across documents.
+      // A second open with the frame destroyed between: the reopen cost, and
+      // whether Chromium's image cache survives a data: URI across documents.
       const second = await openOnce(it.slug, "srcdoc");
       await page.evaluate("window.probe.clear()");
 

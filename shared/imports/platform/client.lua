@@ -10,20 +10,16 @@ local platform = { _engine = "fivem" }
 
 --- Whether a BOOL native said yes.
 ---
---- MEASURED 2026-09-26, FiveM Enhanced: every BOOL native reached from Lua here
---- returns the NUMBER 1, not `true` -- DoesEntityExist, NetworkDoesNetworkIdExist,
---- IsPedInAnyVehicle, IsEntityAVehicle and HasModelLoaded were all checked with
---- `type()` and all answered "number". So `native(...) == true` is ALWAYS FALSE, and
---- the code below used to be exactly that.
+--- Every BOOL native reached from Lua here returns the NUMBER 1, not `true`
+--- (checked: DoesEntityExist, NetworkDoesNetworkIdExist, IsPedInAnyVehicle,
+--- IsEntityAVehicle, HasModelLoaded), so `native(...) == true` is always
+--- false. Cost a full debugging session once: screentarget's `exists`
+--- provider rejected every entity that existed, so props stayed dark on all
+--- three devices while unit tests passed, because the suites inject their
+--- own providers and never run a real native.
 ---
---- It cost a full debugging session: screentarget's `exists` provider rejected every
---- entity that existed, so no vehicle ever qualified as a screen target and the props
---- on all three devices stayed dark -- no browser, no backlight, no lamps -- while
---- every unit test passed, because the suites INJECT their own providers and so never
---- run a real native.
----
---- `not not v` is NOT the fix: 0 is truthy in Lua, so it would turn every "no" into a
---- "yes". Both shapes have to be spelled out.
+--- `not not v` is not the fix either — 0 is truthy in Lua — so both shapes
+--- are spelled out.
 local function nativeTruth(v)
     if v == true then return true end
     return type(v) == "number" and v ~= 0
@@ -218,10 +214,9 @@ function platform.isNetworkIdValid(netId)
 end
 
 function platform.isEntityValid(handle)
-    -- Through nativeTruth, like isNetworkIdValid above and like the server
-    -- twin. This returned the raw native for a while, which is the NUMBER 0 for
-    -- a destroyed entity -- and 0 is truthy in Lua, so every caller spelling the
-    -- check as `not isEntityValid(e)` read a dead entity as alive.
+    -- Through nativeTruth: this returned the raw native for a while (NUMBER
+    -- 0 for a destroyed entity, which is truthy), so `not isEntityValid(e)`
+    -- read dead entities as alive.
     return nativeTruth(DoesEntityExist(handle))
 end
 
@@ -347,28 +342,17 @@ end
 
 --- Give focus back to the game, in the one order that is safe either way.
 ---
---- There were three orderings of these two natives in this tree, two of them in
---- THIS file, and a comment in `shared/lib/adapter/ui.lua` asserting that the
---- wrong one leaks `keepInput` into the next focus cycle. That comment names no
---- measurement and its history was squashed in the layout refactor (a226c76),
---- so it is an assertion, not evidence — and the comment on
---- `setKeepInputActive` right below it asserts the opposite premise ("no-op
---- until focus has been granted"), which if true would make clearing keepInput
---- *after* the release the leaking order. The two cannot both be right.
+--- `SET_NUI_FOCUS` and `SET_NUI_FOCUS_KEEP_INPUT` aren't in the native
+--- reference (only their `IsNuiFocused`/`IsNuiFocusKeepingInput` readers
+--- are), and in-tree comments disagree about which order leaks `keepInput`
+--- into the next focus cycle, with no way to check from outside the game.
+--- So this takes the strictest reading of both: clear keepInput, release
+--- focus, clear it again. The second clear is a no-op under one semantics
+--- and load-bearing under the other — idempotent either way, for one extra
+--- native call on a path that only runs when a UI closes.
 ---
---- Neither can be checked from outside the game: `SET_NUI_FOCUS` and
---- `SET_NUI_FOCUS_KEEP_INPUT` are not in the native reference at all (only the
---- `IsNuiFocused` / `IsNuiFocusKeepingInput` readers are), and the stack has no
---- offline NUI focus oracle.
----
---- So this takes the strictest reading of both claims instead of picking one:
---- clear keepInput while focus is still held, release focus, clear it again.
---- The second clear is a no-op under one semantics and the load-bearing one
---- under the other, it is idempotent under both, and it costs one native call
---- on a path that runs when a UI closes. That is cheaper than being wrong.
----
---- Do not "simplify" this back to two calls without a measurement in the
---- game. `IsNuiFocusKeepingInput()` is the oracle; read it after a release.
+--- Don't "simplify" this to two calls without measuring in-game first;
+--- `IsNuiFocusKeepingInput()` is the oracle to read after a release.
 local function releaseNuiFocus()
     SetNuiFocusKeepInput(false)
     SetNuiFocus(false, false)
@@ -418,20 +402,15 @@ end
 --- Release focus on the NEXT frame, and only if the session that asked for it
 --- is still the current one.
 ---
---- Three resources discovered both halves of this independently and none of
---- them was in the shared helper:
----
---- - `tLS/client/cl_editor.lua` — calling SetNuiFocus from inside a NUI
----   callback can fail silently, so the release has to yield first.
---- - the same file, and `tVDJ/client/nui.lua` — the generation guard. A UI that
----   reopens before the deferred thread resumes has already taken focus
----   synchronously, so an ungated release revokes the NEW session's focus. The
----   symptom is a fully-drawn editor with no cursor whose gizmo ignores every
----   click, and the only cure is exiting and re-entering. Exit-then-reopen
----   inside one frame is an ordinary user action: `/tlsedit` is a toggle, and
----   tLS's settings dialog opens the editor immediately after closing itself.
---- - `tLib/client/cl_layout.lua` warns about the third part: never try to
----   re-acquire focus from a deferred thread. This only ever releases.
+--- The yield exists because calling SetNuiFocus from inside a NUI callback
+--- can fail silently. The generation guard exists because a UI that reopens
+--- before the deferred thread resumes has already taken focus
+--- synchronously — an ungated release would revoke the NEW session's focus,
+--- leaving a fully-drawn editor with no cursor whose gizmo ignores every
+--- click, fixable only by exiting and re-entering. That reopen-within-a-frame
+--- is an ordinary action: a settings dialog can reopen an editor immediately
+--- after closing itself. This only ever releases focus — never try to
+--- re-acquire it from a deferred thread.
 ---
 --- `session` is a snapshot of the caller's generation counter and `current` a
 --- function returning the live one. Pass neither and the guard is skipped,
@@ -472,44 +451,38 @@ function platform.getResourceId()
     return GetCurrentResourceName()
 end
 
--- IT NOW ACTUALLY WRAPS. IT DID NOT, AND THE NAME SAID IT DID.
+-- Now actually wraps — it didn't before, despite the name: a Lua error
+-- inside an export body doesn't propagate across the FiveM export boundary,
+-- so the call returned `undefined`, the real message was lost, and it
+-- resurfaced elsewhere as `"undefined" is not valid JSON`. ~40 call sites
+-- across tRadio, tRadar, tAFK and tChirp had adopted this as a throw guard
+-- and gotten none.
 --
--- This was a bare `exports(name, fn)` with a comment explaining only why the
--- `resource` argument is ignored. Roughly 40 call sites across tRadio, tRadar,
--- tAFK and tChirp adopted it as a throw guard, because that is what it is
--- called; none of them got one. A Lua error inside an export body does not
--- propagate to the caller across the FiveM export boundary — the call returns
--- `undefined`, the real message is lost, and it resurfaces somewhere unrelated
--- as `"undefined" is not valid JSON`. That is the single most expensive failure
--- shape in this estate to debug, and the guard that was supposed to prevent it
--- was a rename of the thing it was guarding against.
+-- `resource` is accepted for signature symmetry and ignored for
+-- registration (`exports(name, fn)` always registers under the calling
+-- resource); it's used only in the error line.
 --
--- `resource` is still accepted for signature symmetry and still ignored:
--- `exports(name, fn)` always registers under the calling resource. It IS used
--- in the error line, which is the first thing a reader needs.
+-- `table.pack`/`unpack`, not a plain `return fn(...)`: several exports
+-- return more than one value (`ok, reason` is the house shape), and
+-- truncating to the first would be a new bug in place of the old.
 --
--- `table.pack`/`unpack` rather than a plain `return fn(...)`: several exports
--- return more than one value (`ok, reason` is the house shape) and a guard that
--- silently truncated them to the first would be a new bug in place of the old.
--- The two halves of `publishExportsAs`, below. Kept as state because the calls
--- can arrive in either order and both orders have to work.
+-- The two halves of `publishExportsAs`, below. Kept as state because the
+-- calls can arrive in either order and both orders have to work.
 local _legacyNames = {}
 local _published   = {}
 
 -- Answer an export addressed to ANOTHER resource's name.
 --
--- Not a trick: this is verbatim what the engine does for a resource's own
--- exports. citizen/scripting/lua/scheduler.lua defines `exports(name, fn)` as
--- this same AddEventHandler under GetCurrentResourceName(), and the read side
--- (`exports['x'].y`) does no existence check on `x` at all -- it TriggerEvents
--- the name and errors "No such export" only when nothing answers. So a second
--- name is indistinguishable from the real one to every caller.
+-- Not a trick: this is what the engine itself does for a resource's own
+-- exports (citizen/scripting/lua/scheduler.lua defines `exports(name, fn)`
+-- as this same AddEventHandler), and the read side does no existence check
+-- on the resource name — it errors "No such export" only when nothing
+-- answers. So a second name is indistinguishable from the real one.
 --
--- `provide 'x'` in the manifest does NOT do this; tDB measured that on a live
--- server (tDB/server/utils/export-router.js:76). It makes GetResourceState('x')
--- report `started`, which satisfies a dependency check and is why the gap looks
--- closed, while `exports.x:anything()` still answers "No such export". Both
--- halves are needed, and they fix different things.
+-- `provide 'x'` in the manifest does NOT do this (measured against tDB on a
+-- live server): it makes GetResourceState('x') report `started`, satisfying
+-- a dependency check, while `exports.x:anything()` still answers "No such
+-- export". Both halves are needed; they fix different things.
 local function answerAs(legacyResource, name, fn)
     AddEventHandler(('__cfx_export_%s_%s'):format(legacyResource, name), function(setCb)
         setCb(fn)
@@ -518,12 +491,12 @@ end
 
 --- Also answer exports sent to a resource name this resource used to have.
 ---
---- For a renamed resource: every consumer written against the old name keeps
---- working, including ones we do not ship and cannot edit. Call it once per
---- retired name; calling it before or after the `wrapExport` calls is the same,
---- which is deliberate -- exports get registered across many files and at least
---- one call site registers them in a loop, so demanding an order here would be
---- a trap that only shows up as a missing export on a customer's server.
+--- For a renamed resource: every consumer written against the old name
+--- keeps working, including ones we don't ship and can't edit. Order with
+--- the `wrapExport` calls doesn't matter, deliberately — exports get
+--- registered across many files, sometimes in a loop, so demanding an order
+--- would be a trap that only shows up as a missing export on a customer's
+--- server.
 function platform.publishExportsAs(legacyResource)
     if type(legacyResource) ~= "string" or legacyResource == "" then return end
     if _legacyNames[legacyResource] then return end
@@ -535,18 +508,19 @@ function platform.wrapExport(resource, name, fn)
     local wrapped = function(...)
         local result = table.pack(pcall(fn, ...))
         if result[1] then return table.unpack(result, 2, result.n) end
-        -- Printed, not re-raised. Re-raising puts it back where it came from:
-        -- invisible to the caller. The caller still gets nil, which is what it
-        -- got before — the change is that the reason now exists somewhere.
+        -- Printed, not re-raised: re-raising would be invisible to the
+        -- caller again. The caller still gets nil as before; now the reason
+        -- exists somewhere.
         print(("^1[%s] export '%s' threw: %s^7"):format(resource or "?", name, tostring(result[2])))
         return nil
     end
 
     exports(name, wrapped)
 
-    -- ONE function object behind every name, so an alias cannot drift from the
-    -- real export -- not even by being wrapped a second time, which would
-    -- double the pcall and report a different resource in the error line.
+    -- One function object behind every name, so an alias can't drift from
+    -- the real export — not even by being wrapped a second time, which
+    -- would double the pcall and report a different resource in the error
+    -- line.
     _published[name] = wrapped
     for legacyResource in pairs(_legacyNames) do answerAs(legacyResource, name, wrapped) end
 end
@@ -594,30 +568,23 @@ do
 
     --- Composed so every product reads the same way in GTA's control list.
     ---
-    --- That list is flat, sorted by resource, and shows only this string. Five
+    --- That list is flat, sorted by resource, shows only this string, and five
     --- different formats currently ship ("ELS: X", "Radio - X", "tDetector: x",
-    --- "LED Editor: X", and tLib's own bare "Open Menu"), so a player scanning
-    --- ~70 rows cannot tell which product a row belongs to.
+    --- "LED Editor: X", tLib's bare "Open Menu") across ~70 rows with no way
+    --- to tell which product a row belongs to.
     ---
-    --- WARNING: THE LABEL MUST NOT DEPEND ON WHETHER A DEFAULT KEY EXISTS.
+    --- The label must never depend on whether a default key exists. It used
+    --- to append " (unbound — assign a key)" when empty, which is wrong
+    --- twice over because this string is the row's PERSISTED identity, not a
+    --- tooltip: it's written once at first sight and never revisited, so a
+    --- player who later binds the key still reads "unbound" forever; and
+    --- changing a registered label doesn't rename the row, it registers a
+    --- second one, leaving the old text as a dead entry the player can't
+    --- remove.
     ---
-    --- This used to append " (unbound — assign a key in GTA keybinds menu)"
-    --- when `default` was empty. It was well meant — an unbound row is easy to
-    --- miss in a 70-row list — and it is wrong twice over, because the string
-    --- handed to `RegisterKeyMapping` is not a tooltip. It is the row's
-    --- identity and FiveM PERSISTS it in the player's settings:
-    ---
-    ---   1. The text is written once, at first sight, and never revisited. So
-    ---      the moment the player assigns a key the row still reads "unbound",
-    ---      permanently, and nothing in the game can correct it.
-    ---   2. Changing a registered label does not rename the row, it registers
-    ---      a SECOND one — leaving the old text behind as a dead entry the
-    ---      player cannot remove. tRadar's `tradar_keys` headstone documents
-    ---      the same trap from the other direction.
-    ---
-    --- So an unbound key is discoverable by being in the list at all, and a
-    --- consumer that wants it found gives it a default. The label stays a pure
-    --- function of product and action.
+    --- So an unbound key is discoverable by being in the list at all; a
+    --- consumer that wants it found gives it a default instead. The label
+    --- stays a pure function of product and action.
     local function composeLabel(product, action, _defaultKey)
         if product and product ~= '' and action and action ~= '' then
             return ('%s: %s'):format(product, action)
@@ -632,18 +599,17 @@ do
 
     local function record(entry)
         _registry[#_registry + 1] = entry
-        -- Best-effort report to tLib so conflicts can be found ACROSS resources.
-        -- Intra-resource conflicts are findable here; the live ones are not —
-        -- tLS's PA mic and tRadio's push-to-talk both default to B, and neither
-        -- VM can see the other.
+        -- Best-effort report to tLib so conflicts can be found ACROSS
+        -- resources — intra-resource conflicts are findable here, but e.g.
+        -- tLS's PA mic and tRadio's push-to-talk both default to B and
+        -- neither VM can see the other.
         --
-        -- The pcall is NOT a version fallback — this module and
-        -- client/cl_keybinds.lua's `ReportKeybind` ship in the same tLib and
-        -- cannot disagree about whether the export exists. It is there because
-        -- consumers call bindKey at FILE SCOPE, so tLib's own client VM may not
-        -- have registered its exports yet, and a missing export RAISES rather
-        -- than returning nil. A diagnostic must never take a player's keybinds
-        -- down with it.
+        -- The pcall is not a version fallback -- this module and tLib's own
+        -- `ReportKeybind` ship in the same tLib. It's there because
+        -- consumers call bindKey at FILE SCOPE, before tLib's own client VM
+        -- may have registered its exports, and a missing export raises
+        -- rather than returning nil. A diagnostic must never take a
+        -- player's keybinds down with it.
         pcall(function()
             exports[tLibName]:ReportKeybind(entry)
         end)
@@ -701,17 +667,17 @@ do
     ---       when    = SOME_FLAG,         -- false => skip registration entirely
     ---     }
     ---
-    --- `token` exists because **a command name IS the stored binding**. FiveM
-    --- persists a player's rebind against the command token, so renaming a token
-    --- silently discards that rebind and the key reverts to default. tRadio's
-    --- `talkOnRadio`/`toggleradioui` and tLS's 32 `lbar_*` tokens therefore
-    --- cannot be migrated to a namespaced form — pass them as `token` and leave
-    --- them alone. New binds should use `id` and get namespacing for free.
+    --- `token` exists because a command name IS the stored binding. FiveM
+    --- persists a player's rebind against the command token, so renaming one
+    --- silently discards the rebind and the key reverts to default — tRadio's
+    --- and tLS's existing tokens can't be migrated to a namespaced form, so
+    --- pass them as `token` and leave them alone. New binds use `id` and get
+    --- namespacing for free.
     ---
-    --- `when` is not sugar for an `if` around the call. A RegisterKeyMapping is
-    --- permanent in the player's FiveM settings the moment it is first seen, so a
-    --- bind registered once and later removed leaves a dead row in their control
-    --- list forever. Gate it here rather than registering speculatively.
+    --- `when` is not sugar for an `if` around the call: a RegisterKeyMapping
+    --- is permanent in the player's FiveM settings the moment it's first
+    --- seen, so a bind registered once and later removed leaves a dead row
+    --- forever. Gate it here rather than registering speculatively.
     function platform.bindKey(key, cb, eventType, bindingId, label)
         local opts
         if type(key) == 'table' then

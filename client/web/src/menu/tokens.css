@@ -1,125 +1,84 @@
-/* Two groups of tokens, not interchangeable:
-
-   1. The public theme tokens (--panel, --text, --selected, …) a server owner
-      sets. These are complete CSS colours, not the shadcn HSL channel triples
-      the dialog and toast are built on. Menu.tsx's theme effect bridges the two
-      directions; never wrap one of these in hsl().
-   2. The geometry of the DEFAULT skin. The vMenu replica's geometry is in
-      skins/vmenu.css and overrides this; nothing here is vMenu's.
-
-   Everything outside the geometry block applies to both skins. */
+/* Two token groups, not interchangeable: (1) public theme tokens (--panel, --text,
+   --selected, …) a server owner sets — complete CSS colours, not the shadcn HSL
+   triples the dialog/toast use; Menu.tsx's theme effect bridges the two, never wrap
+   these in hsl(). (2) default-skin geometry; skins/vmenu.css overrides it for the
+   vMenu replica. Everything outside the geometry block applies to both skins. */
 .tlib-menu {
-  /* Aliases the interface face rather than naming one, so a theme `font`
-     override — written to both --font-sans and --font as inline styles on this
-     element — reaches the menu under either name. */
+  /* Aliases the interface face so a theme `font` override (written to both
+     --font-sans and --font) reaches the menu under either name. */
   --font: var(--font-sans, "Hanken Grotesk", Inter, "Segoe UI", Arial, sans-serif);
-  /* `--motion` IS NOT DECLARED HERE ANY MORE, AND MUST NOT COME BACK.
-     It moved to :root in shared/css/theme-tokens.css so dialog, toast and
-     marketplace get the same kill switch — and a copy on this element would
-     shadow the root value, leaving the menu the one surface that ignored it.
-     The `var(--motion, 1)` reads below are unchanged and still correct. */
-  /* `#3089e8` is `hsl(211 80% 55%)` — `--primary` in theme-tokens.css, `--ring`
-     in every component in `internal/shared-ts/ui/*`, and `--nui-accent` in nui-kit as of
-     the same change. One affirmative/selected/focus colour across all seven
-     bundles; see the long note beside `--nui-accent` in nui-kit/nui.css for why
-     it moved to the blue rather than the other five moving to the grey.
-
-     These are the STOCK SKIN only. A server owner's theme still overrides every
-     one of them through Menu.tsx's theme effect, which reads the incoming value
-     and never any default here. */
+  /* --motion is not declared here — it lives on :root in shared/css/theme-tokens.css
+     so dialog/toast/marketplace share one kill switch; a copy here would shadow it. */
+  /* #3089e8 = hsl(211 80% 55%) — --primary in theme-tokens.css, --ring in
+     internal/shared-ts/ui/*, --nui-accent in nui-kit: one affirmative/selected/focus
+     colour across all seven bundles (see --nui-accent in nui-kit/nui.css for why blue
+     won over grey). Stock skin only — a server theme overrides all of these via
+     Menu.tsx's theme effect. */
   --accent: #3089e8;
   --text: #eeeeee;
   --muted: #aaaaaa;
   --panel: #171717;
   --border: #343434;
   --selected: #3089e8;
-  /* Near-black, NOT the white `--primary-foreground` that `internal/shared-ts/ui/*` puts
-     on this same blue: white on #3089e8 measures 3.58:1 and trips the hard 4.5:1
-     floor tests/browser/dialog.ts asserts on every text part. Black is 5.81:1.
-     The full reasoning, and what the proper cross-bundle fix is, is beside
+  /* Near-black, not the white --primary-foreground internal/shared-ts/ui/* puts on
+     this same blue: white on #3089e8 is 3.58:1, below the 4.5:1 floor
+     tests/browser/dialog.ts asserts; black is 5.81:1. Full reasoning beside
      --nui-accent-text in nui-kit/nui.css. */
   --selected-ink: #111111;
-  /* Bare HSL triplets for the colours above that something below needs a
-     translucent share of. NUI is CEF 103 and color-mix() landed in Chromium 111,
-     and CEF does not merely ignore an unknown function — it invalidates the whole
-     declaration. A token defined with color-mix() therefore resolves to nothing
-     and every consumer of it silently paints nothing, which is what these five
-     surfaces did. The Chrome-103-safe way to say "this colour at p% alpha" is
-     slash-alpha over a triplet, `hsl(var(--text-raw) / 0.08)`; the same `-raw`
-     suffix and the same reasoning are already in shared/ts/nui-kit/nui.css.
+  /* Bare HSL triplets, for colours below that need a translucent share. NUI is CEF
+     103; color-mix() (Chromium 111+) invalidates the whole declaration when unknown,
+     so a color-mix() token resolves to nothing and paints invisibly. The safe form is
+     slash-alpha over a triplet: hsl(var(--text-raw) / 0.08) — same `-raw` convention
+     as shared/ts/nui-kit/nui.css. Each triplet is the exact hex above it, written by
+     hand since CSS cannot decompose a resolved colour back into channels.
 
-     Each triplet is the exact hex above it, so nothing moves on the stock theme.
-     They are not derived from those colours — CSS cannot take a resolved colour
-     apart, and there is no function that puts one back into channels — which is
-     why they are written out by hand here and why a theme cannot be left to
-     override only the colour.
-
-     Menu.tsx's theme effect covers five of them for a theme: it still resolves
-     the incoming value to hsl() for the public token, but it now writes the
-     partner beside it from the SAME unresolved value, in the one moment that
-     value still exists. It can only do that when the theme states a colour in
-     channel form (`0 0% 93.33%`, or `hsl(0 0% 93.33%)`). A theme that names a
-     hex or a CSS colour keyword hands over nothing to decompose, so the default
-     below stays in force and its tints paint the stock hue — visible and wrong
-     rather than invalid and invisible. Such a theme should set the `-raw`
-     partner itself; an explicit one always wins over a derived one.
-
-     --menu-danger is not a public theme token and has no such cover: its partner
-     is only ever this constant. Nothing may wrap any of these in hsl() twice. */
+     Menu.tsx's theme effect writes five of these `-raw` partners from the incoming
+     theme value, but only when the theme states a colour in channel form (e.g.
+     "0 0% 93.33%"); a hex or keyword theme leaves the stock default in force, so its
+     tints paint the stock hue (visible-and-wrong, not invalid-and-invisible) unless
+     the theme sets `-raw` itself. --menu-danger has no theme override, so its partner
+     is only ever this constant. Never wrap any of these in hsl() twice. */
   --text-raw: 0 0% 93.33%;
   --panel-raw: 0 0% 9.02%;
   --border-raw: 0 0% 20.39%;
   --selected-ink-raw: 0 0% 6.67%;
-  /* Its own token because --selected and --text are separate theme knobs, and the
-     focus ring further down follows the SELECTION, not the ink. They used to hold
-     the same white, which made this look like a duplicate of --text-raw; now that
-     --selected is the shared blue they differ, which is what the token was always
-     for. */
+  /* Own token because --selected and --text are separate theme knobs and the focus
+     ring further down follows the selection, not the ink — they used to share one
+     white, now that --selected is the shared blue they differ. */
   --selected-raw: 211 80% 55%;
-  /* Enough of the world to know it is there, not enough to read through. The
-     rows have no fill of their own, so this alpha is what a row sits on, and
-     88% left a bright daytime street legible straight through the list. */
+  /* Rows have no fill of their own; 94% keeps a bright daytime street legible
+     through the list. */
   --menu-panel-bg: hsl(var(--panel-raw) / 0.94);
-  /* The three fills below are scrims — a wash over whatever is behind them —
-     rather than opaque mixes of --panel, because over a translucent panel an
-     opaque band is a hole in the transparency. Composited over the stock
-     --panel each is the exact colour the opaque mix it replaced produced, so
-     nothing moves on an opaque theme.
-
-     A scrim over black needs no `-raw` partner: it is literally black at an
-     alpha, which rgba() states in a syntax CEF 103 has always parsed. */
+  /* Scrims (a wash over whatever is behind), not opaque --panel mixes — an opaque
+     band over a translucent panel is a hole in the transparency. Composited over
+     the stock --panel each equals the opaque mix it replaced, so nothing moves on
+     an opaque theme. Black-at-alpha needs no `-raw` partner; rgba() has always
+     parsed on CEF 103. */
   --menu-inset: rgba(0, 0, 0, 0.18);
-  /* The chrome bands — brand bar, heading, description, footer — against the row
-     body. A separate token from --menu-inset, which is a sunken well for a
-     control: two different jobs that happened to share one value, and sharing it
-     is what made four stacked bands read as one. vMenu restores the old value. */
+  /* Chrome bands (brand bar, heading, description, footer) vs. the row body —
+     separate from --menu-inset (a control's sunken well); sharing one value made
+     four stacked bands read as one. vMenu keeps the old value. */
   --menu-chrome: rgba(0, 0, 0, 0.45);
   --menu-hover: hsl(var(--text-raw) / 0.08);
-  /* A border has the panel behind it, not --panel's opaque self — the panel's
-     background paints to the border box and this panel is translucent — so
-     stating the old two-colour mix as --text at the same 32% alpha composites to
-     the same thing wherever the mix was ever right, and stays right over a
-     lifted panel where an opaque mix of --panel would not. It is also the
-     identical expression .tlib-nui-surface uses for --nui-control-border, which
-     is the point: one control border, one number. */
+  /* A border sits on the translucent panel, not an opaque --panel, so --text at 32%
+     alpha composites the same as the old two-colour mix while staying correct over
+     a lifted panel. Identical to .tlib-nui-surface's --nui-control-border: one
+     control border, one number. */
   --menu-control-border: hsl(var(--text-raw) / 0.32);
   --menu-danger: #ff8585;
   --menu-danger-raw: 0 100% 76.08%;
-  /* The shared control radius, so a menu row's checkbox and a dialog's are the
-     same shape. */
+  /* Shared control radius, so a menu row's checkbox and a dialog's are the same shape. */
   --menu-radius: var(--radius-control, 0.5rem);
 
-  /* Default-skin geometry, sized against the shared surfaces rather than vMenu's
-     scaleform: --menu-width is the dialog's `md` width and --row-height is
-     --nui-control-h. Fixed pixels and no viewport scaling for the same reason
-     the dialog and toast are fixed — this is chrome beside the game, not a
-     scaleform the engine redraws against the backbuffer. The vMenu skin keeps
-     its own 1080p-calibrated numbers; fidelity is the point of that skin. */
+  /* Default-skin geometry, sized against the shared surfaces, not vMenu's scaleform:
+     --menu-width is the dialog's `md` width, --row-height is --nui-control-h. Fixed
+     pixels, no viewport scaling — this is chrome beside the game, not a scaleform the
+     engine redraws against the backbuffer. vMenu keeps its own 1080p-calibrated
+     numbers; fidelity is that skin's point. */
   --menu-width: 360px;
   --row-height: 34px;
   --heading-height: 38px;
-  /* A brand bar, not a brand band: one line at the dialog header's size, with
-     its 12px gutters. */
+  /* A brand bar, not a band: one line at the dialog header's size, 12px gutters. */
   --brand-height: 46px;
   --brand-font: 16px;
   --brand-title-font: 16px;
@@ -128,14 +87,11 @@
   --safe-top: 3vh;
   --safe-left: 1.5vw;
 
-  /* .tlib-nui-surface derives its --nui-* tokens from shadcn HSL channels, which
-     the menu cannot wear because its own --border and --muted are colours. The
-     same contract is restated from the menu's colours instead, so a shared
-     component class renders correctly inside a row and follows the menu's theme.
-
-     Being stylesheet rules, these lose to the inline styles applyScopedTheme
-     writes — which is what makes a theme authoritative, and what lets one theme
-     id style a menu, a dialog and a toast identically. */
+  /* .tlib-nui-surface derives --nui-* from shadcn HSL channels, which the menu
+     can't wear since its own --border/--muted are colours — restated from the
+     menu's colours instead so shared component classes render and follow the
+     menu's theme. These stylesheet rules lose to applyScopedTheme's inline
+     styles, which is what makes one theme id style a menu/dialog/toast alike. */
   --nui-surface: var(--panel);
   --nui-inset: var(--menu-inset);
   --nui-text: var(--text);
@@ -145,38 +101,27 @@
   --nui-hover: var(--menu-hover);
   --nui-accent: var(--selected);
   --nui-accent-text: var(--selected-ink);
-  /* The contract is not finished at the resolved colours: nui.css tints two of
-     them, and a tint needs the triplet, not the colour. Left undefined here
-     `hsl(var(--nui-text-raw) / 0.52)` resolves to `hsl( / 0.52)` — invalid,
-     dropped, painting nothing — which is the same silent failure color-mix()
-     causes above, arriving by the other road. The live casualty in a row is
-     .tlib-nui-control's focus ring, worn by NuiCheckbox and NuiRange: the menu
-     is keyboard- and controller-driven, so that ring is the whole feedback. The
-     other three readers (.tlib-nui-input:hover, .tlib-nui-select-content,
-     .tlib-nui-lit) are not reachable from menu markup today; they are covered
-     anyway, because the point of this block is that anything shared can land in
-     a row without knowing it is in one.
-
-     nui.css's other three `-raw` tokens — --nui-border-raw, --nui-muted-raw,
-     --nui-hover-raw — are deliberately NOT restated. Only admin-ui reads them,
-     it is never inside a menu, and it reads them through a full fallback chain
-     that cannot resolve empty. Restating them here would be three dead tokens. */
+  /* nui.css tints two of these and needs the triplet, not the resolved colour — left
+     undefined, hsl(var(--nui-text-raw) / 0.52) resolves to invalid/nothing, same
+     silent failure as color-mix() above. Live casualty: .tlib-nui-control's focus
+     ring (NuiCheckbox/NuiRange) in a keyboard/controller-driven menu, where that
+     ring is the whole feedback. nui.css's other three `-raw` tokens
+     (--nui-border-raw, --nui-muted-raw, --nui-hover-raw) are NOT restated: only
+     admin-ui reads them, never inside a menu, via a fallback chain that tolerates
+     empty — restating would be three dead tokens. */
   --nui-text-raw: var(--text-raw);
   --nui-accent-raw: var(--selected-raw);
   --nui-danger: var(--menu-danger);
   --nui-radius: var(--menu-radius);
   --nui-radius-lg: var(--radius-surface, 0.875rem);
   --nui-radius-sm: var(--radius-tight, 0.25rem);
-  /* Not --row-height: this is a free-standing control, and a row is a row.
-     Nothing reads it today; it exists so a shared class that does cannot fall
-     back to an undefined token. */
+  /* Not --row-height — a free-standing control, a row is a row. Nothing reads it
+     today; exists so a shared class that does cannot fall back to undefined. */
   --nui-control-h: 34px;
   --nui-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  /* The entrance curve, restated into the menu scope so the three enter
-     animations in menu.css can name it. They were a literal
-     `cubic-bezier(0.2, 0, 0, 1)`, whose first control point sits at y=0 — zero
-     velocity at t=0, i.e. the ease-IN-out family. That delays the movement at
-     the exact moment the player is looking at it, and it meant a tLib dialog
-     rose on ease-out while the menu behind it rose on something else. */
+  /* Entrance curve, restated so menu.css's three enter animations can name it. Was
+     literally cubic-bezier(0.2, 0, 0, 1) — zero velocity at t=0, the ease-in-out
+     family — which delayed movement at the exact moment the player looks, and made
+     a tLib dialog rise on ease-out while the menu behind it rose differently. */
   --nui-ease-entrance: cubic-bezier(0.22, 1, 0.36, 1);
 }

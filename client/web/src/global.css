@@ -3,21 +3,18 @@
    declared here. See the header of that file for why they moved out. */
 @import "../../../shared/css/theme-tokens.css";
 
-/* The one face tLib actually ships, so it is the interface face rather than the
-   menu's alone: --font-sans used to name Inter, which is not on disk and not
-   fetchable, so every dialog and toast on a game client silently fell back to
-   Segoe UI while the menu drew Hanken Grotesk. One shipped face, one fallback
-   chain, and the three surfaces stop disagreeing.
+/* The one face tLib ships, used by every surface not just the menu: --font-sans used
+   to name Inter, which isn't on disk or fetchable, so dialog/toast silently fell back
+   to Segoe UI while the menu drew Hanken Grotesk.
 
-   Self-hosted, never a CDN: the game client may have no internet, and the NUI
-   page is loaded at resource start rather than when the player opens the menu,
-   so the face is resolved from disk long before anything is drawn. Referenced
-   relatively so Vite hashes it into dist/assets and base './' resolves it under
-   nui://; an absolute /fonts/ URL resolves to the resource root and 404s.
+   Self-hosted, never a CDN: the game client may have no internet, and the NUI page
+   loads at resource start, before the player opens anything. Referenced relatively
+   so Vite hashes it into dist/assets under base './'; an absolute /fonts/ URL 404s
+   against the resource root.
 
-   Outside @layer base on purpose: @font-face is not a style rule and carries no
-   specificity, but a layered one is still only honoured while that layer is
-   applied, and this face has to exist for every surface unconditionally. */
+   Outside @layer base on purpose: @font-face carries no specificity, but a layered
+   one is only honoured while that layer applies, and this face must exist
+   unconditionally. */
 @font-face {
   font-family: "Hanken Grotesk";
   font-style: normal;
@@ -28,15 +25,12 @@
   src: url("./menu/fonts/hanken-grotesk-latin.woff2") format("woff2");
 }
 
-/* Neutral HUD surfaces. The HSL channels are the public dialog/toast theme
-   contract and live in shared/css/theme-tokens.css, imported above; the menu keeps
-   its separate full-color tokens on .tlib-menu.
-
-   THE FONT TOKEN NO LONGER LIVES HERE EITHER, and the block that held it was a
-   live trap: it sat inside `@layer base`, which this file's own README section says
-   is silently ignored against an unlayered sheet. It happened to name the identical
-   stack theme-tokens.css names, so nothing looked wrong — and anyone editing it to
-   change tLib's face would have seen no effect and no error. */
+/* Neutral HUD surfaces. HSL channels are the public dialog/toast theme contract,
+   living in shared/css/theme-tokens.css (imported above); the menu keeps its own
+   full-colour tokens on .tlib-menu. The font token doesn't live here either — it
+   used to sit inside this `@layer base`, silently ignored against an unlayered
+   sheet, naming the same stack theme-tokens.css names so an edit here to change
+   tLib's face had no effect and no error. */
 @layer base {
   html,
   body {

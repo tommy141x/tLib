@@ -13,11 +13,8 @@
 -- `serverScoped = true` on a definition stores it under this server's tag, so a
 -- value that is only meaningful against one server's configuration does not
 -- follow the player to the next one. tRadio's Radio FX overrides are the case
--- that produced it: they are a correction dialled in on top of one server's
--- radioFx chain, and carried elsewhere they correct a chain that was never
--- wrong. tRadio had this as a private `SERVER_SCOPED_SETTINGS` set in
--- `cl_bridge.lua` plus a second copy in TypeScript; the option is the shared
--- form of both.
+-- that produced it: a correction dialled in on top of one server's radioFx
+-- chain, which would correct a different, never-wrong chain elsewhere.
 
 --- Coerce an incoming value to a setting's declared type, and clamp it.
 ---

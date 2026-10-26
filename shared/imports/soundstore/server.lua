@@ -1,16 +1,15 @@
 -- The data.json-backed sound registry every t* device panel keeps: tone key to
 -- file, the installed-file list, and the boot-time reconciliation of both.
+-- Server-only: it writes a resource file and lists a directory via
+-- tlib.assets, neither of which works from a client VM.
 --
--- Server-only: it writes a resource file and asks tlib.assets to list a
--- directory, and neither works from a client VM.
---
--- THE RECONCILIATION MUST RUN BEFORE THE PHANTOM-MAPPING PASS. An empty folder
--- scan (a sandboxed listing looks exactly like "no files") otherwise empties
--- installedSounds on boot 1, and on boot 2 the phantom pass reads that as "every
--- default mapping points at an uninstalled file" and deletes the map. Nothing
--- but the admin panel ever writes it back, so the device is silent forever. The
--- self-heal step is the other half: it restores a default mapping once its file
--- is confirmed, so a registry already destroyed recovers on the next boot.
+-- The reconciliation pass must run before the phantom-mapping pass: a failed
+-- scan (indistinguishable from an empty folder) would otherwise empty
+-- installedSounds on boot 1, and on boot 2 phantom-mapping would read that as
+-- "every default mapping points at an uninstalled file" and delete the map,
+-- with nothing but the admin panel able to write it back. Self-heal is the
+-- other half: it restores a default mapping once its file is confirmed, so an
+-- already-destroyed registry recovers on the next boot.
 
 local soundstore = {}
 

@@ -1,56 +1,35 @@
 -- The driven-matrix prop: uniform scale for a prop on a vehicle.
 --
--- Drives `shared/imports/drivenprop/shared.lua`.
+-- Drives `shared/imports/drivenprop/shared.lua`. Run via `bun run test:lua`.
 --
--- Run via `bun run test:lua`.
+-- Three failure modes in `client.lua` are silent in game and unreachable by
+-- reading values back:
 --
--- Why this suite exists
+--   * Rotation convention: `localRotation` must reproduce
+--     `AttachEntityToEntity`'s own (rx, ry, rz) exactly, or an existing
+--     placement reorients the moment it gets a scale — reads as "the editor
+--     broke my placement", not a maths bug, since the prop stays the right
+--     size. The nine fixtures below are the oracle.
+--   * Handedness: a left-handed basis renders the mesh inside-out with no
+--     change to any basis length, so a scale assertion can't catch it — the
+--     module asserts the handedness instead of warning.
+--   * NaN passes `type`/`tonumber`, survives `json.encode` as `nan`, and is
+--     not clamped by `math.max(lo, math.min(hi, nan))` since every NaN
+--     comparison is false. Reaches SetEntityMatrix as a basis with no size.
 --
--- Every rule in `shared/imports/drivenprop/client.lua` fails SILENTLY in game,
--- and two of them fail in ways no amount of reading numbers back can catch:
+-- Fixtures: measured on a live Enhanced client with an axis-aligned parent
+-- (`SetEntityRotation(parent, 0,0,0)`, so world basis = local basis), nine
+-- props attached via `AttachEntityToEntity(..., rx, ry, rz, ...)` and read
+-- back with `GetEntityMatrix`, rounded to five decimals. The three
+-- single-axis cases fix the axes and signs; the two mixed-rotation cases fix
+-- the composition ORDER, which no single-axis case can.
 --
---   * THE ROTATION CONVENTION. `localRotation` has to reproduce
---     `AttachEntityToEntity`'s own interpretation of (rx, ry, rz) exactly. Get it
---     wrong and every placement that already exists reorients the moment someone
---     gives it a scale — which presents as "the editor broke my placement", not
---     as a maths bug, because the prop is still the right size in the right
---     place. The nine fixtures below are the oracle for it.
---
---   * HANDEDNESS. A left-handed basis renders the mesh inside-out: right size,
---     right place, right orientation, inverted normals — and on a symmetric prop
--- you may not see it at all. IT CANNOT BE CAUGHT BY READING THE MATRIX
---     BACK, because a sign does not change a length, so every scale assertion
---     passes either way. That is why the module asserts rather than warns, and
---     why this suite asserts that the assert fires.
---
---   * NaN. It is a number to both `type` and `tonumber`, survives `json.encode`
---     as `nan`, and `math.max(lo, math.min(hi, nan))` does NOT clamp it, because
---     every comparison against NaN is false. It reaches SetEntityMatrix as a
---     basis that puts the prop nowhere at no size.
---
--- Where the fixtures came from
---
--- MEASURED, not derived. On a live Enhanced client, 2026-10-07: an object parent
--- was created and `SetEntityRotation(parent, 0, 0, 0)` applied, so the parent's
--- basis is exactly the world axes — right (1,0,0), fwd (0,1,0), up (0,0,1) — and
--- therefore a child's WORLD matrix IS its local rotation matrix. Nine props were
--- attached to it with `AttachEntityToEntity(prop, parent, 0, 0,0,0, rx,ry,rz,
--- ...)`, given a frame to settle, and their `GetEntityMatrix` read back. The
--- numbers below are that read, rounded to five decimals.
---
--- The three single-axis cases are what identify the axes and the signs; the two
--- mixed cases are what identify the ORDER, which no single-axis case can.
---
--- The per-frame cost, for the record
---
--- Measured on the same client. `GetGameTimer()` is the FRAME clock — it does not
--- advance within a frame, so it cannot time intra-frame work directly — but work
--- done before a `Wait(0)` does show up as a longer gap between two reads of it.
--- Averaging that gap over 20-40 frames at 2k/10k/20k iterations of the real
--- per-prop body (parent matrix read, basis build, SetEntityMatrix) against a
--- zero-iteration baseline of 8.875 ms gave 0.55 / 0.75 / 0.83 µs per prop per
--- frame. Thirty scaled props is therefore ~25 µs, about 0.15% of a 16.6 ms
--- frame. It is cheap, and `hasMoved` makes a parked vehicle cheaper still.
+-- Per-frame cost: `GetGameTimer` is the frame clock, so work done before a
+-- `Wait(0)` shows up as a longer gap between two reads of it. Averaged over
+-- 20-40 frames at 2k/10k/20k iterations of the real per-prop body against an
+-- 8.875ms zero-iteration baseline: 0.55/0.75/0.83 µs per prop per frame — 30
+-- scaled props is ~25µs, ~0.15% of a 16.6ms frame. `hasMoved` makes a parked
+-- vehicle cheaper still.
 
 local function fail(message) error(message, 2) end
 
@@ -84,11 +63,9 @@ local function nearVec(got, want, label, tol)
     return label
 end
 
--- Host stubs
---
--- The module is loaded FOR REAL against these rather than reimplemented here. A
--- suite that reimplements its subject asserts that two copies agree and notices
--- nothing when the shipped one changes.
+-- Host stubs. The module is loaded for real against these rather than
+-- reimplemented here — a suite that reimplements its subject only proves two
+-- copies agree, and notices nothing when the shipped one changes.
 
 local world = {}
 local nextHandle = 100
@@ -155,8 +132,6 @@ local chunk = assert(loadfile('shared/imports/drivenprop/shared.lua'))
 local DP = chunk()
 if type(DP) ~= 'table' then fail('drivenprop/client.lua did not return a table') end
 
---  THE ENGINE FIXTURES — the rotation convention
-
 local FIXTURES = {
     { rot = {   0,   0,   0 }, right = {  1,       0,        0       },
                                fwd   = {  0,       1,        0       },
@@ -200,14 +175,11 @@ test('localRotation reproduces the engine on all nine measured fixtures', functi
     end
 end)
 
--- BROKEN-CONTROL DRILL.
---
--- The nine assertions above being green proves the shipped formula matches the
--- engine. It does NOT prove they would have noticed a formula that did not — a
--- fixture set that is too forgiving, or a tolerance that is too loose, is green
--- against anything. So: compose the SAME three rotations in the wrong order and
--- require the fixtures to reject it. If this test fails, the suite above is not
--- evidence of anything.
+-- Broken-control drill: the nine assertions above being green proves the
+-- shipped formula matches the engine, not that they'd notice a wrong one — a
+-- fixture set that's too forgiving, or a tolerance too loose, is green against
+-- anything. So compose the same three rotations in the wrong order and require
+-- the fixtures to reject it. If this fails, the suite above proves nothing.
 test('CONTROL: the fixtures reject the opposite composition order (Rx*Ry*Rz)', function()
     local function wrongOrder(rx, ry, rz)
         local ax, ay, az = math.rad(rx), math.rad(ry), math.rad(rz)
@@ -255,8 +227,6 @@ test('localRotation defaults a nil angle to zero rather than erroring', function
     local r, fw, u = DP.localRotation(nil, nil, nil)
     nearVec(r, { 1, 0, 0 }); nearVec(fw, { 0, 1, 0 }); nearVec(u, { 0, 0, 1 })
 end)
-
---  SCALE NORMALISATION
 
 test('normaliseScale: an absent scale is normal size, not a rejection', function()
     -- Every record written before records had a scale has no `scale` key. If nil
@@ -322,8 +292,6 @@ test('isUnitScale is true for absent and 1.0, false for a real scale', function(
     if not DP.isUnitScale(0 / 0) then fail('NaN normalises to 1.0, so it is unit scale') end
 end)
 
---  HANDEDNESS
-
 test('handedness is positive for the right-handed basis and negative for the flip', function()
     -- The exact pair from the module header, with f = (0.6, 0.8, 0).
     local f = vec(0.6, 0.8, 0)
@@ -358,8 +326,6 @@ test('a sign flip does not change any basis LENGTH', function()
     local b1, b2, b3 = lengths(f, vec(-2, 0, 0), up)
     near(g1, b1); near(g2, b2); near(g3, b3)
 end)
-
---  THE TRANSFORM
 
 test('transform carries the scale in the basis-vector LENGTHS', function()
     local basis = identityBasis(10, 20, 30)
@@ -441,8 +407,6 @@ test('transform: the result is right-handed for a non-trivial rotation', functio
     near(h, 8.0, 1e-6)
 end)
 
---  hasMoved — the "a parked car is free" rule
-
 test('hasMoved is true when nothing has been written yet', function()
     if not DP.hasMoved(nil, identityBasis()) then
         fail('a prop that has never been written must be written')
@@ -470,8 +434,6 @@ test('hasMoved catches ROTATION ON THE SPOT', function()
     turned.fwd = vec(0.1, 0.995, 0)
     if not DP.hasMoved(last, turned) then fail('missed a rotation on the spot') end
 end)
-
---  THE INSTANCE
 
 local function freshDriver()
     matrixWrites = {}

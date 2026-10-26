@@ -1,19 +1,10 @@
-// The one HTTP transport for everything this bundle asks the marketplace host.
+// The one HTTP transport this bundle uses to call the marketplace host.
 //
-// `fetch`, NOT `PerformHttpRequest`.
-//
-// `PerformHttpRequest` is a Lua-runtime native and is simply absent from
-// globalThis in FiveM's Node server runtime — `./fivem.ts` snapshots it at
-// module load and gets `undefined`, so every call through it dies with
-// "fPerformHttpRequest is not a function". It fails at CALL time, not load
-// time, which is why nothing catches it until a request is actually made.
-// The manifest declares Node 22, so global `fetch` is here and is the better
-// tool regardless: real methods, real headers, and a real abort on timeout —
-// PerformHttpRequest has no cancellation at all.
-//
-// This file is the former `../community-configs/api.ts` request helper, moved
-// up a level unchanged so the browse path can use it without a second copy.
-// That module now imports from here.
+// fetch, not PerformHttpRequest: that native is absent from globalThis in
+// FiveM's Node server runtime, so a call through it dies with "fPerformHttpRequest
+// is not a function" — at call time, not load time. Node 22's global fetch is
+// also the better tool: real headers and a real abort on timeout, which
+// PerformHttpRequest has none of.
 
 import { MarketplaceError } from "./api";
 
@@ -35,45 +26,18 @@ export async function request(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  // One try/catch over the fetch AND the body read, because both race the
-  // timeout.
+  // try/catch wraps the fetch AND the body read, since both race the timeout.
   //
-  // This was `fetch(...).then(onOk, onErr)`, on the theory that the
-  // two-argument form suppressed a recurring runtime log line:
+  // Any body-carrying fetch (not a timeout, not an abort) logs "Unhandled
+  // promise rejection ... Reader released" from undici's own internal body
+  // stream reader on the success path — the rejection is created and settled
+  // inside Node before this code ever holds the promise, so nothing here can
+  // catch it; only swapping fetch for a node:http transport avoids it (see tDB).
+  // Requests with no body (browse, preview) never trigger it.
   //
-  //   [js] Unhandled promise rejection in resource tLib
-  //   [js] Uncaught TypeError: Invalid state: Reader released
-  //         node:internal/webstreams/readablestream(159,19): lazyReadableReleasedError
-  //
-  // IT DID NOT, AND NO SHAPE OF THIS FUNCTION CAN. That promise is created
-  // inside Node — `readablestream.js:2316` rejects it and `:2321` hands it to
-  // `setPromiseHandled` five lines later — and we never hold it, so there is
-  // nothing of ours to attach a handler to. Every frame in the quoted stack is
-  // one of those internals calling the next, line for line.
-  //
-  // It is also not the timeout, which is what the old note claimed. The trigger
-  // is a REQUEST BODY, on the success path, with no abort and no error: undici
-  // sends the body as `for await (const bytes of request.body.stream)` and
-  // ending that loop releases the reader. Measured here with a v8 promise hook
-  // (one such promise per body-carrying fetch, none without a body) and
-  // independently in tDB, whose `server/utils/http-transport.js` header records
-  // the same result from `tests/dev/snippets/probe-bodytypes.js`: every body
-  // type does it, no body is clean, node:http with the same body is clean. So
-  // the browse and preview paths, which send no body, never could have been the
-  // source — only the four community-configs POSTs can be.
-  //
-  // tDB did NOT fix this with `.then(ok, err)`; the old note conflated two
-  // separate things. tDB replaced `fetch` with a node:http transport, which is
-  // the only remedy that works, and its `.then(ok, err)` at `client.js:382` is
-  // about a different symptom (a handled error being reported twice). A
-  // `process.on("unhandledRejection")` filter is not an option either: Node's
-  // own event provably does not fire for this, so the line comes from the
-  // host's reporter and a listener here would be dead code.
-  //
-  // What the old shape did cost is real: `onErr` hung off `fetch(...)`, so it
-  // never saw `res.text()` reject. Headers arrive long before a stalled body
-  // does, so an abort during the body read reached the caller as a raw
-  // `AbortError: This operation was aborted` rather than `request_timed_out`.
+  // The earlier `.then(onOk, onErr)` shape missed `res.text()` rejecting, so an
+  // abort during a stalled body read reached the caller as a raw `AbortError`
+  // instead of `request_timed_out`.
   try {
     const res = await fetch(url, {
       method,

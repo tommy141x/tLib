@@ -1,14 +1,10 @@
 --[[
     tlib.secrets — where a credential actually lives.
 
-    The tracked `config.lua` holds blanks permanently; the real values live in a
-    gitignored `config.local.lua` beside it, and this overlays them onto Config
-    at server start. A commit and a release are blank by construction, not by a
-    step somebody has to remember. Precedence is
-
-        convar  >  config.local.lua  >  config.lua
-
-    Server-only: a credential readable by a game client is not a credential.
+    `config.lua` is tracked and stays blank by construction; real values live
+    in a gitignored `config.local.lua`, overlaid onto Config at server start.
+    Precedence: convar > config.local.lua > config.lua.
+    Server-only — a credential readable by a game client is not a credential.
     Design notes: docs/internal/secrets-sidecar.md
 ]]
 

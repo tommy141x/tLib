@@ -40,21 +40,14 @@ vc({
     current = GetResourceMetadata(GetCurrentResourceName(), 'version', 0),
     author  = 'TIMMYG Studios',
     fetch   = vc.github('tommy141x/tLib'),
-    -- tLib printed more loose startup lines than any other resource here --
-    -- `listening on`, `hub:`, the spawn catalogue, and a full command line per
-    -- spawned process -- while its own banner carried nothing but a version.
-    -- These two rows are the facts worth keeping; the rest is gone or shortened
-    -- at the source. See server/lib/http/index.ts and server/lib/spawn/index.ts.
-    --
-    -- Neither is `required`: a server with the HTTP hub disabled, or one where
-    -- nothing ever spawns, still gets its banner. A startup summary that
-    -- refuses to draw because an optional subsystem is absent is worse than one
-    -- with a missing row.
+    -- These two rows are the facts worth keeping from tLib's startup logging
+    -- (`listening on`, `hub:`, spawn catalogue, etc -- see server/lib/http/index.ts
+    -- and server/lib/spawn/index.ts); the rest is gone or shortened at the source.
+    -- Neither is `required`: a server with the hub disabled or nothing spawning
+    -- still gets its banner rather than one with a missing row.
     info = {
-        -- Absent on a source checkout, and `buildOutput` skips an empty value, so
-        -- this row appears only on a released build. That is the point: a boot log
-        -- is the artefact support is pasted most often, and v1.0's republish-in-place
-        -- left it with nothing in it that could tell two 1.0.0 trees apart.
+        -- Absent on a source checkout; `buildOutput` skips an empty value, so this
+        -- row appears only on a released build, to tell two 1.0.0 trees apart.
         { key = 'Build',  value = GetResourceMetadata(GetCurrentResourceName(), 'tlib_build', 0) },
         { key = 'Hub',    event = 'tlib:vcInfo:hub' },
         { key = 'Spawns', event = 'tlib:vcInfo:spawns' },

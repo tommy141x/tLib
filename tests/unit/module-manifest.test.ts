@@ -1,29 +1,18 @@
-// Oracle for the module.json contract, and the parity mechanism that stops the
-// two implementations of it from drifting.
+// Oracle for the module.json contract, and the parity mechanism that stops two
+// implementations from drifting: a Lua gate in FiveM's server VM
+// (shared/imports/modules/shared.lua) and a TypeScript one the studio and
+// marketplace installer use (shared/ts/modules/manifest.ts); neither can call
+// the other. They deliberately cover different kind sets — TypeScript knows
+// `layout | theme | sound`, Lua only `layout | theme`, since a sound is a flat
+// audio file on a resource and a module only in the studio — so every sound
+// case carries both verdicts via `luaExpect`.
 //
-// There have to be two. The gate that decides whether a folder on a live server
-// is a usable module runs in FiveM's server Lua VM
-// (shared/imports/modules/shared.lua); the gate that decides whether this repo's
-// own shipped content is valid, and the one the studio and the marketplace
-// installer use, runs in TypeScript (shared/ts/modules/manifest.ts). Neither can
-// call the other.
-//
-// They are deliberately NOT the same set of kinds. TypeScript knows
-// `layout | theme | sound`; Lua knows `layout | theme`, because a sound is a flat
-// audio file on a FiveM resource and a module only in the studio. Every sound
-// case below therefore carries both verdicts — see `luaExpect`.
-//
-// So the CASES are written once, here, and this test does three things:
-//   1. runs every case through the TypeScript validator and asserts the verdict;
-//   2. serialises the same cases to a Lua table literal and asserts
-//      tests/fixtures/module-manifest-cases.lua matches it byte for byte;
-//   3. tests/lua/modules.lua dofiles that fixture and asserts the SAME verdicts
-//      through the Lua validator.
-//
-// A rule added to one side and not the other therefore fails here (a new case
-// the other validator does not agree with) or in modules.lua. A rule added with
-// no case at all is the gap this cannot close — which is why the cases are
-// grouped by field, so a missing group is visible by reading.
+// CASES is written once: each runs through the TypeScript validator, then
+// serialises to a Lua table literal asserted byte-for-byte against
+// tests/fixtures/module-manifest-cases.lua, which tests/lua/modules.lua
+// dofiles and checks against the Lua validator. A rule added to one side and
+// not the other fails here or in modules.lua; a rule added with no case is
+// the gap this can't close, so cases are grouped by field for visibility.
 //
 // Regenerate the Lua fixture after editing CASES:
 //   MODULE_CASES_WRITE=1 bun test tests/unit/module-manifest.test.ts
@@ -54,39 +43,22 @@ interface Case {
   /** true = accepted; a string = refused, and the message must contain it. */
   expect: true | string;
   /**
-   * The Lua verdict, when the two sides are not expected to agree.
-   *
-   * Two reasons, and both are deliberate:
-   *
-   * 1. `kind: "sound"` IS NOT A KIND A FIVEM RESOURCE READS. A sound is a flat
-   *    audio file in `layouts/sounds/` so that an operator can drag a `.wav` in
-   *    and have it work. It is a module in the STUDIO and in the MARKETPLACE,
-   *    where a folder and a manifest carry its name, licence, duration and
-   *    waveform peaks — and the installer reads that manifest and writes only
-   *    the audio, flat. So every sound case below is checked in full by the
-   *    TypeScript validator, which the studio and the installer use, and the Lua
-   *    gate refuses it on `kind` grounds, which is the honest answer for a
-   *    document nothing on a resource reads.
-   *
-   * 2. `json.decode` gives Lua no way to tell a JSON array from a JSON object —
-   *    both arrive as a table — so a manifest that is `[]` cannot be refused for
-   *    being an array there. It is still refused, for the next thing wrong with
-   *    it.
-   *
-   * Spelling the Lua verdict out per case is better than loosening the
-   * TypeScript message to whatever both happen to say.
+   * The Lua verdict, when the two sides disagree. Two reasons:
+   * 1. `kind: "sound"` is not a kind a FiveM resource reads — a sound is a flat
+   *    audio file in `layouts/sounds/`, a module only in the studio and
+   *    marketplace, so the Lua gate refuses it on `kind` grounds while
+   *    TypeScript checks it in full.
+   * 2. `json.decode` can't tell a JSON array from an object (both are a Lua
+   *    table), so `[]` is refused for the next thing wrong with it instead.
+   * Spelling the Lua verdict out per case beats loosening the TypeScript
+   * message to whatever both happen to say.
    */
   luaExpect?: string;
 }
 
-/**
- * What the Lua gate says about any sound manifest: it does not know the kind.
- *
- * Not a weaker assertion than the TypeScript one — a different and equally
- * specific one. A sound manifest reaching a FiveM resource's `layouts/` is a
- * studio artefact in the wrong place, and naming the two kinds a resource can
- * actually use is the message an operator can act on.
- */
+// What the Lua gate says about any sound manifest: it does not know the kind.
+// Not weaker than the TypeScript verdict, just differently specific — naming
+// the two kinds a resource can actually use is the message an operator acts on.
 const KIND_UNKNOWN_IN_LUA = '"kind" must be one of layout, theme';
 
 const layout = (over: Record<string, unknown> = {}) => ({
@@ -471,13 +443,10 @@ export const CASES: Case[] = [
     expect: 'must not carry "sound"',
   },
 
-  // theme.fonts
-  //
-  // These ARE checked on both sides, unlike `sound`. A theme manifest is read
-  // on a live server by the Lua gate and its `theme.fonts` is what the dispatch
-  // panel turns into `@font-face` rules, so a malformed declaration produces a
-  // font that registers under the wrong name or not at all — invisible at render
-  // time, which is the exact failure this block exists to refuse.
+  // theme.fonts cases are checked on both sides, unlike `sound`: a theme
+  // manifest is read live by the Lua gate, and its `theme.fonts` becomes the
+  // dispatch panel's `@font-face` rules, so a malformed declaration registers
+  // a font under the wrong name or not at all — invisible at render time.
   {
     why: "A THEME THAT SHIPS NO FONT: the four shipped themes that only SELECT a bundled family",
     id: "dark",
@@ -536,8 +505,8 @@ export const CASES: Case[] = [
     kind: "theme",
     manifest: theme({ theme: "Inter" }),
     expect: '"theme" must be an object',
-    // json.decode hands Lua a string here too, and the Lua gate's first test is
-    // the same type test, so the two agree on this one by construction.
+    // json.decode hands Lua a string here too, and its first test is the same
+    // type check, so the two agree on this one by construction.
   },
   {
     why: "THE DECLARATION RULE: a face with no family is the inference this removes",
@@ -662,11 +631,11 @@ export const CASES: Case[] = [
     manifest: theme({
       theme: { fonts: [face({ file: "a.woff2" }), face({ file: "b.woff2", family: "inter" })] },
     }),
-    // ACCEPTED, and the divergence is honest: the manifest validator keys the
-    // duplicate check on the family as DECLARED, while CSS matches family names
-    // case-insensitively. Normalising here would mean the error message named a
-    // family the author never typed. The resolver in ./theme-fonts.ts does
-    // normalise, so these two faces resolve one token either way.
+    // Accepted: the manifest validator keys the duplicate check on the family
+    // as declared, while CSS matches case-insensitively. Normalising here would
+    // make the error message name a family the author never typed; the
+    // resolver in ./theme-fonts.ts does normalise, so both faces resolve to
+    // one token either way.
     expect: true,
   },
   {
@@ -706,12 +675,12 @@ describe("module.json contract", () => {
     expect(MODULE_MANIFEST).toBe("module.json");
     expect(MODULE_SCHEMA).toBe(1);
     expect([...MODULE_KINDS]).toEqual(["layout", "theme", "sound"]);
-    // And the Lua gate knows a SUBSET of them, on purpose. This is the one
-    // place the asymmetry is asserted rather than described, so adding a kind to
-    // one side and not the other is a decision someone has to make right here.
+    // The Lua gate knows a subset on purpose — asserted here rather than just
+    // described, so adding a kind to one side and not the other is a decision
+    // made right here.
     expect(LUA_KINDS).toEqual(["layout", "theme"]);
-    // The two category directories inside layouts/. Changing this list is a
-    // release-note change: it decides which folder names a module may not take.
+    // The two category directories inside layouts/; changing this list decides
+    // which folder names a module may not take.
     expect([...RESERVED_MODULE_IDS]).toEqual(["sounds", "themes"]);
   });
 
@@ -749,8 +718,8 @@ describe("module.json contract", () => {
     const text = stringifyModuleManifest(parsed);
     expect(text.endsWith("\n")).toBe(true);
     expect(parseModuleManifest(JSON.parse(text), "ptt", "sound")).toEqual(parsed);
-    // Key order is fixed so a regenerated manifest is a no-op diff, which is
-    // what lets `gen:modules --check` be a gate rather than a nuisance.
+    // Key order fixed so a regenerated manifest is a no-op diff, letting
+    // `gen:modules --check` act as a gate rather than a nuisance.
     expect(Object.keys(JSON.parse(text))).toEqual([
       "schema",
       "kind",
@@ -766,9 +735,9 @@ describe("module.json contract", () => {
   });
 
   test("a sound's path is derivable from its filename alone", () => {
-    // This is what keeps every existing caller speaking bare filenames. If this
-    // ever needs an index lookup, `toneWavMap`, `modelToneWavMap`,
-    // `bgModeMappings` and the admin UI all become path-aware at once.
+    // Keeps every existing caller speaking bare filenames. If this ever needs
+    // an index lookup, `toneWavMap`, `modelToneWavMap`, `bgModeMappings` and
+    // the admin UI all become path-aware at once.
     expect(soundModuleId("alert_a.wav")).toBe("alert_a");
     expect(soundModuleId("bgDog.wav")).toBe("bgDog");
     expect(soundModulePath("alert_a.wav")).toBe("alert_a/alert_a.wav");
@@ -780,10 +749,9 @@ describe("module.json contract", () => {
   });
 
   test("the Lua gate is driven by these same cases", () => {
-    // Deliberately NOT under tests/lua/: scripts/test-lua.ts globs `**/*.lua`
-    // there and runs every hit as a suite. A fixture that merely `return`s a
-    // table would be dofile'd, exit zero and count as a passing suite — a
-    // vacuous pass, which is the one failure that runner is written to avoid.
+    // Deliberately not under tests/lua/: scripts/test-lua.ts globs `**/*.lua`
+    // there, and a fixture that merely `return`s a table would be dofile'd,
+    // exit zero and count as a vacuous pass.
     const fixture = path.resolve(import.meta.dir, "../fixtures/module-manifest-cases.lua");
     const generated = luaFixture(CASES);
     if (process.env.MODULE_CASES_WRITE === "1") {
@@ -796,16 +764,12 @@ describe("module.json contract", () => {
 });
 
 /**
- * Serialise CASES as a Lua table literal.
- *
- * Deliberately small and total rather than general: it handles exactly the JSON
- * value types a case can contain and THROWS on anything else, so a case shape
- * the Lua suite could not receive faithfully fails here instead of arriving
- * there silently altered. `nil` is the one lossy spot in any JS→Lua mapping —
- * a JSON `null` field and an absent field are the same thing in a Lua table —
- * so a case that means "this field is missing" and one that means "this field
- * is null" are the same case on that side, which is true of the runtime too:
- * `json.decode` gives Lua no way to tell them apart either.
+ * Serialise CASES as a Lua table literal. Deliberately small and total rather
+ * than general: it handles exactly the JSON value types a case can contain
+ * and throws on anything else, so an unreceivable case shape fails here
+ * instead of arriving silently altered. `nil` is the one lossy spot — a JSON
+ * `null` and an absent field are the same Lua table entry, which matches
+ * `json.decode`'s own behaviour at runtime.
  */
 function luaFixture(cases: Case[]): string {
   const lines = [
@@ -822,9 +786,9 @@ function luaFixture(cases: Case[]): string {
     lines.push(`        id = ${lua(c.id)},`);
     lines.push(`        kind = ${c.kind === null ? "nil" : lua(c.kind)},`);
     lines.push(`        manifest = ${lua(c.manifest)},`);
-    // `luaExpect` wins unconditionally, including over an ACCEPTED case. A sound
-    // manifest is valid TypeScript-side and refused Lua-side, so the override has
-    // to be able to flip the verdict and not merely reword a refusal.
+    // `luaExpect` wins unconditionally, including over an accepted case: a
+    // sound manifest is valid TypeScript-side and refused Lua-side, so the
+    // override must flip the verdict, not just reword a refusal.
     const luaVerdict =
       c.luaExpect !== undefined ? lua(c.luaExpect) : c.expect === true ? "true" : lua(c.expect);
     lines.push(`        expect = ${luaVerdict},`);

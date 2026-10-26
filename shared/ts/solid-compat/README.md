@@ -89,13 +89,12 @@ and guessing is worse than not checking); no plugin list at all → ok. Checked
 against real builds too: web-next and tCAD both still build, and a false positive
 would have failed every one of web-next's 203 test files rather than none.
 
-⚠️ **Requirements 1 and 3 are still unenforced.** A missing
-`optimizeDeps.exclude` entry is computable the same way and is the natural next
-guard. It was deliberately left out: the client environment's exclude list is
-injected by `@solidjs/vite-plugin` rather than written by the consumer, so the
-check has to model which environments actually pre-bundle before it can throw
-without false positives — and an over-eager throw there would break every
-consumer at once.
+**Requirements 1 and 3 are still unenforced.** A missing `optimizeDeps.exclude`
+entry is computable the same way and is the natural next guard, but the client
+environment's exclude list is injected by `@solidjs/vite-plugin` rather than
+written by the consumer: the check has to model which environments actually
+pre-bundle before it can throw without false positives, and an over-eager throw
+there breaks every consumer at once.
 
 **3. Exclude the same set from the dependency optimizer.**
 
@@ -248,8 +247,7 @@ Treating an absent importer as vendor wholesale would reopen the hole the vendor
 gate closes, since a bare `solid-js` re-resolution would land on the shim.
 Keying on the *specifier* is exact instead: `solid-js/web` and `solid-js/store`
 are gone from Solid 2's `exports` map, so nothing migrated can be asking for
-them. Bare `solid-js` is deliberately **not** in the set — it is a real Solid 2
-package.
+them. Bare `solid-js` is **not** in the set — it is a real Solid 2 package.
 
 ### The `src/` throw
 
@@ -472,15 +470,15 @@ survives. The build failure for one arrives from a different plugin, blames
 "./solid-compat/surface-suite": "./solid-compat/solid-compat-surface-suite.ts"
 ```
 
-⚠️ The second is the test suite (see *Testing*), and exporting it does **not**
+The second is the test suite (see *Testing*), and exporting it does **not**
 widen the shim surface: it takes the runner and the real Solid imports as
 arguments and reads the shim files as *text*. It never imports a shim module, so
 it cannot become the supported back door the resolve-time throw exists to forbid.
 
-The shim modules are **deliberately not exported.** They are reachable only
-through the plugin's own `resolveId`, which hands them to vendor importers and
-throws for anyone else. Exporting them would offer application code a supported
-way to do the one thing that resolve-time throw exists to forbid. If you need
+The shim modules are **not exported.** They are reachable only through the
+plugin's own `resolveId`, which hands them to vendor importers and throws for
+anyone else. Exporting them would offer application code a supported way to do
+the one thing that resolve-time throw exists to forbid. If you need
 the shims' behaviour in application code, you have found a Solid 2 migration
 that has not been done — do that instead.
 
@@ -520,7 +518,7 @@ solidCompatSurfaceSuite(
 );
 ```
 
-⛔ **The runner and those two imports are passed in, and both are forced rather
+**The runner and those two imports are passed in, and both are forced rather
 than stylistic.** This file sits inside tLib, so a bare import here resolves
 against tLib. Measured in `tLib/shared/ts/node_modules`: `solid-js` **is**
 installed there on **1.9.12**, and `vitest` is not installed at all. A bare
@@ -532,7 +530,7 @@ Solid 2 and the real runner are. Same trap as the one in the plugin header, wher
 `createRequire` resolving the "real" Solid from tLib kept a build green while 40
 of one consumer's test files died at collection.
 
-### ⚠️ "Unused" is a union question — the suite's first run proved it
+### "Unused" is a union question — the suite's first run proved it
 
 Run against a second consumer for the first time, it failed on `batch`,
 `createComputed` and `observable` as exports with no vendor consumer. All three
@@ -544,7 +542,7 @@ createComputed <- @solid-devtools/logger, @solid-primitives/refs, @tanstack/soli
 observable     <- @tanstack/solid-table
 ```
 
-⛔ So a strict per-project "unused" verdict is a **false failure for a shared
+So a strict per-project "unused" verdict is a **false failure for a shared
 layer**, and acting on it would have deleted exports the wider consumer needs —
 the exact opposite of rule 2 ("re-measure at the union"). Hence
 `exportsWantedOnlyByOtherConsumers`, asserted as an **exact set** rather than an
@@ -560,7 +558,7 @@ delete signal, and no single repo can see it.
 | Consumer | Adopted | `undeclaredTypeImports` | Exports wanted only elsewhere |
 | --- | --- | --- | --- |
 | tWeb | its own local copy, 402 lines | `JSXElement` | — (widest tree) |
-| web-next | ✅ shared suite, 9 tests | *(none)* | `batch`, `createComputed`, `observable` |
+| web-next | shared suite, 9 tests | *(none)* | `batch`, `createComputed`, `observable` |
 
 tWeb's local copy is the original and still passes; it is worth retiring in favour
 of the shared one so both trees are checked by the same assertions. The two
@@ -568,9 +566,8 @@ of the shared one so both trees are checked by the same assertions. The two
 on none of `@tanstack/solid-form`, `@tanstack/solid-table` or `lucide-solid`,
 which are what still import `JSXElement`.
 
-⚠️ **Verified to fail closed**, because a check that cannot fail is worse than no
-check: given a bogus `undeclaredTypeImports` entry and an emptied
-`exportsWantedOnlyByOtherConsumers`, both exact-set assertions fail.
+**Verified to fail closed:** given a bogus `undeclaredTypeImports` entry and an
+emptied `exportsWantedOnlyByOtherConsumers`, both exact-set assertions fail.
 
 ### What it asserts
 
@@ -588,8 +585,8 @@ check: given a bogus `undeclaredTypeImports` entry and an emptied
 - **a control that the vendor scan found imports at all**, so a silent empty walk
   cannot pass every assertion beneath it
 
-⚠️ Two details worth keeping if this is ever rewritten. The type/value split is
-read off the **import position**, not off the package: deciding it by scanning
+The type/value split is read off the **import position**, not off the package:
+deciding it by scanning
 installed `.d.ts` reported seven false positives as missing values (`Accessor`,
 `JSX`, `JSXElement`, `Component`, `ComponentProps`, `Context`, `ParentProps`),
 every one sourced from a declaration file where nothing has a runtime. And the

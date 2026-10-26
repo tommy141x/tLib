@@ -24,10 +24,8 @@ local function httpGet(url, timeoutMs)
 end
 
 local function extractPort(url)
-    -- Skip the protocol's colon (https://), match port after host
     local port = url:match('//[^/]*:(%d+)')
     if port then return tonumber(port) end
-    -- Default ports for known protocols
     if url:match('^https://') then return 443 end
     if url:match('^http://') then return 80 end
     return nil

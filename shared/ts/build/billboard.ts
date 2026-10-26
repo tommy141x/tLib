@@ -1,39 +1,17 @@
 /**
- * In-world billboard artwork for the DoItDigital 50 Billboard Package.
+ * In-world billboard artwork for the DoItDigital 50 Billboard Package — read at 80mph from
+ * 200 metres through GTA's haze, unlike `hero.ts`'s dark product cards (shares only its
+ * capture-with-guards). Real boards (Burger Shot, Lifeinvader, Rusty Brown's) all bleed a
+ * product/photo off the edge over a saturated flat field with hard-shadowed type and a
+ * corner badge — a first pass without that read as a slide deck bolted to a frame.
  *
- * Nothing to do with `hero.ts`'s dark product cards — a billboard is read at 80mph from 200
- * metres through GTA's haze. It borrows only the capture-with-guards from `hero.ts`.
- *
- * What a GTA billboard actually is.
- *
- * The first version of this was a headline, a subhead and a URL bar on a gradient, and it
- * looked like a slide deck bolted to a frame. Pulling apart the game's own boards (Burger Shot,
- * Lifeinvader, Rusty Brown's) the ingredients it was missing are all the same one: SOMETHING TO
- * LOOK AT. Every real board has
- *
- *   - a product or photo BLEEDING OFF AN EDGE, not placed inside a margin,
- *   - a saturated flat field, not a tasteful gradient,
- *   - a headline with a hard offset shadow or a thick outline, not a soft one,
- *   - a badge, a logo lockup, a bit of junk in a corner.
- *
- * Hence three layouts rather than one, each modelled on one of those boards:
- *
- *   product   solid field, copy left, product cut-out bleeding off the right   (Burger Shot)
- *   split     full-bleed art on one side, copy panel on the other              (Lifeinvader)
- *   pattern   the art tiled edge to edge, huge outlined type over it           (Rusty Brown's)
- *   showcase  a full-bleed in-game photograph, scrimmed, with the store art's
- *             light rig and brand face over it
- *
- * `showcase` is the odd one out and deliberately so: the other three are GTA-billboard pastiche,
- * and a set made only of those reads as one joke told four times. It borrows the look of the
- * resources' own thumb/banner art instead — tLib's light rig, Alte Haas rather than condensed
- * caps — which is also the only layout that suits the best source material there is here: real
- * in-game screenshots. A night shot of a lit Charger or a mobile radio on a dashboard is a
- * photograph, and photographs want a scrim and a caption, not a flat colour field.
- *
- * The "product photography" is real: every t* resource's gallery ships cut-outs on transparent
- * grounds — handheld radios, radar heads, detectors, Stream Deck keys — which is exactly what
- * these layouts want and what no amount of typography substitutes for.
+ * Four layouts, three pastiching those boards: `product` (solid field, cut-out bleeding off
+ * the right), `split` (full-bleed art one side, copy panel the other), `pattern` (art tiled
+ * edge to edge under huge outlined type). `showcase` is deliberately the odd one out — a
+ * full-bleed in-game screenshot, scrimmed, under the store art's light rig and brand face —
+ * since an all-pastiche set reads as one joke told four times, and a night shot of a lit
+ * Charger wants a scrim and caption, not a flat colour field. The cut-outs it and `product`
+ * draw on are real: every t* resource's gallery ships transparent-ground product photography.
  */
 
 import fs from "node:fs";
@@ -57,16 +35,10 @@ const CREATO = path.resolve(
 export type BillboardLayout = "product" | "split" | "pattern" | "showcase" | "notice" | "spec";
 
 /**
- * Headline faces.
- *
- * Every board up to now set one of two faces, which is most of why a wall of them read as one
- * campaign rather than a city's worth of advertisers. Type is the cheapest variety there is.
- *
- * Half of these are SYSTEM fonts, named rather than embedded. That is fine and deliberate
- * here — this is build-time art rendered on one machine — but it is the opposite of the rule
- * for anything shipped into NUI, where a named system font is a silent fallback. A board set
- * in a face the machine lacks falls back to Arial and still renders, so the `--audit` flag
- * below measures each one against Arial and names any that did not load.
+ * Headline faces. Half are system fonts, named rather than embedded — fine for build-time
+ * art rendered on one machine, the opposite of the NUI rule where a named system font is a
+ * silent fallback. A face the machine lacks falls back to Arial and still renders, so
+ * `--audit` below measures each against Arial and names any that didn't load.
  */
 export type BillboardFont =
   | "condensed" // Haettenschweiler / Impact — the GTA billboard default
@@ -108,9 +80,9 @@ export interface BillboardSpec {
   /** Headline face. Defaults per layout — condensed for the pastiche ones, brand for showcase. */
   font?: BillboardFont;
   /**
-   * Force the headline's case. Defaults to the FACE, not the layout: the condensed and black
-   * poster faces are drawn for caps, the serif and brand faces are not. Case used to follow the
-   * layout, so the same sentence-case line came out shouting on one board and not on another.
+   * Force the headline's case. Defaults by FACE, not layout — condensed/black poster faces
+   * are drawn for caps, serif/brand aren't; following layout made the same sentence-case
+   * line shout on one board and not another.
    */
   caps?: boolean;
   /** Big line. Two to four words per line; newlines are honoured. */
@@ -129,12 +101,9 @@ export interface BillboardSpec {
   /** Absolute path to a cut-out or photo. Required by `split`. */
   art?: string;
   /**
-   * Tiles for the `pattern` layout, cycled to fill the frame.
-   *
-   * Deliberately a LIST of individual faces rather than one image: the galleries also ship
-   * contact sheets, and the first version tiled one of those — which looks right until you read
-   * it and find `control-audio-master-up` captioned under every key. Those sheets are a review
-   * aid and have debug labels baked in.
+   * Tiles for the `pattern` layout, cycled to fill the frame. A list of individual faces, not
+   * one image — tiling a gallery's contact sheet instead read fine until you noticed
+   * `control-audio-master-up` captioned under every key; those sheets carry debug labels.
    */
   tiles?: string[];
   /** Tile edge in px. Defaults to a twelfth of the long side. */
@@ -175,12 +144,9 @@ function esc(s: string): string {
 }
 
 /**
- * Intrinsic size of a PNG, WEBP or JPEG, read from its header.
- *
- * Placement needs this. The first version of this file took a hand-written `artCss` per advert
- * instead, and the results were exactly what guessing produces: a detector 95% off the right
- * edge, a 288px Stream Deck key stretched to half a board. The art's own aspect is the only
- * thing that says how big it has to be to bleed off one edge and still be the thing you look at.
+ * Intrinsic size of a PNG, WEBP or JPEG, read from its header. Placement needs this — a
+ * hand-written `artCss` per advert produced a detector 95% off the right edge and a 288px
+ * Stream Deck key stretched to half a board.
  */
 function imageSize(file: string): { w: number; h: number } {
   const b = fs.readFileSync(file);
@@ -228,15 +194,11 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
   if (layout === "showcase" && !spec.art) throw new Error("billboard: showcase layout needs art");
 
   /*
-   * `object-fit: cover` silently destroys art it has to magnify. `both.webp` is 1280x383; in a
-   * 1024x2048 portrait, cover blows it up 5.3x and you get an unrecognisable grey blur of
-   * keypad texture — the board renders and every other guard passes.
-   *
-   * The test is the SCALE FACTOR, not how much of the source is cropped away. Cropping a wide
-   * panel into a narrow column is normal and looks fine at roughly 1:1; the first version of
-   * this gate measured area kept instead and failed perfectly good split boards at 35% while
-   * the actual rule — do not upscale a screenshot past the point where it turns to mush — is
-   * about magnification alone.
+   * `object-fit: cover` silently destroys art it has to magnify — `both.webp` (1280x383) in a
+   * 1024x2048 portrait blows up 5.3x into an unrecognisable grey blur, with the board still
+   * rendering and every other guard passing. The gate measures the scale factor, not area kept:
+   * an early version measured area and failed good split boards at 35% crop, when the real rule
+   * is about magnification, not how much is cropped away.
    */
   if ((layout === "showcase" || layout === "split") && spec.art && !spec.allowTightCrop) {
     const a = imageSize(spec.art);
@@ -267,37 +229,28 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
         ).join("")
       : "";
 
-  /*
-   * Type scales off the SHORT side. These slots run from 16:1 to 1:8 off one inventory, and type
-   * sized against the long side is unreadable on one and overflows the other. A strip gets a
-   * bigger share of its short side because it only ever fits one line.
-   */
+  // Type scales off the short side — slots run 16:1 to 1:8, so sizing off the long side is
+  // unreadable on one and overflows the other. A strip gets a bigger short-side share since
+  // it only ever fits one line.
   const unit = Math.min(W, H);
   const pad = Math.round(unit * 0.06);
-  /*
-   * Scaled down as the headline gains lines. At a fixed size a five-line headline on a square
-   * board is 80% of the frame with the product squeezed into the margin — which is what
-   * "ONE RESOURCE / WHOLE DATABASE" looked like. Three lines is the size this was tuned at.
-   */
+  // Scales down as lines grow: fixed size made a 5-line headline 80% of a square board
+  // ("ONE RESOURCE / WHOLE DATABASE") with the product squeezed to a margin. Tuned at 3 lines.
   const headlineLines = spec.headline.split("\n");
   const lineScale = Math.min(1, Math.max(0.62, 3 / headlineLines.length));
 
-  /*
-   * How wide the copy actually gets. NOT the frame's short side: on a square `split` board the
-   * copy column is half the frame, and sizing against `unit` set the headline at 317px in a
-   * 1100px column — "ONE RESOURCE / WHOLE DATABASE" ran clean off the right edge with the last
-   * letters of both lines missing.
-   */
+  // How wide the copy gets — not the frame's short side. Sizing against `unit` on a square
+  // `split` board set the headline at 317px in a 1100px column, running the last letters off
+  // the right edge.
   const copyW =
     layout === "split"
       ? Math.round(W * 0.54) - pad * 2
       : layout === "spec"
         ? Math.round(W * 0.52) - pad * 2
         : layout === "notice"
-          ? // Must match the copy box below. When these two disagreed the fit cap sized the
-            // headline for the full width and a portrait notice ran off BOTH edges as
-            // "RDINANCE / VIOLATION". Only the landscape stamp eats horizontal room — on a tall
-            // board it sits ABOVE the copy, so reserving width there just strangled the type.
+          ? // Must match the copy box below — a mismatch sized the headline for full width and a
+            // portrait notice ran off both edges as "RDINANCE / VIOLATION". Only the landscape
+            // stamp eats horizontal room; a tall board's stamp sits above the copy instead.
             W - pad * 4 - (spec.stamp && !portrait ? Math.round(Math.min(W, H) * 0.3) : 0)
           : layout === "showcase"
             ? Math.round(W * (portrait ? 0.9 : 0.56)) - pad * 2
@@ -305,12 +258,8 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
               ? Math.round(W * 0.6) - pad * 2
               : W - pad * 2;
 
-  /*
-   * ...and then capped so the longest line fits that column. The condensed caps average a shade
-   * under half an em, so width ≈ chars × 0.46 × size; `showcase` sets the wider brand face and
-   * needs more. Without this every new piece of copy is a coin toss that only shows up by eye,
-   * three layouts later.
-   */
+  // Then capped so the longest line fits: condensed caps average ~0.46em, so
+  // width ≈ chars × 0.46 × size; `showcase`'s wider brand face needs more.
   const font: BillboardFont =
     spec.font ??
     (layout === "showcase"
@@ -325,12 +274,8 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
     spec.caps ?? (font === "condensed" || font === "black" || font === "techno" || font === "mono");
   const longest = Math.max(...headlineLines.map((l) => l.length), 1);
   const fitPx = Math.floor(copyW / (longest * emRatio));
-  /*
-   * The strip share rises with how extreme the strip is. At 0.3 a headline on a 16:1 ribbon
-   * sign — which is what the Maze and Legion Square screens are — sat in the top third with
-   * the rest of the board black, because the only limit that ever bound was the short side.
-   * Those boards are read at a glance from a long way off and want to be nearly all type.
-   */
+  // Strip share rises with how extreme the strip is — flat 0.3 on a 16:1 ribbon (the Maze,
+  // Legion Square screens) sat the headline in the top third with the rest black.
   const stripShare = Math.min(0.52, 0.3 + (W / H - 3) * 0.02);
   const designPx = Math.round(unit * (strip ? stripShare : portrait ? 0.17 : 0.155) * lineScale);
   const headlinePx = Math.max(24, Math.min(designPx, fitPx));
@@ -338,8 +283,8 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
   const kickerPx = Math.round(headlinePx * 0.17);
   const finePx = Math.round(headlinePx * 0.12);
   const shadow = Math.max(2, Math.round(headlinePx * 0.055));
-  /* Against the copy column, not the frame: on a square `split` board the lockup sized off a
-     2048px short side ran off the end of a 1100px column as "timmygstudios.c". */
+  // Against the copy column, not the frame — sizing off a 2048px short side ran a square
+  // `split` lockup off the end of a 1100px column as "timmygstudios.c".
   const markH = Math.round(Math.min(unit, copyW * 0.9) * 0.075);
 
   /** Copy occupies a column on `product`, the far side on `split`, the whole frame on `pattern`. */
@@ -347,34 +292,29 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
     layout === "split"
       ? `left: ${Math.round(W * 0.46) + pad}px; right: ${pad}px; top: ${pad}px; bottom: ${pad + markH * 2}px;`
       : layout === "notice"
-        ? // Centred inside the rules — and when there is a stamp, the right edge pulls in to
-          // clear it. The stamp is absolutely positioned over the top-right, so a full-width
-          // centred headline simply ran underneath it ("THIS OFFICER IS" with the IS covered).
+        ? // Centred inside the rules; the right edge pulls in when there's a stamp, since a
+          // full-width centred headline ran underneath the top-right stamp before this
+          // ("THIS OFFICER IS" with the IS covered).
           `left: ${pad * 2}px; right: ${pad * 2 + (spec.stamp && !portrait ? Math.round(unit * 0.3) : 0)}px; top: ${pad * 2 + (spec.stamp && portrait ? Math.round(H * 0.26) : 0)}px; bottom: ${pad * 2 + markH * 2}px; align-items: center; text-align: center;`
         : layout === "spec"
           ? `left: ${pad}px; right: ${Math.round(W * 0.46)}px; top: ${pad}px; bottom: ${pad + markH * 3}px;`
           : layout === "showcase"
-            ? // Over the photograph, in the scrimmed corner — bottom-left on a wide board, bottom on
-              // a tall one, which is where the scrim below puts its darkest end.
+            ? // Over the photograph, in the scrimmed corner — bottom-left on wide, bottom on tall,
+              // matching where the scrim below puts its darkest end.
               `left: ${pad}px; right: ${portrait ? pad : Math.round(W * 0.42)}px; top: ${pad}px; bottom: ${pad + markH * 2}px; justify-content: flex-end;`
             : layout === "pattern"
               ? `left: ${pad}px; right: ${pad}px; top: ${pad}px; bottom: ${pad + markH * 2}px; align-items: center; text-align: center;`
               : portrait
-                ? // Portrait `product` stacks: copy in the top half, product filling the bottom. The
-                  // copy box has to stop above the art or it centres itself over the whole frame and
-                  // leaves the top third of a 1:2 board empty.
+                ? // Portrait `product` stacks copy over product; the box must stop above the
+                  // art or it centres over the whole frame, leaving the top third empty.
                   `left: ${pad}px; right: ${pad}px; top: ${pad}px; bottom: ${Math.round(H * 0.44)}px;`
-                : // `product` reserves the right 40% for the cut-out. With no art that is just
-                  // a dead column, so a type-only board gets the whole width — which is what
-                  // makes this layout usable for the resources whose UI cannot carry a photo.
+                : // `product` reserves the right 40% for the cut-out; with no art a type-only
+                  // board gets the whole width, for resources whose UI carries no photo.
                   `left: ${pad}px; right: ${spec.art ? Math.round(W * 0.4) : pad}px; top: ${pad}px; bottom: ${pad + markH * 2}px;`;
 
-  /*
-   * `product` sizes the cut-out from its OWN aspect so it bleeds off one edge and still reads.
-   * A wide object (a radar head, a Stream Deck) wants width; a tall one (a handheld) wants
-   * height. Sizing everything by height, which is what the hand-written values did, shoves wide
-   * objects almost entirely off the frame and leaves tall ones tiny.
-   */
+  // `product` sizes the cut-out from its own aspect so it bleeds off one edge and still reads —
+  // wide objects want width, tall ones want height; sizing everything by height shoved wide
+  // ones off the frame and left tall ones tiny.
   let productArt = "";
   if ((layout === "product" || layout === "spec") && spec.art) {
     const a = imageSize(spec.art);
@@ -383,11 +323,8 @@ export async function renderBillboard(spec: BillboardSpec): Promise<void> {
       const pw = Math.round(W * (wide ? 1.06 : 0.78));
       productArt = `left: 50%; bottom: ${-Math.round(H * 0.035)}px; width: ${pw}px; height: auto; transform: translateX(-50%) rotate(-3deg);`;
     } else if (wide) {
-      /*
-       * Wide objects run off the right corner. The wider they are the bigger and higher they
-       * have to sit: a 3:1 radar head at the 2:1 size is a 340px sliver along the bottom edge
-       * with the whole upper right of the board empty, which is how the SLX-1100 first landed.
-       */
+      // Wide objects run off the right corner, scaled up with width — a 3:1 radar head at the
+      // 2:1 size was a 340px sliver with the upper right empty (the SLX-1100's first landing).
       const veryWide = a.w / a.h > 2.5;
       const pw = Math.round(W * (veryWide ? 0.66 : 0.52));
       const bottom = veryWide ? Math.round(H * 0.12) : -Math.round(H * 0.06);

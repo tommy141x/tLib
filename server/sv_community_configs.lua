@@ -1,28 +1,17 @@
--- Server-side proxy for the community configs API, so a consuming resource
--- neither repeats the HTTP boilerplate nor sees the server hash.
+-- Server-side proxy for the community configs API: a thin wrapper over the
+-- `cc*` exports registered by server/community-configs/bridge.ts, which holds
+-- the credential. No HTTP happens here.
 --
--- No HTTP happens here: every export below is a thin wrapper over the `cc*`
--- exports registered by server/community-configs/bridge.ts, which holds the
--- credential. The two original exports keep their names and their exact
--- callback signatures, because tLS calls them.
---
--- The publish endpoint requires `X-Resource-Secret`, carrying the baked-in
--- TLIB_PUBLIC_KEY from shared/ts/marketplace/catalogue.ts. The header name must
--- not change -- every shipped copy sends it. It is NOT a convar, and it is not
--- handed to this VM through an export: either would let any third-party script
--- on a customer's server read it without console or file access.
+-- Publish requires `X-Resource-Secret` (the baked-in TLIB_PUBLIC_KEY from
+-- shared/ts/marketplace/catalogue.ts). Not a convar and not exported to this
+-- VM -- either would let a third-party script read it with no console or file access.
 
 local log = Logger.create('tLib/community-configs')
 
---- Is this value callable?
----
---- NOT the same as `type(v) == 'function'`, and the difference is why these
---- exports were silently dead. A Lua function passed ACROSS a resource
---- boundary does not arrive as a function: the runtime rebuilds it on this
---- side as a funcref, which is callable but reports a different `type()`.
---- Every real caller is in another resource — that is the entire point of an
---- export — so a plain `type() == 'function'` test rejects precisely the
---- callers it exists to serve, and rejects them into a log line nobody reads.
+--- Is this value callable? Not the same as `type(v) == 'function'`: a Lua
+--- function passed across a resource boundary arrives as a funcref, which is
+--- callable but reports a different `type()` -- a plain function check
+--- rejected every real (cross-resource) caller.
 local function isCallable(value)
     if type(value) == 'function' then return true end
     local mt = getmetatable(value)
@@ -91,14 +80,10 @@ local function registerExports()
         if type(opts.fp) == 'table' then payload.fp = opts.fp end
         if type(opts.publisher) == 'table' then payload.publisher = opts.publisher end
 
-        -- `editToken` is a FOURTH argument, appended rather than folded into
-        -- the third: a consumer written against `(ok, err, id)` keeps working
-        -- untouched. It is nil against a Worker that does not mint one, which
-        -- is not an error — it is a listing that cannot be edited from in game.
-        --
-        -- IT IS A CREDENTIAL. Whoever holds it can overwrite or withdraw
-        -- that listing. It is never logged here, and a consumer must keep it
-        -- server-side; see the note in tLS's `sv_configs.lua`.
+        -- `editToken` is a fourth argument, appended so a consumer written
+        -- against `(ok, err, id)` keeps working. It's a credential -- whoever
+        -- holds it can overwrite or withdraw the listing; never logged here,
+        -- and a consumer must keep it server-side (see tLS's `sv_configs.lua`).
         exports['tLib']:ccPublish(json.encode(payload), function(ok, err, id, editToken)
             if not ok or type(id) ~= 'string' or id == '' then
                 local errMsg = tostring(err or 'unexpected response')
@@ -111,25 +96,17 @@ local function registerExports()
         end)
     end)
 
-    --- Replace a published config's payload. callback(ok, err, id).
+    --- Replace a published config's payload. callback(ok, err, id). The token
+    --- is the capability minted at publish (see CommunityConfigsUpload); the
+    --- Worker re-derives the fingerprint columns and LED-name index from
+    --- `configJson` in the same write.
     ---
-    --- The token is the capability minted at publish — see
-    --- `CommunityConfigsUpload`. The Worker re-derives the fingerprint columns
-    --- and the LED-name index from `configJson` in the same write, so a
-    --- listing cannot end up matched by data describing its previous contents.
-    ---
-    --- WARNING: AN UPDATE IS A FULL REPLACEMENT, NOT A PATCH. The Worker runs
-    --- the update body through `readConfigBody`, the SAME reader publish uses,
-    --- deliberately so the two cannot drift — so the required set is identical:
-    --- `configType`, `name`, `configJson`, and `key` for everything but a
-    --- pattern. Sending a patch answers HTTP 400 naming only the first guard it
-    --- trips (`configType must be led_layout, pattern or vehicle_setup`), which
-    --- reads as a token problem while Share keeps working.
-    ---
-    --- `description` and `keyLabel` are sent UNCONDITIONALLY for the same
-    --- reason, and that half has no error to show for it: the Worker writes
-    --- both columns on every update, so a body omitting them is a silent
-    --- request to blank them. A caller keeping a description sends it back.
+    --- An update is a FULL REPLACEMENT, not a patch: the Worker runs it through
+    --- the same `readConfigBody` reader as publish, so the required set is
+    --- identical (configType, name, configJson, key for non-patterns). A
+    --- partial body 400s naming only the first guard tripped, reading as a
+    --- token problem. `description`/`keyLabel` are sent unconditionally for the
+    --- same reason -- the Worker writes both columns on every update, so omitting them blanks them.
     Platform.export('tLib', 'CommunityConfigsUpdate', function(opts, callback)
         if type(opts) ~= 'table' then
             if isCallable(callback) then callback(false, 'invalid opts') end
@@ -274,13 +251,11 @@ local function registerExports()
         end)
     end)
 
-    --- Browse published configs. callback(ok, items, err) where `items` is a
-    --- decoded array. Reads are unauthenticated by design, but NOT reachable
-    --- from an in-game panel — the backend sends no Access-Control-Allow-Origin
-    --- on /api/v1, so a fetch from `cfx-nui-<resource>` is refused by the
-    --- browser after the request itself succeeds. That is precisely why this
-    --- export exists: the panel asks the game server, and the server does the
-    --- HTTP.
+    --- Browse published configs. callback(ok, items, err), `items` decoded.
+    --- Reads are unauthenticated, but not reachable from an in-game panel: the
+    --- backend sends no Access-Control-Allow-Origin, so CEF refuses a
+    --- `cfx-nui-<resource>` fetch. This export is why the panel asks the game
+    --- server instead, which does the HTTP.
     Platform.export('tLib', 'CommunityConfigsList', function(opts, callback)
         if type(opts) ~= 'table' then
             if isCallable(callback) then callback(false, nil, 'invalid opts') end

@@ -1,7 +1,6 @@
 -- Vehicle occupancy — who is aboard a vehicle, in which tier, and which of them
--- is allowed to act on it. One rule, shared, because three resources answered
--- the question three different ways and tLS let a rear passenger steal the
--- state-bag relay from the driver:
+-- is allowed to act on it. Shared because tLS once let a rear passenger steal
+-- the state-bag relay from the driver:
 --
 --     The CONTROLLER of a vehicle is its driver if a driver is seated, and
 --     otherwise its front passenger.
@@ -13,13 +12,13 @@
 --     may they CONTROL?    occupancy.isControllerOf  (driver-else-front-passenger)
 --     may they PERCEIVE?   occupancy.isAboard        (any seat at all)
 --
--- Every GATE re-reads the host, so no gate can ever be stale. The CACHE
+-- Every GATE re-reads the host, so it can never be stale. The CACHE
 -- (`occupantsOf`, `tierOf`, `occupantSeatOf`) is repaired by the client's move
--- ping, rate-limited to 100 ms, so it can briefly name a seat the player has
--- left. That can never grant control, because control is never read from it.
+-- ping, rate-limited to 100ms, so it can briefly name a seat the player has
+-- left -- that can never grant control, since control is never read from it.
 --
--- Loaded into each CONSUMER's VM, so every resource keeps its own cache over the
--- same authoritative natives. Only the rule is shared.
+-- Loaded into each CONSUMER's VM, so every resource keeps its own cache over
+-- the same authoritative natives. Only the rule is shared.
 
 local occupancy = {}
 
@@ -82,7 +81,6 @@ local function cabinDiffers(a, b)
 end
 
 --- Fire both listener lists for one vehicle.
----
 local function announce(netId, prev, prevCabin)
     local nowCabin = cabinSnapshot(netId)
     if cabinDiffers(nowCabin, prevCabin) then
@@ -172,7 +170,6 @@ local function readSeat(src)
 end
 
 --- Re-read a player's FRONT seat from the host and update the cache.
----
 --- @return seat, netId — or nil when they are not in a front seat.
 function occupancy.refresh(src)
     local seat, netId, tier = readSeat(src)
@@ -188,7 +185,6 @@ function occupancy.refreshOccupant(src)
 end
 
 --- Cached FRONT seat for a player. Cheap; may lag the host by one refresh.
----
 --- @return seat, netId — or nil.
 function occupancy.seatOf(src)
     local cur = byPlayer[src]
@@ -219,7 +215,6 @@ function occupancy.frontSeats(netId)
 end
 
 --- Everyone aboard a vehicle, as a copy: `{ driver, passenger, rear = { [seat] = src } }`.
----
 function occupancy.occupantsOf(netId)
     return cabinSnapshot(netId)
 end
@@ -232,7 +227,6 @@ function occupancy.controllerOf(netId)
 end
 
 --- THE GATE. May this player act on this vehicle?
----
 function occupancy.isFrontSeat(src, netId)
     local _, actual = occupancy.refresh(src)
     return actual ~= nil and actual == netId
@@ -362,19 +356,14 @@ end)
 
 -- Discovery
 --
--- Everything above learns a player's seat from a question somebody asked about
--- THEM — a gate they were checked against, or a sweep over players already
--- tracked. That is enough to decide whether an action is allowed, and not
--- enough to find a passenger who has not done anything: `partnerOf` would
--- report an empty seat beside a driver until the person in it first pressed
--- something, which is exactly backwards for anything being sent TO them.
---
--- So a client says when it moves. The payload is a hint and nothing more — the
--- seat is re-read from the host here, so a client that lies about where it is
--- sitting gets the truth written into the cache instead.
---
--- One event name for every resource on purpose. Each consumer VM holds its own
--- cache over the same natives, and one ping from a client repairs all of them.
+-- Everything above learns a player's seat from a question asked about THEM --
+-- a gate check, or a sweep over players already tracked. That can't find a
+-- passenger who hasn't done anything: `partnerOf` would report an empty seat
+-- until the person in it first pressed something. So a client pings when it
+-- moves; the payload is a hint only, and the seat is re-read from the host
+-- here, so a lying client still gets the truth written into the cache. One
+-- event name for every resource: each consumer VM holds its own cache over the
+-- same natives, and one ping repairs all of them.
 local lastMoved = {} -- [src] = timestamp
 
 RegisterNetEvent('tlib:occupancy:moved', function()

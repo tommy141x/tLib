@@ -1,31 +1,17 @@
 // Typed handles to the FiveM runtime globals the telemetry module uses.
 //
-// RESOLVED LAZILY, NOT CAPTURED AT MODULE SCOPE
+// Resolved lazily (a property read per call), NOT captured at module scope
+// like `../marketplace/fivem.ts` and `../http/fivem.ts` do: a captured handle
+// binds to whatever `globalThis` held at first import. A test stubbing the host
+// in `beforeEach` installs it after that import, so a captured `fGetConvar`
+// stays `undefined` — `tests/unit/telemetry-consent.test.ts` went 21-red on
+// exactly this. In production this module installs eagerly from
+// `server/main.ts`, before a consumer's `onResourceStart`, so the same capture
+// bug would turn host readiness into a load-order question.
 //
-// `../marketplace/fivem.ts` and `../http/fivem.ts` capture their globals in a
-// `const` at module evaluation. That works for them and it is wrong here, for
-// the reason `shared/ts/fs/server.ts` already documents: a captured handle is
-// bound to whatever `globalThis` held the instant this file was first imported.
-//
-// Two consequences, one of which bit immediately:
-//
-//   • A suite that installs a host stub in `beforeEach` installs it AFTER the
-//     import, so a captured `fGetConvar` is `undefined` and every consent test
-//     exercises the "no convar" branch while claiming to test the others.
-//     `tests/unit/telemetry-consent.test.ts` went 21-red on exactly that, and
-//     the alternative — mutating `globalThis` before the import, with a dynamic
-//     `await import` — makes the test harness decide module order, which is how
-//     one suite ends up depending on another's load.
-//   • In production the window is narrower but real: this module is installed
-//     eagerly from `server/main.ts` so a consumer's Lua can call its exports
-//     before `onResourceStart`, and a capture makes "has the host finished
-//     installing its globals" a load-order question rather than a call-time one.
-//
-// The cost is one property read per call, on paths that run once a minute.
-//
-// `exports` is reached through `globalThis` for the usual reason as well: bun's
-// CJS bundler wraps non-entry files in a scope where `exports` is the CommonJS
-// module-exports object, which shadows FiveM's global `exports(name, fn)`.
+// `exports` is read through `globalThis`, not imported, because bun's CJS
+// bundler shadows FiveM's global `exports(name, fn)` with the CommonJS
+// module-exports object in every non-entry file.
 
 type ExportsFn = (name: string, fn: (...args: unknown[]) => unknown) => void;
 type OnFn = (event: string, handler: (...args: unknown[]) => void) => void;

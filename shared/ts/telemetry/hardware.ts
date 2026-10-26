@@ -1,61 +1,23 @@
 /**
- * What machine the NUI is running on — every field MEASURED in the pinned
- * Chromium 103 that FiveM's CEF is, and nothing collected that was not.
+ * Hardware fields collected from the NUI. Probed against pinned Chromium
+ * 103.0.5058.0 over CDP (`scripts/probe-nui-hardware.ts`), not guessed: that
+ * probe found `navigator.userAgentData` exists in this build (`typeof` is
+ * `object`) but every field on it is empty, which `Object.keys()` alone can't
+ * tell apart from a populated object behind prototype accessors — so it, and
+ * `navigator.connection.effectiveType`, are not collected.
  *
- * A FIELD THAT SILENTLY REPORTS `undefined` FOREVER IS WORSE THAN NO FIELD,
- * so this module has a probe behind it rather than a guess:
- * `scripts/probe-nui-hardware.ts` drives Chromium 103.0.5058.0 over CDP in both
- * headless and headed modes and prints a COLLECT / DO NOT COLLECT verdict per
- * candidate. What follows is that run's output, 2026-10-11, on an RTX 5070 Ti /
- * 24-thread Windows machine:
+ * `deviceMemory` is origin-gated: absent (`typeof undefined`) on a `data:` URL,
+ * present over a real origin — FiveM serves NUI from `https://cfx-nui-<resource>/`,
+ * so it's available in game. It's also clamped to 0.25-8 GiB in powers of two,
+ * so `8` means "at least 8 GiB", hence the field name `deviceMemoryGbAtLeast`.
+ * `localStorage` throws on a `data:` URL but round-trips over a real origin;
+ * already known to work in game — tRadio's session ledger caught eight real
+ * renderer kills with it.
  *
- *   navigator.hardwareConcurrency        24                              COLLECT
- *   navigator.deviceMemory               8                               COLLECT*
- *   navigator.userAgent                  Mozilla/5.0 (Windows NT 10.0…)  COLLECT
- *   navigator.platform                   Win32                           COLLECT
- *   performance.memory.jsHeapSizeLimit   3760000000 / 4294705152         COLLECT
- *   performance.memory.usedJSHeapSize    10000000 / 1277201              COLLECT
- *   screen.width × height                800×600 (headless) 3440×1440    COLLECT
- *   devicePixelRatio                     1                               COLLECT
- *   WEBGL_debug_renderer_info            present, both webgl and webgl2  COLLECT
- *     UNMASKED_RENDERER_WEBGL            ANGLE (NVIDIA, NVIDIA GeForce
- *                                        RTX 5070 Ti Direct3D11 …, D3D11)
- *   navigator.userAgentData              present but EMPTY               DO NOT
- *   navigator.connection.effectiveType   "4g"                            DO NOT
- *
- * THE TWO FINDINGS THAT WOULD HAVE BEEN WRONG BY ASSUMPTION
- *
- * **`deviceMemory` is origin-gated.** The brief for this work recorded it as
- * "may be absent". On a `data:` URL it IS absent — `typeof undefined` — and the
- * first probe run reported exactly that and concluded DO NOT COLLECT. Served
- * over a real `http://127.0.0.1` origin the same build answers `8`. FiveM serves
- * NUI pages from `https://cfx-nui-<resource>/`, a real origin, so the field is
- * available in game. The asterisk above is the second half of the finding: the
- * Device Memory API clamps its answer to the range 0.25–8 GiB in powers of two,
- * so **`8` means "at least 8 GiB" and not "8 GB"** on a machine with 32. The
- * field below is named `deviceMemoryGbAtLeast` for that reason.
- *
- * **`localStorage` is NOT refused.** The same `data:`-URL artefact made it throw
- * `Storage is disabled inside 'data:' URLs`, which would have read as "CEF
- * refuses site data" — the one finding that would have killed the crash detector
- * in `session.ts` outright. Over a real origin it round-trips. (It was already
- * known to work in game, since tRadio's session ledger identified eight real
- * renderer kills with it; the probe is what makes that a measurement rather than
- * an inference from a bug report.)
- *
- * WHAT THIS PROBE CANNOT PROVE
- *
- * Chromium 103.0.5058.0 is two patch builds from cfx's 103.0.5060.141, and cfx
- * patches CEF. A field present here can still be absent in game. Every reader
- * below is therefore guarded AND the result OMITS the key rather than writing
- * `undefined`, so an absent field is absent in the payload and a reader on the
- * other side can tell "not available on that machine" from "zero".
- *
- * `navigator.userAgentData` is the live example of why that matters: it EXISTS
- * in this build — `typeof` is `object`, so a `!== undefined` guard passes — and
- * every field on it is empty (`platform: ""`, `brands: []`). A probe that asked
- * `Object.keys()` reported `[]` for it, which is indistinguishable from an
- * object that is fully populated behind prototype accessors. It is not collected.
+ * The probe build is two patches behind cfx's CEF (103.0.5060.141), so a field
+ * present here can still be absent in game. Every reader below is guarded, and
+ * an absent field is omitted from the payload rather than sent as `undefined`,
+ * so a reader downstream can tell "not available" from "zero".
  */
 
 import {
@@ -80,17 +42,11 @@ function reader<T>(fn: () => T | undefined): T | undefined {
 }
 
 /**
- * The GPU string, from the one API that names the real adapter.
- *
- * `webgl` IS TRIED BEFORE `webgl2` and both are tried, because a context can
- * be refused independently of the other and the extension is registered per
- * context. Measured: both answered in both modes here, and the unmasked strings
- * were identical — but one of them failing is the case this exists for.
- *
- * THE CANVAS IS NEVER ATTACHED TO THE DOCUMENT and the context is dropped
- * immediately. A WebGL context is a real GPU allocation; a diagnostic that keeps
- * one alive for the session would be a diagnostic with a cost, and this is read
- * once at boot.
+ * The GPU string, from the one API that names the real adapter. Tries `webgl`
+ * then `webgl2`: either context can be refused independently, and the debug
+ * extension is registered per context. The canvas is never attached to the
+ * document and the context is dropped immediately — a WebGL context is a real
+ * GPU allocation, and this is read once at boot, not kept alive for the session.
  */
 export function rendererString(): string | undefined {
   for (const kind of ["webgl", "webgl2"] as const) {
@@ -102,9 +58,7 @@ export function rendererString(): string | undefined {
         UNMASKED_RENDERER_WEBGL: number;
       } | null;
       // Without the extension the answer is the useless constant "WebKit WebGL",
-      // which names no adapter. Treated as absent rather than collected: a
-      // dimension whose every value is the same string is a dimension that
-      // cannot answer a question.
+      // which names no adapter — treated as absent, not collected.
       if (!ext) return undefined;
       const value = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
       return typeof value === "string" && value.length > 0 ? value : undefined;
@@ -116,24 +70,13 @@ export function rendererString(): string | undefined {
 
 /**
  * The machine context, in exactly the dimensions `tlib.environment_reported`
- * declares — and nothing else.
- *
- * FIVE FACTS THIS PROBE PROVED AVAILABLE HAVE NO SLOT IN THE CONTRACT and
- * are therefore NOT collected. Stated here so their absence is a known loss
- * rather than a mystery, because every one of them was measured present in
- * Chromium 103 and three of them are diagnostically sharp:
- *
- *   • the CEF build, from the user agent — `103.0.5058`. The one fact that says
- *     whether a crash mechanism still exists in the build the player is running.
- *   • `performance.memory.jsHeapSizeLimit` — 3.76 GB headless, 4.29 GB headed in
- *     the same probe. It is what decides whether a renderer OOM was plausible at
- *     all, and `tlib.crash_reported` carries only `uptimeSeconds`.
- *   • `performance.memory.usedJSHeapSize`.
- *   • the screen size — 3440×1440 measured — and `devicePixelRatio`.
- *
- * All five still appear in the LOCAL F8 trajectory, which is where a player
- * pasting a report gets them from. Nothing in the payload carries them, and the
- * append-only rule means this side cannot add a slot.
+ * declares — nothing else. Measured-available but not collected, because the
+ * append-only contract has no slot for them: the CEF build (from the user
+ * agent — tells whether a crash mechanism still exists in the player's
+ * build), `performance.memory.jsHeapSizeLimit`/`usedJSHeapSize` (decides
+ * whether a renderer OOM was plausible; `tlib.crash_reported` carries only
+ * `uptimeSeconds`), and screen size/`devicePixelRatio`. All still appear in
+ * the local F8 trajectory, which is where a player pasting a report gets them.
  */
 export interface HardwareSnapshot {
   os: DiagOs;
@@ -157,10 +100,8 @@ export function readHardware(): HardwareSnapshot {
   const ram = reader(() => (navigator as unknown as { deviceMemory?: number }).deviceMemory);
 
   return {
-    // `navigator.platform` and NOT the user agent. The UA string is not a
-    // dimension — it has spaces, slashes and parentheses, so the charset refuses
-    // it — and the contract declares no slot for it either. `platform` answers
-    // the one fact `os` wants, in one word.
+    // `navigator.platform`, not the UA string: the UA has spaces/slashes/
+    // parens the dimension charset refuses, and the contract has no slot for it.
     os: osFor(platform),
     ramBucket: ramBucketFor(ram),
     gpuVendor: gpuVendorFor(gpu),
@@ -184,10 +125,8 @@ export function environmentRow(hw: HardwareSnapshot): {
       gpuVendor: hw.gpuVendor,
       gpuModel: hw.gpuModel.slice(0, DIMENSION_CAPS.gpuModel),
     },
-    // Omitted rather than sent as -1 when the reading was absent. A measure
-    // is CLAMPED by the ingest rather than refused, so a -1 would be stored as 0
-    // — "this machine has no CPU cores" — which is a wrong number that looks
-    // like a reading.
+    // Omitted, not sent as -1: the ingest clamps a measure rather than refusing
+    // it, so -1 would be stored as 0 — "no CPU cores" — a wrong reading.
     measures: hw.cpuCores > 0 ? { cpuCores: hw.cpuCores } : {},
   };
 }

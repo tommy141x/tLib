@@ -1,29 +1,16 @@
 --[[
     tLib/shared/imports/access — the CLIENT MIRROR.
 
-    Usage in a consumer (client scripts):
-
         local radio = tlib.access.gate({ key = 'radio' })
-
         if radio:allowed() then showRadioButton() end
         radio:onChange(function(allowed) toggleRadioButton(allowed) end)
 
-    READ THIS BEFORE USING IT
-    -------------------------
-    This answers "should I draw the button?" It does NOT answer "may this player
-    do the thing." It is a cached copy of a decision the server made, living in a
-    process the player controls, and a player who edits it gets a visible button
-    and nothing else -- because the server re-checks on the event behind it.
-
-    That re-check is not optional and not implied. Two of the resources adopting
-    this module had exactly this bug already, in both cases written in good
-    faith: the gate greyed out the UI, and the net event behind it accepted
-    anything from anyone. If you write a client check here and no server check
-    in Gate:allowed(src), you have written a suggestion, not a gate.
-
-    So: every privileged net event handler calls the SERVER gate's
-    `:allowed(source)`. This file exists only so the UI does not lie to honest
-    players about what they can do.
+    Answers "should I draw the button?", NOT "may this player do the thing" —
+    it's a cached copy of a server decision, living in a process the player
+    controls. Every privileged net event handler must still call the SERVER
+    gate's `:allowed(source)`; two resources adopting this module shipped with
+    that check missing (UI greyed out, event behind it accepted anyone). This
+    file only keeps the UI from lying to honest players.
 ]]
 
 local access = {}

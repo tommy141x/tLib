@@ -1,21 +1,15 @@
 /**
- * The one-click install that renders without a resource restart.
+ * Lets a marketplace install render without a resource restart.
  *
- * FiveM builds a client's file manifest when a resource STARTS, so a file written
- * afterwards -- which is what a marketplace install is -- 404s over `nui://`
- * until the next restart. The fill is to let the NUI pull the item from tWeb,
- * extract it in the browser and serve it from `blob:` URLs for the session.
- *
- * THE LOCAL FILE WINS, ALWAYS, and the remote is reached only when the local
- * file is genuinely absent: `acquireBundle` and `acquireFile` HEAD-probe the
- * resource's own NUI file server FIRST. That is structural rather than left to
- * the call site, because a cache that kept preferring the remote copy would turn
- * every installed item into a permanent tWeb dependency and nothing would notice
- * until tWeb went down.
- *
- * It does not persist -- a persisted remote preference is exactly that failure --
- * and it cannot write the file into place: `SaveResourceFile` is false
- * cross-resource, so session-scoped blobs are the whole of what is available.
+ * FiveM builds a client's file manifest at resource START, so a file written
+ * afterward 404s over `nui://` until the next restart. The fill: pull the item
+ * from tWeb, extract it in the browser, serve it from `blob:` URLs for the
+ * session. `acquireBundle`/`acquireFile` HEAD-probe the resource's own NUI file
+ * server first and only fall back to remote when the local file is genuinely
+ * absent — structural, not left to the call site, so a cache preferring the
+ * remote copy can't quietly turn every install into a permanent tWeb
+ * dependency. Never persisted, and can't write the file into place either:
+ * `SaveResourceFile` is false cross-resource, so a session blob is all there is.
  */
 
 /** A bundle's extracted contents: normalised relative path → value. */
@@ -69,16 +63,12 @@ export interface RuntimeAssetCacheOptions {
    */
   logger?: Pick<Console, "log" | "warn"> & Partial<Pick<Console, "debug">>;
   /**
-   * How a bundle's files are addressed once extracted.
-   *
-   * `"blob"` (the default) is what you want: one URL per file, no base64
-   * inflation, revocable.
-   *
-   * `"data"` exists for ONE measured constraint: a `blob:` URL belongs to the
-   * origin that created it, so a document with an OPAQUE origin -- tLS's
-   * `sandbox`ed layout iframe with no `allow-same-origin` -- cannot load one. A
-   * `data:` URL carries its bytes and has no origin to check, at 4/3 the size and
-   * with nothing to revoke, so lower `maxTotalBytes` to match.
+   * How a bundle's files are addressed once extracted. `"blob"` (default): one
+   * URL per file, no base64 inflation, revocable. `"data"` exists for one
+   * constraint: a `blob:` URL belongs to its creating origin, so a sandboxed
+   * iframe with no `allow-same-origin` (tLS's layout iframe) can't load one. A
+   * `data:` URL carries its own bytes at 4/3 the size and nothing to revoke —
+   * lower `maxTotalBytes` to match.
    */
   urlMode?: "blob" | "data";
   /** Injected by the suite — happy-dom has no real blob URLs. */
@@ -128,14 +118,11 @@ export interface RuntimeAssetCache {
   /** Revoke a file's blob, forget it, and clear its recorded failure. */
   evictFile(filename: string): void;
   /**
-   * Replay a whole installed-sound list, downloading only the entries the
-   * resource cannot serve.
-   *
-   * The install broadcast reaches whoever is connected at install time and is
-   * never replayed, so without this a custom sound worked for the admin who
-   * installed it and for nobody else. Fire-and-forget by design: a failure
-   * leaves no blob registered and the consumer's resolver falls through to the
-   * plain local path.
+   * Replay a whole installed-sound list, downloading only entries the resource
+   * cannot serve. The install broadcast only reaches whoever is connected at
+   * install time, so without this a custom sound worked only for the admin who
+   * installed it. Fire-and-forget: a failure leaves no blob registered and the
+   * consumer falls through to the plain local path.
    */
   syncFiles(
     entries: ReadonlyArray<{ slug?: string; filename?: string; localOnly?: boolean }>,
@@ -145,13 +132,11 @@ export interface RuntimeAssetCache {
 }
 
 /**
- * Where one marketplace item's payload is downloaded from.
- *
- * ONE definition of this path, for the same reason the default host has one per
- * language: four NUI bundles and `cl_bridge.lua` were each about to build it.
- * The base arrives from Lua (`tlib.marketplace.baseUrl()`, which reads the
- * `tlib_api_base_url` convar on every call) rather than being a constant
- * here, so a server pointed at a dev worker follows.
+ * Where one marketplace item's payload is downloaded from. One definition —
+ * four NUI bundles and `cl_bridge.lua` were each about to build it separately.
+ * `baseUrl` comes from `tlib.marketplace.baseUrl()` (reads the
+ * `tlib_api_base_url` convar live) rather than a constant, so a server pointed
+ * at a dev worker follows.
  */
 export function marketplaceItemUrl(baseUrl: unknown, slug: string): string | null {
   if (typeof baseUrl !== "string") return null;
@@ -206,15 +191,11 @@ const RELATIVE_ASSET_ATTR =
 
 /**
  * A fetch deadline that does not assume `AbortSignal.timeout` exists.
- *
- * `AbortSignal.timeout()` shipped in Chromium **103**, which is exactly the CEF
- * milestone FiveM runs — so it works today with zero version margin. On
- * anything older it is `undefined`, and calling it throws a synchronous
- * `TypeError` that rejects the download before the request is made: a customer
- * on an older client would lose every runtime asset with no useful error.
- * `AbortController` + `setTimeout` is universally available, so this costs one
- * branch and removes the cliff. Mirrors `createDeadline` in `@tlib/shared/nui`
- * rather than inventing a second pattern.
+ * `AbortSignal.timeout()` shipped in Chromium 103 — exactly the CEF milestone
+ * FiveM runs, zero version margin. On anything older it's `undefined` and
+ * calling it throws synchronously, losing every runtime asset with no useful
+ * error. `AbortController` + `setTimeout` works everywhere. Mirrors
+ * `createDeadline` in `@tlib/shared/nui`.
  */
 function fetchDeadline(ms: number): { signal: AbortSignal; release: () => void } {
   const nativeTimeout = (AbortSignal as { timeout?: (delay: number) => AbortSignal }).timeout;
@@ -254,12 +235,10 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
   };
 
   /**
-   * One extracted file's address.
-   *
-   * `data:` is built here rather than through the injected `objectUrls`,
-   * because it is not an object URL at all: there is nothing to register and
-   * nothing to revoke, and routing it through a create/revoke pair would
-   * invite a future reader to "fix" the missing revoke.
+   * One extracted file's address. `data:` is built here rather than through the
+   * injected `objectUrls` because it isn't an object URL — nothing to register
+   * or revoke, and routing it through create/revoke would invite someone to
+   * "fix" the missing revoke.
    */
   function addressFor(bytes: Uint8Array, mime: string): string {
     if (urlMode === "blob") {
@@ -304,18 +283,12 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
   const fileFailures = new Set<string>();
 
   /**
-   * Is this path in the resource's own file manifest?
-   *
-   * `HEAD` is measured to work on the NUI file server: 200 with a
-   * Content-Length for a file in the manifest, 404 for one that is not.
-   *
-   * Only a **404** counts as absent, and a network error counts as SERVED.
-   * Both lean the same way on purpose. This gates a tWeb fallback, and the
-   * failure to avoid is downloading files the client can already read — so
-   * anything short of the file server positively saying "no such file" leaves
-   * us local. The consumer's own loader then tries the same local path, which
-   * is where a genuine miss surfaces, instead of it becoming a silent
-   * permanent remote dependency for every asset on the server.
+   * Is this path in the resource's own file manifest? `HEAD` on the NUI file
+   * server returns 200 + Content-Length when it is, 404 when it isn't. Only a
+   * 404 counts as absent; a network error counts as served — both lean toward
+   * staying local, since the failure to avoid is re-downloading a file the
+   * client can already read. A genuine miss surfaces later in the consumer's
+   * own local-path load, not here.
    */
   async function servedByResource(path: string): Promise<boolean> {
     try {
@@ -520,10 +493,8 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
         await fetchFile(key, downloadUrl);
       } catch (err) {
         fileFailures.add(key);
-        // A 404 HAS TO SAY WHAT A 404 MEANS. One customer pasted 34 of these --
-        // every built-in tone, registered by the consumer as an installed
-        // marketplace item -- and spent the thread being told it was a port or
-        // CORS problem on their VPS: `failed ... HTTP 404` read as transport.
+        // A bare "failed ... HTTP 404" reads as a transport problem — one
+        // customer spent a support thread being told it was a port/CORS issue.
         if ((err as { status?: number }).status === 404) {
           log.warn(
             `[${tag}] runtime file cache: the marketplace has no item behind "${filename}" ` +

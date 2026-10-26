@@ -3,39 +3,24 @@
  *
  *     import "@tlib/shared/motion";
  *
- * Imported for effect, like a stylesheet: there is nothing to call and nothing
- * to wire. A page that imports it answers `setMotion`; one that does not, does
- * not.
+ * Imported for effect, like a stylesheet. `@media (prefers-reduced-motion:
+ * reduce)` does not work in a FiveM NUI — CEF reports `no-preference`
+ * regardless of host OS — so every such block in the shared sheets was dead
+ * coverage. The mechanism here is a custom property, not a class: `--motion`
+ * defaults to `1` on `:root` (`shared/css/theme-tokens.css`) and every shared
+ * duration is `calc(Nms * var(--motion, 1))`, so setting it to `0` collapses
+ * all of them without a parallel `.reduce-motion .x { animation: none }` per
+ * selector. Writes `1` back rather than removing the property, since a
+ * consumer theme may set `--motion` itself via `cssVars` and clearing the
+ * inline value would reveal that instead of the default.
  *
- * NOTE: `@media (prefers-reduced-motion: reduce)` DOES NOT WORK IN A FiveM NUI.
- * CEF reports `no-preference` whatever the host OS is set to — measured — so
- * every such block in the shared sheets was coverage that could never fire, and
- * a player who needs reduced motion had no way to ask for one.
- *
- * The mechanism is a custom property rather than a class: `--motion` is declared
- * `1` on :root in `shared/css/theme-tokens.css` and every shared duration is
- * written `calc(Nms * var(--motion, 1))`, so setting it to `0` collapses all of
- * them at once and no rule needs a second spelling. A class would have meant a
- * parallel `.reduce-motion .x { animation: none }` for every animated selector,
- * which is the shape that goes stale the first time someone adds an animation.
- *
- * It WRITES `1` BACK RATHER THAN REMOVING THE PROPERTY. A consumer theme may
- * have set `--motion` itself through `cssVars`, so clearing the inline value
- * would reveal theirs rather than restore the default. Being explicit in both
- * directions is what makes this idempotent.
- *
- * Why this lives in `shared/` and not in tLib's app:
- *
- * `client/cl_ui_effects.lua` resolves the preference once — player KVP over the
- * `tlib_reduce_motion` convar — and then has to PUBLISH it, because a consumer
- * with its own `ui_page` owns its own document and tLib cannot write a property
- * into it. Every consumer that animates anything therefore needs this listener,
- * and the second copy of it is the one that drifts from the first.
- *
- * A CONSUMER STILL HAS TO SEND THE MESSAGE. Reading the answer is
- * `exports.tLib:GetReduceMotion()` and the change event is `tlib:reduceMotion`;
- * both go out to this page as `{ action = 'setMotion', data = { motion } }`.
- * Importing this file alone does nothing in a resource whose Lua never speaks.
+ * Lives in `shared/` because `client/cl_ui_effects.lua` resolves the
+ * preference once (player KVP over `tlib_reduce_motion`) and has to publish
+ * it to every consumer's own `ui_page` document, which tLib can't write into
+ * directly. A consumer still has to relay the message —
+ * `exports.tLib:GetReduceMotion()` / the `tlib:reduceMotion` event, posted as
+ * `{ action = 'setMotion', data = { motion } }` — importing this file alone
+ * does nothing on its own.
  */
 
 import { onNuiEvent } from "./nui";

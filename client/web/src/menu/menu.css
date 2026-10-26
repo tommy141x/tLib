@@ -48,18 +48,12 @@
   background: var(--menu-panel-bg);
   border: 1px solid var(--border);
   border-radius: var(--menu-radius);
-  /* Light on the top edge, not a drop shadow: CEF composites no shadow, so the
-     `0 8px 24px` this used to carry was the panel's only separation cue and it
-     never painted. A brighter top border is the same idea — a surface catching
-     a light above it — in a property that renders. It is a border rather than a
-     positioned hairline because the panel scrolls, and an absolutely positioned
-     ::before would scroll away with the rows.
-     Light at an alpha rather than a mix toward --border: color-mix() is dropped
-     whole by CEF 103, which left this longhand invalid and the top edge plain
-     --border — the cue never painted at all. The panel's background reaches the
-     border box, so 20% of --text here composites over the lifted panel, and over
-     a bright scene it lifts with it. That is the same argument .menu-row's
-     ruling below makes for drawing a hairline in --text instead of --border. */
+  /* Light top edge, not a drop shadow — CEF composites no box-shadow, so that cue
+     never painted. A border, not a positioned hairline, since the panel scrolls and
+     an absolute ::before would scroll away with the rows. Alpha over --text-raw, not
+     color-mix() toward --border: CEF 103 drops color-mix() whole, and this panel's
+     translucent background means 20% --text lifts with a bright scene the same way
+     an opaque --border mix would not. */
   border-top-color: hsl(var(--text-raw) / 0.2);
 }
 /* A brand bar rather than a brand band: one line on the same 12px gutter as
@@ -104,9 +98,9 @@
   font-size: var(--brand-font);
   font-weight: 600;
 }
-/* The close button sits 5px off the right edge and is 28px wide, so the word may
-   not come within 38px of it. Measured on the vMenu band, where the word is
-   centred: at 90% a real source subtitle ran 11.4px under the button. */
+/* Close button sits 5px off the right edge, 28px wide, so the word stays 38px clear.
+   On the vMenu band (word centred) a 90% width let a real source subtitle run
+   11.4px under the button. */
 :where(.tlib-menu) .brand-word.source-title {
   max-width: calc(100% - 76px);
   font-size: var(--brand-title-font);
@@ -219,21 +213,12 @@
   border-radius: var(--menu-radius);
   border-bottom: 1px solid transparent;
 }
-/* The ruling the transparent divider above was always left open for. Both menus
-   this one is measured against separate every row this way; without it a list of
-   labels floats on the panel with nothing to tell one row from the next. Soft,
-   because at full --border strength a dark panel reads as a wireframe of
-   itself. The last row rules against the panel edge instead.
-
-   Drawn in --text rather than --border: a dark hairline needs the panel behind
-   it to stay dark, and this panel lets the world through, so over a bright
-   scene a dimmed --border lands on the same value the lifted panel does and the
-   ruling disappears. A light hairline is the lit-edge cue used everywhere else
-   here and it holds against anything.
-
-   Written as slash-alpha over --text-raw because CEF 103 predates color-mix()
-   and drops any declaration containing it, which is how a ruling this paragraph
-   argues for spent its life invisible. */
+/* Row divider: both reference menus separate every row this way; without it labels
+   float with no boundary. Soft because full --border strength reads as a wireframe;
+   last row rules against the panel edge instead. Drawn in --text, not --border: over
+   a bright scene (panel is translucent) a dimmed --border would land on the same
+   value as the lifted panel and vanish — same lit-edge cue used elsewhere. Slash-alpha
+   over --text-raw, not color-mix(), since CEF 103 drops any declaration containing it. */
 :where(.tlib-menu[data-skin="default"]) .menu-row {
   border-bottom-color: hsl(var(--text-raw) / 0.09);
 }
@@ -245,12 +230,10 @@
   color: var(--selected-ink);
   border-bottom-color: transparent;
 }
-/* A bar at the row's leading edge, in the 4px gutter .menu-items already has, so
-   the selection reads as a position rather than a swipe across the label.
-   --accent rather than --selected-ink: with the stock theme the two are the same
-   white, so the rail merges into the slab and the selection simply runs to the
-   panel edge — which is what both reference menus do. Set an accent and the same
-   rule becomes menuv's coloured bar, with no second code path. */
+/* Leading-edge bar in .menu-items' existing 4px gutter, so selection reads as a
+   position, not a swipe. --accent, not --selected-ink: on the stock theme they're the
+   same white so the rail merges into the slab (matching both reference menus); set an
+   accent and the same rule becomes menuv's coloured bar, no second code path. */
 :where(.tlib-menu[data-skin="default"]) .menu-row.is-active::before {
   content: "";
   position: absolute;
@@ -311,18 +294,15 @@
   color: var(--muted);
   cursor: not-allowed;
 }
-/* Ink dimmed toward the bar it sits on, so a disabled row that is also the
-   selected one still reads as unavailable. The old two-colour mix toward
-   --selected is exactly 65% ink drawn over --selected, which is what this row's
-   background already is — so the alpha form composites to the same colour and,
-   unlike color-mix(), CEF 103 parses it. */
+/* Ink dimmed toward the bar it sits on, so a disabled+selected row still reads
+   unavailable. 65% ink over --selected is what the old color-mix() produced; the
+   alpha form composites identically and CEF 103 actually parses it. */
 :where(.tlib-menu) .menu-row.is-disabled.is-active .row-main {
   color: hsl(var(--selected-ink-raw) / 0.65);
 }
-/* 45%, the slider's share, not 57%: at 57% the value block outweighed the label
-   245.7px to 165.3px, truncating a 23-character label while its option kept room
-   for 36. padding-right 4 rather than 5 puts the chevron on the same 10px gutter
-   as .row-chevron, .toggle and .action-mark. */
+/* 45% (matches the slider), not 57%: at 57% the value block outweighed the label
+   245.7px to 165.3px. padding-right 4, not 5, puts the chevron on the same 10px
+   gutter as .row-chevron, .toggle and .action-mark. */
 :where(.tlib-menu) .row-choice {
   display: flex;
   align-items: stretch;
@@ -426,10 +406,9 @@
   height: 15px;
   margin-top: 1px;
 }
-/* A wash of the danger colour behind danger-coloured text. 12% alpha over
-   --menu-danger-raw rather than a color-mix() with transparent: they mean the
-   same thing, but CEF 103 parses only one of them and drops the declaration
-   containing the other, which left this notice with no fill at all. */
+/* Wash of danger colour behind danger text. 12% alpha over --menu-danger-raw, not
+   color-mix() with transparent: CEF 103 only parses the former, dropping the latter
+   left this notice with no fill. */
 :where(.tlib-menu) .notice-error {
   background: hsl(var(--menu-danger-raw) / 0.12);
   color: var(--menu-danger);
@@ -470,14 +449,11 @@
 :where(.tlib-menu) .menu-panel.is-blocked {
   overflow: hidden;
 }
-/* Anchors: nine classes that rewrite the panel's insets and nothing else. All
-   measure off --safe-top/--safe-left rather than the viewport edge, and none
-   relaxes max-height, so a centred or bottom-hung panel keeps at least that
-   inset above it at every resolution.
-   Centring uses `translate` rather than a transform because .menu-panel's entry
-   animation owns `transform`: a centring transform would become the implicit
-   to-keyframe of tlibmenu-in-down and the panel would fly in from its uncentred
-   position. */
+/* Anchors: nine classes rewriting only the panel's insets, measured off
+   --safe-top/--safe-left rather than the viewport edge; none relaxes max-height.
+   Centring uses `translate`, not `transform`, because .menu-panel's entry animation
+   owns `transform` — a centring transform would become tlibmenu-in-down's implicit
+   to-keyframe and the panel would fly in from an uncentred position. */
 :where(.tlib-menu) .menu-panel.align-top-left {
   top: var(--safe-top);
   left: var(--safe-left);
@@ -537,11 +513,10 @@
   right: var(--safe-left);
   bottom: var(--safe-top);
 }
-/* Hide, not close: the panel stays mounted with its box, scroll offset and
-   whatever the player had in progress. visibility rather than display because
-   display:none destroys and rebuilds the layout box — all nine rows — on every
-   pause-menu toggle, where this is a paint-only change. pointer-events because a
-   merely invisible panel would still take the preview cursor's clicks. */
+/* Hide, not close: panel stays mounted with its scroll offset and in-progress state.
+   visibility, not display:none, since display:none would rebuild the layout box
+   (all nine rows) on every pause-menu toggle; pointer-events: none because an
+   invisible panel would still take the preview cursor's clicks. */
 :where(.tlib-menu) .menu-panel.is-hidden {
   visibility: hidden;
   pointer-events: none;
@@ -613,14 +588,11 @@
   color: var(--selected-ink);
   border-color: transparent;
 }
-/* The shared feedback dialog
-   Same shell as .confirmation, which is why it carries that class too: one
-   shade, one width, one heading scale. Only what is genuinely different is
-   below.
-   Every size here is a declaration in this file rather than an arbitrary
-   `text-[12px]` in the markup: unoMerge treats an arbitrary text size and a
-   text colour as ONE conflict group, so a row carrying both silently loses
-   one of them. */
+/* The shared feedback dialog carries the .confirmation class too: one shade, one
+   width, one heading scale. Only what's genuinely different is below. Every size
+   here is a stylesheet declaration, not an arbitrary `text-[12px]` in markup:
+   unoMerge treats an arbitrary text size and colour as one conflict group, so a
+   class carrying both would silently lose one. */
 :where(.tlib-menu) .feedback h2 {
   display: flex;
   align-items: center;
@@ -649,9 +621,9 @@
 :where(.tlib-menu) .feedback-box::placeholder {
   color: var(--muted);
 }
-/* TWO CLASSES DEEP, and not for tidiness: `.confirmation p` above is one
-   class plus a type selector, which outranks a single class — a `.feedback-keys`
-   selector lost its own font-size and colour to it silently. */
+/* Two classes deep, not for tidiness: `.confirmation p` above is a class plus a
+   type selector, which outranks a single class — a bare `.feedback-keys` selector
+   lost its font-size/colour to it silently. */
 :where(.tlib-menu) .feedback .feedback-problem,
 :where(.tlib-menu) .feedback .feedback-sent {
   display: flex;
@@ -668,10 +640,9 @@
   flex-shrink: 0;
   margin-top: 2px;
 }
-/* The danger colour at full strength on text, and a 12% wash of its -raw
-   partner behind it -- the same pairing the notice strip uses, and for the same
-   reason: CEF 103 has no color-mix(), so slash-alpha over a bare triplet is the
-   only expression of "this colour at 12%" the engine parses at all. */
+/* Full-strength danger text over a 12% wash of its -raw partner — same pairing as
+   the notice strip: CEF 103 has no color-mix(), so slash-alpha over a bare triplet
+   is the only "colour at 12%" it parses. */
 :where(.tlib-menu) .feedback .feedback-problem {
   color: var(--menu-danger);
   background: hsl(var(--menu-danger-raw) / 0.12);
@@ -878,13 +849,11 @@
   outline-offset: -1px;
 }
 
-/* Motion: transform and opacity only, so everything below is GPU-composited.
-   Nothing here sits on the row-navigation path — client/input.lua repeats a held
-   key every 25-200ms and an animation would never finish before the next step —
-   so the row highlight, choice values, slider fill and icon swaps are instant,
-   and no layout property is animated. --motion is the kill switch that actually
-   reaches a player, since CEF reports prefers-reduced-motion as no-preference
-   whatever the host OS says. */
+/* Motion: transform and opacity only (GPU-composited). Nothing animates on the
+   row-navigation path — client/input.lua repeats a held key every 25-200ms, faster
+   than any animation would finish — so row highlight, choice values, slider fill
+   and icon swaps are instant. --motion is the real kill switch: CEF always reports
+   prefers-reduced-motion as no-preference regardless of host OS. */
 @keyframes tlibmenu-in-up {
   from {
     opacity: 0;
@@ -983,15 +952,13 @@
 :where(.tlib-menu) .is-pending {
   box-shadow: inset 3px 0 currentColor;
 }
-/* The highlighted row's background IS the accent, so inside it the accent and its
-   ink swap — a checked box that stayed --selected on a --selected bar would be
-   invisible. Flipping the tokens rather than special-casing the control makes
-   anything shared that lands in a row legible for free. --nui-inset goes
-   transparent and --nui-control-border to the row's ink because on a filled bar
-   the unchecked box is an outline, not a well. --nui-accent-raw has to turn over
-   with --nui-accent it partners, or the focus ring — the one consumer that needs
-   the triplet rather than the colour — stays --selected and draws white on the
-   white bar, which is the exact invisibility this paragraph is about. */
+/* The selected row's background IS the accent, so accent/ink swap inside it — a
+   checked box left at --selected on a --selected bar would be invisible. Flipping
+   tokens here, rather than special-casing each control, makes anything shared that
+   lands in a row legible for free. --nui-accent-raw must flip with --nui-accent: the
+   focus ring reads the triplet, not the colour, and would otherwise draw white on
+   white. --nui-inset goes transparent and --nui-control-border to the row's ink
+   because on a filled bar the unchecked box is an outline, not a well. */
 :where(.tlib-menu) .menu-row.is-active {
   --nui-accent: var(--selected-ink);
   --nui-accent-raw: var(--selected-ink-raw);
@@ -1000,14 +967,11 @@
   --nui-control-border: currentColor;
   --nui-hover: #00000055;
 }
-/* Mid-grey, not the row's own ink. The arrows live in a row whose ink inverts
-   with the selection, so the hover has to lighten a dark row and darken a
-   selected one; currentColor said that directly, but taking an alpha of
-   currentColor needs either color-mix() or relative colour syntax and CEF 103
-   has neither — the whole declaration was dropped and the arrows had no hover.
-   A neutral 12% does both jobs from one value because it is lighter than the
-   row ink on one and darker on the other. Same trick, same number, as
-   .tlib-nui-button:hover in shared/ts/nui-kit/nui.css. */
+/* Mid-grey, not the row's own ink: these arrows sit in a row whose ink inverts with
+   selection, so hover must lighten a dark row and darken a selected one. An alpha of
+   currentColor needs color-mix() or relative colour syntax — CEF 103 has neither, so
+   the declaration was dropped and the arrows had no hover. A neutral 12% does both
+   jobs from one value; same trick as .tlib-nui-button:hover in nui-kit/nui.css. */
 :where(.tlib-menu) .row-choice button:not(:disabled):hover {
   background: rgb(127 127 127 / 0.12);
 }

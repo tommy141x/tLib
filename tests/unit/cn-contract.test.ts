@@ -1,22 +1,17 @@
 /**
- * The contract for `cn()`, the class-name joiner every NUI tree in this repo renders through.
+ * The contract for `cn()`, the class-name joiner every NUI tree here renders through, measured
+ * against unocss-merge 0.10.0 and clsx 2.1.1 — a version bump changing any case here should fail
+ * loudly rather than let a component's class override quietly stop working on some screens.
  *
- * These are not tests of unocss-merge. Every case below is behaviour a component here relies
- * on, measured against unocss-merge 0.10.0 and clsx 2.1.1. If a version bump changes any of
- * them the failure here is the point: the alternative is components whose `class` override, or
- * whose own font size, quietly stops working on some screens and not others, which is close to
- * undebuggable from a screenshot.
+ * Roughly half of the file is the oracle for the shield in shared/ts/cn.ts, around four defects
+ * in 0.10.0 that delete a class rather than duplicate it (see that file's header for the
+ * mechanism); the groups tagged SHIELD below all return the wrong answer from a bare
+ * `unoMerge(clsx(...))`.
  *
- * Roughly half of the file is a shield, in shared/ts/cn.ts, around four defects in 0.10.0
- * that DELETE a class rather than duplicate it. The header there explains the mechanism. This
- * file is the oracle for it, and is written so that removing the shield fails it: the groups
- * tagged SHIELD below all return the wrong answer from a bare `unoMerge(clsx(...))`.
- *
- * Ordering of the returned tokens is deliberately NOT asserted except where noted. Class order
- * in the attribute never decides the cascade, and the shield appends held-back utilities after
- * the merged ones, so an order assertion would be a test of the implementation rather than of
- * the contract. Set-membership is what matters, and `toContain` on the split string is how it
- * is asserted.
+ * Token order is deliberately not asserted except where noted — the cascade never reads order
+ * from the attribute, and the shield appends held-back utilities after the merged ones, so an
+ * order assertion would test the implementation rather than the contract. `toContain` on the
+ * split string asserts set-membership instead.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -36,8 +31,8 @@ describe("cn: the parts unocss-merge already gets right", () => {
   });
 
   test("resolves conflicts among this repo's own theme colour names", () => {
-    // These names live only in the consumers' uno.config.ts files. unocss-merge matches colour
-    // utilities by namespace prefix, so they work with no help -- this is what proves it.
+    // These names live only in consumers' uno.config.ts files; unocss-merge matches colour
+    // utilities by namespace prefix, so they work with no help.
     expect(cn("border-line", "border-accent")).toBe("border-accent");
     expect(cn("text-fg-muted", "text-accent")).toBe("text-accent");
   });
@@ -48,17 +43,15 @@ describe("cn: the parts unocss-merge already gets right", () => {
   });
 
   test("resolves the font families presetWind3 ships", () => {
-    // No NUI uno.config.ts in this repo defines a family outside sans/serif/mono, which is
-    // exactly the set unocss-merge's font-family group lists. That is why tWeb's CUSTOM_GROUPS
-    // layer, which exists for its own `font-hero`, was not ported -- and this is the assertion
-    // that says so. Add a family to a consumer's theme and this test still passes while the new
-    // name silently does not resolve, so port that layer at the same time.
+    // No NUI uno.config.ts here defines a family outside sans/serif/mono, exactly what
+    // unocss-merge's font-family group lists — which is why tWeb's CUSTOM_GROUPS layer (for its
+    // own `font-hero`) was not ported. Adding a family to a consumer's theme needs that layer too.
     expect(cn("font-sans", "font-mono")).toBe("font-mono");
     expect(parts("font-medium", "font-sans")).toEqual(["font-medium", "font-sans"]);
   });
 
   test("scopes every conflict to the variant it applies under", () => {
-    // A responsive or state override is not a conflict: the two apply at different times, and
+    // A responsive or state override is not a conflict — the two apply at different times, and
     // collapsing them would delete the override.
     expect(parts("font-sans", "md:font-mono")).toEqual(["font-sans", "md:font-mono"]);
     expect(parts("bg-surface", "hover:bg-surface-hover")).toEqual([
@@ -71,9 +64,8 @@ describe("cn: the parts unocss-merge already gets right", () => {
   });
 
   test("accepts the conditional forms components actually use", () => {
-    // Held in a variable rather than written inline as `false && "p-4"`, which the linter
-    // correctly flags as a constant expression -- the point is the runtime falsy value reaching
-    // cn(), not how it was produced.
+    // Held in a variable rather than inline `false && "p-4"`, which the linter flags as a
+    // constant expression — the point is the runtime falsy value reaching cn(), not its source.
     const inactive = false;
     expect(cn("p-2", inactive && "p-4", undefined, null)).toBe("p-2");
     expect(cn("p-2", { "p-4": true })).toBe("p-4");
@@ -85,8 +77,8 @@ describe("cn: the parts unocss-merge already gets right", () => {
 
 describe("cn: SHIELD -- a font size and a text colour are independent", () => {
   test("a bracketed font size survives a text colour, and vice versa", () => {
-    // The headline defect. unocss-merge's font-size group is keyed to literal values, so a
-    // bracketed size misses it, falls through to the namespace table, and is filed as a COLOUR.
+    // The headline defect: unocss-merge's font-size group is keyed to literal values, so a
+    // bracketed size misses it, falls through to the namespace table, and is filed as a colour.
     // Unshielded, each of these returns exactly one class.
     expect(parts("text-[9px]", "text-muted-foreground")).toEqual([
       "text-[9px]",
@@ -104,9 +96,9 @@ describe("cn: SHIELD -- a font size and a text colour are independent", () => {
   });
 
   test("a bracketed size survives a bracketed COLOUR, which is the common spelling here", () => {
-    // tRadio's admin UI writes nearly every colour as a CSS variable in brackets, so BOTH
-    // tokens miss the font-size group and land in the same colour bucket. This pair appears in
-    // the same class string hundreds of times across tRadio/server.
+    // tRadio's admin UI writes nearly every colour as a CSS variable in brackets, so both tokens
+    // miss the font-size group and land in the same colour bucket — a pairing that appears
+    // hundreds of times across tRadio's server-side class strings.
     expect(parts("text-[10px]", "text-[var(--text-secondary)]")).toEqual([
       "text-[10px]",
       "text-[var(--text-secondary)]",
@@ -118,9 +110,9 @@ describe("cn: SHIELD -- a font size and a text colour are independent", () => {
   });
 
   test("the base font size survives a text colour, although it is spelled as a word", () => {
-    // Named sizes mostly escape the defect because the font-size regex lists them. `base` is
-    // absent from that list, so it behaves like a bracketed value and is filed as a colour.
-    // Unshielded this returns the colour alone.
+    // Named sizes mostly escape the defect because the font-size regex lists them; `base` is
+    // absent, so it behaves like a bracketed value and is filed as a colour. Unshielded this
+    // returns the colour alone.
     expect(parts("text-base", "text-accent")).toEqual(["text-base", "text-accent"]);
   });
 
@@ -131,8 +123,8 @@ describe("cn: SHIELD -- a font size and a text colour are independent", () => {
   });
 
   test("two font sizes still resolve against each other, in every spelling", () => {
-    // Shielding must not become "keep both" -- a size is still overridable by a size. The last
-    // two pairs are a bug fix in their own right: unshielded they return BOTH classes and the
+    // Shielding must not become "keep both" — a size is still overridable by a size. The last
+    // two pairs are a bug fix in their own right: unshielded they return both classes and the
     // winner is decided by UnoCSS's emit order.
     expect(cn("text-sm", "text-lg")).toBe("text-lg");
     expect(cn("text-[9px]", "text-[11px]")).toBe("text-[11px]");
@@ -147,8 +139,8 @@ describe("cn: SHIELD -- a font size and a text colour are independent", () => {
   });
 
   test("the text utilities that are neither a size nor a colour are left to unocss-merge", () => {
-    // Alignment, wrapping and overflow are unrelated properties and already grouped correctly.
-    // Sweeping them into the colour catch-all would have made the shield delete them.
+    // Alignment, wrapping and overflow already group correctly; sweeping them into the colour
+    // catch-all would have made the shield delete them.
     expect(parts("text-center", "text-[9px]", "text-accent")).toEqual([
       "text-center",
       "text-[9px]",
@@ -162,7 +154,7 @@ describe("cn: SHIELD -- a font size and a text colour are independent", () => {
 
   test("a text shadow or opacity no longer annihilates the text colour", () => {
     // Not a goal of the shield, a consequence of it: these sit in the same colour group as a
-    // text colour in 0.10.0, and holding the COLOUR back is what separates them. Unshielded,
+    // text colour in 0.10.0, and holding the colour back is what separates them. Unshielded,
     // each of these returns one class.
     expect(parts("text-accent", "text-op-50").sort()).toEqual(["text-accent", "text-op-50"]);
     expect(parts("text-accent", "text-shadow-lg").sort()).toEqual([
@@ -175,8 +167,8 @@ describe("cn: SHIELD -- a font size and a text colour are independent", () => {
 describe("cn: SHIELD -- the ring offset colour does not eat the ring colour", () => {
   test("a ring keeps its own colour alongside an offset colour", () => {
     // 0.10.0 has no colour group for the ring-offset namespace, so the offset's colour is filed
-    // with the RING's colour and only the last survives. No variant and no custom token needed:
-    // a stock palette collapses identically. Unshielded, each of these loses the ring colour.
+    // with the ring's colour and only the last survives — a stock palette collapses identically,
+    // no custom token needed. Unshielded, each of these loses the ring colour.
     expect(parts("ring-ring", "ring-offset-surface")).toEqual(["ring-ring", "ring-offset-surface"]);
     expect(parts("ring-red-500", "ring-offset-white")).toEqual([
       "ring-red-500",
@@ -212,21 +204,13 @@ describe("cn: SHIELD -- the ring offset colour does not eat the ring colour", ()
 });
 
 describe("cn: SHIELD -- the outline offset does not eat the outline colour", () => {
-  /*
-   * Gap 4 in shared/ts/cn.ts's header, and the one that matters most now: this estate's focus
-   * indicator is an OUTLINE and never a `ring-*`, because presetWind3 compiles a ring to an
-   * outward box-shadow and CEF 103 clips it to nothing inside the `overflow: hidden` ancestor
-   * every NUI panel is.
-   *
-   * The four cases below are the measured ones, verbatim. Unshielded, the first, second and
-   * fourth each silently LOSE a class; the third is the negative-offset spelling that escapes
-   * 0.10.0's tables and already worked, and it must keep working.
-   *
-   * IT WAS LIVE TWICE. tUnit's `ElementList.tsx` rows and `CharacterEditor.tsx` chips both
-   * shipped without `focus-visible:outline-ring` and painted focus in `currentColor`. Both were
-   * fixed at the call site, to the negative spelling; this is the shield so the next one is not
-   * a bug at all.
-   */
+  // Gap 4 in shared/ts/cn.ts's header, and the one that matters most: this estate's focus
+  // indicator is an outline, never a `ring-*`, because presetWind3 compiles a ring to an
+  // outward box-shadow and CEF 103 clips it to nothing inside the `overflow: hidden` ancestor
+  // every NUI panel is. Unshielded, the first, second and fourth cases below each silently lose
+  // a class; the third (negative-offset) already worked and must keep working.
+  // Shipped live twice without `focus-visible:outline-ring` (tUnit's element list rows and its
+  // character editor chips both painted focus in `currentColor`); this shield is for the next one.
   test("a width, a style, a colour and a POSITIVE offset all four survive", () => {
     expect(parts("outline-2 outline-solid outline-ring/40 outline-offset-2").sort()).toEqual([
       "outline-2",
@@ -246,9 +230,8 @@ describe("cn: SHIELD -- the outline offset does not eat the outline colour", () 
   });
 
   test("the NEGATIVE offset spelling, which already worked, still does", () => {
-    // This is the one case that is green without the shield. It is asserted anyway, because the
-    // shield adds `-?` to the offset group and a shield that broke the spelling two live call
-    // sites were migrated TO would be a worse outcome than the defect.
+    // Green without the shield, asserted anyway: the shield adds `-?` to the offset group, and
+    // breaking the spelling two live call sites were migrated to would be worse than the defect.
     expect(parts("outline-2 outline-solid outline-ring/40 -outline-offset-1").sort()).toEqual([
       "-outline-offset-1",
       "outline-2",
@@ -258,9 +241,9 @@ describe("cn: SHIELD -- the outline offset does not eat the outline colour", () 
   });
 
   test("an offset and a colour under the same variant prefix both survive", () => {
-    // The prefixed form is how every focus indicator here is actually written, and the deletion
-    // goes BOTH ways depending on which token came last -- offset-then-colour loses the offset,
-    // colour-then-offset loses the colour. Unshielded each of these returns ONE class.
+    // The prefixed form is how every focus indicator here is actually written. Deletion goes both
+    // ways depending on which token came last — offset-then-colour loses the offset,
+    // colour-then-offset loses the colour. Unshielded each of these returns one class.
     expect(parts("focus-visible:outline-offset-2 focus-visible:outline-ring/40").sort()).toEqual([
       "focus-visible:outline-offset-2",
       "focus-visible:outline-ring/40",
@@ -272,8 +255,8 @@ describe("cn: SHIELD -- the outline offset does not eat the outline colour", () 
   });
 
   test("the explicit width spellings and a bracketed length keep the colour too", () => {
-    // `outline-width-`/`outline-size-` are presetWind3's own aliases, and a bracketed CSS math
-    // value is routed to its width handler. All three landed in the colour group unshielded.
+    // `outline-width-`/`outline-size-` are presetWind3's own aliases; a bracketed CSS math value
+    // is routed to its width handler. All three landed in the colour group unshielded.
     expect(parts("outline-width-2", "outline-ring/40").sort()).toEqual([
       "outline-ring/40",
       "outline-width-2",
@@ -294,9 +277,9 @@ describe("cn: SHIELD -- the outline offset does not eat the outline colour", () 
   });
 
   test("both signs of the offset are ONE group, so they deduplicate against each other", () => {
-    // The second half of Gap 4, and a MISSED conflict rather than an invented one: the negative
+    // The second half of Gap 4, and a missed conflict rather than an invented one: the negative
     // spelling escapes every table in 0.10.0, so unshielded these two values of one property
-    // both ship. Order IS asserted here, because which one wins is the whole point.
+    // both ship. Order is asserted here, because which one wins is the whole point.
     expect(cn("outline-offset-[2px] -outline-offset-1")).toBe("-outline-offset-1");
     expect(cn("-outline-offset-1 outline-offset-2")).toBe("outline-offset-2");
   });
@@ -319,10 +302,9 @@ describe("cn: SHIELD -- the outline offset does not eat the outline colour", () 
   });
 
   test("ConfirmDelete's four focus tokens now survive INSIDE cn()", () => {
-    // `internal/shared-ts/ui/confirm-delete.tsx` concatenates them outside `cn()` deliberately, with a
-    // measurement in its header saying why. This is the assertion that the workaround is no
-    // longer needed -- the icon-only form's box IS the glyph, so its offset has to be POSITIVE
-    // and it cannot use the negative spelling `buttonVariants` escapes through.
+    // ConfirmDelete concatenates these outside `cn()` deliberately — its own header measures why.
+    // This asserts the workaround is no longer needed: the icon-only form's box is the glyph, so
+    // its offset must be positive and can't use the negative spelling `buttonVariants` escapes through.
     const focus =
       "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring/40 focus-visible:outline-offset-2";
     const button = parts(focus, "transition-colors shrink-0 rounded-sm", "text-destructive");
@@ -331,8 +313,8 @@ describe("cn: SHIELD -- the outline offset does not eat the outline colour", () 
     expect(button).toContain("focus-visible:outline-ring/40");
     expect(button).toContain("focus-visible:outline-offset-2");
     expect(button).toContain("outline-none");
-    // …and a caller may now override one of them without losing the other three, which the
-    // concatenated form cannot offer at all.
+    // A caller may now override one of them without losing the other three — impossible with
+    // the concatenated form.
     const overridden = parts(focus, "focus-visible:outline-offset-4");
     expect(overridden).toContain("focus-visible:outline-offset-4");
     expect(overridden).not.toContain("focus-visible:outline-offset-2");
@@ -359,8 +341,8 @@ describe("cn: SHIELD -- a border colour does not delete a border width", () => {
   });
 
   test("the table utilities in the border namespace are not dragged into the colour group", () => {
-    // Unrelated properties that happen to share the namespace. The colour catch-all excludes
-    // them by name, and this is what keeps that exclusion honest.
+    // Unrelated properties that happen to share the namespace; the colour catch-all excludes
+    // them by name, and this keeps that exclusion honest.
     expect(parts("border-collapse", "border-spacing-2")).toHaveLength(2);
     expect(cn("border-collapse", "border-separate")).toBe("border-separate");
   });
@@ -374,7 +356,7 @@ describe("cn: SHIELD -- a bracketed border or ring value is read as width or col
   test("a bracketed length is a width and a bracketed colour is a colour", () => {
     // Nothing in the namespace distinguishes them, so the shield reads the value: a number,
     // sign, decimal point or CSS sizing function means a length, anything else means a colour.
-    // Getting this wrong made the shield itself delete a border -- at three real call sites in
+    // Getting this wrong made the shield itself delete a border at three real call sites in
     // tRadio's colour picker, where a 1px border meets a bracketed CSS-variable colour.
     expect(parts("border-[3px]", "border-accent")).toEqual(["border-[3px]", "border-accent"]);
     expect(parts("border", "border-[var(--border)]")).toEqual(["border", "border-[var(--border)]"]);
@@ -397,8 +379,8 @@ describe("cn: SHIELD -- a bracketed border or ring value is read as width or col
 describe("cn: SHIELD -- a variant that contains brackets no longer degrades the merge", () => {
   test("a data-attribute variant keeps both a width and a colour", () => {
     // unocss-merge's variant parser accepts a bare word or a fully bracketed selector, but not
-    // a variant that merely CONTAINS brackets. The prefix is then never stripped and every
-    // utility under it is grouped by its leading text alone, so a width and a colour become one
+    // a variant that merely contains brackets — the prefix is then never stripped and every
+    // utility under it groups by its leading text alone, so a width and a colour become one
     // group. This is the form Ark UI's state styling is built on. Unshielded, each of these
     // returns the colour or the style alone.
     expect(
@@ -458,21 +440,19 @@ describe("cn: SHIELD -- a variant that contains brackets no longer degrades the 
 });
 
 describe("cn: the real call sites the shield was measured against", () => {
-  // These are the class lists the components actually build, copied from the source. They are
-  // the payload: the groups above are the mechanism, and these are the screens that were wrong.
-  // Each was verified against the unshielded function before the shield landed.
+  // Class lists the components actually build, copied from source — the screens that were
+  // wrong, each verified against the unshielded function before the shield landed.
 
   test("a floating panel's title and description render at their intended size", () => {
-    // internal/shared-ts/ui/popover.tsx -- PopoverTitle and PopoverDescription. The comments there name
-    // the steps of the type scale these are meant to sit on; unshielded, neither size was ever
-    // emitted and both inherited whatever the parent set.
+    // PopoverTitle and PopoverDescription, sized to a type scale documented at their own
+    // definitions. Unshielded, neither size was ever emitted and both inherited the parent's.
     expect(parts("text-[13px] font-semibold text-foreground")).toContain("text-[13px]");
     expect(parts("text-[12px] text-muted-foreground")).toContain("text-[12px]");
   });
 
   test("a tooltip renders at its intended size", () => {
-    // internal/shared-ts/ui/tooltip.tsx -- note the data-attribute variants in the same call, which are
-    // the second defect family, and the bracketed transform-origin, which must pass through.
+    // The tooltip's own call: data-attribute variants are the second defect family, and the
+    // bracketed transform-origin must pass through untouched.
     const tooltip = parts(
       "z-50 rounded-md bg-secondary px-3 py-1.5 text-[12px] text-secondary-foreground",
       "origin-[var(--transform-origin)] transition-[opacity,transform] duration-150 ease-out",
@@ -485,8 +465,8 @@ describe("cn: the real call sites the shield was measured against", () => {
   });
 
   test("a tab trigger renders at its intended size under both variants", () => {
-    // internal/shared-ts/ui/tabs.tsx -- a cva whose BASE carries the size and whose every variant
-    // carries a colour, so the two always meet. Both variants were affected.
+    // The tabs cva: its base carries the size, every variant carries a colour, so the two
+    // always meet. Both variants were affected.
     const base =
       "inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-[12px] font-medium ring-offset-background transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 relative";
     for (const variant of [
@@ -501,7 +481,7 @@ describe("cn: the real call sites the shield was measured against", () => {
   });
 
   test("a toolbar button keeps a visible focus ring", () => {
-    // tAFK EditorHud.tsx -- the one place in these six resources where the ring colour and the
+    // tAFK's editor HUD is the one place in these six resources where the ring colour and the
     // offset colour share a variant prefix, which is what the first defect family needs. The
     // shared components mostly leave the offset colour unprefixed, which is why they escaped.
     const button = parts(
@@ -518,10 +498,10 @@ describe("cn: the real call sites the shield was measured against", () => {
   });
 
   test("a text input's large size resolves to one font size, not two", () => {
-    // tLib and tRadio ui/input.tsx -- the cva base sets one size and the `lg` variant another.
-    // Unshielded BOTH shipped, because the base's is a named size and `base` is not in the
-    // font-size regex, so the rendered size was decided by UnoCSS's emit order. This is the one
-    // real call site whose rendered output the shield CHANGES rather than restores.
+    // tLib and tRadio's Input cva: the base sets one size, the `lg` variant another. Unshielded
+    // both shipped, because the base's size is a named size and `base` is not in the font-size
+    // regex, so the rendered size was decided by UnoCSS's emit order. The one real call site
+    // whose rendered output the shield changes rather than restores.
     const base =
       "flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:text-sm placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
     const lg = parts(base, "h-12 text-base");

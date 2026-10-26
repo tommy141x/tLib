@@ -331,13 +331,9 @@ describe("hub", () => {
     }
   });
 
-  // THE PERMANENT GUARD, router half. A `POST /` consent switch lived here
-  // briefly; this listener binds `0.0.0.0` by default and its index is public
-  // and unauthenticated by design, with no auth primitive in this tree to gate a
-  // writer with, so it was removed. POST is REJECTED — not accepted and ignored,
-  // which would leave a caller believing it had set something. And the original
-  // promise is unchanged: a non-navigation method is never redirected into an
-  // app, single destination or not.
+  // Guards against a removed `POST /` consent switch reappearing. POST must be
+  // rejected, not accepted and ignored — that would leave a caller believing it
+  // had set something.
   test("non-navigation methods at the hub are rejected, not redirected into an app", async () => {
     mountProxy();
     for (const method of ["POST", "PUT", "DELETE", "PATCH"]) {

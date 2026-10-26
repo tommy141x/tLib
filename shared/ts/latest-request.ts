@@ -1,42 +1,26 @@
 /**
  * "Only the newest in-flight request may touch anything" — one async fence.
+ * Three resources (tLS's `createHudRequest`, tDetector/tRadar's
+ * `createLatestLayoutRequest`) had arrived at this independently and
+ * identically, down to which nouns differed — nothing resource-specific to
+ * preserve, only three places to fix if the fence turns out wrong.
  *
- * Three resources had arrived at this independently and identically: tLS as
- * `createHudRequest`, tDetector and tRadar as `createLatestLayoutRequest`. The
- * three bodies differed only in the nouns (`epoch`/`generation`,
- * `abort`/`controller`) and in how the comment above them was worded, so there
- * was nothing resource-specific to preserve — only three places to fix the next
- * time the fence turns out to be wrong.
+ * `AbortController` alone is not sufficient: abort is best-effort and races —
+ * `fetch` can already have resolved, or be mid-`.json()`, when `abort()`
+ * lands, and the continuation then writes a stale value into the live DOM.
+ * The generation check fences that because it's evaluated *after* the await,
+ * not signalled before it; the controller stays as an optimisation (frees the
+ * socket) layered on top, not the fence itself.
  *
- * Why a generation counter and not just AbortController
+ * `pending` is cleared only by the winner: a superseded request's `finally`
+ * runs while its replacement is still loading, so an unguarded `pending =
+ * false` would flicker a bound spinner off and read as idle while work is
+ * outstanding.
  *
- * `AbortController` is the obvious tool and it is not sufficient. Abort is
- * best-effort and it races: `fetch` can already have resolved, or be between
- * resolving the response and resolving `.json()`, when `abort()` lands. The
- * continuation then runs with a perfectly good value from a request nobody
- * wants any more, and writes it into the live DOM or re-subscribes callbacks
- * that belong to the previous skin. The generation check is what actually
- * fences that, because it is evaluated *after* the await rather than signalled
- * before it. The controller is still here, because aborting also stops the
- * transfer and frees the socket — it is an optimisation layered on the fence,
- * not the fence.
- *
- * Why `pending` is cleared only by the winner
- *
- * A superseded request settling must not report "idle": its `finally` runs
- * while the request that replaced it is still loading. Guarding the clear with
- * the same generation check keeps `pending` true for exactly as long as some
- * request the caller still cares about is in flight, which is what a spinner
- * bound to it needs. An unguarded `pending = false` makes the spinner flicker
- * off and on again on every supersede, and — worse — reads as idle while work
- * is outstanding.
- *
- * Why A→B→A needs request identity
- *
- * The callers are skin/layout loaders, and a user can go back to the skin they
- * started on. Keying the fence on a *name* would let the stale A response pass
- * as the newest A. Each `run` therefore takes a fresh monotonic number, so the
- * identity being compared is the request's, never the payload's.
+ * A→B→A needs request identity, not a name: callers are skin/layout loaders
+ * where a user can go back to the skin they started on, so keying on a name
+ * would let a stale A response pass as the newest A. Each `run` takes a fresh
+ * monotonic number instead.
  */
 
 export interface LatestRequest {
@@ -95,11 +79,10 @@ export function createLatestRequest(): LatestRequest {
 
     dispose() {
       disposed = true;
-      // Bumping the generation is what retires the requests already awaiting:
-      // `disposed` alone would be enough for `apply`/`fail`, but the `finally`
-      // guard is deliberately *not* disposal-aware so that `pending` settles to
-      // false exactly once. Moving the generation past every outstanding
-      // request is what makes that guard fail for all of them.
+      // Bumping the generation retires requests already awaiting: `disposed`
+      // alone would cover `apply`/`fail`, but the `finally` guard is
+      // deliberately not disposal-aware so `pending` settles to false exactly
+      // once, for all of them.
       generation++;
       controller?.abort();
       pending = false;

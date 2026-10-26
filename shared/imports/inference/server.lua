@@ -46,20 +46,13 @@ end
 
 --- Whether a BOOL native said yes.
 ---
---- MEASURED 2026-09-26, FiveM Enhanced: every BOOL native reached from Lua here
---- returns the NUMBER 1, not `true` -- DoesEntityExist, NetworkDoesNetworkIdExist,
---- IsPedInAnyVehicle, IsEntityAVehicle and HasModelLoaded were all checked with
---- `type()` and all answered "number". So `native(...) == true` is ALWAYS FALSE, and
---- the code below used to be exactly that.
----
---- It cost a full debugging session: screentarget's `exists` provider rejected every
---- entity that existed, so no vehicle ever qualified as a screen target and the props
---- on all three devices stayed dark -- no browser, no backlight, no lamps -- while
---- every unit test passed, because the suites INJECT their own providers and so never
---- run a real native.
----
---- `not not v` is NOT the fix: 0 is truthy in Lua, so it would turn every "no" into a
---- "yes". Both shapes have to be spelled out.
+--- FiveM Enhanced's BOOL natives (DoesEntityExist, NetworkDoesNetworkIdExist,
+--- IsPedInAnyVehicle, IsEntityAVehicle, HasModelLoaded) return the NUMBER 1 to
+--- Lua, not `true`, so `native(...) == true` is always false — this broke
+--- screentarget's `exists` provider, rejecting every real vehicle, invisibly
+--- to unit tests because their suites inject providers instead of real natives.
+--- `not not v` is not the fix either: 0 is truthy in Lua, so it would turn
+--- every "no" into a "yes".
 local function nativeTruth(v)
     if v == true then return true end
     return type(v) == "number" and v ~= 0

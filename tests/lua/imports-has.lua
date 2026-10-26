@@ -140,13 +140,14 @@ end)
 -- The bootstrap trap: has() cannot probe for its own absence
 
 test('with no has() key, tlib.has is the proxy and CALLING it hits exports', function()
-    -- KEPT AS AN ORACLE FOR THE PROXY, NOT AS A SUPPORTED INSTALL STATE. `has` is
-    -- defined in imports.lua, which must have run for `tlib` to exist at all, so a real
-    -- tLib 1.0+ always has it and consumers call it directly with no pcall. What this
-    -- pins is the __index behaviour that makes `has` necessary in the first place: an
-    -- unresolvable name becomes a truthy FUNCTION. If the proxy ever became a callable
-    -- table, `type(tlib.diag) == 'table'` would start answering true for a missing
-    -- module, and the docs above would be wrong.
+    -- Kept as an oracle for the proxy, not as a supported install state. `has`
+    -- is defined in imports.lua, which must have run for `tlib` to exist at
+    -- all, so a real tLib 1.0+ always has it and consumers call it directly
+    -- with no pcall. What this pins is the __index behaviour that makes `has`
+    -- necessary in the first place: an unresolvable name becomes a truthy
+    -- function. If the proxy ever became a callable table, `type(tlib.diag)
+    -- == 'table'` would start answering true for a missing module, and the
+    -- docs above would be wrong.
     local tlib, exportCalls = fixture({})
     rawset(tlib, 'has', nil)                       -- as if imports.lua predated has()
     local probe = tlib.has

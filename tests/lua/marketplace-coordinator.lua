@@ -164,12 +164,11 @@ req('install', 'a', 'ui', 'throws'); result(last().token, 'a')
 eq(replies[#replies].p.ok, true, 'callback failure does not lose reply')
 req('uninstall', 'a', 'ui', 'throws'); result(last().token, 'a')
 
--- An install reply carries COUNTS AND NO PATH.
---
--- `installFromData` answers with an absolute `<resourceRoot>/<installPath>/<slug>`
--- and the coordinator used to forward it to the client, where the only reader was
--- a log line printing the server's directory layout. The inspect reply was already
--- asserted path-free below; the write path was not, which is how it kept one.
+-- An install reply carries counts and no path: `installFromData` answers with
+-- an absolute `<resourceRoot>/<installPath>/<slug>`, and the coordinator used
+-- to forward it to the client, where the only reader was a log line printing
+-- the server's directory layout. The inspect reply was already asserted
+-- path-free below; the write path was not, which is how it kept one.
 req('install', 'a', 'ui', 'paths'); result(last().token, 'a', true,
     { installedAt = '/private/root/layouts/paths', fileCount = 3, bytesWritten = 4096 })
 local installedReply = replies[#replies].p
@@ -291,8 +290,8 @@ aces = nil
 --
 -- The gap these pin: the coordinator keys registrations `resource:type` and
 -- writes into that resource's own registered installPath, so a tLS item could
--- never land in tRadar's DIRECTORY. The item's own `resource` field was the
--- unenforced half — `tlib:marketplace:install('tRadar','ui','<a-tLS-slug>')`
+-- never land in tRadar's directory. The item's own `resource` field was the
+-- unenforced half -- `tlib:marketplace:install('tRadar','ui','<a-tLS-slug>')`
 -- passed every check above and tLib fetched and installed it.
 eq(reg('a'), true)
 
@@ -317,7 +316,7 @@ ownership.mode = 'ok'
 req('install', 'a', 'ui', 'foreign'); eq(#dispatched, d + 1, 'refusal released the lock')
 result(last().token, 'a')
 
--- FAILS CLOSED, and distinguishably: an unreachable marketplace is not a
+-- Fails closed, and distinguishably: an unreachable marketplace is not a
 -- mismatch and must not read as one.
 ownership.mode = 'unreachable'
 d = #dispatched
@@ -355,7 +354,7 @@ ownership.pending(true, nil)
 eq(#dispatched, d, 'late ownership answer does not dispatch')
 eq(#replies, r, 'late ownership answer is silent')
 
--- UNINSTALL AND INSPECT ARE DELIBERATELY NOT GATED. They act on files already
+-- Uninstall and inspect are deliberately not gated: they act on files already
 -- on this server's disk, addressed by the same tuple that put them there.
 -- Gating them would make a cross-product item installed before this check
 -- existed impossible to remove, and would put an outbound HTTP call in the way

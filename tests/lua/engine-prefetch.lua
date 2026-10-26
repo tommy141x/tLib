@@ -5,17 +5,16 @@
 --
 -- The browser is handed rows for exactly ONE page; every other page reaches it as a
 -- placeholder carrying navigation metadata only. That is what made stepping into a
--- submenu a round trip the player watched -- 19ms measured, about a frame and a
--- half, between pressing Enter and seeing the next page -- because the rows did not
+-- submenu a round trip the player watched -- 19ms, about a frame and a half,
+-- between pressing Enter and seeing the next page -- because the rows did not
 -- exist anywhere the browser could reach until it asked for them.
 --
 -- So the engine projects the page a highlighted submenu row points at while the
--- cursor is resting on it, and the browser paints from what it already holds. That
--- is only worth doing if it stays cheap and only honest if it stays true, so this
--- suite is exclusive about BOTH: every projection pass the engine makes is recorded
+-- cursor is resting on it, and the browser paints from what it already holds.
+-- This suite is exclusive about both halves: every projection pass is recorded
 -- with the exact page list it asked for, and every page push to the browser is
--- counted. A prefetch that fires per row passed over, or one that paints a page an
--- `enter` hook would have refused, both fail here.
+-- counted. A prefetch that fires per row passed over, or one that paints a page
+-- an `enter` hook would have refused, both fail here.
 --
 -- Runs the REAL client/cl_menu.lua against a stub host, as engine-snapshot.lua
 -- does, and additionally drives the NUI callbacks -- so the host has to answer the

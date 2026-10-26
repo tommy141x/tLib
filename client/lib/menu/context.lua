@@ -14,16 +14,14 @@
 -- reconciliation: those run against the raw snapshot, and a row disabled here
 -- because the player got out of the car is not a revoked grant.
 --
--- `authority`, the second argument to present(), is SCOPED TO THE PASS, and that
--- is the most expensive decision in the menu. A cross-resource presenter is
--- called over an export boundary that serialises every argument, so passing the
--- whole hydrated snapshot msgpacked the entire catalogue once per presenter per
--- pass. Measured against tMenu's catalogue (215 pages, ~51,000 option labels,
--- 3.4 MB encoded), timed with GetNetworkTimeAccurate because GetGameTimer does
--- not advance within a frame: 43-99 ms with the whole snapshot as `raw`, 0-1 ms
--- with it emptied, and every other stage of a pass 0-1 ms. The payload was the
--- whole cost.
---
+-- `authority`, present()'s second argument, is scoped to the pass — the most
+-- expensive decision in the menu. A cross-resource presenter crosses an export
+-- boundary that serialises every argument, so passing the whole hydrated
+-- snapshot msgpacked the entire catalogue once per presenter per pass. Against
+-- tMenu's catalogue (215 pages, ~51,000 option labels, 3.4 MB encoded), timed
+-- with GetNetworkTimeAccurate since GetGameTimer does not advance within a
+-- frame: 43-99 ms with the whole snapshot as `raw`, 0-1 ms with it emptied —
+-- the payload was the whole cost.
 
 if _TLIB_SIDE ~= 'client' then return end
 

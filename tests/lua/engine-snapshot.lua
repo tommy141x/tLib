@@ -27,8 +27,6 @@
 -- carries a host at all: client.lua is the one engine file that needs one.
 
 
--- The host
-
 _TLIB_SIDE = 'client'
 _TLIB_IS_FIVEM = false -- no RegisterCommand/RegisterKeyMapping in this state
 
@@ -104,8 +102,6 @@ local function ordered(list, field, expected, message)
     end
 end
 
--- The fixture
-
 local function menu(spec)
     local clean, err = S.menu(spec, 'alpha', true)
     if not clean then fail(('fixture %s is not valid: %s'):format(tostring(spec.id), tostring(err))) end
@@ -152,8 +148,6 @@ equal(built, 0, 'registering a catalog provider does not build it inline')
 pump()
 equal(built, 1, 'it is built on the next frame instead, before any snapshot needs it')
 
--- What an unchanged manifest must not repeat
-
 local snapshots, syncs = 0, 0
 assert(MC.registerHooks('alpha', { snapshot = function() snapshots = snapshots + 1 end }))
 MC.actions('alpha') -- a dispatcher, so permission syncs are observable
@@ -188,8 +182,6 @@ check(secondIndex[1].data == firstIndex[1].data,
     'but it is the index already built rather than ~51,000 entries walked again')
 equal(#messagesOf('menu:snapshot'), 1, 'and the tree is sent again, because opening is a new session for the browser')
 
--- What a changed manifest must do
-
 uiMessages = {}
 refresh(manifest('101'))
 equal(snapshots, 2, 'a manifest that grants different rows announces the new tree')
@@ -204,9 +196,9 @@ check(rebuilt[1].data ~= firstIndex[1].data, 'and the search index is rebuilt ra
 ordered(rebuilt[1].data, 'i', { 'alpha:one:open', 'alpha:a', 'alpha:d', 'alpha:c' },
     'against the rows the new manifest actually granted')
 
--- Back to the original grant: this is a DIFFERENT manifest from the one standing,
--- so it must rebuild -- reuse is keyed on the manifest in hand, not on any manifest
--- ever seen.
+-- Back to the original grant: this is a different manifest from the one
+-- standing, so it must rebuild -- reuse is keyed on the manifest in hand, not
+-- on any manifest ever seen.
 uiMessages = {}
 refresh(manifest())
 equal(snapshots, 3, 'returning to an earlier grant is itself a change, and is announced')

@@ -73,13 +73,9 @@ export function registerCommunityConfigsBridge(): void {
       cb(false, "payload is not valid JSON");
       return;
     }
-    // Not `settle`: this one answers with a FOURTH argument, the edit token.
-    //
-    // Appending rather than changing the third keeps every shipped consumer
-    // working — Lua ignores arguments it does not name, so a caller written
-    // against `(ok, err, id)` is unaffected — and a caller that does want the
-    // token gets `null` from a Worker too old to mint one, which is the same
-    // "cannot be edited from in game" as any other absent token.
+    // Not `settle`: answers with a fourth argument, the edit token. Appending
+    // rather than changing the third keeps every shipped `(ok, err, id)` caller
+    // working; a Worker too old to mint a token sends `null`.
     void publishConfig(payload).then(
       (result) => cb(true, null, result.id, result.editToken),
       (e: unknown) => cb(false, errText(e))

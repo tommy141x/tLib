@@ -1,70 +1,39 @@
 --[[
-    tLib — RUNTIME TXD LIFETIME: CREATE ONCE, NEVER AGAIN
+    tLib — runtime TXD lifetime: create once, never again.
 
-    Loaded into the CONSUMER's VM like every other module under shared/imports/:
+    Loaded into the consumer's VM like every other module under shared/imports/:
     `tlib.runtimetxd`. Client only — every native it touches is a graphics native.
 
         local txds = tlib.runtimetxd.create('tdet_scr_txd')
         local txd  = txds.ensure()
         local name = txds.textureName('tdet_screen', serial)
 
-     Why this exists
+    CREATE_RUNTIME_TXD permanently consumes one of the game's finite `ytd`
+    streaming slots (FindSlotFromHashKey + AddRef + SetDoNotDefrag), and
+    nothing in the engine ever frees it — RuntimeTxd/RuntimeTex register a
+    constructor with no matching destructor. Calling it twice with the same
+    name is worse than wasteful: RuntimeTxd::EnsureTxd only assigns m_txd when
+    the slot has no handle yet, so a second call either orphans every texture
+    already registered under that name (AddReplaceTexture keeps pointing at
+    the old dictionary) or leaves m_txd null, silently killing every later
+    CreateRuntimeTexture against it. Neither failure raises. Replaces ~70
+    lines duplicated across tRadio (which got it wrong first), tDetector and
+    tRadar (which got it right).
 
-    CREATE_RUNTIME_TXD is not the cheap "make me a namespace" call it reads as. In
-    RuntimeAssetNatives.cpp it resolves the name through FindSlotFromHashKey against
-    the `ytd` streaming module, AddRef()s that slot and marks it SetDoNotDefrag — it
-    PERMANENTLY CONSUMES one of the game's finite ytd streaming slots and pins it in
-    place. And it is never given back: the native registration binds .AddConstructor
-    for both RuntimeTxd and RuntimeTex with NO matching .AddDestructor, so there is
-    no code path in the engine, and therefore none reachable from Lua, that frees
-    either one.
+    The dictionary name is tokenised per resource load, at the cost of one
+    pinned `ytd` slot per restart: CreateRuntimeTxd is not idempotent across
+    owners, so re-registering an existing name creates a second dictionary and
+    AddReplaceTexture may resolve to the wrong one — the state a plain
+    `restart <resource>` otherwise leaves a resource in (measured: the same
+    name handed out two different handles minutes apart). Runtime texture
+    names need the same tag for the same reason, process-global with no
+    destructor: a restarted resource's first browser re-requesting a bare name
+    gets a null handle from CreateRuntimeTextureFromDuiHandle and the screen
+    stays dead for the rest of the session. `textureName` lives here, not at
+    each call site, so the tag can't be forgotten.
 
-    Calling it twice with the SAME name is worse than wasteful, it is incoherent.
-    RuntimeTxd::EnsureTxd only assigns m_txd inside `if (!entry.handle)`, and a slot
-    created by a script never acquires a streaming handle. So the second call either
-    allocates a fresh empty pgDictionary and SetResource()s it over the first —
-    orphaning every texture already registered under that name, which is exactly the
-    set AddReplaceTexture is still pointing at — or leaves m_txd null, in which case
-    every later CreateRuntimeTexture against it silently returns 0. Neither is
-    recoverable, and NEITHER RAISES.
-
-    tRadio got this wrong first; tRadar got it right. tDetector and tRadar then
-    carried the same ~70 lines of it each, with the measurement written down twice
-    and, in one of the two, a comment that contradicted its own code about whether
-    the dictionary name was tokenised. It is one implementation now.
-
-     THE TXD NAME IS TOKENISED PER RESOURCE LOAD
-
-    That is not the obvious call — it costs one pinned `ytd` streaming slot per
-    resource load. It is still right. CreateRuntimeTxd is NOT idempotent across
-    owners: re-registering an existing name produces a SECOND dictionary, and
-    AddReplaceTexture then resolves the name to whichever one does not hold our
-    textures, so every replacement silently does nothing. That is the state a plain
-    `restart <resource>` leaves a resource in. Measured 2026-09-25 in tRadar: the
-    same name handed out handle 20 and handle 6 minutes apart.
-
-    One leaked slot per restart is far cheaper than a screen that dies on every
-    restart, and a customer loads a resource once per session anyway.
-
-     AND SO IS EVERY TEXTURE NAME
-
-    Runtime textures are process-global and have no destructor either, so every name
-    a resource took before a restart is still taken afterwards for as long as the game
-    client runs. Without the tag the first browser of a restarted resource asks for
-    `tdet_screen_1` again, CreateRuntimeTextureFromDuiHandle returns null, the caller
-    takes its failure branch and destroys the browser — and the screen stays baked for
-    the whole session with one line in the client console. A texture whose name is
-    otherwise CONSTANT is worse still: it collides on every restart without exception.
-
-    `textureName` is here rather than left to each caller for exactly that reason: the
-    rule is "a runtime texture name must carry the per-load tag", and a name built by
-    hand is a name that can forget to.
-
-     What is NOT owned here
-
-    Which textures go in the dictionary, what they are bound to, and when the
-    replacements are issued or re-issued. Those are the consumer's; this module
-    answers "what dictionary, and under what name" and nothing further.
+    Not owned here: which textures go in the dictionary, what they're bound
+    to, or when replacements are (re-)issued — that's the consumer's.
 ]]
 
 local RuntimeTxd = {}
@@ -77,12 +46,9 @@ function RuntimeTxd.create(prefix)
 
     local instance = {}
 
-    -- [name] = handle, plus a count of CREATE_RUNTIME_TXD CALLS.
-    --
-    -- The call count, not the size of the table, is what `count` answers, and the
-    -- difference is the whole hazard: the dangerous case is calling the native twice
-    -- with the SAME name, which a table keyed by name cannot see at all. Counting
-    -- names reads 1 for a resource that has pinned the slot twenty times.
+    -- [name] = handle. txdCalls counts native calls, not table size: a table
+    -- keyed by name can't see the hazard of calling the native twice with the
+    -- same name, since that would just read as 1 for a slot pinned 20 times.
     local txds = {}
     local txdCalls = 0
     local tagCache = nil
@@ -140,16 +106,10 @@ function RuntimeTxd.create(prefix)
         return ('%s_%s_%d'):format(stem, instance.tag(), serial)
     end
 
-    --- How many times this instance has called CREATE_RUNTIME_TXD -- which is how
-    --- many `ytd` streaming slots it has pinned.
-    ---
-    --- Exported for the suites, which assert it stays at one across repeated screen
-    --- activations. The leak is invisible in game until the streamer runs out of
-    --- slots, so a counter is the only oracle available.
-    ---
-    --- CALLS, not distinct names. The dangerous case is calling the native twice with
-    --- the SAME name, and a count of names reads 1 for a resource that has pinned the
-    --- slot twenty times -- a counter that cannot see the defect it exists for.
+    --- How many times this instance has called CREATE_RUNTIME_TXD -- i.e. how
+    --- many `ytd` slots it has pinned. Exported for suites asserting it stays
+    --- at one across repeated activations; the leak is invisible in game
+    --- until the streamer runs out of slots.
     function instance.count()
         return txdCalls
     end

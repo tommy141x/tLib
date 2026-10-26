@@ -2,44 +2,27 @@
 -- what it is.
 --
 --   tlib.modules.scan('layouts', 'layout')        -> { 'DRX-330', 'QRX-720' }
---   tlib.modules.scan('layouts/themes', 'theme')  -> { 'basic', 'dark' }
 --   tlib.modules.load('layouts', 'QRX-720', 'ui.html')
 --
--- Only scan/list/read need a directory listing, which comes from tLib's Node
--- bundle; `load` is a plain LoadResourceFile.
---
--- shared/ts/modules/manifest.ts is the written-out contract; this file is the
--- runtime gate, and tests/unit/module-manifest.test.ts runs both over the same
--- cases so they cannot drift.
---
--- `kind = "sound"` is valid in that contract and is deliberately NOT accepted
--- here. On a FiveM resource a sound is a flat audio file an operator drags in --
--- no folder, no manifest. It is only a module in the studio and the marketplace,
--- whose installer writes the audio flat. So the TypeScript side knows three kinds
--- and this file knows two.
---
--- A folder counts if it holds a `module.json` whose `kind` matches the directory.
--- The two category names are refused by an explicit RESERVED list rather than,
--- as before, by happening to contain no `ui.html`.
+-- shared/ts/modules/manifest.ts is the paired contract, kept in sync by
+-- tests/unit/module-manifest.test.ts. `kind = "sound"` is valid there but refused
+-- here -- a sound ships as a flat file an operator drags in, with no folder or
+-- manifest, so this side only knows `layout` and `theme`.
 
 local modules = {}
 
 modules.MANIFEST = 'module.json'
 modules.SCHEMA = 1
--- The kinds a FiveM resource discovers on disk. `sound` is absent on purpose --
--- see the header. Keep this in step with MODULE_KINDS in
--- shared/ts/modules/manifest.ts, which is a SUPERSET by design.
+-- Discovered kinds; sound is excluded (see header). Keep in step with
+-- MODULE_KINDS in manifest.ts, which is a superset by design.
 modules.KINDS = { layout = true, theme = true }
 
 --- Folder names a module may never take: the category directories inside
---- `layouts/`. Explicit so that a module called `themes` is REFUSED by name
---- instead of silently shadowing every theme on the server.
----
+--- `layouts/`. Explicit so a module called `themes` is REFUSED by name instead
+--- of silently shadowing every theme on the server.
 modules.RESERVED = { sounds = true, themes = true }
 
 --- Called for every folder that is on disk but is not a usable module.
----
----
 --- @param basePath string
 --- @param id string
 --- @param err string
@@ -49,12 +32,10 @@ end
 
 --- Folder names directly under basePath.
 ---
---- FiveM's server Lua sandbox cannot enumerate a directory at all: io.popen is
---- nil and io.readdir returns an empty list for every path, including the
---- resource's own root. So the listing comes from tLib's Node bundle. io.popen is
---- kept as a second chance for a test harness or a runtime with no export; note
---- the platform test is `OS ~= nil`, because the FiveM server reports "Windows"
---- and an equality check against "Windows_NT" sent a `ls` to cmd.exe.
+--- FiveM's server sandbox has no directory enumeration: io.popen is nil and
+--- io.readdir returns empty for every path, so the listing comes from tLib's Node
+--- bundle. The OS test below is `OS ~= nil`, not `== "Windows_NT"` -- the FiveM
+--- server reports plain "Windows", and the equality check once sent `ls` to cmd.exe.
 local function listDirs(resourceName, basePath)
     local ok, encoded = pcall(function()
         return exports.tLib:ListResourceDirs(resourceName, basePath)
@@ -64,17 +45,12 @@ local function listDirs(resourceName, basePath)
         if type(decoded) == "table" then return decoded end
     end
 
-    -- NEVER ON A LIVE SERVER. The branch below shells out to cmd.exe, and the
-    -- header above records the measurement that makes it pointless here: io.popen
-    -- is nil in FiveM's server sandbox, so `pcall(io.popen, cmd)` has only ever
-    -- returned false. It is kept for a test harness or a runtime with no export,
-    -- and it is gated so that is all it can be.
-    --
-    -- Gated rather than deleted because the cost of leaving it ungated is not
-    -- theoretical: a server SIGSEGV during tRadio's start was being investigated
-    -- against this line for exactly as long as it took to find that comment --
-    -- the only Windows-specific, consumer-triggered code reachable at resource
-    -- start, and dead the whole time.
+    -- NEVER ON A LIVE SERVER: io.popen is nil in FiveM's server sandbox, so
+    -- `pcall(io.popen, cmd)` always returns false here; this branch only runs in
+    -- a test harness or a runtime with no export. Gated rather than deleted --
+    -- a server SIGSEGV during tRadio's start was once chased against this exact
+    -- line, the only Windows-specific, consumer-triggered code reachable at
+    -- resource start.
     if _TLIB_IS_FIVEM then return {} end
 
     local resourcePath = GetResourcePath(resourceName)
@@ -100,10 +76,9 @@ end
 
 --- Read a file from a resource, seeing writes made since the resource started.
 ---
---- LoadResourceFile answers from the index built when the resource started, so a
---- module dropped in afterwards is on disk but invisible until a restart. That
---- live-scan property IS the drop-in install mechanism, so fall through to tLib's
---- Node bundle before deciding the module is not there.
+--- LoadResourceFile answers from the index built at resource start, so a module
+--- dropped in afterwards is on disk but invisible until a restart. Falls through
+--- to tLib's Node bundle -- the drop-in install mechanism -- before giving up.
 local function readFile(resourceName, relPath)
     local contents = LoadResourceFile(resourceName, relPath)
     if contents and contents ~= '' then return contents end
@@ -158,7 +133,8 @@ local function isFontWeight(value)
     return one(value)
 end
 
---- Mirror of FONT_FAMILY_FORBIDDEN. A declared family is ONE name: a comma would
+--- Mirror of FONT_FAMILY_FORBIDDEN. A declared family is ONE name -- a comma
+--- would make it a list, so it is rejected below along with quotes and braces.
 local function isFontFamily(value)
     if not isText(value, 120) then return false end
     if value:find('[\'"{};,\\]') then return false end
@@ -299,9 +275,8 @@ function modules.validate(raw, id, kind)
         return nil, ('module.json: a "%s" module must not carry "sound"'):format(raw.kind)
     end
 
-    -- `theme` is OPTIONAL on a theme: one that merely selects a family the app
-    -- already bundles ships no font and declares no block, which is four of the
-    -- five dispatch themes. On any other kind it is refused.
+    -- `theme` is OPTIONAL: one that merely selects a family the app already
+    -- bundles ships no font and declares no block. On any other kind it is refused.
     if raw.theme ~= nil then
         if raw.kind ~= 'theme' then
             return nil, ('module.json: a "%s" module must not carry "theme"'):format(raw.kind)
@@ -327,15 +302,10 @@ function modules.read(basePath, id, kind, resourceName)
     return modules.validate(decoded, id, kind)
 end
 
---- Every usable module of `kind` under basePath, as `{ id = , manifest = }`.
----
---- A folder that is on disk but unusable — reserved name, no manifest, wrong
---- Directory names the last `list` of this path skipped for having no manifest.
----
---- Exists because that skip is otherwise invisible, and its invisibility is what
---- made a marketplace layout look installed and absent at the same time. Keyed
---- the same way as the cache, so a caller asks about the scan it just ran.
----
+--- Directory names the last `list()` call for this path skipped for having no
+--- manifest. Recorded because that skip is otherwise invisible -- it once made a
+--- marketplace layout look installed and empty at the same time. Keyed like the
+--- cache, so a caller asks about the scan it just ran.
 --- @param basePath string
 --- @param kind string
 --- @param resourceName string|nil
@@ -368,22 +338,12 @@ function modules.list(basePath, kind, resourceName)
             elseif err ~= 'no ' .. modules.MANIFEST then
                 modules.onRefusal(basePath, id, err)
             else
-                -- A directory with no manifest is not an error: this scan asks a
-                -- manifest question, and plenty of folders are not modules.
-                --
-                -- WARNING: BUT IT MUST LEAVE A TRACE. It is the one refusal that printed
-                -- nothing, and that silence cost three operator reports: a
-                -- marketplace layout bundle carries no `module.json`, so it was
-                -- skipped here without a word while the admin panel counted it as
-                -- installed. The operator saw "installed" and an empty in-game
-                -- picker with nothing connecting the two, and reinstalled it again
-                -- and again. tRadio fixed its own side by not asking a manifest
-                -- question about a manifest-less artifact; this is so the next
-                -- person looking has something to find.
-                --
-                -- Recorded, not printed. A scan runs over every folder on disk and
-                -- a line each would be noise on every boot — `modules.skipped()`
-                -- is there for whoever is actually debugging.
+                -- No manifest is not an error -- plenty of folders are not modules.
+                -- But it must leave a trace: an unprinted skip once let an admin
+                -- panel show a marketplace layout as "installed" while it rendered
+                -- empty, with nothing connecting the two. Recorded, not printed,
+                -- since a line per skipped folder would be noise on every boot --
+                -- see modules.skipped().
                 skipped[#skipped + 1] = id
             end
         end
@@ -398,7 +358,6 @@ function modules.list(basePath, kind, resourceName)
 end
 
 --- Just the ids, sorted.
----
 function modules.scan(basePath, kind, resourceName)
     local ids = {}
     for _, entry in ipairs(modules.list(basePath, kind, resourceName)) do
@@ -419,7 +378,6 @@ function modules.load(basePath, id, fileName, resourceName)
 end
 
 --- Whether a module ships a given file, seeing files added since start.
----
 function modules.hasFile(basePath, id, fileName, resourceName)
     resourceName = resourceName or GetCurrentResourceName()
     if LoadResourceFile(resourceName, basePath .. '/' .. id .. '/' .. fileName) then

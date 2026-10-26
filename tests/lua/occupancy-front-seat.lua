@@ -1,18 +1,15 @@
 -- Vehicle occupancy: the one trust rule tLS, tRadar and tRadio share.
 --
--- Three resources each grew their own answer to "may this player act on that
--- vehicle" and all three got it differently wrong: tLS accepted any seat (so a
--- rear passenger could steal the relay from the driver), tRadio accepted only
--- the driver, tRadar never asked because it never left the client. This module
--- is the single answer, and this suite is its oracle.
+-- Each grew its own wrong answer to "may this player act on that vehicle": tLS
+-- accepted any seat (a rear passenger could steal the driver's relay), tRadio
+-- accepted only the driver, tRadar never asked at all. This module is the
+-- single answer and this suite is its oracle.
 --
--- There are three tiers — driver, front passenger, rear passenger — and two
--- questions. The rear tier PERCEIVES and never CONTROLS, so most of what this
--- file asserts about a rear seat is what it is still refused.
---
--- The module is loaded into each CONSUMER's VM, like every tLib import, so each
--- resource keeps its own cache over the same authoritative natives. Nothing here
--- is shared between resources at runtime — only the rule is.
+-- Three tiers -- driver, front passenger, rear passenger. The rear tier
+-- perceives and never controls, so most of what this file asserts about a rear
+-- seat is what it is still refused. The module loads into each consumer's VM
+-- like every tLib import, so each resource keeps its own cache over the same
+-- authoritative natives -- nothing here is shared at runtime but the rule.
 
 local seats = {}   -- [src] = { seat = -1|0|1.., netId = n } or nil
 local reads = 0
@@ -268,8 +265,8 @@ assert(#events == 1 and events[1].netId == 10 and events[1].driver == 6 and even
 
 occupancy.clear(6)
 assert(occupancy.seatOf(6) == nil, 'a dropped player holds no seat')
--- 5, not 2: taking seat 0 of vehicle 10 above displaced 2 from it. Two players
--- cannot share a seat, and the reading taken from the host is the newer one.
+-- 5, not 2: taking seat 0 of vehicle 10 above displaced 2 from it (same
+-- double-booking rule as above).
 assert(occupancy.controllerOf(10) == 5,
     'and control falls back to the remaining front-seat occupant')
 assert(#events == 2 and events[2].driver == nil, 'the drop is announced like any other change')

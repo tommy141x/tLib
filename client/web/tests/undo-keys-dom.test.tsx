@@ -15,11 +15,11 @@
  *    keydown inside a focused input actually carries that target.
  *  - `preventDefault` on a real `KeyboardEvent` is what the browser reads.
  *
- * THE SINGLETON IS SHARED ACROSS THIS WHOLE FILE AND EVERY OTHER FILE IN THE
- * PROCESS. That is the reason `tests/harness.test.tsx` asserts a mounted
- * component's scope count returns to its baseline after `cleanup()` — with the
- * duplicate solid-js copy that was measured first, it did not, and these tests
- * would have been resolving against scopes left behind by earlier files.
+ * The registry singleton is shared across this file and every other file in
+ * the process, which is why `harness.test.tsx` asserts a mounted component's
+ * scope count returns to baseline after `cleanup()` — with the duplicate
+ * solid-js copy measured earlier, it didn't, and these tests would have
+ * resolved against scopes left behind by earlier files.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";

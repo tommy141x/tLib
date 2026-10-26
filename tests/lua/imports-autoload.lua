@@ -3,39 +3,35 @@
 -- Oracle for the AUTOLOAD list in imports.lua — the two modules whose wiring only
 -- happens when they load, which a consumer no longer has to declare.
 --
--- WHAT THIS GUARDS
--- ----------------
--- `telemetry`'s file scope is what registers the `tlib:diagnostics` NUI callback,
+-- `telemetry`'s file scope registers the `tlib:diagnostics` NUI callback,
 -- subscribes the consent event and starts the flush thread. tRadio's and tCAD's
 -- diagnostics producer is the NUI collector, which never touches `tlib.telemetry`
--- from Lua at all, so there is no first access to trigger a lazy load. Until
--- 0.15.x the thing that loaded it was a `tlib_modules { 'telemetry' }` entry in
--- eight manifests; those entries are gone, and if the autoload list ever loses
--- the module the NUI flushes into an unregistered callback and NOTHING
--- TRANSMITS, with nothing saying so. There is no error to assert on. So the
--- assertion has to be that the callback is registered.
+-- from Lua, so there is no first access to trigger a lazy load. Until 0.15.x a
+-- `tlib_modules { 'telemetry' }` entry in eight manifests loaded it; those
+-- entries are gone, and if the autoload list ever drops the module the NUI
+-- flushes into an unregistered callback and nothing transmits, with nothing
+-- saying so — no error to assert on, so the assertion has to be that the
+-- callback is registered.
 --
--- THE REAL MODULE, THROUGH THE REAL LOADER
--- ----------------------------------------
--- The module body is the REAL shared/imports/telemetry/shared.lua, compiled from
--- disk and executed by imports.lua's own `loadModule`. A stub recording "my body
--- ran" would keep passing while the module stopped registering anything, which
--- is the whole failure.
+-- The module body is the real shared/imports/telemetry/shared.lua, compiled
+-- from disk and executed by imports.lua's own `loadModule` — a stub recording
+-- "my body ran" would keep passing while the module stopped registering
+-- anything, which is the whole failure.
 --
--- Getting the real bytes to imports.lua needs a trick, and it is worth naming:
--- fengari ships no `io.open` (measured — `io` exists, `io.open` is nil), so the
--- suite cannot read source into the `LoadResourceFile` map the way a normal
--- fixture would. Instead `load` is replaced for the duration of the fixture:
--- imports.lua resolves `load` as a GLOBAL, so when it compiles a chunk whose
--- name is the telemetry path it is handed `loadfile` of the real file. Everything
--- else about the path is real — the lazy table, the metatable, the autoload loop
--- and `loadModule`'s file resolution are the shipped code.
+-- Getting the real bytes to imports.lua needs a trick: fengari ships no
+-- `io.open` (`io` exists, `io.open` is nil), so the suite cannot read source
+-- into the `LoadResourceFile` map the way a normal fixture would. Instead
+-- `load` is replaced for the duration of the fixture: imports.lua resolves
+-- `load` as a global, so when it compiles a chunk whose name is the telemetry
+-- path it is handed `loadfile` of the real file. Everything else about the
+-- path is real — the lazy table, the metatable, the autoload loop and
+-- `loadModule`'s file resolution are the shipped code.
 --
--- WHAT IT DOES NOT PROVE. Nothing here runs in an FXServer. It proves the
--- registration CALL is made with the right name in a VM that declares nothing;
+-- What this does not prove: nothing here runs in an FXServer. It proves the
+-- registration call is made with the right name in a VM that declares nothing;
 -- it cannot prove FiveM then routes a NUI POST to it. tests/lua/telemetry-core.lua
 -- is the complementary half: it loads the same module with the wiring natives
--- ABSENT and proves the rest of it still works.
+-- absent and proves the rest of it still works.
 
 local report = print
 local passed = 0
@@ -182,8 +178,6 @@ local STUDIO = 'TIMMYG Studios'
 local NUI_CALLBACK = 'tlib:diagnostics'
 local CONSENT_EVENT = 'tlib:diag:consent'
 
--- The thing this whole change risks
-
 test('telemetry wires in a consumer that declares NOTHING', function()
     local tlib, wired, ok, err = fixture({ author = STUDIO, real = { 'telemetry' } })
     assert(ok, 'imports.lua raised: ' .. tostring(err))
@@ -224,8 +218,6 @@ test('declaring telemetry as well as autoloading it loads it ONCE', function()
         .. 'the NUI callback twice and start two flush threads')
 end)
 
--- occupancy
-
 test('occupancy wires its discovery handler with nothing declared', function()
     local _, wired, ok, err = fixture({ context = 'server', real = { 'occupancy' } })
     assert(ok, 'imports.lua raised: ' .. tostring(err))
@@ -243,8 +235,6 @@ test('occupancy is NOT studio-gated — a third-party consumer gets it', functio
         'occupancy must autoload with no author: its wiring only LISTENS, and a '
         .. 'consumer VM that misses the ping answers from an empty cache')
 end)
-
--- The studio default
 
 test('telemetry does not autoload into a non-studio resource', function()
     local _, wired, ok = fixture({ author = 'Someone Else', real = { 'telemetry' } })
@@ -273,8 +263,6 @@ test('an author-less resource is not treated as the studio', function()
     local _, wired = fixture({ real = { 'telemetry' } })
     assert(not wired.bodies.telemetry, 'no author must land on the third-party default')
 end)
-
--- Loud, not silent — and not an outage either
 
 local function joined(lines) return table.concat(lines, '\n') end
 
@@ -306,7 +294,7 @@ test('a missing autoload module does NOT take the consumer down', function()
 end)
 
 test('a host that cannot read tLib AT ALL is not a packaging fault', function()
-    -- MEASURED FAILURE, not a hypothetical. An earlier version of this check
+    -- Regression, not a hypothetical: an earlier version of this check
     -- error()ed whenever loadModule returned nil, which in a VM with
     -- LoadResourceFile stubbed is every module — so it declared `occupancy`
     -- missing while shared/imports/occupancy/{client,server}.lua sat untouched on

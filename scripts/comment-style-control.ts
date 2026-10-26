@@ -2,42 +2,24 @@
 /**
  * Negative control for `scripts/comment-style-gate.ts`.
  *
- * Three things make this gate cheap to fool, and each gets a case below:
+ * Covers: a missing path reporting nothing rather than failing loud (so no
+ * case here trusts a zero alone, and the file-set floor is asserted both
+ * ways); correct code that must stay green (an emoji/box-drawing banner
+ * inside string literals in all three languages -- real code, e.g.
+ * `server/sv_demo.lua` -- plus a licence-headed file skipped whole); a naive
+ * any-line-containing-the-character reader that must go RED on that same
+ * fixture, so the green case is proven to exercise the string-awareness
+ * rather than pass for free; a broken-gate drill per rule, removing it via
+ * the real `skip` plumbing; both sides of both ratio thresholds (an off-by-one
+ * in `split("\n").length` counting the trailing terminator was caught this
+ * way); the licence exemption proven not to be mere silence (an identical
+ * file minus the header goes red); and all four directions of the baseline
+ * ratchet, including the two that demand an entry be deleted -- no ratchet
+ * case hard-codes a count, each asks the gate for the fixture's own.
  *
- *   - `run()` reads whatever file list it is handed and reports nothing for a
- *     path that does not exist, so a wrong cwd or a widened exclusion prints a
- *     clean verdict in milliseconds. Every red case here asserts a named
- *     finding; no case trusts a zero on its own, and the file-set floor is
- *     asserted in both directions.
- *   - A gate that fires on correct code gets switched off. Half the fixture is
- *     deliberately correct: an emoji and a box-drawing banner inside string
- *     literals in all three languages, which is real code in this tree
- *     (`server/sv_demo.lua` prints a boxed banner), plus a licence-headed file
- *     that must be skipped whole.
- *   - String-awareness is the one piece of judgement in the two character
- *     rules, so the last drill re-reads the correct fixture with a naive
- *     any-line-containing-the-character reader and REQUIRES it to go red.
- *     Without that, the green case above passes for free and proves nothing.
- *
- * Plus a broken-gate drill per rule: each rule is removed through the real
- * `skip` plumbing and the fixture that was red must go green.
- *
- * Four things here are easy to get subtly wrong, so each has its own case:
- *
- *   - The character classes are asserted against the glyphs they must catch AND
- *     against the typographic arrows, dashes and ellipsis they must allow.
- *   - Both sides of both ratio thresholds, including that a file exactly AT the
- *     ceiling and a file one line under `RATIO_MIN_LINES` are green. That caught
- *     a real off-by-one: `split("\n").length` counts the trailing terminator.
- *   - The licence exemption is proven not to be mere silence, by requiring an
- *     identical file minus the licence header to go red.
- *   - All four directions of the baseline ratchet, including the two that demand
- *     an entry be DELETED. No ratchet case hard-codes a count; each asks the gate
- *     for the fixture's own, so the control cannot go stale against the baseline.
- *
- * It proves the rules discriminate. It does not prove the rule set is complete,
- * and it says nothing about whether a comment is worth keeping -- that is a
- * judgement in `docs/CODE-STYLE.md`, not something a regex can hold.
+ * Proves the rules discriminate, not that the rule set is complete or that
+ * any given comment is worth keeping -- that judgement lives in
+ * `docs/CODE-STYLE.md`.
  */
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -145,8 +127,8 @@ const ratioFile = (lines: number, commentLines: number) => {
 };
 
 try {
-  // 0. The character classes themselves, on the glyphs the standard names and
-  //    on the prose characters it deliberately allows.
+  // 0. The character classes, on the glyphs they must catch and the prose
+  // characters they must allow.
   setCheck(
     "EMOJI matches the severity glyphs",
     ["⚠", "⛔", "⭐", "✅", "❌", "\u{1F534}"].filter((c) => !EMOJI.test(c)),
@@ -164,8 +146,7 @@ try {
   );
   check("BOX_DRAWING does not match an em dash", !BOX_DRAWING.test("—"));
 
-  // 1. The file-set floor, both directions. A gate that reports nothing because
-  //    it read nothing is the failure this exists to catch.
+  // 1. The file-set floor, both directions.
   check(`the floor rejects ${MIN_FILES - 1} files`, !floorOk(MIN_FILES - 1));
   check("the floor rejects an empty file set", !floorOk(0));
   check(`the floor accepts ${MIN_FILES} files`, floorOk(MIN_FILES));
@@ -285,9 +266,8 @@ ${ratioFile(RATIO_MIN_LINES, RATIO_MIN_LINES - 4)}`
     }).findings.length > 0
   );
 
-  // 7. Broken-gate drills: remove each rule through the real `skip` plumbing and
-  //    the fixture that was red MUST go green. Without this, "the defects were
-  //    reported" is not evidence the rule caused it.
+  // 7. Broken-gate drills: remove each rule via `skip`, and the fixture that
+  // was red must go green.
   for (const rule of ["emoji", "divider"] as const) {
     setCheck(
       `DRILL: with the ${rule} rule removed, the planted ${rule} goes green`,
@@ -305,11 +285,9 @@ ${ratioFile(RATIO_MIN_LINES, RATIO_MIN_LINES - 4)}`
     []
   );
 
-  // 7b. The ratchet. The baseline is the one part of this gate that can rot, and
-  //     a ledger that outlives what it describes is the failure a sibling
-  //     resource already shipped -- five claimed live bugs, three of them long
-  //     fixed. So all four directions are required, including the two that
-  //     demand the entry be DELETED.
+  // 7b. The ratchet: the baseline is the part of this gate that can rot (a
+  // sibling resource's ledger once claimed five live bugs, three long fixed),
+  // so all four directions are required, including the two that demand deletion.
   setCheck(
     "a pinned file at its pinned count is green",
     run({ root, files: [over], baseline: { [over]: countOf(over) } }).findings.map((f) => f.rule),
@@ -350,10 +328,8 @@ ${ratioFile(RATIO_MIN_LINES, RATIO_MIN_LINES - 4)}`
     Object.values(loadBaseline()).every((n) => Number.isInteger(n) && n >= 0)
   );
 
-  // 8. The string-awareness drill. This is the one piece of judgement in the two
-  //    character rules: a naive reader that flags any LINE containing the
-  //    character must go red on the correct fixture. If it agrees with the gate,
-  //    case 3 stopped exercising anything and this control is theatre.
+  // 8. String-awareness drill: a naive any-line reader must go red on the
+  // correct fixture. If it agrees with the gate, case 3 proves nothing.
   const naive: string[] = [];
   for (const rel of correctFiles) {
     const src = await Bun.file(join(root, rel)).text();

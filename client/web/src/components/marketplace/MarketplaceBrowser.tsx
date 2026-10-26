@@ -1,28 +1,13 @@
 /**
- * The marketplace BODY: toolbar, category tabs, card grid, pagination, preview
- * and the install/uninstall/inspect machinery. Everything except the chrome it
- * is mounted in.
+ * The marketplace BODY: toolbar, tabs, grid, pagination, preview, and
+ * install/uninstall/inspect. Two hosts mount it — `MarketplacePanel.tsx` as a
+ * modal, `Dialog.tsx` inside a dialog tab — so this component must never
+ * render its own backdrop/focus trap; `onEscape` hands the key back to
+ * whichever host owns dismissal.
  *
- * This exists because the browser has two mounts, and only one of them is a
- * modal:
- *
- * - `components/MarketplacePanel.tsx` wraps it in `.mp-backdrop` + `.mp-panel`
- *   and is what `exports.tLib:OpenMarketplace` opens. tRadio's in-game path
- *   still uses that.
- * - `components/Dialog.tsx` mounts it INSIDE a dialog tab panel, for a tab
- *   declared `view: "marketplace"`. That is the integrated path: `/tdet` and
- *   `/tradar` open a dialog, and the Marketplace tab has to live in that same
- *   dialog rather than close it and throw a second overlay on top.
- *
- * So nothing here may render a backdrop, a modal surface, or a second focus
- * trap. The host owns those. It also may not close itself — `onEscape` hands
- * the key back to whichever host is mounting it, because "Escape" means
- * "dismiss the modal" in one and "dismiss the dialog" in the other.
- *
- * Why browse/preview/install all go through Lua rather than a direct fetch is
- * explained in `@tlib/shared/marketplace/ui` (`browse.ts`) and in
- * `client/cl_marketplace.lua`: CEF's origin is `cfx-nui-tLib` and the
- * marketplace host sends no Access-Control-Allow-Origin.
+ * Browse/preview/install go through Lua, not a direct fetch: CEF's origin is
+ * `cfx-nui-tLib` and the marketplace host sends no Access-Control-Allow-Origin
+ * (see `@tlib/shared/marketplace/ui`'s `browse.ts` and `client/cl_marketplace.lua`).
  */
 
 import type { JSX } from "@solidjs/web";
@@ -63,19 +48,10 @@ export interface MarketplaceBrowserProps {
   data: OpenData | null;
   /**
    * Whether this mount is visible and allowed to issue requests. Going false
-   * aborts anything in flight; going true again re-applies `data` from scratch,
-   * so leaving and returning to the tab re-browses rather than showing a stale
-   * page.
-   *
-   * NEITHER FIRST-PARTY MOUNT EVER PASSES `false`, measured 2026-10-15, and the
-   * reason is worth knowing before relying on this: both of them tie `active` to
-   * the very condition that MOUNTS the component. `MarketplacePanel` passes
-   * `active={open()}` inside `Show when={open()}`, and `Dialog.tsx` passes
-   * `active={props.open}` inside a branch that renders only while the marketplace
-   * tab is selected. So this path is correct and untested — a host that wants to
-   * HIDE the browser rather than unmount it is what it is for, and that is a
-   * host worth having, because unmounting is what loses an install result (see
-   * the ledger in `@tlib/shared/marketplace/ui`).
+   * aborts anything in flight; going true re-applies `data` from scratch.
+   * Neither first-party host actually passes `false` while mounted — both tie
+   * `active` to the same condition that mounts the component — so this path
+   * (hide without unmount, to avoid losing an install result) is untested.
    */
   active: boolean;
   /** Chrome rendered at the start of the header row (the modal's title). */
@@ -111,12 +87,9 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   const [panelPreviewUrl, setPanelPreviewUrl] = createSignal<string | null>(null);
 
   /**
-   * Slugs with a like round trip in flight, so the heart can say so and cannot
-   * be double-pressed into two outbound requests.
-   *
-   * A SET OF SLUGS AND NOT ONE BOOLEAN. The grid renders a whole page of
-   * cards; a single flag would disable every heart on the page while one of them
-   * was waiting.
+   * Slugs with a like round trip in flight. Keyed per-slug rather than one
+   * boolean, since a single flag would disable every heart on the page while
+   * only one card's request was outstanding.
    */
   const [likePending, setLikePending] = createSignal<Record<string, true>>({});
 
@@ -189,13 +162,10 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   }
 
   /**
-   * `forTab` exists because a Solid 2 signal write is NOT readable through the
-   * signal in the tick that wrote it. `handleTabSwitch` did `setTab(next)` and
-   * then called this, which re-read `tab()` and got the tab the player had just
-   * LEFT — so every browse fetched the wrong type. It was invisible in tRadio,
-   * which has 50 items under both `ui` and `sound`; tRadar has 5 and 0, so its
-   * UIs tab fetched sounds and came back empty while its Sounds tab showed the
-   * UIs. Measured against the live catalogue, not inferred.
+   * `forTab` exists because a Solid 2 signal write isn't readable through the
+   * signal in the same tick. Re-reading `tab()` right after `setTab(next)` got
+   * the tab just left, so every browse fetched the wrong type — invisible in
+   * tRadio (50 items under both types) but not tRadar (5 and 0).
    */
   async function fetchItems(
     offset = 0,
@@ -204,9 +174,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   ) {
     const base = baseUrl();
     if (!base || !props.active) {
-      // Kept after `handleSearchInput` stopped pre-lighting the spinner: a tab
-      // switch or a reopen can still bail here with `loading` already true, and
-      // the grid would sit on "Loading items…" with nothing in flight.
+      // A tab switch or reopen can bail here with `loading` already true;
+      // without this the grid sits on "Loading items…" with nothing in flight.
       setLoading(false);
       return;
     }
@@ -234,9 +203,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
       );
       if (request !== browseRequest) return;
       setItems(page.items);
-      // The server reports this now. Previously it was inferred from a full
-      // page, which claimed a next page whenever the catalogue happened to be
-      // an exact multiple of the page size.
+      // Server-reported; inferring it from a full page falsely claimed a next
+      // page whenever the catalogue was an exact multiple of the page size.
       setHasNextPage(page.hasMore);
     } catch (e) {
       if (request !== browseRequest) return;
@@ -251,11 +219,9 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
       setHasNextPage(false);
     } finally {
       window.clearTimeout(timeout);
-      // A MINIMUM VISIBLE TIME, not a delay before showing. A spinner that
-      // appears and vanishes inside ~100ms reads as a glitch rather than as
-      // work, which is worse than never having shown one. The request is
-      // already finished and the data already applied; only the indicator
-      // waits, so nothing is slower than it was.
+      // Minimum visible time for the spinner, not a delay before showing it —
+      // one that appears and vanishes inside ~100ms reads as a glitch. Data is
+      // already applied; only the indicator waits.
       const held = Math.max(0, 300 - (Date.now() - shownAt));
       const settle = () => {
         if (request === browseRequest) setLoading(false);
@@ -266,29 +232,15 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   }
 
   /**
-   * The whole catalogue for one type, paged.
+   * The whole catalogue for one type, paged at `limit: 100` (the server's own
+   * clamp) — a single request used to be the whole implementation, so past the
+   * hundredth item an installed layout got no catalogue entry and the
+   * Installed tab silently showed its bare directory name.
    *
-   * ONE REQUEST USED TO BE THE WHOLE IMPLEMENTATION, at `limit: 100`, which is
-   * also the server's clamp. Past the hundredth item of a type, an installed
-   * layout got no catalogue entry: the Installed tab then showed it by its bare
-   * directory name with no creator, no size and no Reinstall, and nothing said
-   * why. Silent, and it gets worse with every item published.
-   *
-   * Sequential WITHIN a type and parallel ACROSS the two, which keeps at most two
-   * requests outstanding against `READ_MAX_IN_FLIGHT = 3` in
-   * `server/sv_marketplace.lua`. Paging both types concurrently would make that
-   * budget a function of catalogue size and start getting "too many marketplace
-   * requests in flight" refusals.
-   *
-   * `MAX_PAGES` is a stop, not a size estimate: an open panel must not be able to
-   * issue unbounded outbound requests from the game server, and a cursor that
-   * failed to advance would otherwise loop forever. Both are guarded — the cursor
-   * check below is load-bearing because `nextCursor` is taken from the wire
-   * whenever it is a number.
-   *
-   * A mid-sequence failure keeps the pages that DID arrive rather than discarding
-   * them: a partial catalogue names most of the rows, where an empty one names
-   * none.
+   * Sequential within a type, parallel across the two types, to stay under
+   * `READ_MAX_IN_FLIGHT = 3` in `server/sv_marketplace.lua`. `MAX_PAGES` bounds
+   * outbound requests in case a cursor fails to advance. A mid-sequence
+   * failure keeps the pages that already arrived rather than discarding them.
    */
   async function catalogueForType(
     type: "ui" | "sound",
@@ -323,16 +275,14 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     setInstalledLoading(true);
     try {
       const resource = resourceFilter() ?? undefined;
-      // Two sequences rather than one unfiltered one: the Installed tab matches
-      // catalogue entries to what is on disk by slug, and a `ui` and a `sound`
-      // may share one. The per-request cap is per TYPE, so merging them would
-      // halve what either can carry within a page.
+      // Two sequences, not one unfiltered one: a `ui` and a `sound` may share a
+      // slug, and the per-request cap is per type — merging would halve what
+      // either can carry in a page.
       const pages = await Promise.all(
         (["ui", "sound"] as const).map((type) => catalogueForType(type, resource, request))
       );
       if (request === installedRequest) setInstalledMarketplaceItems(pages.flat());
-      // No `catch`: `catalogueForType` handles the only fallible call and answers
-      // with the pages it got. `finally` is what guarantees the spinner clears.
+      // No `catch`: `catalogueForType` already handles its own failure.
     } finally {
       if (request === installedRequest) setInstalledLoading(false);
     }
@@ -345,31 +295,18 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     setSearch("");
     setOperationError(null);
     setSort("downloads");
-    // CLAMPED, BECAUSE THE TYPE IS A PROMISE LUA CANNOT KEEP. `initialTab` is
-    // typed `"uis" | "sounds"`, but it arrives over NUI from a host, and
-    // cl_marketplace.lua accepts any string for it. An unrecognised value used
-    // to land in this signal and skip EVERY render branch — no grid, no
-    // toolbar, no spinner, no empty state, no error pane, just the category
-    // buttons over nothing. Two of the four consumers shipped `"layouts"` and
-    // both panels were silently blank; one of them went unreported entirely
-    // because nobody had opened it.
-    //
-    // Falling back to "uis" rather than refusing: a host asking for a tab that
-    // does not exist still wants the marketplace, and a wrong-but-populated tab
-    // is recoverable by one click where a blank panel is not.
+    // `initialTab` arrives over NUI as any string (cl_marketplace.lua doesn't
+    // validate it); an unrecognised value used to land in this signal and skip
+    // every render branch, leaving the category buttons over nothing. Fall
+    // back to "uis" rather than refusing.
     const wanted = data.initialTab;
-    // Held in a local and passed on, for the same reason `fetchItems` takes
-    // `forTab`: the read at the end of this function cannot see this write.
+    // Held in a local for the same reason `fetchItems` takes `forTab`: the
+    // read at the end of this function can't see this write yet.
     const opening = wanted === "sounds" || wanted === "installed" ? wanted : "uis";
     setTab(opening);
-    // THE HOST'S SNAPSHOT, PATCHED WITH WHAT THIS SESSION WATCHED HAPPEN.
-    //
-    // `data` is sent once per open and the signal holding it keeps that object,
-    // so re-applying it after an unmount re-applies a `readdir` from before any
-    // install this session performed. `patchInstalledNames` is the correction —
-    // see the ledger's header in `@tlib/shared/marketplace/ui`. Without it,
-    // leaving the Marketplace tab and coming back offered Install for an item
-    // already on disk, which is the report `../local-name.ts` exists to answer.
+    // `data` is the host's snapshot from open time; `patchInstalledNames`
+    // corrects it with installs this session performed, or leaving and
+    // returning to the tab offers Install for something already on disk.
     setInstalledLayouts(patchInstalledNames(data.installedLayouts ?? [], "ui"));
     const sounds = data.installedSounds ?? [];
     const soundNames = patchInstalledNames(
@@ -383,25 +320,16 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     setPreviewFn(data.previewFn ?? null);
     setPreviewState(data.previewState ?? null);
     setPanelPreviewUrl(data.panelPreviewUrl ?? null);
-    // Cleared with the rest of the per-session state. A like whose round trip
-    // was still out when the panel was re-fed left its slug in here, so the
-    // heart on the re-rendered card came back already spinning and disabled —
-    // until the old promise settled, which is up to the 25s reply timeout.
+    // Without this, a like round trip still in flight when the panel is
+    // re-fed would leave its slug in here, so the heart on the re-rendered
+    // card came back stuck spinning until the old promise settled.
     setLikePending({});
 
-    /**
-     * SOUND SLUGS ONLY NOW REACH THIS SEED, and a layout's state is DERIVED
-     * instead — see `itemInstallState` below.
-     *
-     * This record is keyed by MARKETPLACE SLUG: every write to it
-     * (`handleInstall`, both NUI result handlers, `handleUninstallBySlug`) and
-     * every read of it (`installStates()[item.slug]`) uses a slug. The seed was
-     * the one place feeding it something else — `installedSlugs` used to carry
-     * layout FOLDER NAMES, so the keys `QRX-720` and the lookups
-     * `tradio-qrx-720` never met and all eleven shipped radio heads offered
-     * Install for something already on disk. `client.lua` no longer sends them,
-     * so the two keyspaces that were sharing this object are now one.
-     */
+    // Seeds sound slugs only; layout state is derived instead (see
+    // `itemInstallState`). Must stay keyed by marketplace slug — it used to
+    // carry layout folder names (`QRX-720`), which never matched the slug
+    // lookups (`tradio-qrx-720`) and every shipped radio head offered Install
+    // for something already on disk.
     const seed: Record<string, InstallState> = {};
     for (const slug of patchInstalledNames(data.installedSlugs ?? [], "sound")) {
       seed[slug] = { state: "installed" };
@@ -412,14 +340,12 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     else void fetchItems(0, opening);
   }
 
-  // The only entry point. `applied` is identity, not a deep compare: every
-  // payload arrives as a fresh object off an NUI message, and a host that
-  // re-sends the same object means "nothing changed".
+  // `applied` is identity, not a deep compare: a fresh object off an NUI
+  // message means "something changed"; the same object resent means it didn't.
   let applied: OpenData | null = null;
-  // The two-argument form replaces the `untrack` that used to wrap the body:
-  // in Solid 2 only `compute` tracks, so the resets below — which write most of
-  // the signals in this component — cannot re-trigger this effect, and the
-  // phase split states that rather than relying on a wrapper to enforce it.
+  // Two-argument form instead of an `untrack` wrapper: in Solid 2 only
+  // `compute` tracks, so the handler writing most of this component's signals
+  // can't re-trigger itself.
   createEffect(
     () => ({ data: props.data, active: props.active }),
     ({ data, active }) => {
@@ -464,11 +390,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
         if (!data || typeof data.slug !== "string" || !props.active) return;
         if (data.resource && data.resource !== resourceFilter()) return;
         clearInspection();
-        // Off the WIRE. `server/sv_marketplace.lua`'s `reply` has always carried
-        // `type = p.itemType`; this component kept its own `pendingInstallTypes`
-        // side-table to remember what it had asked for, which duplicated a field
-        // already on the payload and could not survive the unmount the ledger in
-        // `@tlib/shared/marketplace/ui` now covers.
+        // Read off the wire (`sv_marketplace.lua`'s reply always carries
+        // `type`) rather than from a side-table this component used to keep.
         const type = data.type;
         if (data.ok) {
           setInstallState(data.slug, { state: "installed" });
@@ -510,11 +433,9 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   function handleSearchInput(value: string) {
     invalidateRequests();
     setSearch(value.slice(0, 200));
-    // NO `setLoading(true)` HERE, AND THAT IS THE FIX. It used to fire on the
-    // keystroke, 250ms before the request it was reporting even started, and the
-    // grid is swapped wholesale for a centred spinner while `loading` is true —
-    // so every character typed replaced the results with a spinner and back. The
-    // debounce below is already the show-delay the spinner wanted.
+    // Deliberately no `setLoading(true)` here: firing it on the keystroke,
+    // 250ms before the debounced request even starts, replaced the grid with
+    // a spinner on every character typed.
     searchDebounce = window.setTimeout(() => void fetchItems(), 250);
   }
 
@@ -532,29 +453,15 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   }
 
   /**
-   * What this catalogue item's state is, taking an operation in flight first and
-   * falling back to what is on disk.
-   *
-   * Why the layout answer is DERIVED and not seeded
-   *
-   * Because the two sides are named differently and only one of them is a slug.
-   * `installedLayouts` is `readdir(layouts/)` — `QRX-720` — and `item.slug` is
-   * product-namespaced and lowercased — `tradio-qrx-720`. A seeded record can
-   * only hold one spelling, which is how every shipped layout came to read as
-   * not-installed. `localInstallKind` compares both spellings and, crucially,
-   * reports WHICH matched:
-   *
-   *   · `"managed"`  — the name IS the install target (`installFromData` is
-   *                    handed the raw slug), so Delete can address it.
-   *   · `"builtin"`  — only the prefix-stripped spelling is on disk, which the
-   *                    installer never writes. The consumer shipped it: present,
-   *                    and not removable by us. Neither Install nor Delete.
-   *
-   * SOUNDS ARE NOT DERIVED, deliberately. Their installed records are written
-   * by `marketplace.upsertSound` from the catalogue slug, so the seed's key and
-   * `item.slug` are the same string by construction and there is no second
-   * naming to reconcile. Running them through the same match would invent the
-   * possibility of a prefix-stripped sound directory that nothing creates.
+   * This catalogue item's state: an operation in flight first, else what's on
+   * disk. Layout state is derived, not seeded, because `installedLayouts` is
+   * `readdir(layouts/)` (`QRX-720`) while `item.slug` is namespaced and
+   * lowercased (`tradio-qrx-720`) — a seed can only hold one spelling.
+   * `localInstallKind` compares both and reports which matched: `"managed"`
+   * (raw slug is the install target, Delete can address it) or `"builtin"`
+   * (only the prefix-stripped spelling is on disk; shipped, not removable).
+   * Sounds are NOT derived — `marketplace.upsertSound` writes their installed
+   * records from the catalogue slug directly, so there's no second spelling.
    */
   function itemInstallState(item: MarketplaceItem): InstallState {
     const operation = installStates()[item.slug];
@@ -568,11 +475,10 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   }
 
   function handleInstall(item: MarketplaceItem) {
-    // Defence in depth only: `canInstall` already removes the control, and
-    // `ItemCard`/`PreviewOverlay` drop the handler outright for a built-in. This
-    // is here because a reinstall writes `layouts/<raw slug>/` BESIDE the
-    // shipped directory rather than over it, and a duplicate is not something a
-    // later refactor should be able to reintroduce by re-enabling one button.
+    // Defence in depth: `canInstall` and `ItemCard`/`PreviewOverlay` already
+    // block a built-in, but a reinstall writes `layouts/<raw slug>/` beside
+    // the shipped directory rather than over it, so this guard must survive
+    // even if a later refactor re-enables the button.
     if (isBuiltin(itemInstallState(item))) return;
     if ((item.type === "ui" || item.type === "sound") && inspectionBlocks(item.type, item.slug))
       return;
@@ -589,10 +495,9 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   }
 
   function handleUninstall(item: MarketplaceItem) {
-    // Same defence in depth, and the more important of the two: the uninstaller
-    // addresses `<installPath>/<raw slug>` and requires an ownership receipt
-    // beside it, so a Delete on a shipped built-in can only come back
-    // `"tradio-qrx-720" is not installed`.
+    // The more important defence in depth: the uninstaller addresses
+    // `<installPath>/<raw slug>` plus an ownership receipt, so a Delete on a
+    // shipped built-in can only come back "not installed".
     if (isBuiltin(itemInstallState(item))) return;
     const current = installStates()[item.slug]?.state;
     if (current === "installing" || current === "uninstalling") return;
@@ -605,23 +510,11 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   }
 
   /**
-   * Toggle this player's like on one item.
-   *
-   * NO OPTIMISTIC UPDATE, DELIBERATELY
-   *
-   * The count and the filled state are both replaced only with what the SERVER
-   * answers. An optimistic ±1 would be wrong in two ways that both show:
-   *
-   *   · The authoritative count may have moved for other reasons — somebody else
-   *     liked it a moment ago — so the server's number is more current rather
-   *     than merely safer.
-   *   · The write is idempotent by design. A second like writes nothing and
-   *     answers the SAME count, so an optimistic increment would paint a number
-   *     the next browse silently contradicts.
-   *
-   * The pending flag is what covers the latency instead, which is honest about
-   * the fact that the answer is not in yet. Same reasoning the roadmap vote seam
-   * records: reconcile against the server rather than keeping your own ±1.
+   * Toggle this player's like on one item. Deliberately no optimistic update:
+   * the count and filled state are replaced only with what the server
+   * answers, since the count may have moved from someone else's like, and the
+   * write is idempotent (a second like answers the same count). The pending
+   * flag covers the latency instead.
    */
   function handleLike(item: MarketplaceItem, next: boolean) {
     if (likePending()[item.slug]) return;
@@ -633,12 +526,9 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
           const { [item.slug]: _done, ...rest } = prev;
           return rest;
         });
-        // Patched by SLUG into whatever the list currently holds, rather than
-        // by index or by re-fetching the page. The player may have paged or
-        // changed the search while the round trip was out, in which case the
-        // item is simply no longer there and `map` leaves the list alone — where
-        // an index write would corrupt a different card and a re-fetch would
-        // throw away a scroll position for one number.
+        // Patched by slug rather than index or re-fetch: the player may have
+        // paged or searched while the round trip was out, and an index write
+        // would then corrupt a different card.
         const patch = (list: MarketplaceItem[]) =>
           list.map((entry) =>
             entry.slug === item.slug ? { ...entry, likes: state.likes, liked: state.liked } : entry
@@ -651,10 +541,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
           const { [item.slug]: _done, ...rest } = prev;
           return rest;
         });
-        // The host's own sentence, not a generic one. The marketplace words
-        // its refusals to be shown to a person — "A game server may only like as
-        // a FiveM license…" is more use to whoever is looking at it than
-        // "request failed", and the rate-limit refusal names the wait.
+        // The host's own message, not a generic one — the marketplace words
+        // its refusals (license requirement, rate-limit wait) for a person.
         setOperationError(e instanceof Error ? e.message : "Could not like this item");
       }
     );
@@ -669,20 +557,12 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     void fetchNui("marketplaceUninstall", { type, slug, resource: resourceFilter() ?? "" });
   }
 
-  // A preview is dismissed in BOTH mounts, because it is this component's own
-  // layer — that is what `onInternal` means. Only the outer Escape — nothing
-  // open, dismiss the host — differs, and that is `onEscape`'s whole job. The
-  // embedded mount passes none, so the key falls through to the dialog and
-  // closes it, exactly as on any other tab.
-  //
-  // `depth: 1` puts this above a host that registers its own layer at 0, and
-  // `active` is why the registry has that option at all: this component has two
-  // mounts and the one on an unselected dialog tab must not shadow the dialog.
-  //
-  // `active` also requires there to be something to do. Owning the key and then
-  // doing nothing is not the same as not owning it: the embedded mount passes no
-  // `onEscape`, and if this layer claimed the press anyway the dialog would stop
-  // closing on Escape while the Marketplace tab was open.
+  // `onInternal` dismisses an open preview in both mounts; `onEscape` hands
+  // the key to the host when nothing is open (the embedded mount passes none,
+  // so it falls through to the dialog). `depth: 1` sits above a host's own
+  // layer at 0. `active` must require something to do — otherwise this layer
+  // would claim Escape on an unselected dialog tab with nothing to dismiss,
+  // and the dialog would stop closing on Escape while that tab was open.
   const disposeEscapeLayer = createEscapeLayer({
     label: "marketplace-browser",
     depth: 1,

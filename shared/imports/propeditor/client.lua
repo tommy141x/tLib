@@ -24,8 +24,8 @@
 
 local PropEditor = {}
 
---  PURE RULES — no natives, no state. tests/lua/propeditor-*.lua drive these
---  directly.
+-- Pure rules -- no natives, no state. tests/lua/propeditor-*.lua drive these
+-- directly.
 
 --- What a placement record's `model` field must say when it is saved again.
 ---
@@ -75,23 +75,18 @@ function PropEditor.localToWorld(m, o)
         m.pos.z + m.right.z * o.x + m.fwd.z * o.y + m.up.z * o.z
 end
 
---  ORBIT CAMERA — pure maths over a plain state table
+-- Orbit camera -- pure maths over a plain state table.
 --
---  state = { yaw = deg, pitch = deg, dist = m, focus = { x, y, z } }
---
+-- state = { yaw = deg, pitch = deg, dist = m, focus = { x, y, z } }
 
 local orbit = {}
 PropEditor.orbit = orbit
 
---- Degrees of orbit per pixel of pointer drag.
----
---- Per PIXEL, not per normalised axis. The delta cannot come from the pad: this
---- editor holds `SetNuiFocus(true, true)` and under NUI cursor focus CEF owns
---- pointer movement, so `GetDisabledControlNormal(0, 1)` reports one frame of
---- motion and then zero for as long as the button is held. That is the measured
---- "it moves a pixel and then stops" symptom, and disabling controls 1 and 2
---- first does not restore it. The page is the only source of this delta — see
---- `tLib/shared/ts/camera-drag.ts`.
+--- Degrees of orbit per pixel of pointer drag. Per pixel, not a normalised
+--- axis -- under NUI cursor focus (`SetNuiFocus(true, true)`) CEF owns pointer
+--- movement, so `GetDisabledControlNormal` reports one frame of motion then
+--- zero for as long as the button is held. The page is the only source of
+--- this delta; see `tLib/shared/ts/camera-drag.ts`.
 orbit.ORBIT_SENS_PX = 0.22
 --- Fraction of the orbit distance panned per pixel of pointer drag.
 orbit.PAN_SENS_PX = 0.0022
@@ -165,21 +160,19 @@ end
 
 --- One batch of pointer movement from the page, in device pixels.
 ---
---- The sign of every term here is load-bearing
+--- All four axis/control pairs obey one convention: the scene follows the
+--- cursor. Drag right and what you're looking at moves right; drag down and
+--- it moves down -- two of the four disagreed with that and shipped as
+--- "left = right" on shift-pan and "inverted up/down" on orbit.
 ---
---- All four axis/control pairs obey ONE convention: **the scene follows the
---- cursor**. Drag right and what you are looking at moves right; drag down and it
---- moves down. Two of the four disagreed with that and were reported in game as
---- "left = right" on Shift-pan and "inverted up/down" on orbit.
----
----   pan-horizontal  drag right -> focus moves camera-LEFT  -> scene moves right
----   pan-vertical    drag down  -> focus moves camera-UP     -> scene moves down
----   orbit-yaw       drag right -> yaw increases             -> scene swings right
+---   pan-horizontal  drag right -> focus moves camera-left  -> scene moves right
+---   pan-vertical    drag down  -> focus moves camera-up    -> scene moves down
+---   orbit-yaw       drag right -> yaw increases            -> scene swings right
 ---   orbit-pitch     drag down  -> pitch increases           -> scene tips down
 ---
---- The focus always travels OPPOSITE the apparent motion of the scene, so every
---- pan term is a `+`. Vertical already was (`+ cu*dy`); horizontal was a `-`, and
---- that lone sign is the whole of the pan bug.
+--- The focus always travels opposite the apparent motion of the scene, so
+--- every pan term is a `+`; horizontal was a `-`, and that one sign was the
+--- whole pan bug.
 ---
 --- `tests/lua/propeditor-orbit-camera.lua` pins each of the four independently.
 --- @param mode string 'orbit' | 'pan' | 'dolly'
@@ -246,7 +239,7 @@ function orbit.command(s, cmd)
     return true
 end
 
---  RUNTIME
+-- Runtime
 
 --- Controls disabled for every frame the editor is open. Movement, weapons,
 --- vehicle inputs and melee: the player is sitting in a frozen car staring at a
@@ -270,30 +263,16 @@ PropEditor.DISABLED_CONTROLS = DISABLED_CONTROLS
 
 --- The GTA pause menu, disabled for every frame the editor is open.
 ---
---- Measured, not guessed: this is the "GTA exit sound"
----
---- Reported as "when i hit save or exit etc i don't like the gta style exit
---- sound/effect that happens". It is the PAUSE MENU opening underneath the
---- editor, with its own whoosh and screen blur, on the same keypress that closes
---- the editor.
----
---- The editor holds `SetNuiFocusKeepInput(true)` so the numpad view bindings keep
---- working, and that sends every KEY to the game as well as to the page. Two of
---- the editor's own bindings are pause-menu keys:
----
----   Escape -> 200 FRONTEND_PAUSE_ALTERNATE   the editor's Cancel
----   P      -> 199 FRONTEND_PAUSE             the editor's driver-POV view
----
---- Neither was disabled. Proved in game: with the editor open and nothing else
---- touched, driving control 200 for twenty frames left `IsPauseMenuActive()` true.
----
---- `suppressInputAfterClose` below does disable the same pair, but only from the
---- frame AFTER the close — which is a frame too late for the keypress that caused
---- the close, and does nothing at all for P, which does not close anything.
----
---- Group 2 as well as 0: these are FRONTEND controls, and that is the pair
---- `suppressInputAfterClose` and `platform.releaseCursorSuppressPause` already
---- disable in both groups.
+--- The editor holds `SetNuiFocusKeepInput(true)` for its own numpad bindings,
+--- which also sends every key through to the game. Two of those bindings
+--- double as pause-menu keys -- Escape (200, FRONTEND_PAUSE_ALTERNATE, the
+--- editor's Cancel) and P (199, FRONTEND_PAUSE, driver-POV) -- and neither was
+--- disabled, so the pause menu opened underneath the editor with its own
+--- whoosh/blur on the same keypress. `suppressInputAfterClose` disables the
+--- same pair, but only from the frame after close (too late for the keypress
+--- that caused it) and never for P. Disabled in control groups 0 and 2
+--- (FRONTEND), matching `suppressInputAfterClose` and
+--- `platform.releaseCursorSuppressPause`.
 local PAUSE_CONTROLS = { 199, 200 }
 PropEditor.PAUSE_CONTROLS = PAUSE_CONTROLS
 
@@ -438,20 +417,12 @@ function PropEditor.create(descriptor)
         onStateChange(active, prop)
     end
 
-    -- Ownership mark
-    --
-    -- The tracking table only lasts as long as this incarnation of the
-    -- resource; a prop bolted to a car outlives it. Recovering those needs
-    -- evidence that survives a restart, and neither the model hash nor "it is
-    -- attached to a vehicle" is that — either one would have us deleting an
-    -- object another resource created and happens to have attached. A decorator
-    -- is set BY US, ON the object we created.
-    --
-    -- If another resource already holds a DecorRegisterLock, registration fails
-    -- and every DecorSetBool is a no-op — so `isOwnedProp` answers false for
-    -- everything and the adoption sweep simply finds nothing. That is the right
-    -- way round: the failure mode is an orphan left behind, never someone
-    -- else's prop deleted.
+    -- Ownership mark: a decorator set by us on objects we create, since the
+    -- tracking table doesn't survive a restart but a prop bolted to a vehicle
+    -- does, and neither the model hash nor "attached to a vehicle" proves we
+    -- own it. If another resource already holds the DecorRegisterLock,
+    -- registration fails and every DecorSetBool/isOwnedProp is a no-op -- the
+    -- failure mode is an orphan left behind, never someone else's prop deleted.
     Citizen.CreateThread(function()
         if not DecorIsRegisteredAsType(decor, 2) then
             DecorRegister(decor, 2) -- 2 = bool
@@ -506,17 +477,14 @@ function PropEditor.create(descriptor)
         cam = nil
     end
 
-    --- One wheel notch from the page. `delta` is a raw DOM `WheelEvent.deltaY`:
-    --- positive scrolls the content down, which by every 3D editor's convention
-    --- means zoom OUT.
+    --- One wheel notch from the page. `delta` is DOM `WheelEvent.deltaY`;
+    --- positive (scroll down) means zoom out, by convention.
     ---
-    --- The wheel used to be read here as `IsDisabledControlJustPressed(0, 241/242)`
-    --- and never fired once. The editor holds `SetNuiFocus(true, true)`, and under
-    --- that focus CEF owns the wheel outright -- exactly as it owns pointer
-    --- movement, which is why the middle-mouse orbit had to move to the browser
-    --- too. `SetNuiFocusKeepInput` does not rescue it: it keeps key controls and
-    --- mouse BUTTONS flowing, and the wheel is neither. The page gets every wheel
-    --- event, so the page is the only correct source.
+    --- Reading `IsDisabledControlJustPressed(0, 241/242)` here never fired:
+    --- under `SetNuiFocus(true, true)` CEF owns the wheel outright, same as
+    --- pointer movement (why middle-mouse orbit also moved to the browser).
+    --- `SetNuiFocusKeepInput` doesn't rescue it -- it only keeps keys and
+    --- mouse buttons flowing, and the wheel is neither.
     local function applyScrollZoom(delta)
         -- A wheel over a NUI panel scrolls that panel; it must not also dolly.
         -- The canvas is the only element with the listener, so this is belt and
@@ -548,30 +516,22 @@ function PropEditor.create(descriptor)
         if dirty then pushCam() end
     end
 
-    -- Prop
+    -- Prop: two mechanisms, chosen by scale -- not an optimisation that could
+    -- be dropped. `AttachEntityToEntity` can't carry a scale: a scaled prop
+    -- reads 3.000 the tick it's attached and 1.000 the next frame, and
+    -- driving the matrix every frame while attached still loses it after one
+    -- frame -- the attach recomputation rewrites the basis from the parent's
+    -- matrix with no notion of scale (the entity never detaches;
+    -- `IsEntityAttached` stays true). So a scaled prop is driven instead --
+    -- detached, frozen, matrix written from the vehicle's, via
+    -- `tlib.drivenprop`. A unit-scale prop stays attached, since attachment
+    -- is free and every placement today is unit-scaled; the cost is paid
+    -- only by placements that use the feature.
     --
-    -- TWO MECHANISMS, CHOSEN BY THE SCALE, AND THAT IS NOT AN OPTIMISATION
-    -- THAT COULD BE DROPPED.
-    --
-    -- `AttachEntityToEntity` cannot carry a scale. Measured: a prop attached and
-    -- then given a scaled matrix reads 3.000 in the same tick and 1.000 on the
-    -- next frame, and driving the matrix every frame WHILE ATTACHED survives one
-    -- frame and then loses it too — the attach recomputation rewrites the basis
-    -- from the parent's matrix and the stored offset, and it has no notion of
-    -- scale. The entity never detaches; `IsEntityAttached` stays true throughout.
-    --
-    -- So a scaled prop is driven instead: detached, frozen, and its matrix
-    -- written from the vehicle's. `tlib.drivenprop` is that mechanism, with the
-    -- measurements and the handedness invariant at its head.
-    --
-    -- A prop at UNIT scale stays attached, because attachment is free and every
-    -- placement that exists today is unit-scaled. The cost of this feature is
-    -- therefore paid only by the placements that use it.
-    --
-    -- The driver is created HERE and exposed on the instance so the consumer's
-    -- lifecycle can share it, for the same reason `markOwnedProp` is shared: one
-    -- prop is handed back and forth between the editor and the lifecycle through
-    -- takeProp/giveProp, and two drivers could both think they owned its matrix.
+    -- The driver is created here and exposed on the instance, for the same
+    -- reason `markOwnedProp` is shared: one prop moves between the editor and
+    -- the lifecycle via takeProp/giveProp, and two drivers could both think
+    -- they own its matrix.
     local driver = tlib.drivenprop.create({
         onError = function(message) notify(tostring(message)) end,
     })
@@ -1001,14 +961,11 @@ function PropEditor.create(descriptor)
         TriggerServerEvent(d.saveEvent, key, {
             x  = offset.x,   y  = offset.y,   z  = offset.z,
             rx = rotation.x, ry = rotation.y, rz = rotation.z,
-            -- `scale` is sent ONLY when it is not unit, so a record that was
-            -- never scaled is written back byte-identical to how it was found.
-            --
-            -- That is the same rule `savedModelFor` documents, for the same
-            -- reason: writing `scale = 1.0` into every record the first time
-            -- anyone nudged its position would add a key to every legacy record
-            -- on disk, and a reader cannot then tell "deliberately normal size"
-            -- from "never had an opinion". It also keeps data.json diffs honest.
+            -- `scale` is sent only when non-unit, so an unscaled record is
+            -- written back byte-identical. Same rule as `savedModelFor`:
+            -- writing `scale = 1.0` into every legacy record the first time
+            -- it's nudged would make "deliberately normal" indistinguishable
+            -- from "never had an opinion".
             scale = (not tlib.drivenprop.isUnitScale(scale)) and scale or nil,
             -- nil on a record that never had one, which keeps it exactly as
             -- legacy as it was. See PropEditor.savedModelFor.
@@ -1098,14 +1055,12 @@ function PropEditor.create(descriptor)
         --- reason `currentKey` is: a consumer that adds its own NUI callback
         --- should read the editor's state rather than keep a second copy.
         currentScale = function() return scale end,
-        --- The shared `tlib.drivenprop` driver.
-        ---
-        --- A CONSUMER'S LIFECYCLE MUST USE THIS ONE, not a driver of its own.
-        --- One prop is handed back and forth between the editor and the
-        --- lifecycle through takeProp/giveProp, and two drivers would both
-        --- believe they owned its matrix — which presents as a prop that
-        --- flickers between two transforms, with nothing logged, exactly like
-        --- two resources streaming one model name.
+        --- The shared `tlib.drivenprop` driver. The consumer's lifecycle must
+        --- use this one, not a driver of its own: one prop moves between
+        --- editor and lifecycle via takeProp/giveProp, and two drivers would
+        --- both believe they owned its matrix -- a prop that flickers
+        --- between two transforms, with nothing logged, exactly like two
+        --- resources streaming one model name.
         driver = driver,
         --- Sends an arbitrary action to the editor page, namespaced.
         send = function(payload)

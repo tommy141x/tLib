@@ -35,7 +35,7 @@ lines = capture(function() log('a value:', '42') end)
 assert(lines[1] == '[tDetector][INFO] a value: 42',
     'args are tostring\'d and space-joined, got: ' .. tostring(lines[1]))
 
--- The sharp edge worth pinning: a TRAILING NUMBER is consumed as the level, so
+-- The sharp edge worth pinning: a trailing number is consumed as the level, so
 -- log('count', 4) logs "count" at ERROR rather than logging "count 4".
 lines = capture(function() log('count', 4) end)
 assert(lines[1] == '^1[tDetector][ERROR] count^0',

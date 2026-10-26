@@ -1,25 +1,18 @@
 -- `wrapExport` has to wrap, because roughly 40 call sites across the estate
 -- believe it does.
 --
---  WHAT WAS WRONG 
---
 -- All three implementations — `shared/lib/adapter/shim.lua` for tLib's own VM
 -- and `shared/imports/platform/{client,server}.lua` for a consumer's — were a
--- bare `exports(name, fn)`. The only comment on them explained why the
--- `resource` argument is ignored, so nothing said the guard was absent, and
--- tRadio, tRadar, tAFK and tChirp all adopted it as one.
+-- bare `exports(name, fn)`, and tRadio, tRadar, tAFK and tChirp all adopted
+-- that. A Lua error inside an export body does not cross the FiveM export
+-- boundary: the call returns `undefined`, the message is gone, and it
+-- reappears elsewhere as `"undefined" is not valid JSON`.
 --
--- A Lua error inside an export body does not cross the FiveM export boundary.
--- The call returns `undefined`, the message is gone, and it reappears somewhere
--- unrelated as `"undefined" is not valid JSON`. The function named after
--- preventing that was a rename of it.
---
--- THE CONTRACT IS "THE REASON SURVIVES", NOT "THE CALL SUCCEEDS". A throwing
--- export still answers nil — that is what it did before and consumers are
--- written against it. What changed is that the error is now printed under the
--- resource and export name instead of vanishing. The multi-value test is the
--- other half: `ok, reason` is the house return shape, and a guard that
--- truncated it to one value would have been a new bug for an old one.
+-- The contract is "the reason survives", not "the call succeeds" — a
+-- throwing export still answers nil, same as before, but the error now prints
+-- under the resource and export name instead of vanishing. The multi-value
+-- test covers the other half: `ok, reason` is the house return shape, and a
+-- naive pcall wrapper collapses it to `ok`.
 
 local checks = 0
 local function check(value, message)
@@ -56,24 +49,16 @@ local function host(side)
         list[#list + 1] = fn
     end
 
-    -- `exports(name, fn)` REGISTERS AN EVENT HANDLER, and this stub has to do
-    -- that too or the alias tests below cannot fail.
+    -- `exports(name, fn)` REGISTERS AN EVENT HANDLER (the engine's own
+    -- `citizen/scripting/lua/scheduler.lua` does this too, ignoring any
+    -- resource argument and always using the CALLING resource — why
+    -- wrapExport's `resource` parameter is just a label), and this stub has
+    -- to do that too or the alias tests below cannot fail.
     --
-    -- The engine's own definition, citizen/scripting/lua/scheduler.lua:731:
-    --
-    --     __call = function(t, exportName, func)
-    --         AddEventHandler(getExportEventName(GetCurrentResourceName(), exportName),
-    --             function(setCB) setCB(func) end)
-    --     end
-    --
-    -- Note it ignores any resource argument and always uses the CALLING
-    -- resource -- which is why wrapExport's `resource` parameter is a label.
-    --
-    -- This stub used to only record into `env.exported`. That made publishing
-    -- under the resource's OWN name invisible: the own-name registration never
-    -- reached `env.handlers`, so a self-alias produced exactly one handler and
-    -- looked identical to a real alias. Verified by making the retired name
-    -- equal the current one -- the suite stayed green. It does not now.
+    -- This stub used to only record into `env.exported`. Publishing under the
+    -- resource's OWN name never reached `env.handlers` then, so a self-alias
+    -- produced exactly one handler and looked identical to a real alias --
+    -- a suite with the retired name equal to the current one stayed green.
     env.exported = {}
     env.exports = function(name, fn)
         env.exported[name] = fn
@@ -125,8 +110,6 @@ for _, entry in ipairs(SOURCES) do
         path .. ': the print carries the original message'
     )
 
-    -- THE HALF A NAIVE pcall WRAPPER GETS WRONG. `ok, reason` is the house
-    -- shape and `return fn(...)` inside a pcall collapses it to `ok`.
     platform.wrapExport('tLib', 'Grant', function(a, b)
         return false, 'no permission', a + b
     end)
@@ -173,23 +156,24 @@ end
 
 -- publishExportsAs -- a renamed resource keeps answering its old name.
 --
--- THE NAMES BELOW ARE DELIBERATELY NOT REAL PRODUCT NAMES. They were, and the
--- rename of 2026-10-24 swept this file: every mention of the old name became
--- the new one, so these tests published a name AS ITSELF and asserted a handler
--- appeared. They still passed, having lost the ability to tell an alias from a
--- self-alias -- the entire bug the section exists to catch.
+-- The names below are deliberately not real product names: a global
+-- rename-sweep once turned every mention of an old name into the new one, so
+-- these tests ended up publishing a name AS ITSELF and asserting a handler
+-- appeared -- passing while unable to tell an alias from a self-alias, the
+-- exact bug this section exists to catch.
 --
--- `provide '<old name>'` does NOT fix a rename. tDB measured that on a live
--- server: it makes GetResourceState report `started`, which is why it looks
--- sufficient, while the export call still fails. What works is answering
+-- `provide '<old name>'` does NOT fix a rename: on a live server it makes
+-- GetResourceState report `started`, which is why it looks sufficient, while
+-- the export call still fails. What works is answering
 -- `__cfx_export_<resource>_<name>` -- verbatim what the engine does for a
--- resource's own exports (citizen/scripting/lua/scheduler.lua:627-666), and
--- what oxmysql, rpemotes and qb-policejob use for their own legacy names.
+-- resource's own exports, and what oxmysql, rpemotes and qb-policejob use
+-- for their own legacy names.
 --
--- THE ORDERING IS THE TRAP THIS MOSTLY GUARDS. Exports register across many
--- files and one call site registers them in a loop, so "declare the legacy name
--- first" is a rule that holds on a dev machine and drops a random subset on a
--- customer's server. Both orders are tested because testing one is how that ships.
+-- The ordering is the trap this mostly guards: exports register across many
+-- files and one call site registers them in a loop, so "declare the legacy
+-- name first" holds on a dev machine and drops a random subset on a
+-- customer's server. Both orders are tested because testing one is how that
+-- ships.
 local CURRENT        = 'tProduct'
 local LEGACY         = 'tRetired'
 local SECOND_RETIRED = 'tRetiredToo'
@@ -219,9 +203,8 @@ for _, entry in ipairs(SOURCES) do
 
         platform.wrapExport(CURRENT, 'GetLightState', function(veh) return { veh = veh } end)
 
-        -- NEGATIVE CONTROL. Until the legacy name is declared there must be no
-        -- handler for it -- otherwise every later check passes vacuously and
-        -- this suite would also pass against a publishExportsAs that did nothing.
+        -- Negative control: until the legacy name is declared there must be
+        -- no handler for it, or every later check passes vacuously.
         check(
             handlerFor(env, LEGACY, 'GetLightState') == nil,
             path .. ': no legacy handler before publishExportsAs is called'

@@ -25,7 +25,7 @@ maintained apart with no reason to converge.
 Importing this file is what makes a change here reach every consumer without a
 matching commit in each resource.
 
-## What is deliberately not here
+## Left to each resource
 
 - **`--font-sans`.** A face has to be shipped to resolve, and each resource
   self-hosts a different one, so a shared value would name a file that is only

@@ -23,17 +23,10 @@ local function installAll()
     end
     return pending
 end
--- Why a retry exists at all
---
--- tLib refuses registration while the HUD editor is open: the editor is a
--- transaction over every component at once. So a consumer that starts, or
--- re-registers, during the seconds a player spends positioning their HUD gets a
--- refusal -- and the definition used to be DROPPED on that refusal, which meant
--- the widget was never registered, never rendered and never retried. The HUD was
--- simply absent until the resource restarted, with nothing said anywhere.
---
--- The definition is kept now, and this walks it in. Bounded, because a refusal
--- can also mean the definition is invalid, which no amount of waiting fixes.
+-- tLib refuses registration while the HUD editor is open (a transaction over
+-- every component). Used to drop the definition on refusal, so the widget
+-- stayed silently unregistered until a restart; now it's kept and retried
+-- here, bounded because a refusal can also mean the definition is invalid.
 local function retryPending()
     if retrying then return end
     retrying = true
@@ -58,9 +51,9 @@ function tLibHud.unregister(id)
     definitions[id], latest[id], committed[id], installed[id] = nil, nil, nil, nil
     return ok
 end
--- Write a placement the player produced in the consumer's OWN UI -- dragging the
--- surface by its background -- into tLib's store, so it is the same placement
--- the editor would have made: healed, persisted, and cleared by Reset.
+-- Writes a placement the player made by dragging the surface in the
+-- consumer's own UI into tLib's store, as if the editor had made it:
+-- healed, persisted, and cleared by Reset.
 function tLibHud.set(id, layout)
     if type(id) ~= 'string' or type(layout) ~= 'table' then return false, 'Invalid HUD layout' end
     if GetResourceState('tLib') ~= 'started' then return false, 'tLib is not started' end

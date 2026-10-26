@@ -14,8 +14,8 @@
 
 local VehicleProp = {}
 
---  PURE RULES — no natives, no state. tests/lua/vehicleprop.lua drives these
---  directly, which is possible only because they take no globals.
+-- No natives, no state: tests/lua/vehicleprop.lua drives these directly
+-- because they take no globals.
 
 --- Is `model` a plausible archetype name? It is one of the few config strings
 --- that reaches a native -- `GetHashKey` then `CreateObject` -- so a path
@@ -101,8 +101,6 @@ function VehicleProp.replacePlacements(target, source)
     return target
 end
 
---  THE INSTANCE
-
 local LIFECYCLE_INTERVAL_MS = 2500
 local STARTUP_REQUEST_DELAY_MS = 2000
 local MODEL_LOAD_ATTEMPTS = 100
@@ -179,10 +177,7 @@ function VehicleProp.create(descriptor)
 
     instance.setRegistry(d.registry)
 
-    --
-    --   placements[<vehicle model hash as a string>] = { x, y, z, rx, ry, rz, model? }
-    --
-    --
+    -- placements[<vehicle model hash as a string>] = { x, y, z, rx, ry, rz, model? }
     local placements = {}
     -- { [vehicleHandle] = propHandle }. This incarnation of the resource only.
     local attached = {}
@@ -221,8 +216,6 @@ function VehicleProp.create(descriptor)
     function instance.isGizmoActive() return gizmoActive end
     function instance.gizmoProp() return gizmoProp end
 
-    -- Model streaming
-
     --- Blocks until the model is loaded, or gives up after ~1s. Declared above
     --- the editor because the descriptor takes it BY VALUE, and
     --- `tlib.propeditor.create` asserts it is a function at call time.
@@ -244,10 +237,8 @@ function VehicleProp.create(descriptor)
 
     instance.loadPropModel = loadPropModel
 
-    -- The editor, and the ownership mark that comes with it. Created here rather
-    -- than by the consumer because the editor and the lifecycle share one prop,
-    -- so there is exactly one implementation of the mark.
-    --
+    -- The editor is created here, not by the consumer, because the editor and
+    -- the lifecycle share one prop -- one implementation of the ownership mark.
     local editor = tlib.propeditor.create({
         prefix      = d.prefix,
         decor       = d.decor,
@@ -289,8 +280,6 @@ function VehicleProp.create(descriptor)
     instance.editor        = editor
     instance.markOwnedProp = editor.markOwnedProp
     instance.isOwnedProp   = editor.isOwnedProp
-
-    -- Attach / detach
 
     --- Attaches the device to a vehicle using its saved placement.
     --- Yields while the model streams, so it is only ever called from the
@@ -439,8 +428,6 @@ function VehicleProp.create(descriptor)
         instance.cleanupAll()
     end)
 
-    -- Events
-
     if type(d.receiveEvent) == 'string' and d.receiveEvent ~= '' then
         RegisterNetEvent(d.receiveEvent, function(props)
             -- Rejects anything that did not come from the server. This decides
@@ -508,9 +495,7 @@ function VehicleProp.create(descriptor)
             end
         end
 
-        -- One reclaim, after the FIRST pass only
-        --
-        --
+        -- One reclaim, after the first pass only.
         if not firstPassDone then
             firstPassDone = true
             reclaimOrphanProps()

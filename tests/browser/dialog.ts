@@ -175,27 +175,23 @@ try {
   await pause();
   const desktop = await measure("desktop-form");
   // rgb(48, 137, 232) is #3089e8 == hsl(211 80% 55%), i.e. --primary in
-  // theme-tokens.css and --ring in `internal/shared-ts/ui/*`. These two lines used to pin
-  // the neutral #eeeeee, which is the 2026-09-22 repaint recorded in
-  // `internal/shared-ts/admin-ui/index.tsx`; it was reverted because the other five
-  // bundles never followed it and a tLib dialog opened over a tLS editor
-  // repainted the primary button. Pinned as a literal on purpose: a token read
-  // would agree with whatever the sheet says.
+  // theme-tokens.css and --ring in the shared UI kit. These two lines once
+  // pinned the neutral #eeeeee, reverted because the other five bundles never
+  // followed it and a tLib dialog opened over a tLS editor repainted the
+  // primary button. Pinned as a literal on purpose: a token read would agree
+  // with whatever the sheet says.
   assert.equal(
     desktop.primary?.background,
     "rgb(48, 137, 232)",
     "stock primary is the shared blue"
   );
   assert.equal(desktop.input?.border, "rgb(48, 137, 232)", "stock focus border is the shared blue");
-  // This asserted `shadow !== "none"` — "focused input has a visible soft
-  // ring" — and had been failing since a9695a2 ("one focus mechanism, and it is
-  // an outline") without anyone noticing, because this harness is not in
-  // `verify`. The affordance is deliberately an `outline`: an outward
-  // `box-shadow` is clipped to nothing inside an `overflow: hidden` ancestor,
-  // which is the geometry `probe:focus` exists to measure. So the shadow being
-  // absent is now the thing asserted, and the outline being the accent at 40%
-  // beside it. `probe:focus` is what proves it paints pixels; this proves the
-  // declaration is the one that ships.
+  // The affordance is deliberately an `outline`: an outward `box-shadow` is
+  // clipped to nothing inside an `overflow: hidden` ancestor, which is the
+  // geometry `probe:focus` exists to measure. This harness is not in `verify`,
+  // so an earlier version asserting `shadow !== "none"` drifted unnoticed
+  // after the outline migration — now the absent shadow is asserted directly,
+  // alongside the outline being the accent at 40%.
   assert.equal(desktop.input?.shadow, "none", "focus is an outline, never an elevation");
   assert.equal(
     desktop.input?.outline,
@@ -515,16 +511,13 @@ try {
     3,
     "slider emits number"
   );
-  // A DRAG commits ONCE, at its end
-  //
-  // zag fires `onValueChange` on every pointer move, so wiring `dialogChange`
-  // to it meant one NUI call per step of a drag — and tRadar's cl_settings.lua
-  // answers each one with an `UpdateDialogField` push back, so a drag was a full
-  // round trip per pixel in every resource using a tLib dialog. The commit is on
-  // `onValueChangeEnd` now, with `onValueChange` kept for the local value.
-  //
-  // Both halves are asserted. The count alone would also pass if the thumb never
-  // moved at all, and the position alone would also pass if every step committed.
+  // A drag commits once, at its end: zag fires `onValueChange` on every
+  // pointer move, so wiring `dialogChange` to it meant one NUI call per step,
+  // and tRadar's settings handler answers each with an UpdateDialogField push
+  // back — a full round trip per pixel. The commit is on `onValueChangeEnd`
+  // now, with `onValueChange` kept for the local value. Both halves are
+  // asserted: count alone would pass if the thumb never moved, position alone
+  // would pass if every step committed.
   let draggedLevel = 3;
   {
     const level = () =>
@@ -534,12 +527,10 @@ try {
     const box = await slider.boundingBox();
     assert.ok(box, "the slider thumb has a box to drag");
     // `[data-slider-track]`, not zag 1's `[data-scope="slider"][data-part="track"]`:
-    // zag 2's createAnatomy emits one combined `data-<component>-<part>` attribute.
-    // Read from the installed `@zag-js/slider` (anatomy.build().track.attr) rather
-    // than hand-converted. This file is not in `bun run test` -- it needs a browser --
-    // so a stale selector here survives a fully green gate run, which is how this one
-    // did; the assertion below would have failed only when someone next ran the
-    // browser suite.
+    // zag 2's createAnatomy emits one combined `data-<component>-<part>`
+    // attribute. Read from the installed `@zag-js/slider` rather than
+    // hand-converted — this file needs a browser and is not in `bun run
+    // test`, so a stale selector here survives a fully green gate run.
     const track = await page.locator("[data-slider-track]").boundingBox();
     assert.ok(track, "the slider track has a box to drag along");
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -675,10 +666,9 @@ try {
   );
   await page.locator("#focus-after-dialog").evaluate((el: Element) => el.remove());
 
-  // A button renders no label, so in a row beside a labelled field it used to
-  // sit a whole label-height above its neighbour's control — the reset button
-  // next to tRadio's microphone dropdown. The row is the only place this shows,
-  // and only a real layout pass can prove it.
+  // A button with no label used to sit a whole label-height above its
+  // neighbour's control in a row beside a labelled field — the reset button
+  // next to tRadio's microphone dropdown. Only a real layout pass can prove it.
   await shown(9, [
     {
       id: "microphone",
@@ -697,13 +687,11 @@ try {
     const top = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().top;
     return {
       dropdown: top("[data-scope=select][data-part=trigger]"),
-      // PRESENCE, not `=true`/`=false`. Dialog.tsx binds `data-labelless` to a
-      // plain boolean, and Solid 2's setAttribute writes `true` as the EMPTY
-      // string and REMOVES the attribute on `false`. So `[data-labelless=true]`
-      // matches nothing and `[data-labelless=false]` never exists — both
-      // `querySelector(...)!` calls would deref null and this assertion would
-      // crash rather than measure. Presence/absence is the exact test: there is
-      // no third state. Same reasoning as the CSS in shared/ts/nui-kit/nui.css.
+      // Presence, not `=true`/`=false`: Dialog.tsx binds `data-labelless` to
+      // a plain boolean, and Solid 2's setAttribute writes `true` as the
+      // empty string and removes the attribute on `false`, so
+      // `[data-labelless=true]` matches nothing. Presence/absence is the
+      // exact test — same reasoning as the CSS in shared/ts/nui-kit/nui.css.
       reset: top(".tlib-nui-field-cell[data-labelless] .tlib-nui-button"),
       standalone: top(".tlib-nui-field-cell:not([data-labelless]) .tlib-nui-button"),
       standaloneRow: document.querySelectorAll(".tlib-nui-field-row")[1]!.getBoundingClientRect()

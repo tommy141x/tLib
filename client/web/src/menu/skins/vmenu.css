@@ -1,18 +1,14 @@
-/* The vMenu skin: tMenu's original presentation, kept as a switchable test look
-   rather than as the default. Selected per page with `skin = 'vmenu'` on a theme
-   (see branding.ts / shared/lib/menu/schema.lua) and applied through data-skin on the
-   menu root, which is the only thing the markup knows about skins.
+/* The vMenu skin: tMenu's original presentation, kept as a switchable test look.
+   Selected per page with `skin = 'vmenu'` on a theme (branding.ts /
+   shared/lib/menu/schema.lua), applied via data-skin on the menu root. Every rule
+   here is an override against `.tlib-menu[data-skin=vmenu]`, strictly heavier than
+   the `:where(.tlib-menu)` default it replaces — a rule shared by both belongs in
+   menu.css instead. */
 
-   Everything here is an override of the shared default in ../menu.css, and every
-   rule is written against `.tlib-menu[data-skin=vmenu]` so it is strictly heavier
-   than the `:where(.tlib-menu)` rule it replaces. Nothing here should ever be the
-   answer for the default skin: a rule that belongs to both belongs in menu.css. */
-
-/* Source geometry: vMenu draws a 431px-wide menu with 38px rows at 1080p. Every
-   number here is the 1080p number and nothing resolves it against the viewport,
-   because the panel must stay pixel-identical at the resolution it was drawn
-   against. The min-height steps at the foot of this file restate these tokens for
-   taller clients, the same way the max-height steps do for short ones. */
+/* Source geometry: vMenu draws a 431px menu with 38px rows at 1080p. These are the
+   1080p numbers, unresolved against the viewport, so the panel stays pixel-identical
+   at that resolution; the min-height/max-height steps below restate them for taller
+   and shorter clients. */
 .tlib-menu[data-skin="vmenu"] {
   --menu-width: 431px;
   --row-height: 38px;
@@ -114,16 +110,12 @@
   border-color: var(--menu-control-border);
 }
 
-/* The slider. The shared control is a 17px bordered thumb on a bar that always
-   shows its filled share; the source draws a 15px borderless dot on a bar that is
-   flat unless the row carries an explicit barColor, and this skin is the replica,
-   so it restates the source's geometry rather than inheriting the shared one.
-   Only the painting is restated — the element, its markup and its keyboard
-   behaviour are still NuiRange's.
-   One gradient covers both cases rather than two rules: --nui-range-color is set
-   by NuiRange only when the row actually has a barColor, so falling back to the
-   track's own colour collapses the gradient to a flat bar for every row that does
-   not, which is exactly what the source draws. */
+/* The slider: shared control is a 17px bordered thumb on a bar that always shows
+   its filled share; source draws a 15px borderless dot on a bar that is flat unless
+   the row has an explicit barColor. This skin restates the source's painting only —
+   element, markup and keyboard behaviour stay NuiRange's. One gradient covers both
+   cases because --nui-range-color is set only when barColor exists, so the
+   fallback to the track colour collapses it to a flat bar otherwise. */
 .tlib-menu[data-skin="vmenu"] .row-slider .tlib-nui-range {
   background: linear-gradient(
     to right,
@@ -172,13 +164,11 @@
     --row-font: 14px;
   }
 }
-/* Tall viewports. The first step cannot fire at or below 1080p, so the panel at
-   the resolution vMenu was drawn against is byte-for-byte what it was. Above it
-   the panel keeps roughly the share of screen height it has at 1080p: 1.333x for
-   the 1440p band and 2x for 2160p and beyond, which is what the engine does to
-   the scaleform this menu replaces. It stops at 2x rather than tracking the
-   viewport forever, because past that the rows are large enough that the limit
-   is the player's reading distance, not the backbuffer. */
+/* Tall viewports. First step can't fire at/below 1080p, so the panel stays
+   byte-for-byte what it was drawn as. Above that it keeps roughly its 1080p share
+   of screen height: 1.333x at 1440p, 2x at 2160p+ — matching what the engine does
+   to the scaleform this replaces. Stops at 2x; past that the limit is reading
+   distance, not the backbuffer. */
 @media (min-height: 1200px) {
   .tlib-menu[data-skin="vmenu"] {
     --menu-width: 575px;

@@ -181,19 +181,13 @@ end
 --- raises on a resource that is not installed, which is the whole point of a
 --- dependency section.
 ---
---- A VERSION READ ALSO CARRIES `tlib_build` WHEN THE RESOURCE DECLARES ONE, as
---- `1.0.0 (build 20261024-7f3a91c2)`. tLib v1.0 was republished in place with a
---- crash fix in it and no version change, so every diagnostic in the estate
---- reported `tLib 1.0.0` whether or not the fix was installed, and two servers
---- that both said so demonstrably had different files. The build id is a hash of
---- the released bytes (shared/ts/build/core.ts, `stampBuildId`), so it answers
---- "which tree is this" where the version cannot.
----
---- Composed HERE rather than at the call sites so no consumer needs a release to
---- start reporting it. Safe because every caller of this prints the result for a
---- human -- nothing compares it, and the compatibility gate in imports.lua reads
---- `version` straight from the manifest, not through here. A build with no stamp
---- reports its bare version, which is the truth about a source checkout.
+--- A version read also carries `tlib_build` when the resource declares one, as
+--- `1.0.0 (build 20261024-7f3a91c2)` -- a hash of the released bytes
+--- (`stampBuildId` in shared/ts/build/core.ts), so it answers "which tree is
+--- this" when an in-place republish leaves the version number unchanged.
+--- Composed here rather than at the call sites so no consumer needs a release
+--- to start reporting it; the compatibility gate in imports.lua reads `version`
+--- straight from the manifest, not through here.
 --- @param resource string
 --- @param key string|nil  defaults to 'version'
 --- @return string

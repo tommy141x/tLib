@@ -62,22 +62,10 @@ export function proxyRequest(
   });
 
   upstream.on("error", (err: NodeJS.ErrnoException) => {
-    // WARNING: SAY WHETHER THE CLIENT WAS STILL THERE. Without it this line cannot
-    // distinguish the two things it gets used to diagnose, and they have
-    // opposite remedies:
-    //
-    //   · the caller hung up and the upstream noticed — nothing is wrong, and
-    //     a reverse proxy in front of tLib produces a steady drip of these
-    //   · the upstream reset while someone was waiting on it — a real fault,
-    //     and the request they were making is the lead
-    //
-    // Measured 2026-10-19 chasing `/dispatch -> 51283 failed: ECONNRESET` on a
-    // customer box behind an unidentified host proxy: tLib's own cleanup was
-    // ruled out as the source (destroying the request emits no error, a
-    // keep-alive reuse race is retried by Node, and a client abort mid-pipe
-    // through this exact shape produces nothing), so the reset is genuinely
-    // the upstream's. Which of the two cases above it was could not be read
-    // off this line, and that is what cost the time.
+    // Say whether the client was still there: this line gets used to diagnose
+    // two things with opposite remedies — the caller hung up and the upstream
+    // noticed (nothing wrong, a reverse proxy in front of tLib drips these), or
+    // the upstream reset while someone was waiting (a real fault).
     const clientGone = res.writableEnded || res.destroyed;
     log(
       "warn",

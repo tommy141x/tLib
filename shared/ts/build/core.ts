@@ -96,17 +96,12 @@ function stagedPaths(dist: string, prefix = ""): string[] {
 }
 
 /**
- * Stamp the staged manifest with a build id hashed from the staged bytes.
- *
- * NOT a version bump: v1.0 was republished in place on 2026-10-24 with a crash
- * fix (`c9a8f8f`) and no version change, so `tradio_diag` printed `tLib 1.0.0`
- * for both trees and nobody could confirm a customer had the fix. A bump only
- * moves that to the next republish — a number is remembered by a human, and this
- * is derived from the bytes `prod` is about to zip. The hash is the identity.
- *
- * Its OWN key, NEVER `version`: imports.lua enforces `tlib_min_version` out of
- * that string and every consumer pins `'1.0'`. An unstamped tree is a source
- * checkout, and a bare version is the truth about it.
+ * Stamp the staged manifest with a build id hashed from the staged bytes, not a version
+ * bump: v1.0 was republished in place with a crash fix (`c9a8f8f`) and no version change, so
+ * `tradio_diag` printed `tLib 1.0.0` for both trees with no way to confirm a customer had the
+ * fix. The hash, derived from the bytes `prod` is about to zip, is the identity. Its own key,
+ * never `version` — `imports.lua` enforces `tlib_min_version` out of that string and every
+ * consumer pins `'1.0'`.
  */
 export function stampBuildId(dist: string, now = new Date()): string {
   const manifestPath = join(dist, "fxmanifest.lua");
@@ -144,24 +139,15 @@ export function addDirToZip(zip: ZipLike, dir: string, zipPrefix: string) {
 }
 
 /**
- * Layer 2 of the credential gate, applied at the one chokepoint every release
- * passes through.
- *
- * Done HERE, inside `createZip`, on purpose. Before 2026-10-06 exactly one
- * resource sanitized its staged config (tRadio, with a four-name hand-written
- * array) and the other eight did not — including tCAD, whose `.env.example`
- * declares 23 credential keys. A per-resource call is a per-resource chance to
- * not have one. `createZip` is called by every resource that cuts a zip, with
- * the staged tree as its second argument, so putting it here is both the
- * shared implementation and the thin per-resource call.
- *
- * Values are blanked, not refused: a release is a derived artifact, so
- * rewriting its copy is free and cannot destroy anything. (The commit-time
- * layer refuses instead, because there the file IS the developer's.)
- *
- * `expectConfig: false` is for a resource that genuinely ships no config file —
- * tLib and tAFK. Say why at the call site; the default refusal exists because a
- * sanitizer that sanitized nothing prints a tick either way.
+ * Layer 2 of the credential gate, at the one chokepoint every release passes through. Done
+ * here, inside `createZip`, on purpose: before 2026-10-06 only tRadio sanitized its staged
+ * config (a four-name hand-written array) while the other eight resources didn't, including
+ * tCAD, whose `.env.example` declares 23 credential keys — a per-resource call is a
+ * per-resource chance to skip it. Values are blanked, not refused, since a release is a
+ * derived artifact and rewriting its copy is free (the commit-time layer refuses instead,
+ * since there the file is the developer's). `expectConfig: false` is for a resource that
+ * genuinely ships no config file (tLib, tAFK) — say why at the call site, since the default
+ * refusal exists because a sanitizer finding nothing prints the same tick as one that worked.
  */
 export function createZip(
   zip: ZipLike,
@@ -250,31 +236,18 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
 
   assertProductionFiles(root, config.requiredFiles ?? []);
 
-  // Both directions of the allowlist, the way every sibling resource's prod.ts
-  // does it by hand. stageFiles throws on an included path that has stopped
-  // existing; this throws on a path fxmanifest.lua declares that nobody added
-  // to `include`. Without it the release is missing a file the resource will
-  // demand at start, and the build reports success -- the failure surfaces on a
-  // customer's server, not here.
+  // Both directions of the allowlist: stageFiles throws on an included path that no longer
+  // exists; this throws on a path fxmanifest.lua declares that nobody added to `include` —
+  // otherwise the release ships without a file the resource demands at start, and the
+  // failure surfaces on a customer's server instead of here.
   assertManifestStaged(readFileSync(join(root, "fxmanifest.lua"), "utf8"), include);
 
-  // Dependency licences, after the structural asserts and before anything is
-  // written. tRadio's prod.ts has run this check since it was written and no tLib
-  // release path ever did, so tLib and every resource releasing through runProd
-  // shipped with no licence check at all; running it here rather than in each
-  // resource's prod.ts is what makes that impossible to forget again.
-  //
-  // AFTER the asserts above, not before them, which is where it first went: a root
-  // with no package.json fails the licence check, so a build that was really missing
-  // an artifact reported "License compliance failed" instead of naming the missing
-  // file. Two tests caught it -- `missing artifacts refuse packaging before touching
-  // prior output` and `runProd refuses an allowlist that would ship without a
-  // manifest path` -- and they were right to: a structural fault is the actionable
-  // one, and a licence gate that masks it has made the build harder to fix.
-  //
-  // It still cannot be bypassed. Nothing is staged and nothing is zipped until this
-  // has passed; the only cost of the later position is that a UI build runs before a
-  // licence failure stops the release.
+  // Dependency licences, after the structural asserts and before anything is written —
+  // running it here rather than per-resource is what makes it impossible to skip (tLib's own
+  // release path never ran one before this). After the asserts, not before: a root with no
+  // package.json fails the licence check, so a build actually missing an artifact used to
+  // report "License compliance failed" instead of naming the missing file. Still unbypassable
+  // either way — nothing is staged or zipped until this passes.
   step("Checking dependency licences");
   const depLicences = checkLicenses({ cwd: root });
   console.log(formatLicenseReport(depLicences));
@@ -301,15 +274,11 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
     console.log(`  ${bundle.out} — ${bundle.sections.length} section(s), ${(bundle.bytes / 1024).toFixed(1)} KB`);
   }
 
-  // A licence beside every staged webfont, or refuse to build. After staging and
-  // before zipping, deliberately: it has to read the tree that is about to be
-  // shipped, because the two previous versions of this rule in the estate both
-  // watched the build output instead and were green while the zip went out with
-  // the fonts and none of their licences. See stageFontLicences.
-  //
-  // tLib's own font directory is always searched, since that is where Hanken
-  // Grotesk, Inter and JetBrains Mono now come from for every consumer; a
-  // resource adds its own via `fontLicenceDirs` when it ships a face of its own.
+  // A licence beside every staged webfont, or refuse to build — after staging and before
+  // zipping, since two previous versions of this rule watched the build output instead and
+  // stayed green while the zip shipped fonts with none of their licences. See
+  // stageFontLicences. tLib's own font directory (Hanken Grotesk, Inter, JetBrains Mono) is
+  // always searched; a resource adds its own via `fontLicenceDirs`.
   const licences = stageFontLicences(dist, [
     ...(config.fontLicenceDirs ?? []).map((d) => join(root, d)),
     join(import.meta.dir, "..", "..", "css", "fonts"),

@@ -6,22 +6,19 @@
 -- per-entity variant of the native. A DUI per vehicle is not an escape either:
 -- CREATE_RUNTIME_TXD pins a `ytd` streaming slot and has no destructor.
 --
--- So there is exactly ONE screen, and the only question left is which vehicle it
+-- So there is exactly one screen, and the only question left is which vehicle it
 -- shows. Answered the same way for all three resources, so a player walking
 -- between props gets one notion of "the one in front of me":
 --
--- 1. THE VEHICLE YOU ARE ABOARD WINS, in any seat, whenever it has a screen.
---    Not "the nearest": a car alongside is easily closer to your ped than your
---    own dashboard. Asked of `occupancy.cabin()`, the perception tier.
---
--- 2. OTHERWISE THE NEAREST VEHICLE THAT HAS A SCREEN, within `range`.
---
--- 3. HYSTERESIS, because rule 2 on its own flaps. Two cars at similar distance
---    would swap the incumbency every pass, and since the texture is global every
---    prop in the world would strobe between two devices' readings.
---
--- 4. NO CANDIDATE IS AN ANSWER. `update` returns nil, and the consumer tears its
---    browser down rather than leave stale numbers painted on every prop.
+-- 1. The vehicle you are aboard wins, in any seat, whenever it has a screen.
+--    Not "the nearest" -- a car alongside is often closer than your own
+--    dashboard. Asked of `occupancy.cabin()`.
+-- 2. Otherwise the nearest vehicle with a screen, within `range`.
+-- 3. Hysteresis, because rule 2 alone flaps: two cars at similar distance
+--    would swap the incumbency every pass, and since the texture is global
+--    every prop in the world would strobe between two devices' readings.
+-- 4. No candidate is an answer: `update` returns nil and the consumer tears
+--    its browser down rather than leave stale numbers painted on every prop.
 --
 -- Every native is an injectable provider, so tests/lua/screentarget-arbitration
 -- drives THIS file rather than a re-implementation of it.
@@ -38,15 +35,16 @@ local screentarget = {}
 screentarget.DEFAULT_RANGE_M = 8.0
 
 --- How much closer a challenger must be than the incumbent before it takes over.
---- ABSOLUTE METRES, NOT A FRACTION: the flap happens where two candidates are
---- nearly equidistant, and at this module's ranges a proportional margin
---- collapses to nothing exactly there. Two metres is about one car width.
+--- Absolute metres, not a fraction: the flap happens where two candidates are
+--- nearly equidistant, where a proportional margin collapses to nothing. Two
+--- metres is about one car width.
 screentarget.DEFAULT_SWITCH_MARGIN_M = 2.0
 
---- Minimum time an incumbent holds before ANY challenger may displace it, in ms.
---- The margin alone is not enough: two vehicles driving alongside weave by more
---- than a margin's worth over a few seconds, which reads as the device glitching.
---- A floor on DISPLACEMENT only -- losing the incumbent is never delayed.
+--- Minimum time an incumbent holds before any challenger may displace it, in ms.
+--- The margin alone isn't enough: two vehicles driving alongside weave by more
+--- than a margin's worth over a few seconds, which reads as the device
+--- glitching. A floor on displacement only -- losing the incumbent outright is
+--- never delayed.
 screentarget.DEFAULT_DWELL_MS = 1500
 
 -- Sources
@@ -64,17 +62,10 @@ local function defaultVehicles()
     return GetGamePool("CVehicle")
 end
 
---- Whether a BOOL native said yes.
----
---- MEASURED 2026-09-26, FiveM Enhanced: every BOOL native reached from Lua here
---- returns the NUMBER 1, not `true` -- DoesEntityExist, NetworkDoesNetworkIdExist,
---- IsPedInAnyVehicle, IsEntityAVehicle and HasModelLoaded were all checked with
---- `type()` and all answered "number". So `native(...) == true` is ALWAYS FALSE, and
---- It cost a full debugging session: `exists` rejected every entity that existed,
---- so the props on all three devices stayed dark while every unit test passed,
---- because the suites inject their own providers and never run a real native.
----
---- `not not v` is NOT the fix -- 0 is truthy in Lua. Both shapes are spelled out.
+--- Whether a BOOL native said yes. On this build, DoesEntityExist,
+--- NetworkDoesNetworkIdExist, IsPedInAnyVehicle, IsEntityAVehicle and
+--- HasModelLoaded all return the number 1, not `true`, so `native(...) == true`
+--- is always false. `not not v` is not a fix either -- 0 is truthy in Lua.
 local function nativeTruth(v)
     if v == true then return true end
     return type(v) == "number" and v ~= 0
@@ -156,7 +147,7 @@ function screentarget.create(opts)
     local now        = opts.now        or defaultNow
     local aboard     = opts.aboard     or defaultAboard
 
-    -- The incumbent. `since` is when THIS VEHICLE became the target, and it is
+    -- The incumbent. `since` is when this vehicle became the target.
     local target   = nil
     local targetNet = nil
     local source   = nil
@@ -170,7 +161,7 @@ function screentarget.create(opts)
         for i = 1, #listeners do listeners[i](target, targetNet, source) end
     end
 
-    --- Adopt a vehicle. Resets the dwell clock only on an actual CHANGE of
+    --- Adopt a vehicle. Resets the dwell clock only on an actual change of target.
     local function commit(vehicle, netId, why, dist)
         local changed = (vehicle ~= target)
         if changed then
@@ -194,7 +185,7 @@ function screentarget.create(opts)
         announce()
     end
 
-    --- Re-run the arbitration. Cheap enough for a 250-1000 ms poll; it is a pool
+    --- Re-run the arbitration. Cheap enough for a 250-1000 ms poll.
     --- @return vehicle, netId, source -- or nil when nothing qualifies.
     function self.update()
         local t = now()
@@ -231,7 +222,7 @@ function screentarget.create(opts)
             return nil
         end
 
-        -- The incumbent did not survive the scan: it despawned, lost its prop, or
+        -- The incumbent did not survive the scan: it despawned, lost its prop, or left range.
         if target ~= nil and incumbentDist == nil then
             target, targetNet, source, lastDist, since = nil, nil, nil, nil, 0
         end
@@ -272,7 +263,7 @@ function screentarget.create(opts)
         return lastDist
     end
 
-    --- Forget the incumbent. For a resource stop, or a consumer that has just
+    --- Forget the incumbent, e.g. for a resource stop.
     function self.reset()
         clear()
     end
@@ -291,7 +282,7 @@ function screentarget.create(opts)
         end
     end
 
-    --- The tuning actually in force, for a diag command to print. A range that
+    --- The tuning actually in force, for a diag command to print.
     function self.settings()
         return { range = range, switchMargin = switchMargin, dwellMs = dwellMs }
     end

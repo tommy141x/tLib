@@ -17,21 +17,12 @@ local E = MenuEngine
 -- does, which the engine cannot know.
 E.config = {
     requestTimeoutMs = 10000,
-    -- Sized against what the UI legitimately produces, not against a guess.
-    --
-    -- A select or slider row with apply = 'change' sends one request per value
-    -- step, and stepping is a held arrow key. MEASURED on a live server: a
-    -- serialized request round trip is ~26ms, so the real pipeline sustains ~39
-    -- requests/second. At the old burst = 6 / refill = 2 that exhausted the whole
-    -- budget in 174ms of holding one key, and every further step of an ordinary
-    -- colour or ped-model row came back 'Rate limit exceeded'. A limiter a normal
-    -- user trips by scrolling a list is not protecting anything; it is just a bug
-    -- with a reassuring name.
-    --
-    -- The ceiling is now above what a held key can produce, because the client
-    -- coalesces those steps (client/web/src/menu/Menu.tsx) and so a legitimate
-    -- session stays far below this. Flooding still gets cut off, which is the only
-    -- thing this was ever for.
+    -- A select/slider row with apply = 'change' sends one request per value step
+    -- (a held arrow key). A serialized round trip is ~26ms (~39 req/s sustained);
+    -- the old burst=6/refill=2 exhausted in 174ms of holding one key and every
+    -- further step read 'Rate limit exceeded'. The ceiling here is above what a
+    -- held key can produce since the client also coalesces steps
+    -- (client/web/src/menu/Menu.tsx); flooding still gets cut off.
     rateLimit = { burst = 30, refillPerSecond = 15 },
     maxAuthorities = 8,
     maxPermissionQuery = 64,
@@ -205,22 +196,13 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
         return
     end
 
-    -- The shared "Send feedback" dialog, which tLib's own menu injects into
-    -- every owner's root page. It is here rather than behind a net event of its
-    -- own because this channel already carries the correlation id, the rate
-    -- limiter, the timeout and the drop sweep -- and because the dialog is only
-    -- reachable from the menu.
-    --
-    -- NOT an `action`, deliberately: an action is a row a resource registered
-    -- with an ACE and a handler, and this row belongs to no resource. Routing it
-    -- through `resolveAction` would mean every consumer having to register an
-    -- item they did not write, which is exactly the per-resource wiring the
-    -- injection exists to avoid.
-    --
-    -- And NOT permission-gated. Feedback is about the software, not about the
-    -- server, so an ACE would let an operator switch off the only channel a
-    -- player has for telling US something -- while leaving the impression it
-    -- still worked.
+    -- The shared "Send feedback" dialog tLib's menu injects into every owner's
+    -- root page. On this channel (not its own net event) to reuse the
+    -- correlation id, rate limiter, timeout and drop sweep. Not an `action`: it
+    -- belongs to no resource, so routing through `resolveAction` would make
+    -- every consumer register an item it didn't write. Not permission-gated
+    -- either -- an ACE would let an operator silently disable the only channel
+    -- a player has to tell us something.
     if body.kind == 'feedback' then
         if not MenuFeedback then immediate('Feedback is unavailable'); return end
         MenuFeedback.submit(src, body, function(result)
@@ -253,26 +235,13 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
     end
 
     -- Also ahead of the client branch: `register` accepts a cooldown on every
-    -- action, so honouring it only for server-`run` rows would silently ignore the
-    -- field for the rest.
-    --
-    -- Stamped on ADMISSION rather than on success, because the stamp is also what
-    -- stops a second press racing the first while a handler is still in flight.
-    --
-    -- But an attempt the server itself watched FAIL is refunded (`refundCooldown`
-    -- below). Charging a full window for a handler that refused and produced
-    -- nothing is what makes an ordinary session feel like a punishment -- the
-    -- player waits out the window having received nothing, and cannot tell that
-    -- from a success they somehow missed. Rapid retries of a cheaply-failing row
-    -- are bounded by the request rate limiter above, which is the guard whose job
-    -- that is.
-    --
-    -- The refund is only ever applied to a server-`run` row. A client-dispatched
-    -- action reports its outcome to nobody -- the branch below answers `ok = true`
-    -- and hands off -- so the server never learns whether it worked, and a
-    -- client-reported failure would be forgeable into an unlimited-spawn bypass.
-    -- Those rows keep the admission stamp, and the honest lever for them is the
-    -- length of the window itself.
+    -- action, not just server-`run` rows. Stamped on admission, not success, since
+    -- the stamp also stops a second press racing the first mid-flight. An attempt
+    -- the server watched FAIL is refunded (`refundCooldown` below) -- charging a
+    -- full window for nothing produced reads as a punishment. The refund only
+    -- applies to server-`run` rows: a client-dispatched action reports its outcome
+    -- to nobody, so a client-reported failure would be forgeable into an
+    -- unlimited-spawn bypass; those rows keep the stamp and rely on the window length alone.
     local refundCooldown
     if action.cooldown then
         local key = action.cooldownKey and (entry.owner .. ':group:' .. action.cooldownKey) or item.id
@@ -319,13 +288,10 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
     Platform.setTimeout(function() finish({ ok = false, error = 'Action timed out' }) end,
         E.config.requestTimeoutMs - 500)
     Platform.createThread(function()
-        -- Refunded on the three outcomes the server can be sure cost nothing: the
-        -- handler never started, it raised before completing, or it completed and
-        -- explicitly refused. Deliberately NOT refunded after a successful run
-        -- whose patch was malformed, nor on the `active()` check below, nor on the
-        -- timeout above -- in each of those the handler may have already had its
-        -- side effect, and giving the window back would be giving away a second
-        -- one for work that was really done.
+        -- Refunded only on outcomes the server can be sure cost nothing: never
+        -- started, raised before completing, or explicitly refused. Not refunded
+        -- for a malformed patch, the active() check, or the timeout -- in those
+        -- the handler may already have had its side effect.
         if not active() then
             if refundCooldown then refundCooldown() end
             finish({ ok = false, error = 'Action no longer available' }); return

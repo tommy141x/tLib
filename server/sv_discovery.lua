@@ -6,42 +6,18 @@ local log = Logger.create('tLib/discovery')
 Discovery = {}
 
 -- The resource whose VM issues the file-writing natives below. Every write in
--- this file is made from tLib's runtime no matter which resource asked for it,
--- because Discovery.create is reached across an export boundary — so tLib is the
--- name that appears in a filesystem-permission grant, not the consumer's.
+-- this file runs from tLib's runtime regardless of which resource asked, since
+-- Discovery.create is reached across an export boundary.
 local TLIB_RESOURCE = _TLIB_IS_FIVEM and GetCurrentResourceName() or 'tLib'
 
--- THERE IS NO server.cfg LINE THAT LIFTS THE CROSS-RESOURCE WRITE REFUSAL.
--- DO NOT ADD ONE BACK, AND DO NOT TELL OPERATORS TO TRY ONE.
---
--- This file used to carry
---     BLANKET_GRANT_LINE = 'add_filesystem_permission tLib write *'
--- and six places recommended it whenever a write was refused. It was a
--- hypothesis awaiting measurement. The measurement is in, and it is negative:
--- that exact line sat in 305RP2's server.cfg from 2026-09-25, across many
--- server restarts, and on 2026-10-13 writes into a vehicle resource were still
--- refused every time.
---
--- The reason is that the sandbox objects to WHICH RESOURCE IS WRITING, not to
--- a missing permission. FiveM's Node runtime confines each resource to its own
--- directory, so a write originating in tLib's VM cannot land in someone else's
--- folder whatever the cfg says. shared/ts/fs/server.ts records the same finding
--- from the other side: a tLib-registered `WriteResourceFile(resource, ...)` was
--- built, measured, and abandoned for this, and replaced by "every resource
--- writes to itself from its own bundle".
---
--- THAT IS NOT THE SAME AS "CROSS-RESOURCE WRITES ARE IMPOSSIBLE", and this
--- comment used to say so. They are possible, and _saveFile does them: the
--- write just has to ORIGINATE in the target, which is what calling the
--- TARGET's own `WriteResourceFile` export achieves. Every t* resource bundles
--- tLib's shared/ts and registers one, and exports cross resources freely. The
--- only unreachable destination is one with no server bundle at all -- a plain
--- ASSET PACK, a vehicle resource shipping a tls.json. That case is structural.
---
--- For that case, and only that case, there is STAGING: write the finished file
--- inside tLib and tell the operator the two or three steps to put it where it
--- belongs. See stagingPath and _stageFile below, and the identical fallback in
--- saveModelConfig.
+-- No server.cfg line lifts the cross-resource write refusal -- `add_filesystem_
+-- permission tLib write *` sat in server.cfg across many restarts and writes
+-- were still refused. The sandbox objects to WHICH resource is writing, not to
+-- a missing permission: FiveM's Node runtime confines each resource to its own
+-- directory. Cross-resource writes ARE possible though (see _saveFile): the
+-- write has to originate in the target, via the target's own `WriteResourceFile`
+-- export. Only a target with no server bundle at all (a plain vehicle asset
+-- pack) is genuinely unwritable -- STAGING covers that case (stagingPath/_stageFile).
 
 -- Where a refused export leaves the file it could not deliver. Inside tLib,
 -- because tLib's own directory is the one place a write from tLib's VM is always
@@ -54,20 +30,11 @@ local function manifestLineFor(metadataKey, targetPath)
     return tostring(metadataKey) .. " '" .. tostring(targetPath) .. "'"
 end
 
--- PER-PLAYER RATE LIMITING
---
--- The admin-gated handlers below are already bounded by checkPerm; the config
--- request is not, and it is the expensive one — it serialises the whole config
--- map to the asking client. A request-shaped event with no limit is a free
--- amplifier: the client sends a few bytes and the server pays for the reply.
---
--- A floor on the interval between calls rather than a token bucket, for the
--- same reason tLS uses one: a client asks for configs once per boot, so there
--- is no legitimate burst to accommodate.
---
--- Buckets are keyed by event name, not by instance, because every consumer
--- resource creates its own Discovery with its own eventPrefix and they must not
--- share a budget.
+-- The admin-gated handlers below are bounded by checkPerm; config_request is not,
+-- and it's the expensive one -- it serialises the whole config map. A floor on
+-- the call interval (not a token bucket, same as tLS) is enough since a client
+-- only asks once per boot. Buckets are keyed by event name, not instance, since
+-- each consumer resource's Discovery has its own eventPrefix and must not share a budget.
 local _rateBuckets = {}
 
 local function rateLimited(bucket, src, intervalMs)
@@ -86,8 +53,7 @@ local function rateLimited(bucket, src, intervalMs)
     return false
 end
 
--- Otherwise every bucket keeps one timestamp per player who has ever connected,
--- for the life of the server.
+-- Otherwise each bucket keeps one timestamp per player who ever connected, for the server's life.
 Platform.onPlayerDropped(function(src)
     for _, b in pairs(_rateBuckets) do b[src] = nil end
 end)
@@ -101,21 +67,13 @@ local function _loadFile(resource, path)
     end
 end
 
--- WRITING TO A RESOURCE THAT IS NOT OURS
---
--- Measured on this server, from one resource's VM:
---
+-- Measured from one resource's VM:
 --   SaveResourceFile(<own resource>,   …) → 1
 --   SaveResourceFile(<other resource>, …) → false        -- sandbox refusal
 --   SaveResourceFile(<unknown resource>,…) → THROWS       -- "Resource X not found."
 --   LoadResourceFile(<anything>,       …) → works         -- reads are unrestricted
---
--- Three distinguishable outcomes, and until now `_saveFile` discarded all of
--- them. Every failure was silent: the server logged a write, then logged
--- success, then told the player in green chat that their config had been
--- exported, while nothing had been written and a restart reverted the lot. A
--- green checkmark over silent data loss is worse than an error, so the return
--- value is now the contract.
+-- Three distinguishable outcomes; the return value below is the contract so a
+-- caller can't report success over a silently discarded write.
 --
 -- `ok, err, kind` where `kind` is:
 --   'denied'  the sandbox refused a cross-resource write (the actionable one)
@@ -137,23 +95,11 @@ local function _saveFile(resource, path, content)
         return true
     end
 
-    -- CROSS-RESOURCE WRITES ARE POSSIBLE, and this is how.
-    --
-    -- The sandbox objects to which resource is DOING the writing, not to the
-    -- destination — so the write has to originate inside the target. That is
-    -- exactly what the target's own `WriteResourceFile` export is: every
-    -- resource bundling tLib's shared/ts calls `registerWriteResourceFile()`
-    -- in its own server/main.ts, and an export is callable across resources.
-    --
-    -- `exports[resource]`, NOT `exports[tLib]`. Asking our own bridge to
-    -- write somewhere else is the thing that is refused, and shared/ts/fs/
-    -- server.ts refuses it there deliberately rather than letting Node answer
-    -- with "use --allow-fs-write" — a server startup argument no customer can
-    -- be asked to add. Routing to the target's bridge is not a workaround for
-    -- that refusal; it is the design the refusal points at.
-    --
-    -- Only a target with no server bundle at all — a plain vehicle asset pack —
-    -- is genuinely unwritable, and the callers below stage a file for that.
+    -- Cross-resource writes work by having the write originate IN the target:
+    -- `exports[resource]:WriteResourceFile`, not `exports[tLib]`. Every resource
+    -- bundling tLib's shared/ts calls `registerWriteResourceFile()` in its own
+    -- server/main.ts. Only a target with no server bundle at all (a plain vehicle
+    -- asset pack) is genuinely unwritable -- the callers below stage a file for that.
     local bridged, bridgeRes = pcall(function()
         return exports[resource]:WriteResourceFile(resource, path, content)
     end)
@@ -246,28 +192,14 @@ local function _onResourceStop(cb)
     end
 end
 
---  INSTANCE LIFETIME
---
---  Every handler this module registers lives in tLib's resource state, not in
---  the consumer's -- Discovery.create is called across an export boundary, so
---  the closures it builds belong to tLib and survive for as long as TLIB is
---  running. Nothing in here used to end that lifetime.
---
---  The consequence was not subtle. `restart tLS` re-ran CreateDiscovery and
---  registered a SECOND config_request handler over a freshly loaded `configs`
---  table, while the first one stayed live over the table it loaded whenever
---  tLib last started. Both answered. The client kept whichever reply landed
---  last, so an edit to data.json could be correct on disk, correctly loaded by
---  the restarted consumer, and still never reach a client -- and restarting the
---  consumer again only added a third voice. It presented as "the config is
---  stale even after a resource restart", which is exactly what it was, and it
---  applied to every resource built on Discovery rather than to any one of them.
---
---  So instances are now tracked and disposed: a consumer restarting tears its
---  old instance down before the new one is built, and a consumer stopping tears
---  it down there and then. Disposal both removes the handlers and trips a flag
---  the handler bodies check, because RemoveEventHandler is not guaranteed on
---  every build and a handler that cannot be removed must at least go quiet.
+-- Every handler here lives in tLib's resource state, not the consumer's, since
+-- Discovery.create runs across an export boundary -- so a consumer `restart`
+-- used to register a SECOND config_request handler over the old one, and the
+-- client kept whichever reply landed last. An edit to data.json could be on
+-- disk and correctly loaded, yet never reach a client. Instances are now
+-- tracked and disposed on both restart and onResourceStop; disposal removes the
+-- handlers and trips a flag the handler bodies check too, since
+-- RemoveEventHandler isn't guaranteed on every build.
 
 local LIVE = {}
 
@@ -308,18 +240,12 @@ function Discovery.create(opts)
     local tag           = opts.logTag or metadataKey
     local chatTag       = opts.chatTag or ("[" .. ownerResource .. "]")
 
-    -- Metadata keys this channel ANSWERS TO but no longer writes.
-    --
-    -- A consumer that renames its metadata key cannot rename the key in other
-    -- people's fxmanifest.lua. Those packs are the whole point of the channel:
-    -- they declare `<key> 'file.json'` and ship a config for a vehicle we have
-    -- never seen. Rename the key with nothing else and every one of them goes
-    -- INVISIBLE -- not an error, no log line, just a pack whose config stops
-    -- being found, which presents as "the new version lost my vehicle".
-    --
-    -- Reads accept these; writes never use them. A pack that is re-exported
-    -- through this channel gets the current key appended to its manifest, so the
-    -- old spelling drains away as packs are touched rather than by a migration.
+    -- Metadata keys this channel still reads but no longer writes. A consumer
+    -- renaming its metadata key can't rename it in other people's fxmanifest.lua
+    -- -- those packs declare `<key> 'file.json'` for a vehicle we've never seen,
+    -- and a bare rename makes every one of them go invisible with no error. Reads
+    -- accept these; a re-exported pack gets the current key appended to its
+    -- manifest, so the old spelling drains away as packs are touched.
     local legacyKeys = opts.legacyMetadataKeys or {}
 
     Discovery.addManifestSibling(metadataKey)
@@ -382,17 +308,14 @@ function Discovery.create(opts)
         return disposed
     end
 
-    -- Every walk over `configs` type-guards its values. Without a `localSection`,
-    -- loadLocal adopts the whole of the owner's data file as the model → config
-    -- map, and owners legitimately park scalars at its top level (tLS keeps
-    -- bloom, paRange, envQuality, hudVisible there). Reaching one with pairs() is
-    -- a hard error, and since the export is a bare exports(name, fn) it unwinds
-    -- out of CreateDiscovery before any handler is registered — one stray scalar
-    -- took a whole resource offline. Guards skip or pass through, never throw.
+    -- Every walk over `configs` type-guards its values: without `localSection`,
+    -- loadLocal adopts the owner's whole data file as the model→config map, and
+    -- owners legitimately park scalars at its top level (tLS keeps bloom, paRange,
+    -- envQuality, hudVisible there). A stray scalar reaching pairs() unwound out of
+    -- CreateDiscovery before any handler registered and took the resource offline.
 
-    -- `skipAutoSave` means the owning resource does its own file writes; what it
-    -- is avoiding is SaveResourceFile reaching from tLib's runtime into its
-    -- folder. Every write path must honour it.
+    -- `skipAutoSave`: the owning resource writes its own file instead of
+    -- SaveResourceFile reaching in from tLib's runtime. Every write path must honour it.
     --- Returns ok, err, kind. `kind == 'skipped'` is not a failure: the owner
     --- writes its own file and is expected to. Any other falsey return IS one,
     --- and callers must not report success over it.
@@ -518,14 +441,9 @@ function Discovery.create(opts)
             return true
         end
 
-        -- This used to be where the lie started: the write was discarded, and
-        -- every caller went on to report success.
         local advice = ""
         if kind == 'denied' then
-            -- tLib is writing into the consumer's own folder from tLib's VM. The
-            -- owner is the resource that can always write here, so the real fix
-            -- is for it to take the write — which is exactly what `skipAutoSave`
-            -- is for.
+            -- The owner can always write its own folder; skipAutoSave hands it the write.
             advice = " '" .. tostring(ownerResource) .. "' should pass skipAutoSave = true to CreateDiscovery and"
                 .. " write its own data file (tlib.fs.writeResourceFile runs inside its VM and is always allowed)."
         end
@@ -563,15 +481,11 @@ function Discovery.create(opts)
                 end
                 local existing = configs[model]
                 -- Re-registration by the SAME external resource is not a shadow.
-                -- scanExternal() walks every resource at owner start, including
-                -- ones that have not started yet -- their folder is on disk, so
-                -- the metadata and tls.json read fine and the config is adopted.
-                -- Their onResourceStart then re-registers the identical file, and
-                -- this used to see the owner's own earlier adoption as a local
-                -- override and report a shadow against a file that does not
-                -- contain the model at all. Measured 2026-10-13: tLS/data.json
-                -- held `vehicles: {}` and the warning still fired every boot for
-                -- 18charger21tr and fpiu21tr. Refresh in place instead.
+                -- scanExternal() adopts not-yet-started resources (their folder
+                -- is already on disk); their onResourceStart then re-registers
+                -- the identical file. Without this guard that read as a local
+                -- override shadowing a file that never contained the model, and
+                -- fired a false warning every boot. Refresh in place instead.
                 if existing and prevSource
                     and prevSource.resource == resName
                     and prevSource.filePath == configPath
@@ -582,35 +496,17 @@ function Discovery.create(opts)
                     configs[model] = cfg
                     count = count + 1
                 elseif type(existing) == "table" then
-                    -- WARNING: A SHIPPED CONFIG NOW WINS OVER AN UNMARKED LOCAL COPY.
-                    --
-                    -- This branch used to leave precedence alone and only REPORT the
-                    -- shadow, on the reasoning that the operator should do nothing because
-                    -- "saveLocal drops the entry on the next write". That is true and it is
-                    -- not enough: the entry is only dropped when somebody SAVES that exact
-                    -- model, so a vehicle nobody edits keeps its stale local copy forever.
-                    --
-                    -- Measured in the field 2026-10-23, on the US East test server: tLS
-                    -- data.json carried `18charger21tr` (18 patterns, the old set) while
-                    -- `matrix_charger/tls.json` shipped 30 patterns including the
-                    -- one being looked for. Updating the pack file changed nothing in game,
-                    -- restarting changed nothing, and the only fix was deleting the entry
-                    -- from data.json by hand -- exactly the outcome the comment above says
-                    -- this branch exists to prevent, arrived at anyway because reporting a
-                    -- thing is not the same as fixing it.
-                    --
-                    -- So the pack is adopted here. A config a resource SHIPS is the author's
-                    -- current intent; an unmarked local copy is a leftover of whatever tLS
-                    -- (or tRadar, tRadio, tCAD -- every Discovery consumer) last persisted.
-                    --
-                    -- `_local` still wins, and that is the whole exception: it marks a
-                    -- config an admin DELIBERATELY took ownership of, and overriding a pack
-                    -- is its entire purpose. Only the accidental case changes.
+                    -- A shipped config wins over an unmarked local copy. Only reporting
+                    -- the shadow (old behaviour) left a stale local entry in place forever,
+                    -- since it's only dropped when somebody saves that exact model -- a
+                    -- vehicle nobody edits kept the stale copy regardless of pack updates.
+                    -- A shipped config is the author's current intent; an unmarked local
+                    -- copy is a leftover. `_local` still wins -- that's the one exception,
+                    -- marking a config an admin deliberately took ownership of.
                     local shadowPath = tostring(ownerResource) .. "/" .. tostring(localFile)
                         .. (localSection and (" (section '" .. tostring(localSection) .. "')") or "")
                     if existing._local then
-                        -- Permanent: saveLocal keeps `_local` entries forever,
-                        -- so every restart reloads the override.
+                        -- Permanent: saveLocal keeps `_local` entries forever, so every restart reloads the override.
                         log("[" .. tag .. "] '" .. tostring(model) .. "' shipped by '" .. resName .. "/" .. configPath
                             .. "' is NOT being used. " .. shadowPath .. " contains a saved local override for '"
                             .. tostring(model) .. "' (marked _local), and local always wins. The override is "
@@ -619,11 +515,8 @@ function Discovery.create(opts)
                             .. "' ships, delete the '" .. tostring(model) .. "' entry from " .. shadowPath
                             .. " and restart the server.", 3)
                     else
-                        -- The adoption itself. Still DEBUG: the operator's correct response
-                        -- is to do nothing, and now that really is true rather than true
-                        -- only if somebody saves. The line stays because "which copy am I
-                        -- running" is the question this whole branch exists to answer, and
-                        -- it is the only place the answer is visible.
+                        -- DEBUG: "which copy am I running" is the question this branch
+                        -- answers, and this line is the only place that's visible.
                         configs[model] = cfg
                         log("[" .. tag .. "] '" .. tostring(model) .. "' from '" .. resName
                             .. "' has replaced an older copy in " .. shadowPath
@@ -701,32 +594,10 @@ function Discovery.create(opts)
             local encodedExt = json.encode(extData)
             local ok, err, kind = _saveFile(ext.resource, ext.filePath, encodedExt)
             if not ok then
-                -- DO NOT RECOMMEND THE BLANKET GRANT HERE. It cannot work.
-                --
-                -- This used to end with "add this one line to server.cfg and
-                -- restart: add_filesystem_permission tLib write *". That advice
-                -- is false, and it was being printed on EVERY lightbar save.
-                -- The grant has been in 305RP2's server.cfg since 2026-09-25 and
-                -- the write is still refused, because the sandbox objects to
-                -- WHICH RESOURCE IS WRITING, not to a missing permission:
-                -- FiveM's Node runtime confines each resource to its own
-                -- directory. shared/ts/fs/server.ts documents the same thing
-                -- from the other side -- a tLib-registered WriteResourceFile
-                -- taking a target resource was built, measured and abandoned
-                -- for exactly this reason, and replaced by "every resource
-                -- writes to itself from its own bundle".
-                --
-                -- Reaching HERE is not "cross-resource writes do not work" --
-                -- _saveFile has already tried the target's own fs bridge, which
-                -- is the route that does work. It means this particular target
-                -- has no server bundle to host one: a plain asset pack, a
-                -- vehicle resource shipping a tls.json. That case is
-                -- structural, not a configuration gap, and no cfg line fixes it.
-                --
-                -- So do what the export path at the bottom of this file already
-                -- does: stage the finished file inside tLib and tell the
-                -- operator the three steps. `stagingPath` and `_stageFile`
-                -- exist for precisely this.
+                -- No server.cfg grant fixes this -- see _saveFile. _saveFile has already
+                -- tried the target's own fs bridge; reaching here means the target has
+                -- no server bundle to host one (a plain asset pack), which is structural.
+                -- Stage the finished file inside tLib instead, same as the export path below.
                 local staged = stagingPath(ext.resource, ext.filePath)
                 local stagedOk, stageErr = _stageFile(staged, encodedExt)
 
@@ -778,13 +649,8 @@ function Discovery.create(opts)
             extData[model] = nil
             local ok, err = _saveFile(ext.resource, ext.filePath, json.encode(extData))
             if not ok then
-                -- The entry is gone from memory but still on disk, so it comes
-                -- back on the next scan. Saying so is the whole point.
-                -- No blanket-grant suggestion here either, and for the same
-                -- reason as saveModelConfig above: the grant cannot work, and
-                -- offering it sends the operator to restart a server for
-                -- nothing. Deleting the entry by hand is the ONLY way to remove
-                -- a config from a resource that cannot write to itself.
+                -- Gone from memory but still on disk, so it reappears on the next scan.
+                -- Deleting the entry by hand is the only way to remove it from a resource that can't write itself.
                 warning = "'" .. tostring(model) .. "' was removed here but could NOT be removed from "
                     .. ext.resource .. "/" .. ext.filePath .. " — " .. tostring(err)
                     .. " It will reappear when that resource is next scanned. Delete the '" .. tostring(model)
@@ -805,12 +671,9 @@ function Discovery.create(opts)
         local targets = {}
         table.insert(targets, { name = ownerResource, hasMetadata = true, isLocal = true })
 
-        -- `hasMetadata` is exactly what it says: the resource DECLARES the
-        -- metadata key in its fxmanifest. It used to be derived from which
-        -- resources currently serve a config instead, so a vehicle that declared
-        -- the key but shipped an empty file — or one whose only model is
-        -- shadowed by a local override — showed as "no metadata" in the picker
-        -- and looked like the wrong place to export to.
+        -- `hasMetadata`: the resource declares the metadata key in its fxmanifest,
+        -- not whether it currently serves a config -- a vehicle with an empty file
+        -- or a shadowed model is still a valid export target.
         local numResources = _getResourceCount()
         for i = 0, numResources - 1 do
             local resName = _getResourceAtIndex(i)
@@ -846,14 +709,9 @@ function Discovery.create(opts)
         return _saveFile(ext.resource, ext.filePath, json.encode(extData))
     end
 
-    --- Move `model` back into the owner's own data file.
-    ---
-    --- The external copy is genuinely deleted, and when it cannot be, that is
-    --- reported rather than assumed. The move itself still stands in that case —
-    --- a `_local` entry outranks anything a resource ships, so the config the
-    --- player sees IS the local one — but a stale copy left in the vehicle is
-    --- something the operator has to know about, because it is what will come
-    --- back if the local entry is ever deleted.
+    --- Move `model` back into the owner's own data file. The move stands even
+    --- if the external copy can't be deleted -- `_local` outranks anything a
+    --- resource ships -- but the leftover is reported since it resurfaces if the local entry is later deleted.
     local function moveBackToLocal(model, config)
         local info = { status = 'local', warnings = {} }
         local oldExt = externalSources[model]
@@ -872,10 +730,7 @@ function Discovery.create(opts)
         end
 
         externalSources[model] = nil
-        -- `_local` is what makes the entry survive saveLocal and outrank the
-        -- external copy on the next boot. Clearing it here — which is what used
-        -- to happen — is precisely how a "move back to local" could end up
-        -- owning nothing at all.
+        -- `_local` makes the entry survive saveLocal and outrank the external copy on the next boot.
         config._local = true
 
         local ok, err, kind = persistLocal("exportConfig (moved '" .. tostring(model) .. "' back to local)")
@@ -898,15 +753,10 @@ function Discovery.create(opts)
     ---   'failed'   nothing was written anywhere
     ---   'no-config' there is no such model
     ---
-    --- ORDERING. Nothing that could lose the config is done until the
-    --- destination write has actually succeeded. The previous order cleared
-    --- `_local`, rewrote the owner's data file and deleted the entry from the
-    --- resource that used to hold it BEFORE attempting the target write, and
-    --- attributed the new source only afterwards. On a host where writes land
-    --- that is a delete-then-crash; on this one, where the target write is
-    --- refused, it rewrote the local file with the entry still marked as local-
-    --- but-unowned and left the picker claiming an export that never happened.
-    --- Write first, commit second.
+    --- Ordering: nothing that could lose the config happens before the
+    --- destination write succeeds. Committing first risked a refused write
+    --- leaving the entry marked local-but-unowned while the picker claimed an
+    --- export that never happened. Write first, commit second.
     function inst:exportConfig(model, targetResource)
         model = resolveModel(model)
         local config = configs[model]
@@ -949,10 +799,7 @@ function Discovery.create(opts)
         local wrote, err, kind = _saveFile(targetResource, targetPath, encoded)
 
         if not wrote then
-            -- NOTHING has been committed at this point: the config is still
-            -- local, still marked `_local`, still in the owner's file and still
-            -- being served to clients. The export did not happen, and this
-            -- returns false so no caller can claim it did.
+            -- Nothing committed: config is still local, marked `_local`, still served.
             info.status = 'staged'
             info.error = err
             info.errorKind = kind
@@ -991,10 +838,7 @@ function Discovery.create(opts)
 
         -- committed from here: the destination has the config
         info.status = 'exported'
-        -- DEBUG because the handler at the bottom of this file logs the same
-        -- export at INFO with the player who asked for it, which is the version
-        -- worth keeping: an audit line names who did what. Two lines per click
-        -- for one event is the duplication, not the level.
+        -- DEBUG: the handler below logs the same export at INFO with the player who asked, which is the audit line worth keeping.
         log("[" .. tag .. "] Wrote '" .. tostring(model) .. "' → " .. targetResource .. "/" .. targetPath, 1)
 
         local oldExt = externalSources[model]
@@ -1041,19 +885,12 @@ function Discovery.create(opts)
 
     -- Load local first (takes priority), then external, then deduplicate.
     --
-    -- Wrapped in pcall on purpose. Everything below this line — the late-start
-    -- watcher and the whole event-handler block — is registered AFTER these
+    -- Wrapped in pcall: the event-handler block below is registered AFTER these
     -- three calls, and Platform.wrapExport on FiveM is a bare exports(name, fn)
-    -- with no pcall of its own. An error raised in here therefore unwinds
-    -- straight out of the consumer's `exports['tLib']:CreateDiscovery{…}`: the
-    -- handle is never assigned, config_request/config_save are never registered,
-    -- and the consumer looks alive while silently answering nothing. One
-    -- malformed entry in one data file used to be enough.
-    --
-    -- Whatever loaded before the fault is kept, and the failure is reported at
-    -- ERROR level with the file to look at — a partially-loaded store that still
-    -- serves events is strictly better than a resource with no handlers, but it
-    -- must never be silent.
+    -- with no pcall of its own. An error here would unwind straight out of the
+    -- consumer's `exports['tLib']:CreateDiscovery{…}`, leaving handlers never
+    -- registered while the consumer looks alive and silently answers nothing.
+    -- Whatever loaded before the fault is kept; the failure is reported at ERROR.
     local okInit, initErr = pcall(function()
         inst:loadLocal()
         inst:scanExternal()
@@ -1069,9 +906,7 @@ function Discovery.create(opts)
 
     track(_onResourceStop(function(resName)
         if resName ~= ownerResource then return end
-        -- DEBUG, not INFO. Disposal is bookkeeping that always happens and can
-        -- only fail loudly; narrating it put one line per Discovery owner in
-        -- every operator's console on every restart.
+        -- DEBUG, not INFO: this fires once per Discovery owner on every restart.
         log("[" .. tag .. "] '" .. tostring(ownerResource) .. "' stopped — disposing its Discovery", 1)
         inst:dispose()
     end))
@@ -1115,34 +950,20 @@ function Discovery.create(opts)
         local receiveEv     = opts.receiveEvent or (prefix .. ":config_receive")
         local sourceInfoEv  = opts.sourceInfoEvent or (prefix .. ":externalSourceInfo")
         local targetsEv     = opts.exportTargetsEvent or (prefix .. ":exportTargets")
-        -- The outcome of an export, structured. Separate from `sourceInfoEv`,
-        -- which only ever carried "who owns this model now" and therefore had no
-        -- way to express a refused write at all.
+        -- The outcome of an export, structured -- unlike `sourceInfoEv`, which only
+        -- ever carries "who owns this model now" and can't express a refused write.
         local resultEv      = opts.exportResultEvent or (prefix .. ":exportResult")
         local permCheck     = opts.permissionCheck
 
         -- `skipAutoBroadcast` is the delivery counterpart of `skipAutoSave`: the
-        -- owning resource takes over sending configs to clients, exactly as
-        -- `skipAutoSave` hands it the file writes. Off by default, so every
-        -- existing caller keeps the behaviour it has.
-        --
-        -- It exists because this broadcast is a plain, non-latent
-        -- `TriggerClientEvent` of the WHOLE map to `-1` on every save, and an
-        -- owner that wants to pace it (TriggerLatentClientEvent) or send only
-        -- the model that changed cannot do either while this one still fires:
-        -- FiveM serialises and sends a net event whether or not any client has
-        -- a handler for it, so redirecting `receiveEvent` at an unused name
-        -- would cost the same bandwidth and merely hide it.
-        --
-        -- An owner that sets this MUST answer `config_request` itself — nothing
-        -- else replies to it — and must send after `afterSave`/`afterRemove`.
-        -- Announce a declined path ONCE per instance rather than per call, which
-        -- is where this has to differ from `skipAutoSave`. That option guards
-        -- file writes — rare, and one line each is proportionate. These guard a
-        -- broadcast and a per-player request: on a full server the request path
-        -- alone is one line per player per second, which buries the very first
-        -- line an owner needs to read. Once is enough to turn silent-forever
-        -- into a console message naming who owes the reply.
+        -- owner takes over sending configs to clients. Off by default. Exists because
+        -- FiveM serialises and sends a net event whether or not any client handles it,
+        -- so an owner that wants to pace delivery (TriggerLatentClientEvent) or send
+        -- only the changed model can't while this plain broadcast still fires. An
+        -- owner that sets it must answer `config_request` itself and send after
+        -- afterSave/afterRemove. Announced once per instance, not per call -- unlike
+        -- skipAutoSave's rare file writes, the request path can be one line per
+        -- player per second on a full server.
         local skipNoticed = {}
         local function noticeSkip(path, owes)
             if skipNoticed[path] then return end
@@ -1237,10 +1058,8 @@ function Discovery.create(opts)
 
             broadcast()
 
-            -- The structured result, for a consumer UI that wants to render the
-            -- steps properly. Sent on every outcome, including the failures —
-            -- this event is the only thing that distinguishes "exported" from
-            -- "could not export, here is what to do" on the client.
+            -- Sent on every outcome including failures -- the only event that distinguishes
+            -- "exported" from "could not export, here is what to do" on the client.
             Platform.TriggerClientEvent(resultEv, src, info)
 
             if ok and info.status == 'local' then
@@ -1252,10 +1071,7 @@ function Discovery.create(opts)
                 _chatMessage(src, chatTag, "Exported ~b~" .. model .. "~w~ config to ~y~" .. tostring(targetResource) .. "~w~.")
                 log("[" .. tag .. "] Player " .. src .. " exported '" .. model .. "' to '" .. tostring(targetResource) .. "'", 2)
             else
-                -- The export did NOT happen. The config is untouched and still
-                -- served from wherever it was — say so, and say what to do,
-                -- rather than leaving a green message over a file that was never
-                -- written.
+                -- Export did not happen; config untouched. Say so, and say what to do.
                 Platform.TriggerClientEvent(sourceInfoEv, src, model,
                     inst:getExternalSource(model) and inst:getExternalSource(model).resource or nil)
                 if info.status == 'staged' then
@@ -1283,17 +1099,12 @@ end
 
 function Discovery.registerExports()
     Platform.export('tLib', 'CreateDiscovery', function(opts)
-        -- GetInvokingResource() returns nil when called at module init time (top-level
-        -- script execution), so callers must pass resourceName = GetCurrentResourceName()
-        -- explicitly. Warn loudly here so the misconfiguration is obvious.
+        -- GetInvokingResource() returns nil at module init time (top-level script
+        -- execution), so callers must pass resourceName = GetCurrentResourceName() explicitly.
         if not opts.resourceName then
             opts.resourceName = GetInvokingResource()
             if not opts.resourceName or opts.resourceName == '' then
-                -- Level 4 (ERROR). This said "WARNING: … file I/O will target
-                -- the wrong resource!" at level 1, which the logger filters out
-                -- by default -- so the loudest sentence in the file was the one
-                -- nobody could see. The comment above says "warn loudly"; now it
-                -- does.
+                -- Level 4 (ERROR), not 1 -- the default logger filter hid this at 1.
                 log('[Discovery] resourceName not set and GetInvokingResource() returned nil. '
                     .. 'Pass resourceName = GetCurrentResourceName() in your CreateDiscovery opts. '
                     .. 'Defaulting to tLib — file I/O will target the wrong resource!', 4)

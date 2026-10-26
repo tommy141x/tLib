@@ -13,14 +13,11 @@ export interface HttpStatus {
    * True when `publicUrl` came from IP detection rather than
    * `tlib_http_public_url`.
    *
-   * Carried out to consumers because a guessed address and a configured one are
-   * different facts to an operator, and the banner is the only place either is
-   * seen in time to act. Three tickets in one day on 2026-10-19 were the same
-   * shape: the panel is reached by hostname through a proxy, tLib published the
-   * detected IP, and the browser's origin stopped matching — which surfaces as
-   * a CORS refusal much later, far from the cause. The convar exists for this
-   * and was documented only in a code comment and a README table, so operators
-   * were searching a config file for a key that no longer exists.
+   * Carried out to consumers because a guessed address and a configured one
+   * are different facts to an operator, and the banner is the only place
+   * either is seen in time to act — a wrong guess surfaces as a CORS refusal
+   * much later, far from the cause, when the panel is reached by hostname
+   * through a proxy while tLib published a detected IP instead.
    */
   publicUrlDetected: boolean;
   localUrl: string | null;

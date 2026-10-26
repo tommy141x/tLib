@@ -40,8 +40,8 @@ do
     -- A convar that sanitizes away to nothing has to fall through rather than
     -- win, or a community id of "!!!" selects an empty prefix and quietly turns
     -- namespacing off while sv_projectName sits there unused. The TypeScript
-    -- side (shared/ts/kvp.ts) already fell through; this one did not, so the same
-    -- server could read one namespace from Lua and another from JS.
+    -- side already fell through; this one didn't, so the same server could
+    -- read one namespace from Lua and another from JS.
     for _, convar in ipairs({ "tlib_community_id", "sv_projectName" }) do
         local cleaned = sanitize(GetConvar(convar, ""))
         if cleaned ~= "" then

@@ -10,41 +10,14 @@
             ...
         end)
 
-     Why this exists
-
-    Seven byte-identical copies of the same twelve-line function were in the
-    tree: tLS/server/sv_configs.lua, tRadio/server/sv_props.lua,
-    tDetector/server/sv_admin.lua and sv_props.lua, tRadar/server/sv_admin.lua
-    and sv_props.lua, and tUnit/server/sv_elements.lua. Nothing differed but
-    the local's name (`_rateBuckets` in six, `_buckets` in one) and whether the
-    `if not b then` was folded onto one line. The interval was 1000 at every
-    call site but tLS's two community-config queries.
-
-     A floor on the interval, not a token bucket
-
-    Every event this guards is asked once per boot or once per command press, so
-    there is no legitimate burst to accommodate and the simplest thing that
-    rejects a flood is the right one. A token bucket would let a client bank
-    allowance while idle and then spend it all at once, which is precisely the
-    shape of the request these events must not serve.
-
-     The sweep is the half that gets forgotten
-
-    Without it, every bucket keeps one timestamp per player who has EVER
-    connected, for the life of the server. Six of the seven copies remembered
-    it; the point of putting it here is that copy number eight cannot forget.
-
-    It is installed ONCE, on first use, rather than per bucket — `playerDropped`
-    is a normal event and registering N handlers for it would mean N table
-    walks per disconnect for no benefit.
-
-     Scope
-
-    Bucket names are per-RESOURCE, not global: this module is loaded into each
-    consumer's own server VM, so two resources both naming a bucket
-    'requestOpenSettings' cannot collide. That is worth knowing in the other
-    direction too — a bucket cannot be shared between resources, and a rate
-    limit that needs to be is a different problem than this one.
+    Replaces seven byte-identical copies (tLS, tRadio, tDetector, tRadar,
+    tUnit). A floor on the interval, not a token bucket: every guarded event
+    fires once per boot or command press, so there is no burst to bank and
+    spend later. The `playerDropped` sweep is installed once globally, not per
+    bucket, so a bucket doesn't keep a timestamp for every player who ever
+    connected. Bucket names are per-resource — this module loads into each
+    consumer's own VM, so names can't collide, and also can't be shared, across
+    resources.
 ]]
 
 local RateLimit = {}

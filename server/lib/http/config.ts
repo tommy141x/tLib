@@ -5,21 +5,17 @@
 //   set tlib_http_host        "0.0.0.0"   # bind address
 //   set tlib_http_public_url  ""          # the address clients should be told
 //
-// `set`, not `setr`. All three are read here, server-side, through GetConvar —
-// nothing in client/ or any web/ tree reads them, so replicating them to every
-// connected player buys nothing and widens what the server tells the world
-// about its own networking. The public URL still reaches clients: the server
-// resolves it and sends the resolved value, which is why the override does not
-// need to be replicated. README.md's convar table is the source of truth for
-// this and already said `set`; this comment was the one that was wrong.
+// `set`, not `setr`: all three are server-side only through GetConvar, so
+// replicating them would only widen what the server tells the world about its
+// own networking. The public URL still reaches clients, resolved server-side
+// and sent as a value, not as the raw convar.
 //
-// tlib_http_public_url is the one an operator has to think about: the router
-// binds a port but cannot know what address reaches it from outside. Unset
-// auto-detects the public IP. public-url.ts has the inference rules.
+// tlib_http_public_url is the one an operator has to think about — the router
+// binds a port but can't know what address reaches it from outside. Unset
+// auto-detects the public IP; public-url.ts has the inference rules.
 //
-// 7777 is tRadio's historical port. v7 is a hard cutover, so every existing
-// customer already has it open in the firewall and forwarded in NAT: the
-// upgrade changes paths but not networking.
+// 7777 is tRadio's historical port, kept across the v7 cutover since every
+// existing customer already has it open in the firewall and forwarded in NAT.
 
 import { fGetConvar } from "./fivem";
 

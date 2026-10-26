@@ -173,10 +173,9 @@ function Store:_replace(doc)
     return true
 end
 
---- Set the write-behind mirror when a "successful" write did not reach the disk
---- -- the normal case under `tlib_demo`. Verified by re-probing rather than
---- trusted, because a dropped write is indistinguishable from a real one at the
---- return value.
+--- Set the write-behind mirror when a "successful" write did not reach disk --
+--- the normal case under `tlib_demo`. Verified by re-probing, since a dropped
+--- write is indistinguishable from a real one at the return value.
 function Store:_mirrorIfDropped(doc, owner, version)
     local _, state, onDisk = self:_probe()
     local landed = state == 'ok' and type(onDisk) == 'table'
@@ -351,11 +350,9 @@ function Store:_ensure(schema, owner)
         end
 
         self:_mirrorIfDropped(seed, owner, target)
-        -- DEBUG, unlike the migration line further down. A store that did not
-        -- exist yet being created is the expected outcome of installing the
-        -- resource, and it prints under the CONSUMER's scope -- so at INFO it
-        -- is a first-boot line in five resources' consoles that nobody can act
-        -- on. The branch above, where creation failed, stays at ERROR.
+        -- DEBUG, unlike the migration line further down: a first-run store
+        -- being created is expected, not something an operator can act on.
+        -- The branch above, where creation failed, stays at ERROR.
         self._log(('jsonstore: created %s at schema v%d for "%s"')
             :format(self.file, target, owner), self._levels.DEBUG)
         local result = { action = 'seeded', owner = owner, to = target }

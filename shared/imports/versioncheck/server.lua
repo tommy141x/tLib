@@ -3,20 +3,20 @@
 -- Eligibility comes from the resource loading this module, never from opts.name
 -- or opts.author: branding policy, not an authenticity boundary.
 --
--- The rule is loaded as the exact file the menu registry's limit exemption uses,
--- the way shared/imports/menu/shared.lua loads shared/lib/menu/schema.lua. One copy is what
--- stops the banner and the exemption disagreeing about who counts as the studio.
--- LoadResourceFile reads from disk, so tLib need not have started.
+-- Loaded as the exact file the menu registry's limit exemption uses (same
+-- pattern as shared/imports/menu/shared.lua loading shared/lib/menu/schema.lua),
+-- so the banner and the exemption cannot disagree about who counts as the
+-- studio. LoadResourceFile reads from disk, so tLib need not have started.
 if type(StudioBranding) ~= 'table' then
     local path = 'shared/sh_branding.lua'
     local source = assert(LoadResourceFile('tLib', path), 'Missing tLib module: ' .. path)
     assert(load(source, '@@tLib/' .. path))()
 end
 
--- Same mechanism, same reason: the `studios` provider below talks to the same
--- host the marketplace does, so it must honour `tlib_api_base_url` too.
--- Without this the convar was only half a switch -- installs went to a local dev
--- worker while the version check and its changelog still hit production.
+-- Same mechanism: the `studios` provider below talks to the same host the
+-- marketplace does, so it must honour `tlib_api_base_url` too -- otherwise the
+-- convar was only half a switch, with installs going to a dev worker while the
+-- version check still hit production.
 if type(StudioApi) ~= 'table' then
     local path = 'shared/sh_api.lua'
     local source = assert(LoadResourceFile('tLib', path), 'Missing tLib module: ' .. path)
@@ -214,16 +214,11 @@ local TEAL = '\x1b[38;2;0;180;210m'
 
 -- Width of a banner line, with colour codes removed.
 --
--- COUNTS CODEPOINTS, NOT COLUMNS. This looks like a bug and is not: a terminal
--- draws columns, and the Unicode width tables call U+2705 two of them.
--- The console these banners are actually read in renders that glyph in ONE
--- cell, so column counting puts every line carrying one a place out. Changing
--- this to measure columns makes the box worse, and a test built from the width
--- tables will agree with the tables rather than with the console.
---
--- So: do not 'fix' this again from first principles. If a banner ever does look
--- crooked, screenshot the console first -- the terminal is the oracle here, not
--- the standard.
+-- Counts codepoints, not columns, on purpose: Unicode width tables call
+-- U+2705 two columns, but the console these banners are read in renders it in
+-- one cell. Switching to column-width math makes the box worse even though a
+-- test built from the width tables would agree with it. If a banner looks
+-- crooked, screenshot the actual console before "fixing" this.
 local function visLen(s)
     local stripped = s:gsub('%^%d', ''):gsub('%[[%d;]*m', '')
     local count = 0
@@ -409,12 +404,12 @@ local function buildOutput(opts, release, infoValues)
     local author  = opts.author
     local color   = opts.color or TEAL
 
-    -- The display title is NOT put through the figlet. That font has glyphs for
-    -- letters and digits only -- no space, no apostrophe -- so art silently
-    -- renders "Tommy's Radar Detector" as TommysRadarDetector, and MEASURED it
-    -- is 173 columns wide against tDetector's 74, which wraps and destroys the
-    -- box on any normal console. So the wordmark stays short and the title is a
-    -- text line under it. Omitted when it would just repeat the wordmark.
+    -- The display title is not put through the figlet: that font has glyphs for
+    -- letters and digits only, no space or apostrophe, so "Tommy's Radar
+    -- Detector" would render as TommysRadarDetector at 173 columns against
+    -- tDetector's 74, wrapping and destroying the box. The wordmark stays
+    -- short; the title is a text line under it, omitted when it would just
+    -- repeat the wordmark.
     local titleLine = nil
 
     local bannerLines = {}
@@ -734,13 +729,11 @@ local function studios(product, current)
                 end
             end
             finish({ version = data.product.currentVersion, changelog = table.concat(parts, '\n'), url = '' })
-        -- Through `StudioApi.headers` and never as a literal table, because
-        -- the per-install id has to be on this request as it is on every other
-        -- studio call. IT RUNS REGARDLESS OF `tlib_telemetry` — the update
-        -- check is not diagnostics and is not gated on consent — which is
-        -- exactly why docs/content/convars.mdx has to say out loud that the id
-        -- is sent whether or not diagnostics are on. (It said so on the hub's
-        -- diagnostics panel too; that panel is gone, the docs section is not.)
+        -- Through `StudioApi.headers`, never a literal table, so the per-install
+        -- id is on this request as it is on every other studio call. It runs
+        -- regardless of `tlib_telemetry` -- the update check is not diagnostics
+        -- and is not gated on consent -- which is why docs/content/convars.mdx
+        -- says the id is sent whether or not diagnostics are on.
         end, 'GET', '', StudioApi.headers({ ['Accept'] = 'application/json' }))
         CreateThread(function()
             Wait(8000)

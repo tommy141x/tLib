@@ -194,8 +194,7 @@ A copy at the expected generation prints **nothing** — a check that speaks on 
 install is one operators learn to scroll past. A copy *newer* than the build is reported too,
 because that is a rollback and has the opposite fix.
 
-Two limits worth stating. It compares two numbers, so it cannot tell them **which** call in
-their file broke — report your own hook failures as well, since a `pcall` that returns
+It compares two numbers, so it cannot tell them **which** call in their file broke — report your own hook failures as well, since a `pcall` that returns
 silently is the defect. And `expected` is yours to bump when the shipped file changes; pin
 that with a test of your own, which has to read your file shapes and so cannot live in tLib.
 

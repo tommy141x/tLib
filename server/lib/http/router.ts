@@ -5,12 +5,10 @@
 // header nor an absolute-form request target influences which upstream is
 // chosen — that is what separates a router from an open relay.
 //
-// `Router`, `proxy` and `registry` TOUCH NO FiveM GLOBAL, and that property
-// is load-bearing: it is the whole reason `router.test.ts` can stand a real
-// listener in front of a real upstream. Anything here that needs the runtime
-// gets injected by `index.ts` rather than imported. A `TelemetryBridge` was the
-// one such injection; it went with the diagnostics panel (see `hub.ts`), so the
-// constructor is back to config, name, log and the state callback.
+// `Router`, `proxy` and `registry` touch no FiveM global — load-bearing, since
+// it's why `router.test.ts` can stand a real listener in front of a real
+// upstream. Anything here that needs the runtime gets injected by `index.ts`
+// rather than imported.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import * as http from "node:http";
@@ -76,10 +74,8 @@ export class Router {
             ? "::1"
             : address.address;
       const localUrl = `http://${host.includes(":") ? `[${host}]` : host}:${address.port}`;
-      // No `listening on <addr>:<port>` line. The banner's `Hub:` row carries
-      // the URL an operator actually uses, and this said the same thing one
-      // line earlier in a form nobody can paste into a browser. A bind FAILURE
-      // still throws and is still reported -- this was only the success case.
+      // No `listening on <addr>:<port>` line: the banner's Hub row already
+      // carries the URL an operator actually uses. A bind failure still logs.
       this.onState("listening", localUrl, null);
     });
 
@@ -176,11 +172,9 @@ export class Router {
   /**
    * The front door counts visible destinations, independently of exposure.
    *
-   * GET/HEAD ONLY, AND NOTHING IS TO BE ADDED. This listener binds `0.0.0.0`
-   * by default and is unauthenticated by design (`hub.ts`), and there is no auth
-   * primitive in this tree to gate a writer with. A `POST /` consent switch
-   * lived here briefly and was removed for exactly that reason; the 405 below is
-   * what keeps it gone.
+   * GET/HEAD only. This listener binds `0.0.0.0` by default and is
+   * unauthenticated (`hub.ts`), with no auth primitive in this tree to gate a
+   * writer with — never add a POST handler here.
    */
   private serveHub(req: IncomingMessage, res: ServerResponse): void {
     if (req.method !== "GET" && req.method !== "HEAD") {

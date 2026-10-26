@@ -120,10 +120,9 @@ if #logged ~= 0 then fail('an absent file was reported as a problem') end
 files['tProbe|data.json'] = json.encode({ props = 'not a table' })
 if next(store:section('props')) ~= nil then fail('a non-table section was handed back') end
 
--- Unparseable content is SAID OUT LOUD -- tUnit's copy did this and the other
--- two recovered silently, which leaves an owner with no idea why their saved
--- data is gone -- and the file is NOT overwritten, so a typo is still fixable
--- by hand.
+-- Unparseable content is said out loud -- tUnit's copy did this and the other
+-- two recovered silently, leaving an owner with no idea why their saved data
+-- is gone -- and the file is not overwritten, so a typo stays fixable by hand.
 reset()
 store = JsonStore.open({ log = log })
 files['tProbe|data.json'] = '{ this is not json'

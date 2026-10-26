@@ -1,59 +1,20 @@
 /**
- * Turning a caught `unknown` into something a customer can paste back — and,
- * now, into something the transport can send without a customer involved.
+ * Turns a caught `unknown` into something pasteable, and now into something
+ * telemetry can send unattended. Moved here from tRadio's two render
+ * boundaries (now reached via `@tlib/shared`) because it was already most of
+ * a telemetry payload: `name`/`message`/`stack`/`causes` plus a context
+ * carrying `surface`/`location`/`version`/`panelVersion`.
  *
- * Provenance
+ * Redaction changed on the move to `scrub()`, not `redactSecrets()` alone, so
+ * a home-directory path and any host-registered player value are blanked too
+ * — strictly more redaction, since a pasted `C:\Users\<name>\...` leaks a
+ * Windows account to Discord.
  *
- * This was `tRadio/shared/ui/src/error-report.ts`. It moved here whole because
- * it was already one hop from a telemetry payload: it normalises a throw into
- * `name`/`message`/`stack`/`causes` and pairs it with a context carrying
- * `surface`, `location`, `version` and `panelVersion`. tRadio's two render
- * boundaries still use it, now across the `@tlib/shared` alias, and the copy
- * that was in tRadio is gone rather than re-exported.
- *
- * ONE BEHAVIOUR CHANGED IN THE MOVE, deliberately: redaction is now
- * `scrub()` rather than `redactSecrets()` alone, so a home-directory path and
- * any value the host registered as the player's are blanked as well. That is
- * strictly more redaction in the pasteable report too, and it should be: a
- * pasted `C:\Users\<their real name>\...` leaks the player's Windows account to
- * a Discord channel. Nothing that was readable before became unreadable — the
- * path rule replaces only the home segment, not the path.
- *
- * Why the original exists at all
- *
- * Both of tRadio's frontends wrap their render tree in a Solid error boundary,
- * and both used to render the error with `String(err)` (admin) or `err?.message`
- * (NUI) — which throws away the error NAME, the STACK and every scrap of
- * context about where it happened. BUG-68735 ("admin panel replaceChild render
- * crash") was blocked on exactly that: the report said "a render error appeared"
- * and nothing more, so the affected page, the preceding action and the first
- * caught exception were all unavailable and no fix could be selected.
- *
- * `String(err)` is lossy in three specific ways worth spelling out:
- *   - `String(new TypeError("x"))` is `"TypeError: x"` but drops `.stack`, which
- *     is the only part that names the component and the Solid internal frame.
- *   - `String({})` is `"[object Object]"`. A thrown non-Error — common from
- *     rejected `fetch` wrappers — becomes literally no information.
- *   - a wrapped error's `.cause` is never shown, so the underlying failure is
- *     invisible behind a generic "failed to apply settings".
- *
- * That last one is neither hypothetical nor optional, but the reason has
- * changed, so read it as history and not as current behaviour.
- *
- * MEASURED against solid-js 1.9.15: `handleError` wrapped a thrown non-Error as
- * `new Error("Unknown error", { cause: thrown })` before any error boundary
- * fallback saw it, so `String(err)` on a thrown object rendered the literal
- * text "Error: Unknown error" — strictly worse than `[object Object]` — and the
- * payload was reachable ONLY through `.cause`.
- *
- * RE-MEASURED against solid-js 2.0.0-rc.14 (2026-10-13), the renderer tRadio
- * ships on: `<Errored>` passes the thrown value to its fallback BY IDENTITY.
- * `err() === thrown` for a plain object, `instanceof Error` is false, `.cause`
- * is undefined, and `String(err)` is back to `[object Object]`. A real `Error`
- * is likewise passed through untouched with its own `.cause` intact. So the
- * wrapper no longer rescues a non-Error throw — `describeNonError` below is
- * what does — and the `.cause` walk now only ever carries causes the thrower
- * actually set. Both still matter; neither is for the reason above any more.
+ * Against solid-js 2.0.0-rc.14 (tRadio's shipped renderer): `<Errored>` passes
+ * a thrown value to its fallback by identity — a non-Error stays a non-Error,
+ * `String(err)` on a plain object is `"[object Object]"`, and `.cause` is
+ * whatever the thrower actually set. `describeNonError` below is what rescues
+ * the non-Error case now.
  */
 
 import { scrub } from "./scrub";
@@ -79,13 +40,11 @@ export interface ErrorContext {
   /** Build identity, so a stale bundle is visible in the paste itself. */
   version?: string;
   /**
-   * The build of the code that actually threw, when it can differ from `version`.
-   *
-   * `version` is the SERVER's. The two diverge: tRadio's desktop app ships its own
-   * panel bundle (`frontendDist` in tauri.conf.json), which is why its dispatch header
-   * has a mismatch badge at all. Without this field a pasted report cannot say which
-   * panel build crashed — and a renderer migration makes that the first question anyone
-   * asks, because the answer decides whether the reported mechanism still exists.
+   * The build of the code that actually threw, when it can differ from
+   * `version` (the server's). tRadio's desktop app ships its own panel bundle
+   * (`frontendDist` in tauri.conf.json) — why its dispatch header has a
+   * mismatch badge — and without this field a pasted report can't say which
+   * panel build crashed.
    */
   panelVersion?: string;
 }

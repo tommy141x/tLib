@@ -1,26 +1,24 @@
 -- The Lua half of the diagnostics core, and the three things in it that MUST
 -- agree with the TypeScript half byte for byte.
 --
--- WHY A PIN AND NOT A DERIVED ASSERTION. The fingerprint is a grouping key
+-- Why a pin and not a derived assertion: the fingerprint is a grouping key
 -- computed in two languages, and no single source can span them. A fault
--- reported from Lua and the same fault reported from the NUI have to land in the
--- same group, and the only failure mode is silent: two groups of one, on a
+-- reported from Lua and the same fault reported from the NUI have to land in
+-- the same group, and the only failure mode is silent: two groups of one, on a
 -- dashboard, forever. So the literals below are also pinned in
 -- tests/unit/telemetry-payload.test.ts, and `fnv1a('')` / `fnv1a('a')` are the
--- PUBLISHED FNV-1a 32-bit test vectors — which makes this an oracle rather than
--- a snapshot of whatever the code happened to do.
+-- published FNV-1a 32-bit test vectors — which makes this an oracle rather
+-- than a snapshot of whatever the code happened to do.
 --
--- The module is loaded WITHOUT RegisterNetEvent, CreateThread or
--- RegisterNUICallback defined, deliberately: every one of its wiring blocks is
--- guarded on `type(...) == 'function'`, and this suite is what proves the
--- primitives are reachable in a VM that has none of them. A module that only
--- loaded inside a live FXServer could not be tested at all.
+-- The module is loaded without RegisterNetEvent, CreateThread or
+-- RegisterNUICallback defined, deliberately: every wiring block is guarded on
+-- `type(...) == 'function'`, and this suite proves the primitives are
+-- reachable in a VM that has none of them. A module that only loaded inside a
+-- live FXServer could not be tested at all.
 --
 -- Run via `bun run test:lua`.
 
 local function fail(message) error(message, 2) end
-
--- Host stubs
 
 local now = 0
 function GetGameTimer() return now end
@@ -33,16 +31,12 @@ local T = dofile('shared/imports/telemetry/shared.lua')
 -- identifier rules rather than to the credential or path rules in `scrub`.
 local function Telemetry_scrubCheck(text) return T.scrubIdentifiers(text) end
 
--- fnv1a: the published vectors
-
 if T.fnv1a('') ~= '811c9dc5' then
     fail('fnv1a("") was ' .. T.fnv1a('') .. ', not the FNV-1a 32-bit offset basis 811c9dc5')
 end
 if T.fnv1a('a') ~= 'e40c292c' then
     fail('fnv1a("a") was ' .. T.fnv1a('a') .. ', not the published vector e40c292c')
 end
-
--- fnv1a: the cross-language pins
 
 local pins = {
     ['tlib'] = 'a3620e9a',
@@ -65,8 +59,6 @@ for _, input in ipairs({ '', 'a', string.rep('x', 5000), '\255\254' }) do
     if #h ~= 8 then fail('fnv1a produced ' .. #h .. ' characters, not 8') end
     if not h:match('^[0-9a-f]+$') then fail('fnv1a produced non-hex: ' .. h) end
 end
-
--- fingerprint
 
 if T.fingerprint('LuaError', 'cl_tones') == T.fingerprint('LuaError', 'cl_hud') then
     fail('two different sites produced one fingerprint; every fault in a resource would group as one')
@@ -185,8 +177,6 @@ for got, expected in pairs(names) do
     end
 end
 
--- scrub
-
 T.resetScrubValues()
 
 -- The real case this feature was briefed on: a credential in a config dump.
@@ -263,7 +253,7 @@ now = 0
 for _ = 1, 1000 do timers.record('load', 50, 10) end
 if #reported ~= 0 then fail('a call inside its budget was reported ' .. #reported .. ' times') end
 
--- THE FIRST BREACH OF A SESSION IS REPORTED, at GetGameTimer() == 0.
+-- The first breach of a session is reported, at GetGameTimer() == 0.
 -- `lastThresholdAt` is -math.huge for exactly this: a zero would have made
 -- `now - 0 >= 60000` false for the whole first minute of a boot, which is where
 -- a slow boot path lives.
@@ -273,7 +263,7 @@ if reported[1].kind ~= 'threshold' then fail('the first breach was not a thresho
 if reported[1].durationMs ~= 4000 then fail('the reported duration was ' .. reported[1].durationMs) end
 if reported[1].suppressed ~= 0 then fail('the first report claimed suppressed calls') end
 
--- A storm inside the cooldown is ONE report, and the VOLUME survives.
+-- A storm inside the cooldown is one report, and the volume survives.
 for _ = 1, 4000 do timers.record('load', 50, 4000) end
 if #reported ~= 1 then fail('a 4000-call storm produced ' .. #reported .. ' reports') end
 now = now + T.THRESHOLD_COOLDOWN_MS
@@ -305,7 +295,7 @@ if reported[1].sampleCount ~= T.SAMPLE_WINDOW then fail('the p95 reported the wr
 for _ = 1, 5000 do timers.record('tick', 50, 40) end
 if #reported ~= 1 then fail('the p95 interval was not respected: ' .. #reported .. ' reports') end
 
--- A throwing call is STILL TIMED and STILL THROWS. The slowest call on a machine
+-- A throwing call is still timed, and still throws. The slowest call on a machine
 -- in trouble is frequently the one that then throws.
 timers.reset()
 reported = {}
@@ -326,12 +316,10 @@ timers.reset()
 reported = {}
 timers.record('x', 0, -5)
 if #reported ~= 0 then fail('a negative duration was recorded') end
--- But ZERO is legal: GetGameTimer() has millisecond resolution, so an operation
+-- But zero is legal: GetGameTimer() has millisecond resolution, so an operation
 -- faster than 1ms genuinely measures 0.
 timers.record('x', 0, 0)
 if #reported ~= 1 then fail('a zero duration was discarded; sub-millisecond work is unmeasurable') end
-
--- consent defaults OFF
 
 local consent = T.consent()
 if consent.enabled ~= false then

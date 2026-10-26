@@ -82,28 +82,18 @@ local function convarNumber(name, fallback, minimum, maximum)
     return math.floor(value)
 end
 
--- Every duration convar carries its unit (`_ms`). Three once did not, and the
--- unit-less spellings were read as aliases with a deprecation print. Do not
--- bring that back: the only released tLib is 0.6, which predates all three
--- names, so there has never been a server.cfg carrying one. The alias existed
--- purely to smooth an unreleased rename, and its own message said it went in the
--- next major version — 1.0.0 is that version.
+-- Every duration convar carries its unit (`_ms`); no unit-less alias is owed —
+-- tLib has never shipped a server.cfg naming one.
 
--- NO OPEN KEY AND NO OPEN COMMAND. A library does not get to take a key off
--- every server that installs it: `RegisterKeyMapping` is immediate, so a tLib
--- that bound one was reaching the player before any resource had registered a
--- menu for them to see. It bound F1 by default, which is the framework menu key
--- on ESX and QB -- and FiveM runs every command bound to a key, so one press
--- opened the framework's menu AND an empty tLib one on top of it. Reported as
--- "F1 opens some weird menu".
+-- No open key or command: tLib used to bind F1 by default, the ESX/QB framework
+-- menu key, and FiveM fires every command bound to a key, so one press opened
+-- the framework menu plus an empty tLib one on top. Opening is the consuming
+-- resource's job: `RegisterKeyMapping` in its own startup, then
+-- `exports.tLib:OpenMenu(id)`.
 --
--- Opening is the consuming resource's job and it already has what it needs:
--- `RegisterKeyMapping` in its own startup, then `exports.tLib:OpenMenu(id)`.
---
--- `searchKey` stays, and that is not an inconsistency. It acts only while a menu
--- is already open (see `MenuInput.bindSearchKey`), so it is part of how this
--- widget behaves rather than how it is reached, and it should be the same key in
--- every menu built on tLib.
+-- `searchKey` stays: it only acts while a menu is already open
+-- (`MenuInput.bindSearchKey`), so it is the widget's own key rather than a way
+-- in, and should match across every tLib menu.
 local settings = {
     searchKey        = convar('tlib_menu_search_key', 'F3'),
     locale           = convar('tlib_menu_locale', 'en'),
@@ -790,11 +780,10 @@ local function installCallbacks()
         end
     end)
 
-    -- THE OWNING RESOURCE IS RESOLVED HERE, NOT TAKEN FROM THE BROWSER.
-    -- `selectedMenuId` is the page the game believes it is on, and the owner is
-    -- its `owner:` prefix -- so the attribution on a message cannot be chosen by
-    -- whoever is talking to the NUI callback. The server checks the name against
-    -- the registry again anyway, which is where a stale page is caught.
+    -- The owning resource is resolved here, from `selectedMenuId`'s `owner:`
+    -- prefix, never taken from the browser — so attribution cannot be chosen by
+    -- whoever is talking to the NUI callback. The server re-checks the name
+    -- against the registry, which is where a stale page is caught.
     nui(CALLBACK.feedback, function(data, finish, active)
         if not visible or not ready then finish({ ok = false, error = 'Menu is closed' }); return end
         if type(data) ~= 'table' or type(data.message) ~= 'string' or data.message == '' then
@@ -1369,8 +1358,8 @@ end
 --- than a second way out with its own rules. Does not toggle: closing a menu that
 --- is not open is a no-op.
 ---
---- `busy` deliberately does not block here. An action in flight is when the close
---- key is needed most, and close() answers every outstanding request with
+--- `busy` does not block here: an action in flight is when the close key is
+--- needed most, and close() answers every outstanding request with
 --- 'Menu closed' rather than leaving it hanging.
 function MC.close()
     if not visible then return false, 'Menu is not open' end
@@ -1595,30 +1584,20 @@ function MC.registerApi()
         return true
     end)
 
-    -- For a resource whose settings live in a tLib DIALOG rather than a menu, and
-    -- which therefore never gets the row the menu injects into an owner's root
-    -- page. tRadio's /tradio is the first.
-    --
-    -- IT GOES THROUGH THE MENU'S CHANNEL ON PURPOSE. That channel already carries
-    -- the correlation id, the rate limiter, the timeout and the drop sweep, and
-    -- re-deriving all four behind a second net event is exactly what
-    -- server/sv_feedback.lua's header declines to do. `request` has never been
-    -- gated on the menu being visible -- the visibility check lives in the NUI
-    -- callback, not here -- so nothing had to be loosened for this.
-    --
-    -- The owner is the CALLING resource, not an argument, so a message cannot be
-    -- attributed to a resource that did not ask for it.
+    -- For a resource whose settings live in a tLib dialog rather than a menu, so
+    -- it never gets the feedback row the menu injects into an owner's root page
+    -- (tRadio's /tradio is the first). Goes through the menu's own channel on
+    -- purpose: that channel already carries the correlation id, the rate
+    -- limiter, the timeout and the drop sweep, so nothing had to be loosened or
+    -- re-derived for this. The owner is the calling resource, never an argument,
+    -- so a message cannot be attributed to a resource that did not send it.
     api('SubmitFeedback', function(message, callback, declaredOwner)
         local owner, err = ownerOf(declaredOwner)
         if not owner then return false, err end
         if type(message) ~= 'string' or message == '' then return false, 'A message is required' end
-        -- NOT `type(callback) == 'function'`. MEASURED on a live server: a
-        -- function passed across a FiveM export boundary arrives as a callable
-        -- TABLE with a `__call` metamethod, not as a function, so that test
-        -- rejected every real caller while the value was perfectly callable --
-        -- and the caller got a refusal it had no reason to expect. The paragraph
-        -- above says functions cross "by reference", which is true and is not
-        -- the same as crossing as a `function`.
+        -- Not `type(callback) == 'function'`: a function crossing a FiveM export
+        -- boundary arrives as a callable table with a `__call` metamethod, not a
+        -- function, so that test rejected every real, perfectly callable caller.
         if not isCallable(callback) then return false, 'A callback is required' end
         request({ kind = 'feedback', message = message, resource = owner }, callback)
         return true

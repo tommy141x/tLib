@@ -142,8 +142,6 @@ assert(occupancy.cabin() == nil, 'and no cabin')
 assert(occupancy.isFrontSeat() == false)
 assert(occupancy.isController() == false)
 
--- Tier transitions
-
 local function poll(seat, vehicle, netId, ids)
     mySeat = seat and { seat = seat, vehicle = vehicle, netId = netId } or nil
     frontIds = ids or {}
@@ -180,8 +178,6 @@ assert(occupancy.isAboard() == false, 'and stepping out ends that too')
 -- Reset for the announcement block below.
 myId = 1
 frontIds = {}
-
--- Changes are announced once per transition
 
 local changes = {}
 occupancy.onChange(function(state)

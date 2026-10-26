@@ -1,36 +1,25 @@
 /**
  * Pointer-driven camera drag for NUI editors.
  *
- * Why this exists
+ * An editor showing the NUI cursor holds `SetNuiFocus(true, true)`, so CEF
+ * owns pointer movement. `SetNuiFocusKeepInput(true)` keeps buttons flowing
+ * to the game, but the look axes (`INPUT_LOOK_LR`/`INPUT_LOOK_UD`) go dead:
+ * `GetDisabledControlNormal` reports one frame of motion then zero for as
+ * long as the button is held — not the disabled-control rule itself (tAFK's
+ * sequence editor disables both every frame and fails the same way), since
+ * disabling a control stops the game turning the head but doesn't give the
+ * read its delta back. The page receives the pointer events perfectly, so the
+ * browser is the only correct source — proven in CEF 103 by tVDJ's editor
+ * before being lifted here.
  *
- * An in-game editor that shows the NUI cursor holds `SetNuiFocus(true, true)`.
- * In that state **CEF owns pointer movement**. `SetNuiFocusKeepInput(true)` keeps
- * keyboard and mouse *buttons* flowing to the game — which is why a
- * `RegisterKeyMapping` `+`/`-` pair on MOUSE_MIDDLE still fires — but the look
- * axes (`INPUT_LOOK_LR` = 1, `INPUT_LOOK_UD` = 2) go dead: `GetDisabledControlNormal`
- * reports **one frame** of motion and then zero for as long as the button is held.
- *
- * That is the exact measured symptom "it moves a pixel and then stops while I am
- * still holding the button", and it is NOT the disabled-control rule: tAFK's
- * sequence editor disables 1 and 2 every frame before reading them and fails the
- * same way. Disabling the control is necessary to stop the game *also* turning the
- * head; it does not give the read back its delta.
- *
- * The page itself receives those pointer events perfectly. So the browser is the
- * only correct source of the delta, and this module is the one implementation of
- * that — tVDJ's editor proved the approach in CEF 103 before it was lifted here.
- *
- * Contract
- *
- * - `movementX/Y`, not `clientX/Y` deltas: a client-coordinate delta stalls the
- *   instant the cursor reaches a screen edge, mid-drag.
- * - One message per animation frame. `pointermove` fires well above the frame
- *   rate and every post is a `fetch` across the NUI boundary.
- * - The drag MODE is decided once, at `pointerdown`, from the modifiers held
- *   then — releasing Shift halfway through a pan must not turn it into an orbit.
- * - Pointer capture is taken, so a drag that leaves the element still tracks.
- * - A terminal `{ dx: 0, dy: 0, mode: "none" }` is sent on release, so the Lua
- *   side can drop any held state without a second keybind to tell it.
+ * Contract: `movementX/Y`, not `clientX/Y` (a client delta stalls at a screen
+ * edge mid-drag); one message per animation frame (`pointermove` fires well
+ * above frame rate and each post is a `fetch` across the NUI boundary); drag
+ * mode is decided once at `pointerdown` from the modifiers held then, so
+ * releasing Shift mid-pan can't turn it into an orbit; pointer capture is
+ * taken so a drag leaving the element still tracks; a terminal `{ dx: 0, dy:
+ * 0, mode: "none" }` is sent on release so Lua can drop held state without a
+ * second keybind.
  */
 
 export type CameraDragMode = "orbit" | "pan" | "dolly" | "none";

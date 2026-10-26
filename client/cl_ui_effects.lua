@@ -64,25 +64,20 @@ Platform.onShutdown(function()
     fadeOut(0.0)
 end)
 
--- REDUCED MOTION
+-- Reduced motion: `prefers-reduced-motion: reduce` does not work in a FiveM NUI
+-- — CEF always reports `no-preference` — so every such media query in this
+-- estate was dead. The switch that reaches a player is the `--motion` custom
+-- property on :root; every shared duration multiplies through it, so one
+-- write disables all of them.
 --
--- `@media (prefers-reduced-motion: reduce)` DOES NOT WORK IN A FiveM NUI.
--- CEF reports `no-preference` whatever the host OS is set to — measured — so
--- every such block in this estate was coverage that could never fire. The
--- switch that reaches a player is the `--motion` custom property on :root
--- (shared/css/theme-tokens.css); every shared duration multiplies through it,
--- so one write disables all of them.
---
--- Two inputs, player over server, because the server owner is setting a house
--- default and the player is stating an accessibility need:
---
+-- Two inputs, player over server: the server sets a house default, the player
+-- states an accessibility need.
 --   tlib_reduce_motion  (convar, `setr`)   server default, 0 or 1
 --   tlib.motion         (KVP)              the player's own answer, if any
 --
 -- A consumer with its own ui_page owns its own document, so tLib cannot write
--- the property there. It publishes the ANSWER instead and the consumer applies
--- it to its own root: `exports.tLib:GetReduceMotion()` to read it now, and the
--- `tlib:reduceMotion` event for when it changes.
+-- the property there; it publishes the answer instead, via
+-- `exports.tLib:GetReduceMotion()` and the `tlib:reduceMotion` event.
 
 local MOTION_KVP = 'tlib.motion'
 local reduceMotion = false

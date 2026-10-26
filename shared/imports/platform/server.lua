@@ -57,41 +57,29 @@ end
 
 --- Highest passenger seat index the seat scan will look at.
 ---
---- The server has no `GetVehicleMaxNumberOfPassengers` — that native is
---- client-only (0xA7C4F2C6E744A550), and there is no server-side equivalent that
---- reports a vehicle's seat count. `GetPedInVehicleSeat` answers 0 both for an
---- empty seat and for a seat index the vehicle does not have, so a scan cannot
---- discover its own end and has to be bounded.
+--- `GetVehicleMaxNumberOfPassengers` is client-only, and there's no
+--- server-side equivalent, so a scan can't learn a vehicle's seat count.
+--- `GetPedInVehicleSeat` returns 0 both for an empty seat and a seat index
+--- the vehicle doesn't have, so the scan can't detect its own end either —
+--- it has to be bounded.
 ---
---- MEASURED, not assumed. Every `vehiclelayouts*.meta` in the Enhanced install
---- was counted: 394 layout entries, and the largest is 16 seat slots — driver
---- plus 15 passengers, so the highest live passenger index in the base game is
---- 14. It is a four-way tie between LAYOUT_BUS (bus, airbus),
---- LAYOUT_PLANE_MILJET, LAYOUT_PLANE_TITAN2 and LAYOUT_HELI_CARGOBOB5, and an
---- independent 921-vehicle dump agrees. This server's own add-on layouts
---- (`[vehicles]/[models]/onx-evp-a-shared/data/vehiclelayouts.meta`) top out at
---- 12 slots, index 10.
+--- Measured across every `vehiclelayouts*.meta` in the Enhanced install (394
+--- entries): the largest is 16 slots (driver + 15 passengers, index 14), a
+--- four-way tie led by LAYOUT_BUS; this server's own add-on layouts top out
+--- at index 10. Counting seat bones instead gives 17 on the bus and would be
+--- wrong — `seat_dside_r7` exists on the model but no layout references it.
 ---
---- Counting seat BONES gives 17 on the bus and would be wrong: `seat_dside_r7`
---- exists on the model and no layout references it.
----
---- 16 therefore clears the measured maximum by two. It is an empirical bound and
---- not an engine limit — no hard cap was found in code, and a third-party layout
---- with more slots is not ruled out. Raise this one constant if one ever appears;
---- nothing downstream assumes a number of rows.
+--- 16 is an empirical bound, not an engine limit — raise it if a layout with
+--- more slots ever appears; nothing downstream assumes a row count.
 platform.MAX_SEAT_INDEX = 16
 
 --- The FRONT seat a player occupies, and the vehicle it belongs to.
 ---
---- Only seats -1 (driver) and 0 (front passenger) are reported; a rear seat
---- reads as nil, exactly as a player on foot does. That is deliberate rather
---- than lossy — this is the CONTROL question, and the control election has only
---- ever had two candidates. `getPlayerSeat` below is the same read without the
---- collapse, for the perception question.
----
----
---- The seat is derived from the host, never taken from the caller, so a client
---- cannot assert its way into a seat it is not in.
+--- Deliberately collapses to -1/0 only — a rear seat reads as nil, same as
+--- being on foot — because this answers the CONTROL question, which has only
+--- ever had two candidates. `getPlayerSeat` below does the same read without
+--- the collapse, for the perception question. Seat comes from the host,
+--- never the caller, so a client can't assert its way into a seat it isn't in.
 --- @return seat, netId — or nil.
 function platform.getPlayerFrontSeat(source)
     local ped = platform.getPlayerPed(source)
@@ -116,14 +104,11 @@ end
 
 --- ANY seat a player occupies, rear rows included, and the vehicle it belongs to.
 ---
----
---- The scan tries -1 and 0 first, so a front-seat occupant — the common case and
---- the one on the hot gate path — costs exactly the two reads `getPlayerFrontSeat`
---- costs. Only somebody actually in the back pays for the rest of the sweep.
----
----
---- The seat is derived from the host, never taken from the caller, so a client
---- cannot assert its way into a seat it is not in.
+--- Tries -1 and 0 first, so a front-seat occupant — the common case, on the
+--- hot gate path — costs exactly what `getPlayerFrontSeat` costs; only
+--- someone actually in the back pays for the rest of the sweep. Seat comes
+--- from the host, never the caller, so a client can't assert its way into a
+--- seat it isn't in.
 --- @return seat, netId — or nil.
 function platform.getPlayerSeat(source)
     local ped = platform.getPlayerPed(source)
@@ -235,18 +220,18 @@ function platform.publishExportsAs(legacyResource)
     for name, fn in pairs(_published) do answerAs(legacyResource, name, fn) end
 end
 
--- IT NOW ACTUALLY WRAPS. IT DID NOT, AND THE NAME SAID IT DID. The full
--- account is on the client twin; in short, a throw inside an export body does
--- not cross the FiveM boundary, so ~40 call sites that adopted this as a guard
--- never had one. `resource` is still ignored for registration and used only in
--- the error line. `table.pack`/`unpack` because `ok, reason` is the house shape.
+-- Now actually wraps — it didn't before, despite the name: a throw inside an
+-- export body doesn't cross the FiveM boundary, so ~40 call sites that
+-- adopted this as a guard never had one. `resource` is unused for
+-- registration, only for the error line. `table.pack`/`unpack` because
+-- `ok, reason` is the house shape.
 function platform.wrapExport(resource, name, fn)
     local wrapped = function(...)
         local result = table.pack(pcall(fn, ...))
         if result[1] then return table.unpack(result, 2, result.n) end
-        -- Printed, not re-raised. Re-raising puts it back where it came from:
-        -- invisible to the caller. The caller still gets nil, which is what it
-        -- got before — the change is that the reason now exists somewhere.
+        -- Printed, not re-raised: re-raising would be invisible to the
+        -- caller again. The caller still gets nil as before; now the reason
+        -- exists somewhere.
         print(("^1[%s] export '%s' threw: %s^7"):format(resource or "?", name, tostring(result[2])))
         return nil
     end

@@ -193,14 +193,11 @@ describe("marketplace installer isolation and ownership", () => {
   test.each(["demo", "demo.wav"])(
     "⛔ refuses an unreceipted existing %s for install and uninstall",
     (name) => {
-      // THE PROTECTION PROPERTY, for BOTH shapes a target can take. Content
-      // that ships with a resource has no receipt, and this refusal is the whole
-      // reason it cannot be overwritten or uninstalled — not
-      // `ProtectedBuiltinInventory`, which is measurably inert.
-      //
-      // Both names are probed regardless of item type, deliberately: a directory
-      // called `demo` must block a sound install just as `demo.wav` must block a
-      // layout install. Refusing more is the safe direction.
+      // Content shipped with a resource has no receipt, and this refusal is the
+      // whole reason it can't be overwritten or uninstalled — not
+      // `ProtectedBuiltinInventory`, which is inert. Both names are probed
+      // regardless of item type: a directory called `demo` must block a sound
+      // install just as `demo.wav` must block a layout install.
       fs.mkdirSync(base());
       if (name === "demo") {
         fs.mkdirSync(file(name));
@@ -219,12 +216,10 @@ describe("marketplace installer isolation and ownership", () => {
     fs.writeFileSync(file("bgDog.wav"), "SHIPPED");
     const outcome = installFromData("test", "sound", "bgDog", wav, "", 0);
     expect(outcome.ok).toBe(false);
-    // WHICH guard fires depends on the filesystem, and both are the right answer.
-    // On a case-INSENSITIVE filesystem (this machine) the plain stat for
-    // `bgdog.wav` finds `bgDog.wav` and the unreceipted-target refusal catches it
-    // first. On a case-SENSITIVE one that stat misses and the case-variant scan is
-    // the only thing standing there. Asserting one message would make this pass on
-    // one platform and fail on the other while the property holds on both.
+    // Which guard fires depends on the filesystem, and both are the right
+    // answer: case-insensitive, the plain stat for `bgdog.wav` finds `bgDog.wav`
+    // first; case-sensitive, that stat misses and the case-variant scan catches
+    // it. Asserting one message would make this pass on one platform only.
     if (!outcome.ok) expect(outcome.error).toMatch(/no marketplace ownership receipt|only by case/);
     expect(uninstallItem("test", "sound", "bgDog").ok).toBe(false);
     expect(fs.readFileSync(file("bgDog.wav"), "utf8")).toBe("SHIPPED");
@@ -234,12 +229,10 @@ describe("marketplace installer isolation and ownership", () => {
     // reach on its own: the only way to have a stat for `bgdog.wav` miss while
     // `bgDog.wav` is in the directory listing is to make the listing say so.
     //
-    // THE BUG THIS PINS. The scan used to be handed the bare slug, so it looked
-    // for an entry case-equal to `bgdog` and never for one case-equal to
-    // `bgdog.wav`/`.ogg`/`.mp3`. Sounds are most of the catalogue and a sound's
-    // destination is a flat file, so on a case-sensitive filesystem an install of
-    // slug `bgdog` wrote a second sound beside the shipped `bgDog.wav` with no
-    // refusal and no warning — the exact outcome the scan exists to prevent.
+    // The bug this pins: the scan used to be handed the bare slug, so it looked
+    // for an entry case-equal to `bgdog` and never to `bgdog.wav`/`.ogg`/`.mp3`.
+    // On a case-sensitive filesystem that let an install of slug `bgdog` write a
+    // second sound beside the shipped `bgDog.wav` with no refusal or warning.
     fs.mkdirSync(base());
     const readdir = fs.readdirSync;
     spyOn(fs, "readdirSync").mockImplementation(((p: string, opts: unknown) =>

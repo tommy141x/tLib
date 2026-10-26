@@ -1,18 +1,16 @@
 /**
- * tLib's DOM test preload. Referenced by `client/web/bunfig.toml`'s
- * `[test] preload` and reached through `bun run test:dom` from the repo root.
+ * tLib's DOM test preload, referenced by `client/web/bunfig.toml`'s
+ * `[test] preload`, reached through `bun run test:dom`. A preload rather than
+ * a per-file import because module top-level code runs before any
+ * `beforeAll()` could install a DOM. Lives in `client/web` because node
+ * resolution walks up from the importing file, making this the only
+ * directory where a component test resolves the same module graph the
+ * shipped bundle builds from. `--conditions=browser` is required — without
+ * it solid-js resolves to its SSR build and a bare signal test silently
+ * never recomputes.
  *
- * A preload rather than a per-file import because module top-level code runs
- * before any `beforeAll()` could install a DOM. It lives in `client/web` because
- * node resolution walks up from the importing file, so this is the only
- * directory in the repo where a component test resolves the same module graph
- * the shipped bundle is built from. `--conditions=browser` is set by the script
- * and is not optional: without it solid-js resolves to its SSR build, where a
- * bare signal test silently never recomputes.
- *
- * Every plugin below exists for a measured trap, and several of them fail
- * SILENTLY -- a green run that measured nothing. Read
- * docs/internal/dom-test-harness.md before changing any of them.
+ * Every plugin below exists for a measured trap, several of which fail
+ * silently. Read docs/internal/dom-test-harness.md before changing any.
  */
 
 import { mock } from "bun:test";
@@ -288,17 +286,15 @@ function collectIconSpecifiers(dir: string, found = new Set<string>()): Set<stri
   }
 }
 
-//
-// THE FIX BELONGS HERE AND NOT IN A COMPONENT. This makes the setter behave
-// the way the spec — and the browser the NUI actually runs in — already does. A
-// component rewritten to `String(n)` to dodge it would be carrying a workaround
-// for a test-only DOM, and the next component to render a bare number would hit
-// the same wall. Transcribed from `tRadio/scripts/test-setup.ts`, which measured
-// it first.
+// Belongs here, not in a component: makes `textContent` setter behave the
+// way the spec — and the NUI's real browser — already does. happy-dom widened
+// a fast path to numbers and `textContent = 0` appends nothing (null deref).
+// A component rewritten to `String(n)` would just be dodging a test-only DOM
+// bug. Transcribed from `tRadio/scripts/test-setup.ts`, which found it first.
 {
-  // The setter is not always an own property of the named class — happy-dom's
-  // `DocumentFragment` reaches it through `Node`. Patching the class that OWNS it
-  // (and deduping, since several classes can share one owner) keeps inheritance
+  // The setter isn't always an own property of the named class — happy-dom's
+  // `DocumentFragment` reaches it through `Node`. Patching the owning class
+  // (deduped, since several classes can share one owner) keeps inheritance
   // intact instead of shadowing a subclass override.
   const patched = new Set<object>();
   const patch = (label: string, start: object | undefined) => {

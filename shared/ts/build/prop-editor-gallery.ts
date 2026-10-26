@@ -1,60 +1,24 @@
 /**
- * Every state of the shared 3D prop editor, photographed, into one flat folder —
- * out of whichever consumer's real NUI bundle you point it at.
+ * Every prop-editor state, screenshotted into one folder, against a consumer's real NUI
+ * bundle. Shared because chrome is themed by token VALUES, not names — tRadio sets its own
+ * on `.radio-settings-root`, tRadar/tDetector inherit tLib's from `theme-tokens.css` on
+ * `:root` — so each host is a genuinely different picture. Moved out of
+ * `tRadio/scripts/propeditor-gallery/gallery.ts` once tRadio stopped being the only host.
  *
- * Why this is shared
+ * Every input is a real FiveM message (`locale:init`, `<prefix>:propEditorInit`,
+ * `setCameraPosition`) except two synthesised fixtures: `vehicleMatrix` is a real GTA basis
+ * at a 35° heading, not identity — identity would make the local/world shots byte-identical,
+ * hiding the thing they exist to show — and `setCameraPosition` is sent up front since without
+ * it the camera sits at the origin with the gizmo off-screen.
  *
- * `@tlib/internal/prop-editor` is one component mounted by three resources, and its
- * chrome is drawn entirely from token NAMES (`bg-card`, `text-muted-foreground`,
- * `--radius`). The VALUES behind those names are per-resource — tRadio declares
- * its own set on `.radio-settings-root`, tRadar and tDetector inherit tLib's from
- * `theme-tokens.css` on `:root` — so "the editor, themed as tRadar" is a
- * genuinely different and genuinely interesting picture from "the editor, themed
- * as tRadio". Shooting all three is how "one shared look, per-resource token
- * values" gets checked rather than assumed.
+ * tRadio's perf harness (`nui-harness/scenarios/misc.ts`) skips `propEditorInit`: repeating a
+ * WebGL mount hundreds of times on a GPU-less box floods it with context-loss warnings it would
+ * file as findings. This gallery opens each state once, so that cost doesn't apply — measured,
+ * headless Chromium 103 gives WebGL 2.0 with no extra flags. `gizmoPixels` catches a blank
+ * canvas instead of shipping one.
  *
- * The driver lived in `tRadio/scripts/propeditor-gallery/gallery.ts` while tRadio
- * was the only host. Three copies of it was never the alternative; this is.
- *
- * What is faked, and what is not
- *
- * Nothing here patches application code. Every input is a message FiveM itself
- * sends: `locale:init`, `<prefix>:propEditorInit` (the shared module's `open`),
- * `setCameraPosition`, plus whatever extra side-channel messages a host's own
- * views add. Two of those have no producer without a game and so are synthesised:
- *
- *   - `vehicleMatrix`, which in game is `GetEntityMatrix(vehicle)`. The fixture
- * below is a real GTA basis for a vehicle parked at a 35° heading. NOT an
- *     identity matrix on purpose: the local and world captures are the same
- *     picture except for the gizmo's orientation, so an axis-aligned vehicle
- *     would make those two files byte-identical and the distinction they exist
- *     to show invisible.
- *   - `setCameraPosition`, which in game arrives every frame from the orbit cam.
- *     Without it the Three camera sits at the origin and the gizmo is off-screen
- *     behind it — a page of chrome around an empty canvas, which is exactly the
- *     failure this must not ship.
- *
- * Why it can run at all, given tRadio's perf harness refuses to
- *
- * `tRadio/scripts/nui-harness/scenarios/misc.ts` deliberately does NOT drive
- * `propEditorInit`. That rationale is about a *perf* harness repeating the open
- * hundreds of times: mounting a WebGL canvas that often on a GPU-less machine
- * spends the run inside the software rasteriser and emits context-loss warnings
- * the harness would file as application findings. A gallery opens each state
- * exactly once — a handful of contexts for the whole run, each disposed on
- * unmount — so the objection does not transfer. Measured: headless Chromium 103
- * gives WebGL 2.0 with no extra flags at all (`--use-gl=swiftshader` /
- * `--enable-unsafe-swiftshader` changed nothing), so none are passed.
- * `gizmoPixels` is what keeps that an observation rather than a hope: a run whose
- * canvas drew nothing fails instead of shipping blank art.
- *
- * Zero npm dependencies
- *
- * Like `hud-gallery.ts` beside it. The static server is `Bun.serve`, the browser
- * is the cached Chromium 103 from `nui-chromium.ts`, and the blank-canvas check
- * decodes the captured PNG **in the page** — the shot is served back to the
- * browser from the output folder and read with `getImageData`, rather than
- * pulling `sharp` into tLib and into every consumer that shoots a gallery.
+ * Zero npm deps, like `hud-gallery.ts`: `Bun.serve`, the cached Chromium 103 from
+ * `nui-chromium.ts`, and the blank-canvas check decodes the PNG in-page via `getImageData`.
  */
 
 import fs from "node:fs";
@@ -114,13 +78,9 @@ const CAMERA = {
 // In-page selectors
 
 /**
- * The editor's host-independent anchor.
- *
- * NOT `.radio-settings-root`. That is tRadio's token-scope wrapper and the class
- * this component is handed as `scopeClass`; tRadar and tDetector pass none at all
- * because their tokens are on `:root`, so keying on it would have found nothing
- * in two hosts out of three. `PropEditor.tsx` sets `data-prop-editor` for exactly
- * this.
+ * The editor's host-independent anchor. NOT `.radio-settings-root` — that is tRadio's
+ * token-scope wrapper; tRadar/tDetector pass no `scopeClass` since their tokens sit on
+ * `:root`. `PropEditor.tsx` sets `data-prop-editor` for exactly this.
  */
 export const PROP_EDITOR_ROOT = "[data-prop-editor]";
 
@@ -165,20 +125,15 @@ export interface PropEditorGalleryView {
 }
 
 /**
- * The states every host has.
- *
- * `hasExisting` is stored (`prop-editor/store.ts`) and read by NOTHING — the
- * Remove button renders unconditionally. The last two shots are therefore
- * expected to be identical to the first, and the run SAYS so at the end rather
- * than implying three looks. They are here because this gallery was the
- * before/after net for moving the editor into tLib, and it stays as the net for
- * the next change: if Remove ever starts or stops being gated on `hasExisting`,
- * that pair is where it shows.
+ * `hasExisting` is stored (`prop-editor/store.ts`) but read by nothing — Remove renders
+ * unconditionally — so the last two shots are expected to be identical. Kept as the
+ * before/after net from moving the editor into tLib: if Remove ever gates on
+ * `hasExisting`, that pair is where it shows.
  */
 export const SHARED_PROP_EDITOR_VIEWS: PropEditorGalleryView[] = [
   {
-    // `openPropEditor()` resets mode to "translate" and space to "local" on every
-    // open, so this is also the proof that those defaults are what a player lands on.
+    // `openPropEditor()` resets mode/space to translate/local on every open — this
+    // is the proof those defaults are what a player lands on.
     id: "default-move-local",
     name: "Default — Move, local space",
     ready: `${EDITOR_UP} && ${toolActive("move")}`,
@@ -265,13 +220,10 @@ export interface PropEditorGalleryResult {
 // The FiveM host, reduced to what this page needs
 
 /**
- * `GetParentResourceName` and the `fetchNui` rewrite, and nothing else.
- *
- * Deliberately NOT tRadio's `nui-harness/shim.ts`: that one also carries a 3D
- * audio position driver, a socket.io connection-info reply and the memory probes
- * its perf harness measures with, none of which this page has any use for. What
- * is shared with it is the principle — nothing here patches application code, it
- * only supplies host functions FiveM would supply.
+ * `GetParentResourceName` and the `fetchNui` rewrite only — not tRadio's
+ * `nui-harness/shim.ts`, which also carries 3D audio, socket.io and perf probes this
+ * page has no use for. Only host functions FiveM would supply; nothing here patches
+ * application code.
  */
 function hostShim(resource: string): string {
   return `(() => {
@@ -296,12 +248,9 @@ function hostShim(resource: string): string {
   window.__peHost = H;
 
   /**
-   * Count the non-backdrop pixels in the middle of a PNG the run just wrote.
-   *
-   * The shot is fetched back from the gallery's own server rather than handed in
-   * as a base64 expression — a 3840x2160 capture is several megabytes of source
-   * text otherwise — and it is same-origin, so the canvas is not tainted and
-   * getImageData works.
+   * Counts non-backdrop pixels in the middle of a just-written PNG. Fetched back from the
+   * gallery's own server (same-origin, so getImageData isn't tainted) rather than inlined
+   * as base64, which would be megabytes of source text for a 3840x2160 capture.
    */
   window.__peMeasure = (url, fraction, opaque) => new Promise((resolve) => {
     const img = new Image();
@@ -358,11 +307,9 @@ interface BundleServer {
 }
 
 /**
- * Serves the bundle, the resource root behind it, and the shots taken so far.
- *
- * Two static roots because a NUI's root-relative URLs (`/layouts/...`) resolve to
- * `nui://<resource>/layouts/...` in game, i.e. to the RESOURCE, not to the bundle.
- * Serving only the bundle 404s every one of them.
+ * Serves the bundle, its resource root, and shots taken so far. Two static roots because a
+ * NUI's root-relative URLs resolve to `nui://<resource>/...` in game — the resource, not the
+ * bundle — so serving only the bundle 404s every one of them.
  */
 function startBundleServer(bundleDir: string, resourceRoot: string, shotDir: string): BundleServer {
   const nuiCalls: string[] = [];
@@ -405,8 +352,7 @@ function startBundleServer(bundleDir: string, resourceRoot: string, shotDir: str
     },
   });
 
-  // Port 0 asked the OS to pick one, so this is the only place the real port is known.
-  // Bun types it optional (a unix-socket server has none); this one is TCP.
+  // Port 0 asked the OS to pick one; Bun types `port` optional for unix sockets, this one is TCP.
   if (server.port === undefined) throw new Error("the gallery server did not bind a TCP port");
 
   return {
@@ -502,9 +448,8 @@ export async function renderPropEditorGallery(
       deviceScaleFactor: dpr,
       mobile: false,
     });
-    // The NUI page is transparent — in game the vehicle is behind it. Keeping the alpha
-    // is the honest picture; Chromium's default composites the chrome over an invented
-    // white plate.
+    // The NUI page is transparent (the vehicle is behind it in game); Chromium's default
+    // would composite over an invented white plate.
     if (!opaque)
       await page.send("Emulation.setDefaultBackgroundColorOverride", {
         color: { r: 0, g: 0, b: 0, a: 0 },
@@ -512,10 +457,9 @@ export async function renderPropEditorGallery(
     await page.addInitScript(hostShim(resource));
     await page.navigate(`http://127.0.0.1:${srv.port}/`);
 
-    // Every caption in this editor goes through the host's translator, which for a
-    // dictionary-backed host returns the KEY NAME when the dictionary is empty — so
-    // without this the gallery would be a faithful photograph of `prop_editor_btn_save`.
-    // Hosts with no locale file fall through to tLib's English defaults and pass none.
+    // A dictionary-backed host's translator returns the KEY NAME when the dict is empty,
+    // so without this the shot is a photo of `prop_editor_btn_save`. Hosts with no locale
+    // file pass none and fall through to tLib's English defaults.
     if (locale !== undefined) await post(browser, { action: "locale:init", strings: locale });
 
     // Prove WebGL before spending a run on it, and say which rasteriser drew the art.
@@ -574,18 +518,16 @@ async function capture(b: LaunchedBrowser, ctx: CaptureContext): Promise<PropEdi
   const { view, init, prefix, outDir, viewport, dpr, opaque, log } = ctx;
   const flags: string[] = [];
 
-  // Close first, so each view mounts the viewport from scratch and gets a fresh WebGL
-  // context that `onCleanup` disposes. Reusing one mount would leave the previous view's
-  // picker or mode in place and make a shot depend on the order the registry is in.
+  // Close first so each view gets a fresh WebGL context via `onCleanup`; reusing a mount
+  // would leave the previous view's picker/mode in place.
   await post(b, { action: `${prefix}:propEditorClose` });
   if (!(await poll(b, `!document.querySelector('${PROP_EDITOR_ROOT}')`, 5_000)))
     flags.push("previous editor never unmounted");
   await b.page.evaluate(`window.__peGallery = { lost: 0 };`);
 
-  // Retried rather than posted once. The init message is only received after the host's
-  // App has mounted and PropEditor's `onMount` has subscribed, and there is no signal for
-  // that which every host sends — an init that lands a frame early is silently dropped
-  // and the run would photograph an empty page.
+  // Retried rather than posted once: init is only received after PropEditor's `onMount`
+  // subscribes, and there's no universal signal for that — one landing a frame early is
+  // silently dropped.
   const initMessage = { ...init, ...view.init, action: `${prefix}:propEditorInit` };
   let up = false;
   for (let attempt = 0; attempt < 6 && !up; attempt++) {
@@ -657,8 +599,8 @@ async function capture(b: LaunchedBrowser, ctx: CaptureContext): Promise<PropEdi
   if (width !== viewport.width * dpr || height !== viewport.height * dpr)
     flags.push(`unexpected size ${width}x${height}`);
 
-  // Measured off the FILE that was just written, not off the live page: a blank PNG
-  // beside a correct-looking page is the failure this exists to catch.
+  // Measured off the written file, not the live page — a blank PNG beside a
+  // correct-looking page is the failure this catches.
   const drawn = await b.page
     .evaluate<number>(
       `window.__peMeasure(${JSON.stringify(`/__shot/${file}`)}, ${CENTRE_FRACTION}, ${opaque})`
@@ -740,15 +682,10 @@ export function parsePropEditorGalleryCli(argv: string[]): PropEditorGalleryCli 
 }
 
 /**
- * Make sure there is a built NUI bundle to photograph, building one if there is not.
- *
- * Via the resource's ROOT build script, never a bare `vp build`: the root script is
- * what stamps the version out of fxmanifest.lua and builds whatever else the bundle
- * needs, and a gallery shot from a hand-built bundle is a picture of something that
- * was never assembled the way the game gets it.
- *
- * tRadio does not use this — its gallery builds an ISOLATED bundle under `.tmp` so a
- * run cannot touch the `client/ui` tree FXServer is serving, and hands the result in.
+ * Builds via the resource's root script (never a bare `vp build`), which stamps the
+ * version from fxmanifest.lua and builds whatever else the bundle needs. tRadio doesn't
+ * use this — its gallery builds an isolated bundle under `.tmp` to avoid touching the
+ * `client/ui` tree FXServer is serving.
  */
 export async function ensureNuiBundle(
   resourceRoot: string,
@@ -783,14 +720,10 @@ const OWN_FLAGS: Record<string, boolean> = {
 };
 
 /**
- * Remove the flags this half consumes, so the rest of a resource's gallery can
- * parse what is left.
- *
- * `hud-gallery.ts`'s `parseGalleryCli` THROWS on an unknown option, which is the
- * right behaviour — a mistyped flag that is silently ignored produces a gallery
- * of the wrong thing. It does mean a resource whose gallery has two halves has to
- * split the arguments before either half sees them. `--out` is deliberately NOT
- * in here: both halves want it, and each puts its own subfolder under it.
+ * Strips this half's flags so the rest of a two-half gallery's CLI can parse what's left.
+ * `hud-gallery.ts`'s `parseGalleryCli` throws on an unknown flag, so args must be split
+ * before either half sees them. `--out` stays shared — both halves want it and each nests
+ * its own subfolder.
  */
 export function stripPropEditorGalleryArgs(argv: readonly string[]): string[] {
   const rest: string[] = [];
@@ -806,12 +739,9 @@ export function stripPropEditorGalleryArgs(argv: readonly string[]): string[] {
 }
 
 /**
- * Print a finished run and say whether the folder is usable.
- *
- * Flagged is FATAL here, unlike an advisory-flag gallery: every flag this can
- * raise means the picture is of the wrong thing (state never reached, canvas
- * blank, app crashed), and the whole point of the folder is to be diffable
- * against a later one.
+ * Flagged is fatal here, unlike an advisory-flag gallery — every flag means the picture
+ * is of the wrong thing (state unreached, canvas blank, app crashed), and the folder
+ * exists to be diffable against a later run.
  */
 export function reportPropEditorGallery(
   label: string,
@@ -822,9 +752,8 @@ export function reportPropEditorGallery(
     `[${label}] ${result.shots.length} captures → ${result.outDir}, flagged: ${result.flagged.length}`
   );
   for (const s of result.flagged) log(`  ${s.file}: ${s.flags.join("; ")}`);
-  // States that produced the same picture. Not a failure — `hasExisting` currently
-  // changes nothing the editor draws — but a gallery that silently contains duplicates
-  // reads as coverage it does not have.
+  // Not a failure — `hasExisting` changes nothing drawn — but a gallery with silent
+  // duplicates reads as coverage it doesn't have.
   for (const files of result.duplicates) log(`  identical pixels: ${files.join(" == ")}`);
   if (result.flagged.length) {
     console.error(`[${label}] NOT usable: ${result.flagged.map((s) => s.view).join(", ")}`);

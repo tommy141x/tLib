@@ -88,15 +88,9 @@ describe("hub", () => {
   });
 });
 
-// THE PERMANENT GUARD, AND IT OUTLIVED WHAT IT WAS WRITTEN FOR.
-//
-// It was written for the diagnostics panel, which carried a `POST /` consent
-// switch briefly. The switch went first, then the whole panel (see `hub.ts`).
-// The rule the guard encodes is about the PAGE, not the panel: this listener
-// binds `0.0.0.0` by default and its index is public and unauthenticated, with
-// no auth primitive in `server/lib/http/` to gate a writer with, so NOTHING
-// here may be a control. Every page the hub can render, asserted to contain no
-// form, button, input, `method="post"` or script.
+// This listener binds 0.0.0.0 by default with no auth primitive to gate a
+// writer with, so nothing the hub renders may be a control. Every page it can
+// render, asserted to contain no form, button, input, `method="post"` or script.
 describe("every hub page is read-only", () => {
   const pages = (): [string, string][] => [
     ["nothing mounted", renderIndex([], "305 RP")],
@@ -129,10 +123,9 @@ describe("every hub page is read-only", () => {
   }
 });
 
-// The diagnostics panel is GONE, and this is the test that stops it coming
-// back by accident. The hub is app discovery; the setting's state lives in
-// `tlib_telemetry_status`, and the per-install-id disclosure the panel carried
-// lives in `docs/content/convars.mdx`.
+// Guards against the removed diagnostics panel coming back. State lives in
+// `tlib_telemetry_status`; the per-install-id disclosure lives in
+// `docs/content/convars.mdx`.
 describe("the hub carries no diagnostics surface", () => {
   test("no page mentions diagnostics, the convar or the install id", () => {
     for (const html of [

@@ -1,26 +1,16 @@
 /**
- * The credential-name pattern list, read from the Lua that already owns it.
+ * The credential-name pattern list, parsed from the Lua that already owns it
+ * (`shared/imports/diag/shared.lua`'s `Diag.SECRET_PATTERNS`), rather than
+ * declared a second time here — a pattern added to one list and not the other
+ * fails silently either way (a gate that passes it through, or a runtime that
+ * prints a value it should redact). A shared `.json` was rejected: Lua in a
+ * FiveM resource can't read JSON without a decoder in scope at load time, and
+ * the redactor must work before anything else initialises.
  *
- * Why this parses Lua instead of declaring an array
- *
- * `shared/imports/diag/shared.lua` has owned `Diag.SECRET_PATTERNS` since the
- * diagnostics module was unified, and its own header states the governing rule:
- * "a redactor that has to be updated to keep working is a redactor that
- * silently stops working." A second list here would be exactly that — two
- * places to update, one of which nobody remembers, and the failure is silent in
- * both directions (a pattern added to Lua and not to TS lets the commit gate
- * through; a pattern added to TS and not to Lua lets the runtime report print
- * the value).
- *
- * The alternative considered and rejected was moving the list into a `.json`
- * both sides read. Lua in a FiveM resource cannot read JSON without a decoder
- * in scope at load time, and the redactor has to work before anything else has
- * initialised. Parsing one table literal from one file is the cheaper half.
- *
- * The parser is strict on purpose. Every failure mode of a loose parser here
- * is "returns a SHORTER list than Lua has", which reads as a clean gate. It
- * throws instead, and `scripts/secret-gate.test.ts` asserts the parsed set
- * equals the set a real Lua VM reports from the same file.
+ * The parser is strict on purpose: every failure mode of a loose parser here
+ * is "returns a shorter list than Lua has", which reads as a clean gate. It
+ * throws instead; `scripts/secret-gate.test.ts` asserts the parsed set equals
+ * what a real Lua VM reports from the same file.
  */
 
 import * as fs from "node:fs";
@@ -39,12 +29,10 @@ export const PATTERNS_LUA_PATH = path.join(
 const TABLE = /Diag\.SECRET_PATTERNS\s*=\s*\{([^}]*)\}/;
 
 /**
- * Parse the pattern list out of Lua source text.
- *
- * Throws on anything it does not fully understand: a missing table, an empty
- * table, a non-lowercase entry, or any token inside the braces that is not a
- * quoted string or a comma. A pattern list that silently came back short is the
- * one outcome this must not have.
+ * Parse the pattern list out of Lua source text. Throws on anything it
+ * doesn't fully understand — missing/empty table, non-lowercase entry, any
+ * unquoted token inside the braces — since a list that silently came back
+ * short is the one outcome this must not have.
  */
 export function parseSecretPatterns(luaSource: string): string[] {
   const table = luaSource.match(TABLE);

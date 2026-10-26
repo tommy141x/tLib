@@ -135,23 +135,13 @@ const api: HudLayoutClient = {
     if (bindings.has(id)) throw new Error(`HUD component already attached: ${id}`);
     if (!/^[\w-]{1,80}$/.test(id) || bindings.size >= 16)
       throw new Error("Invalid HUD component ID or limit reached");
-    // WARNING: HIDDEN UNTIL PLACED, so a saved layout does not arrive as a visible jump.
-    //
-    // `apply` needs a binding AND a pushed update. The element is in the DOM and
-    // painted from the consumer's own CSS before that update lands, so a player
-    // with a saved position watched the widget appear at its authored spot and
-    // then teleport to where they had put it -- reported across the t* resources,
-    // tRadar most visibly. Nothing was wrong with the placement; it was simply
-    // applied a frame or more after the thing was already on screen.
-    //
-    // `visibility` rather than `hidden` or `display`: it suppresses paint without
-    // disturbing the consumer's own layout or its `hidden` bookkeeping, and the
-    // element's prior value is restored rather than assumed to be the default.
-    //
-    // WARNING: THE TIMER IS NOT OPTIONAL. If no update ever arrives -- tLib not loaded,
-    // a handshake that fails, a consumer that binds an id nothing pushes -- a
-    // permanently invisible widget is far worse than the jump this removes. The
-    // failsafe reveals it anyway, unplaced, which is exactly the old behaviour.
+    // Hidden until placed, via `visibility` (not `hidden`/`display`, which would disturb the
+    // consumer's own layout/bookkeeping) so a saved layout doesn't arrive as a visible jump —
+    // the element paints from the consumer's CSS before the layout update lands, so a saved
+    // position used to appear at its authored spot then teleport (reported across t* resources,
+    // tRadar most visibly). The reveal timer is required, not optional: if no update ever
+    // arrives (tLib not loaded, failed handshake, unbound id), it reveals unplaced rather than
+    // leaving the widget permanently invisible.
     const binding: Binding = {
       element,
       previousStyle: element.getAttribute("style"),

@@ -37,9 +37,8 @@ local function fixture(authors, name)
     -- rather than letting the spelling decide whether the suite runs.
     --
     -- Without this the suite dies at `../tRadio/server/sv_version.lua:649:
-    -- attempt to index a nil value (global 'Citizen')`, which looks exactly like
-    -- an ancient unrelated failure. It was reported as "pre-existing, not mine"
-    -- four times in one day before anyone read the line it died on.
+    -- attempt to index a nil value (global 'Citizen')`, which reads exactly
+    -- like an unrelated pre-existing failure rather than a missing stub.
     Citizen = { CreateThread = CreateThread, Wait = Wait }
     function PerformHttpRequest(url, cb, method, body, headers)
         requests[#requests + 1] = { url = url, cb = cb, headers = headers }

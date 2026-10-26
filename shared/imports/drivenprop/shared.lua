@@ -12,8 +12,8 @@
 
 local DrivenProp = {}
 
---  PURE RULES — no natives, no state. tests/lua/drivenprop.lua drives these
---  directly, which is possible only because they take no globals.
+-- No natives, no state: tests/lua/drivenprop.lua drives these directly
+-- because they take no globals.
 
 --- Uniform scale bounds. One scalar is a product decision, not a limit of the
 --- mechanism. The bounds are what the handle can reach: 0 collapses the basis to
@@ -178,8 +178,6 @@ function DrivenProp.hasMoved(last, basis)
         or math.abs(p.y - last.py) > 1e-3
         or math.abs(p.z - last.pz) > 1e-3
 end
-
---  THE INSTANCE
 
 --- Reads a parent's matrix into the plain-table shape the pure rules take. Local
 --- to the instance because it is the only thing here that touches a native, and

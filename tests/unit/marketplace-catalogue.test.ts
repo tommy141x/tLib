@@ -1,42 +1,21 @@
 /**
- * The shared catalogue transport.
+ * Shared catalogue transport, compiled into both tRadio's admin server and
+ * tLib's NUI bridge — a defect here hits every resource at once.
  *
- * This is the module tRadio's admin server and tLib's NUI bridge both compile
- * in, so a defect here is a defect in every resource at once. Three things are
- * pinned:
- *
- * 1. **Field totality.** The headline test round-trips a fully-populated v2
- *    item and asserts deep equality with what the backend actually sends. That
- *    is not a formality: `previewColors` reached tRadio and was dropped on the
- *    way into tLib's item shape, and tRadio's own store carries a comment about
- *    theme swatches having already been lost once to this exact class of drift.
- *    A field added to `toV2Item` upstream and not here fails this test rather
- *    than rendering an empty swatch row.
- *
- * 2. **Presence, not nullability.** Every consumer checks `if (item.previewUrl)`.
- *    An absent field must be ABSENT, not `undefined` and not `null`.
- *
- * 3. **The credential is sent, and the scope is real.** `resource` is what makes
- *    "in tRadio you browse only tRadio items" true rather than nominal, and the
- *    secret is what makes v2 reachable at all.
- *
- * NOT under test, and not testable here: that the request succeeds against the
- * live host, and that the browser permits it. The defect this whole track fixes
- * was a CORS refusal, which only a browser enforces.
+ * Pinned: field totality (round-trips a full v2 item with deep equality;
+ * `previewColors` was dropped once on the way into tLib's item shape),
+ * presence over nullability (an absent field is absent, never null/undefined),
+ * and that `resource` scoping plus the credential are both real.
+ * Not testable here: the live host accepting the request — the bug this
+ * fixes was a CORS refusal, which only a browser enforces.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { setInstallIdResolver } from "../../shared/ts/install-id";
 
 const g = globalThis as unknown as Record<string, unknown>;
-/**
- * No key stub here, deliberately.
- *
- * The tLib public key is a BAKED-IN constant, not a convar — see
- * `TLIB_PUBLIC_KEY`'s comment for why that is intended and not an
- * oversight. So the tests assert against the real exported value: if someone
- * converts it back to operator-supplied configuration, these fail.
- */
+// Tests assert against the real exported TLIB_PUBLIC_KEY, not a stub — see
+// its own comment for why it's a baked-in constant rather than a convar.
 const convarStub = (_name: string, defaultValue: string) => defaultValue;
 
 g.GetConvar = convarStub;
@@ -74,11 +53,8 @@ beforeEach(() => {
 interface Captured {
   url: string;
   headers: Record<string, string>;
-  /**
-   * Captured because the like path's METHOD is its verb — POST adds and
-   * DELETE withdraws, with no body either way. A test that only looked at the
-   * URL could not tell a like from an un-like.
-   */
+  // The like path has no body either way — POST adds, DELETE withdraws, and
+  // method is the only thing that distinguishes them.
   method: string;
 }
 
@@ -98,12 +74,8 @@ function captureFetch(body: unknown, status = 200): Captured[] {
 const emptyPage = { items: [], pagination: { total: 0, nextCursor: 0, hasMore: false } };
 
 describe("field totality", () => {
-  /**
-   * Every field `toV2Item` can emit, populated. Types are mutually exclusive
-   * upstream — a real item is never both a sound and a theme — but populating
-   * all of them at once is deliberate: this test is about the mapping being
-   * total, not about any one item being plausible.
-   */
+  // Every field toV2Item can emit, populated at once. Real items are never
+  // both a sound and a theme; the point here is mapping totality, not plausibility.
   const fullV2Item = {
     id: "itm_1",
     slug: "midnight",
@@ -123,14 +95,14 @@ describe("field totality", () => {
   };
 
   test("carries every v2 field through unchanged", () => {
-    // Deep equality, not toMatchObject: this must fail when a field is DROPPED,
-    // and toMatchObject passes happily on a subset.
+    // Deep equality, not toMatchObject — must fail if a field is dropped,
+    // not just if one is wrong.
     expect(toCatalogueItem(fullV2Item)).toEqual(fullV2Item);
   });
 
   test("keeps theme swatches — the field that was being lost", () => {
-    // Called out separately from the round trip so the failure message names
-    // the regression rather than printing a 15-key diff.
+    // Separate from the round trip so a failure names the regression instead
+    // of printing a 15-key diff.
     expect(toCatalogueItem(fullV2Item).previewColors).toEqual(["#000", "#fff"]);
   });
 
@@ -145,9 +117,8 @@ describe("field totality", () => {
 
 describe("presence, not nullability", () => {
   test("omits every optional key when the listing has none", () => {
-    // `previewUrl: null` on a UI item makes it claim to be playable;
-    // `previewColors: null` on a theme renders an empty swatch row rather than
-    // falling through to the placeholder tile.
+    // `previewUrl: null` makes an item claim to be playable; `previewColors:
+    // null` renders an empty swatch row instead of the placeholder tile.
     const item = toCatalogueItem({ slug: "x" });
     for (const key of ["previewWaveform", "previewColors", "thumbnail", "previewUrl"]) {
       expect(key in item).toBe(false);
@@ -155,8 +126,8 @@ describe("presence, not nullability", () => {
   });
 
   test("omits a colour array that survives filtering empty", () => {
-    // `[123]` is not colours. Emitting `[]` would render a theme card with a
-    // swatch row of nothing in it, which reads as a broken item.
+    // `[123]` is not colours; emitting `[]` would render a theme card with an
+    // empty swatch row, which reads as broken.
     expect("previewColors" in toCatalogueItem({ slug: "x", previewColors: [123] })).toBe(false);
   });
 });
@@ -184,19 +155,12 @@ describe("the request", () => {
     expect(calls[0]?.headers["x-fivem-server"]).toMatch(/^[0-9a-f]{32}$/);
   });
 
-  /**
-   * THE WHOLE REASON ONE SHARED KEY IS ACCEPTABLE. `x-resource-secret` says
-   * "some install of something in this estate" and nothing more, so
-   * `x-install-id` is what lets tWeb rate-limit, filter or mute ONE server. It
-   * is set in `studioHeaders`, which is the single builder every call below goes
-   * through — a test per endpoint would be a test that passes while the next
-   * endpoint added forgets it.
-   *
-   * And it must be OMITTED, never blank, when nothing resolves: an empty
-   * value fails tWeb's `/^[0-9a-z]{25}$/` and a 400 on a browse reads as "the
-   * marketplace is down". `setInstallIdResolver(null)` is the state of a
-   * consumer's bundle, which does not install tLib's reader.
-   */
+  // The reason one shared key is acceptable at all: `x-resource-secret` only
+  // says "some install of something in this estate", so `x-install-id` is
+  // what lets tWeb rate-limit or mute one server. Set in `studioHeaders`, the
+  // single builder every call below shares, rather than per-endpoint.
+  // Must be OMITTED, never blank, when nothing resolves — an empty value fails
+  // tWeb's `/^[0-9a-z]{25}$/` and a 400 on browse reads as "marketplace is down".
   test("carries the install id on every call, and omits it rather than blanking it", async () => {
     const id = "a1b2c3d4e5f6g7h8i9j0k1l2m";
     setInstallIdResolver(() => id);
@@ -205,8 +169,8 @@ describe("the request", () => {
       await browseCatalogue({});
       expect(browse[0]?.headers["x-install-id"]).toBe(id);
 
-      // Same builder, so the unauthenticated variant carries it too — that is
-      // the one community-configs' open reads go out on.
+      // Same builder, so the unauthenticated variant carries it too — the one
+      // community-configs' open reads go out on.
       expect(studioHeaders()["x-install-id"]).toBe(id);
       expect(marketplaceHeaders()["x-install-id"]).toBe(id);
     } finally {
@@ -220,8 +184,8 @@ describe("the request", () => {
   });
 
   test("never sends the raw licence key", async () => {
-    // The label is a hash precisely because sv_licenseKey is used for other
-    // sensitive purposes; it must not go over the wire in any form.
+    // The label is a hash because sv_licenseKey has other sensitive uses and
+    // must not go over the wire in any form.
     g.GetConvar = (name: string, d: string) =>
       name === "sv_licenseKey" ? "SECRET-LICENCE" : convarStub(name, d);
     _resetServerId();
@@ -231,8 +195,8 @@ describe("the request", () => {
   });
 
   test("honours a self-hosted base URL instead of pinning production", async () => {
-    // An operator who points tlib_api_base_url at their own host must not
-    // have this silently keep hitting ours.
+    // An operator pointing tlib_api_base_url at their own host must not have
+    // this silently keep hitting ours.
     g.GetConvar = (name: string, d: string) =>
       name === "tlib_api_base_url" ? "https://example.test/" : convarStub(name, d);
     expect(marketplaceApiV2()).toBe("https://example.test/api/v2/marketplace");
@@ -250,14 +214,12 @@ describe("the request", () => {
   });
 
   test("authenticates with no operator setup at all", async () => {
-    // The regression guard for a change that was made once and reverted: the
-    // secret is public ON PURPOSE, a speed bump against scripting the API from
-    // a browser rather than a credential. Requiring a convar would break every
-    // existing install and buy nothing, since the same shared string would just
-    // move from a zip a customer can open into a config file they can read.
-    //
-    // `GetConvar` here returns the default for everything, i.e. a server that
-    // has configured nothing. The call must still be authenticated.
+    // Regression guard for a change made once and reverted: the secret is
+    // public on purpose, a speed bump rather than a credential, so requiring
+    // a convar would break every install for nothing — the same string would
+    // just move from a zip a customer can open to a config file they can read.
+    // `GetConvar` here returns the default for everything; the call must
+    // still authenticate.
     g.GetConvar = (_name: string, d: string) => d;
     const calls = captureFetch(emptyPage);
     await browseCatalogue({});
@@ -277,7 +239,7 @@ describe("paging and failure", () => {
   });
 
   test("advances the cursor itself when the server sends none", async () => {
-    // A missing cursor would otherwise pin a panel to page one forever.
+    // A missing cursor would pin a panel to page one forever.
     captureFetch({ items: [{ slug: "a" }, { slug: "b" }] });
     expect((await browseCatalogue({ cursor: 10 })).nextCursor).toBe(12);
   });
@@ -312,15 +274,10 @@ describe("paging and failure", () => {
   });
 });
 
-/**
- * Bundle integrity.
- *
- * tLib's own install agent has verified this digest since it was written
- * (`installer/bundle.ts`'s `prepareBundle`). tRadio's install path verified
- * nothing but two ZIP magic bytes, which a substituted archive also has —
- * `assertBundleHash` is that check factored out so a caller doing its own
- * extraction can reuse it rather than re-derive it.
- */
+// Bundle integrity. tLib's install agent (`installer/bundle.ts`'s
+// `prepareBundle`) has verified this digest since it was written; tRadio's
+// install path verified only two ZIP magic bytes, which a substituted archive
+// also has. `assertBundleHash` factors the real check out for reuse.
 describe("assertBundleHash", () => {
   const bytes = Buffer.from("a bundle's worth of bytes", "utf8");
   const digest = createHash("sha256").update(bytes).digest("hex");
@@ -335,11 +292,8 @@ describe("assertBundleHash", () => {
     expect(() => assertBundleHash(bytes, "0".repeat(64))).toThrow(/bundle_hash_mismatch/);
   });
 
-  /**
-   * FAILS CLOSED. Stripping a response header is strictly easier than forging a
-   * digest, so "we could not check" is the case an attacker controls and must
-   * not be the case that installs.
-   */
+  // Fails closed: stripping a response header is easier than forging a
+  // digest, so "we could not check" must not be the case that installs.
   test("rejects a missing digest rather than waving the bundle through", () => {
     for (const header of [null, undefined, "", "   "]) {
       expect(() => assertBundleHash(bytes, header)).toThrow(/missing_or_invalid_bundle_hash/);
@@ -359,20 +313,12 @@ describe("assertBundleHash", () => {
   });
 });
 
-/**
- * Cross-product install enforcement.
- *
- * The gap this closes: tLib's coordinator keys registrations `resource:type`
- * and writes into that resource's own registered `installPath`, so a tLS item
- * could never land in tRadio's DIRECTORY. The item's own `resource` field was
- * the unenforced half — `install('tRadar', 'ui', '<a-tLS-slug>')` passed every
- * check and tLib fetched and installed it.
- *
- * It could not be answered client-side before this, and that is the reason the
- * per-slug fetch is here rather than the install paths each deriving it: v2's
- * `search` matches `name` and `description` and never `slug`, and neither
- * `/download` nor `/items/:slug/theme` carries a `resource` field at all.
- */
+// Cross-product install enforcement. tLib's coordinator keys registrations
+// `resource:type` and writes into that resource's own `installPath`, but the
+// item's own `resource` field was unenforced: `install('tRadar', 'ui',
+// '<a-tLS-slug>')` passed every check. A per-slug fetch is needed because v2's
+// `search` matches only `name`/`description`, and neither `/download` nor
+// `/items/:slug/theme` carries a `resource` field.
 describe("item ownership", () => {
   const owned = {
     id: "itm_1",
@@ -417,19 +363,16 @@ describe("item ownership", () => {
   });
 
   test("tolerates case, which is the one difference that is not a different product", () => {
-    // `expectedResource` is the same string the panel sends as v2's `resource`
-    // filter, so it already has to match for browse to have shown anything.
-    // No two products here differ only by case.
+    // `expectedResource` is the same string sent as v2's `resource` filter, so
+    // it already matched for browse to show anything; no two products here
+    // differ only by case.
     expect(() => assertItemResource(toCatalogueItem(owned), "tradio")).not.toThrow();
     expect(() => assertItemResource(toCatalogueItem(owned), " tRadio ")).not.toThrow();
   });
 
-  /**
-   * FAILS CLOSED, the same way `assertBundleHash` does on a missing digest.
-   * Stripping a field is easier than forging one, so "we could not establish
-   * ownership" is the state an attacker controls and must not be the state that
-   * installs.
-   */
+  // Fails closed, same as assertBundleHash on a missing digest: stripping a
+  // field is easier than forging one, so "ownership not established" must
+  // not be the state that installs.
   test("refuses an item whose owner the marketplace did not state", () => {
     for (const resource of [undefined, null, "", "   "]) {
       expect(() => assertItemResource(toCatalogueItem({ ...owned, resource }), "tRadio")).toThrow(
@@ -475,8 +418,6 @@ describe("item ownership", () => {
   });
 });
 
-/* Likes */
-
 describe("the like count on the wire", () => {
   const base = {
     id: "itm_1",
@@ -492,15 +433,10 @@ describe("the like count on the wire", () => {
     createdAt: "2026-09-01T00:00:00.000Z",
   };
 
-  /**
-   * `likes` MUST NOT GO THROUGH `num()` THE WAY `downloads` DOES.
-   *
-   * `num()` maps a missing value to `0`, and `0` is a real like count — so
-   * coercing would make a host that predates likes indistinguishable from an
-   * item nobody has liked, and `ItemCard` would print a confident "0 likes" on
-   * every card against any older or self-hosted backend. These two tests are
-   * the pair that catches it; neither alone would.
-   */
+  // `likes` must not go through `num()` the way `downloads` does: `num()`
+  // maps a missing value to `0`, a real like count, so coercing would make a
+  // host that predates likes indistinguishable from an item nobody liked.
+  // These two tests are the pair that catches it — neither alone would.
   test("omits likes entirely when the host does not send it", () => {
     const item = toCatalogueItem(base);
     expect("likes" in item).toBe(false);
@@ -522,12 +458,10 @@ describe("the like count on the wire", () => {
     }
   });
 
-  /**
-   * `liked` is a PRESENCE check and not a truthiness one. Absent means "no
-   * identity was asserted" and renders no control at all; `false` means "you
-   * have not liked this" and renders a working empty heart. Collapsing them
-   * takes the control away from everybody who has not yet liked the item.
-   */
+  // `liked` is a presence check, not a truthiness one: absent means "no
+  // identity was asserted" (no control), `false` means "not liked yet" (an
+  // empty heart). Collapsing the two removes the control for everyone who
+  // hasn't liked the item.
   test("keeps a false liked flag and omits an absent one", () => {
     expect("liked" in toCatalogueItem(base)).toBe(false);
     const no = toCatalogueItem({ ...base, liked: false });
@@ -538,14 +472,10 @@ describe("the like count on the wire", () => {
 });
 
 describe("the identity a browse carries", () => {
-  /**
-   * A PLAYER LICENSE IS A HEADER AND NEVER A QUERY PARAMETER.
-   *
-   * A URL is a cache key and a URL is what gets logged. Serialising a per-player
-   * identifier into the query string would give every player on a server a
-   * distinct URL for the same catalogue page — and would write a durable
-   * per-human identifier into every access log on the path.
-   */
+  // A player license is a header, never a query parameter: a URL is a cache
+  // key and gets logged, so putting a per-player id in the query string would
+  // give every player a distinct URL and write a durable identifier into
+  // every access log on the path.
   test("never serialises the identity into the query string", () => {
     const qs = catalogueQuery({ resource: "tRadio", identity: "a1b2c3d4" });
     expect(qs).not.toContain("a1b2c3d4");
@@ -558,9 +488,9 @@ describe("the identity a browse carries", () => {
     await browseCatalogue({ identity: "a1b2c3d4" });
     const headers = calls[0]?.headers ?? {};
     expect(headers[MARKETPLACE_IDENTITY_HEADER.toLowerCase()]).toBe("a1b2c3d4");
-    // The secret must still be there. The identity is an ADDITION to the
-    // request, not a replacement for the credential — and `marketplaceHeaders`
-    // merges caller extras last, so a careless spread could have dropped it.
+    // The secret must still be there — identity is an addition, not a
+    // replacement, and `marketplaceHeaders` merges caller extras last, so a
+    // careless spread could have dropped it.
     expect(headers["x-resource-secret"]).toBe(TLIB_PUBLIC_KEY);
   });
 
@@ -593,12 +523,10 @@ describe("setCatalogueLike", () => {
     expect(calls[0]?.url).toContain("a%2F..%2Fb");
   });
 
-  /**
-   * The identity goes in the header the backend's write path reads, and the
-   * SECRET is still sent. The secret is what gets the request past the door; the
-   * identity is what names the player once inside. Losing either one is a
-   * different failure and both are silent at the panel.
-   */
+  // The identity goes in the header the backend's write path reads, and the
+  // secret is still sent: the secret gets the request past the door, the
+  // identity names the player once inside. Losing either fails silently
+  // at the panel.
   test("carries the identity header and the resource secret", async () => {
     const calls = captureFetch(state);
     await setCatalogueLike("midnight", "a1b2c3d4", true);
@@ -607,11 +535,9 @@ describe("setCatalogueLike", () => {
     expect(headers["x-resource-secret"]).toBe(TLIB_PUBLIC_KEY);
   });
 
-  /**
-   * REFUSED BEFORE ANY REQUEST IS MADE. A caller that forgot to resolve the
-   * license is a bug in the caller; letting it through would produce a 400 from
-   * the host that reads, at the panel, as "the marketplace is down".
-   */
+  // Refused before any request is made. A caller that forgot to resolve the
+  // license has a bug; letting it through would produce a 400 that reads at
+  // the panel as "the marketplace is down".
   test("refuses to call at all without an identity", async () => {
     const calls = captureFetch(state);
     await expect(setCatalogueLike("midnight", "", true)).rejects.toThrow("identity_required");
@@ -624,11 +550,9 @@ describe("setCatalogueLike", () => {
     expect(calls.length).toBe(0);
   });
 
-  /**
-   * The SERVER'S numbers, read as-is. The caller must not keep its own ±1 —
-   * the count may have moved for other reasons, and the write is idempotent, so
-   * a second like answers the SAME count rather than one more.
-   */
+  // The server's numbers, read as-is — the caller must not keep its own ±1,
+  // since the count may have moved for other reasons and the write is
+  // idempotent (a second like answers the same count, not one more).
   test("returns the server's own state", async () => {
     captureFetch({ likes: 41, liked: true });
     expect(await setCatalogueLike("midnight", "a1b2c3d4", true)).toEqual({
@@ -645,12 +569,10 @@ describe("setCatalogueLike", () => {
     });
   });
 
-  /**
-   * The refusal the IDENTITY GATE produces — a caller trying to like as an
-   * account on the website rather than as a FiveM license. It must reach the
-   * panel as the backend's own sentence rather than as `http_403`, because that
-   * sentence is the only thing that tells whoever is looking what went wrong.
-   */
+  // The refusal the identity gate produces — liking as an account on the
+  // website rather than a FiveM license. Must reach the panel as the
+  // backend's own sentence, not `http_403`, since that sentence is the only
+  // thing that says what went wrong.
   test("surfaces the host's refusal, not the bare status", async () => {
     captureFetch(
       {

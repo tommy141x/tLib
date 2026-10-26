@@ -45,8 +45,6 @@ local function mustApply(condition, message)
     end
 end
 
--- Host stubs
-
 local FILES = {}
 local resourceName = 'tProbe'
 local convars = {}
@@ -73,8 +71,6 @@ if CONTROL then
     -- `absent sidecar` cases below vacuous, and those must stay green.
     Secrets.read = function() return nil, nil end
 end
-
--- A sidecar supplies what the tracked config leaves blank
 
 local TRACKED = [[
 Config = {
@@ -120,8 +116,6 @@ must(config.band == 'ka', 'the overlay touched a non-credential key it was not g
 must(TRACKED:find('authToken     = ""', 1, true) ~= nil,
     'the module mutated the tracked config source')
 
--- A convar beats the sidecar: production overrides the dev machine
-
 convars['tprobe_authToken'] = 'from-the-host-secret-store'
 local withConvar = freshConfig()
 Secrets.overlay(withConvar, { quiet = true })
@@ -142,16 +136,12 @@ Secrets.overlay(plain, { quiet = true })
 must(plain.band == 'ka', 'a convar overrode a non-credential key')
 convars = {}
 
--- No sidecar: the customer's case, and CI's
-
 FILES['tProbe/config.local.lua'] = nil
 local bare = freshConfig()
 local bareResult = Secrets.overlay(bare, { quiet = true })
 must(bare.authToken == '', 'an absent sidecar did not leave the config alone')
 must(bareResult.sidecar == false, 'an absent sidecar was reported as read')
 must(#bareResult.errors == 0, 'an absent sidecar was reported as an error')
-
--- A broken sidecar is an ERROR, never a silent blank
 
 FILES['tProbe/config.local.lua'] = 'return { authToken = '
 local broken = freshConfig()
@@ -166,7 +156,7 @@ local wrongType = freshConfig()
 local wrongResult = Secrets.overlay(wrongType, { quiet = true })
 mustApply(#wrongResult.errors == 1, 'a sidecar that returns a non-table was accepted')
 
--- The sidecar runs with an EMPTY environment: it is data. A file that reaches for
+-- The sidecar runs with an empty environment: it is data. A file that reaches for
 -- a global gets a nil, and calling one raises — which is caught and reported
 -- rather than taking the resource down.
 FILES['tProbe/config.local.lua'] = 'return { authToken = GetConvar("x", "y") }'
@@ -195,8 +185,6 @@ local futurePaths = {}
 for _, p in ipairs(Secrets.credentialPaths(future)) do futurePaths[p] = true end
 must(futurePaths['s3.AccessKey'],
     'AccessKey — the key the old hand-written lists missed — is still not derived')
-
--- Verdict
 
 if CONTROL then
     local expected = 8

@@ -1,11 +1,7 @@
-// GTA's ~colour~ markup, parsed. Deliberately free of every import: no solid-js,
-// no i18n, nothing reactive. These two functions are pure string work, and the
-// Playwright runner loads them from a CommonJS context where
-// @solid-primitives/i18n cannot be resolved at all -- it publishes only an
-// `import` condition in its exports map, so a `require` of anything that reaches
-// it throws "No exports main defined" and takes the whole browser suite down with
-// it. Keeping the parser separate from the translator is also just the honest
-// split: text.tsx re-exports both names, so every existing call site is unchanged.
+// GTA's ~colour~ markup, parsed. Deliberately free of every import (no solid-js, no i18n):
+// the Playwright runner loads this from CommonJS, and @solid-primitives/i18n publishes only
+// an `import` condition, so any `require` reaching it throws "No exports main defined" and
+// takes the whole browser suite down. text.tsx re-exports both functions for existing callers.
 
 const colors: Record<string, string> = {
   r: "#e03232",

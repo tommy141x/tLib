@@ -1,35 +1,10 @@
---[[----------------------------------------------------------------------------
-    Cross-resource keybind registry.
-
-    Every consumer that binds through `tlib.platform.bindKey` reports the bind
-    here. That is the only place in the stack where two different resources'
-    bindings are visible at the same time, and it is the reason this file exists.
-
-     Why a per-resource check is not enough
-
-    `platform.keybindConflicts()` runs inside the consumer's own VM, so it can
-    only see that resource's own bindings. It catches the case tLS shipped —
-    a siren-tone loop running 1..8 while cruise, takedown and traffic advisor
-    already held 6, 7 and 8 — but it is structurally blind to the collisions that
-    actually reach a player:
-
-        B       tLS  "ELS: PA Mic (hold)"        vs  tRadio "Radio: Push to Talk"
-        RMENU   tLS  "ELS: Toggle Rumbler"       vs  tRadar "tRadar: work the radar keys"
-
-    Both are certainties on a police server: one key, two products, both fire.
-    Neither VM can see the other, so neither could ever report it.
-
-     Why this warns and does not resolve
-
-    A default key is a *suggestion*; the player's own rebind is authoritative and
-    stored by FiveM against the command token. Silently reassigning a default
-    would either fight that rebind or change the controls of an install that was
-    working. So this prints, and a human decides.
-
-    The report is deferred rather than immediate because resources start in an
-    arbitrary order — checking on the first report would compare tLS against an
-    empty table. `REPORT_DELAY_MS` is generous for that reason.
-------------------------------------------------------------------------------]]
+--[[ Cross-resource keybind registry: every `tlib.platform.bindKey` call reports
+here, the only place two resources' bindings are visible together, since
+`platform.keybindConflicts()` only sees its own VM (e.g. tLS's PA Mic and
+tRadar's radar keys both claim B/RMENU, invisible to either resource alone).
+A default key is a suggestion, not authority — the player's FiveM rebind wins
+— so this only warns and never reassigns. The report is deferred
+`REPORT_DELAY_MS` because resource start order is not guaranteed. ]]
 
 local log = Logger.create('tLib/keybinds')
 
@@ -38,9 +13,8 @@ local byKey = {}
 --- Flat list, for `GetKeybinds` and a future controls UI.
 local all = {}
 
---- Long enough for every consumer to have started and registered.
---- Resource start order is not guaranteed, and a bind reported after the report
---- has run is still recorded — it just misses that printout.
+--- Long enough for every consumer to have started and registered; a bind
+--- reported after this fires is still recorded, just not printed.
 local REPORT_DELAY_MS = 10000
 
 local reported = false
@@ -54,9 +28,9 @@ end
 
 --- Record one bind. Called by `platform.bindKey` in every consumer VM.
 ---
---- Deliberately total: a malformed entry is dropped rather than raised. This runs
---- inside the consumer's bind path, and a keybind registry is not worth breaking
---- a resource's startup over.
+--- Total, not strict: a malformed entry is dropped, not raised. This runs inside
+--- the consumer's bind path, and a keybind registry is not worth breaking a
+--- resource's startup over.
 local function report(entry)
     if type(entry) ~= 'table' then return end
     if type(entry.token) ~= 'string' or entry.token == '' then return end
@@ -70,8 +44,8 @@ local function report(entry)
     }
     all[#all + 1] = record
 
-    -- An unbound entry has no key to collide on. Twenty of them share the empty
-    -- string, and treating that as a collision would bury the real ones.
+    -- An unbound entry has no key to collide on; many share the empty string,
+    -- and treating that as a collision would bury the real ones.
     if record.default == '' then return end
 
     local k = keyOf(record)

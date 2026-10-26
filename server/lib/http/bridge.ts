@@ -3,11 +3,10 @@
 //   exports['tLib']:RegisterWebApp({
 //     id         = 'radio',              -- stable identifier
 //     mount      = '/dispatch',          -- path prefix to serve it under
-//     port       = 54231,                -- YOUR loopback listen port. Read it
-//                                        -- back off your own listener; do not
-//                                        -- ask the operator for it. tLib's
-//                                        -- tlib_http_port is the only port
-//                                        -- anyone should have to set.
+//     port       = 54231,                -- YOUR loopback listen port, read off
+//                                        -- your own listener. tLib's
+//                                        -- tlib_http_port is the only port an
+//                                        -- operator should have to set.
 //     host       = '127.0.0.1',          -- optional, must be loopback
 //     stripPrefix= false,                -- true if you cannot emit the prefix
 //     websocket  = true,                 -- forward WS upgrades
@@ -24,15 +23,13 @@
 //   })
 //
 // Returns { ok = true, url = '...' } or { ok = false, error = '...' }, and
-// { ok = false, retryable = true } while tLib is still binding or discovering
-// its public address. Call it after your own listener is up; to catch readiness,
-// subscribe to 'tLib:http:status' before querying GetHttpStatus, and re-register
-// after onResourceStart('tLib'). Mounts drop automatically when the owning
-// resource or tLib stops.
+// { ok = false, retryable = true } while tLib is still binding or discovering its
+// public address. Call after your own listener is up; subscribe to
+// 'tLib:http:status' and re-register after onResourceStart('tLib') to catch
+// readiness. Mounts drop automatically when the owning resource or tLib stops.
 //
 // GetHttpStatus.localUrl is the real listener, for health checks; publicUrl may
-// name an HTTPS proxy on another port. GetHubUrl is '' until both are ready
-// rather than a provisional localhost, though a configured one is fine in dev.
+// name an HTTPS proxy on another port. GetHubUrl is '' until both are ready.
 
 import { fExports, fGetInvokingResource } from "./fivem";
 import type { Log } from "./proxy";
@@ -82,8 +79,8 @@ export function registerBridge(
 
     const current = status();
     if (!current.ready || !current.publicUrl) {
-      // Claiming the mount here would make the caller's own retry collide with
-      // it once discovery and bind complete.
+      // Refuse rather than claim the mount: the caller's own retry would collide
+      // with it once discovery and bind complete.
       return {
         ok: false,
         retryable: true,

@@ -33,12 +33,10 @@ export function applyNuiTheme(theme: string | undefined, element: HTMLElement) {
     element.style.getPropertyValue(name) || document.documentElement.style.getPropertyValue(name);
   if (explicit("--primary") && !element.style.getPropertyValue("--nui-accent")) {
     element.style.setProperty("--nui-accent", "hsl(var(--primary))");
-    // --nui-accent-raw must move with --nui-accent. It holds the bare triplet the
-    // alpha tints in nui.css are built on (focus ring 0.24, slider thumb 0.18),
-    // and those cannot read it back out of the resolved colour above. Leave it
-    // behind and a themed panel gets a theme-coloured border with a stock-white
-    // focus ring. This relies on the same contract as the line above it: a
-    // registered --primary is a bare HSL triplet, not a complete colour.
+    // --nui-accent-raw must move with --nui-accent: it holds the bare HSL triplet the
+    // alpha tints in nui.css are built on (focus ring 0.24, slider thumb 0.18), which can't
+    // be read back out of the resolved colour above. Skip it and a themed panel gets a
+    // theme-coloured border with a stock-white focus ring.
     element.style.setProperty("--nui-accent-raw", "var(--primary)");
     element.style.setProperty("--nui-accent-text", "hsl(var(--primary-foreground))");
   }

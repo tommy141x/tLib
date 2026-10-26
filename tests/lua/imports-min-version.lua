@@ -2,13 +2,13 @@
 --
 -- Oracle for the `tlib_min_version` gate in imports.lua.
 --
--- WHY THIS EXISTS: `1.0` sorts BELOW every pin it replaced under any reading
+-- Why this exists: `1.0` sorts below every pin it replaced under any reading
 -- that is not component-wise semver.
 --
---   * a plain NUMERIC read gets the old pins wrong among themselves:
+--   * a plain numeric read gets the old pins wrong among themselves:
 --     tonumber('0.17') == 0.17 < tonumber('0.6') == 0.6, so a tLib declaring
 --     0.17.0 would have been refused by a resource pinning 0.6.
---   * a plain STRING read gets '1.0' > '0.17' right by luck, and '0.9' > '0.17'
+--   * a plain string read gets '1.0' > '0.17' right by luck, and '0.9' > '0.17'
 --     wrong, for the same reason: it compares the digit '9' against the digit '1'.
 --
 -- imports.lua reads neither way: `parseVer` splits on every run of digits and
@@ -69,8 +69,6 @@ local function refuses(required, installed)
         ('expected the message to name the installed version %s, got: %s'):format(installed, err))
 end
 
--- The release this is for: every consumer pins 1.0, tLib declares 1.0.0
-
 test('every consumer pin (1.0) accepts the tLib being shipped (1.0.0)', function()
     allows('1.0', '1.0.0')
 end)
@@ -91,8 +89,6 @@ test('1.0 accepts anything above it, major and minor alike', function()
         allows('1.0', v)
     end
 end)
-
--- The comparison is component-wise and NUMERIC, not textual
 
 test('a NUMERIC read of the whole string would have mis-ordered the old pins', function()
     -- The proof that parseVer is not `tonumber`: 0.17 < 0.6 as a number, and a
@@ -118,8 +114,6 @@ test('a v prefix on either side is stripped', function()
     allows('v1.0', 'v1.0.0')
     refuses('v1.0', 'v0.6')
 end)
-
--- Degenerate inputs must not accidentally open or close the gate
 
 test('a resource with no pin at all is never gated', function()
     allows(nil, '0.6')

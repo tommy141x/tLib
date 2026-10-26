@@ -1,40 +1,23 @@
 /**
- * Layer 2: blank every credential in a STAGED RELEASE TREE.
+ * Layer 2: blank every credential in a staged release tree. Asserted on the
+ * artifact rather than an include list, so anything that puts a copy there
+ * after staging — a post-staging step, a hand-copied file, a sibling script —
+ * is blanked too instead of shipping (tCAD states the same rationale at
+ * `assertNothingForbiddenStaged`).
  *
- * Asserted on the artifact rather than on an include list, which is the point:
- * anything that puts a copy there after staging — a post-staging step, a
- * hand-copied file, a sibling script writing into the stage — is blanked too
- * instead of shipping. tCAD states the same rationale at
- * `assertNothingForbiddenStaged`.
+ * tRadio's prior implementation hand-maintained a `SECRET_KEYS` array, which
+ * is the wrong shape: correct only on the day it's written, and it missed
+ * `Advanced.S3.AccessKey`, a live credential in tDB's config. This instead
+ * derives the key set from `Diag.SECRET_PATTERNS` — the same list the runtime
+ * redactor, the pre-commit hook and the CI assertion all derive from — so a
+ * credential added to any config is blanked with no edit here.
  *
- * What changed, and why
- *
- * tRadio had the only implementation of this and it carried
- *
- *     const SECRET_KEYS = ["authToken", "adminPassword", "clientSecret", "botToken"];
- *
- * and threw on a key it could not find, so a rename broke the build. That was
- * the best a hand-written list could do, and it is still the wrong shape: the
- * list is correct on the day it is written. It is exactly the shape that would
- * have missed `Advanced.S3.AccessKey`, which is a live credential in tDB's
- * config and the one name `SECRET_PATTERNS` itself also missed until
- * 2026-10-06.
- *
- * This derives the key set from `Diag.SECRET_PATTERNS` — the same list the
- * runtime redactor, the pre-commit hook and the CI assertion all derive from —
- * so a credential added to any config next year is blanked with no edit here
- * and no edit in any resource.
- *
- * Three things it refuses rather than skips
- *
- * 1. A stage with no config file in it. Every resource here ships at least one;
- *    zero means staging stopped including it, and a sanitizer that sanitized
- *    nothing prints a tick either way.
- * 2. `config.local.lua` present in the stage. That file is the developer's real
- *    credentials. It is gitignored, so it should never be staged — but a glob
- *    that widened would carry it, and it would carry the one thing this whole
- *    mechanism exists to keep out of a release.
- * 3. A credential assigned a Lua long string, which cannot be blanked in place.
+ * Refuses rather than skips: a stage with no config file at all (every
+ * resource ships at least one; zero means staging broke, not that there's
+ * nothing to clean); `config.local.lua` present in the stage (the
+ * developer's real, gitignored credentials — a widened glob could carry
+ * exactly what this exists to keep out); and a credential assigned a Lua
+ * long string, which can't be blanked in place.
  */
 
 import * as fs from "node:fs";

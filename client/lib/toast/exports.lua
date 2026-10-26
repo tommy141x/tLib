@@ -19,24 +19,20 @@ local function validDuration(value)
     return type(value) == 'number' and value >= 0 and value <= 2147483647
 end
 
--- The short spellings, mapped rather than refused.
+-- The short spellings are mapped, not refused: `durations` above is the whole
+-- type vocabulary, and `warn` is not in it. Three resources independently
+-- passed it for the same notice anyway, each falling through to neutral
+-- `info` where it meant amber `warning` — the fallback is correct for a
+-- genuinely unknown type, nothing failed loudly.
 --
--- `durations` above is the whole type vocabulary, and `warn` is not in it. Three
--- resources pass it anyway -- tDetector cl_hud.lua, tRadio cl_bridge.lua and
--- tRadar cl_hud.lua, the same copy-pasted "Sound Overwritten" notice -- so each
--- one fell through to `info` and rendered neutral at 4000ms where it had asked
--- for amber at 5000ms. Nothing failed: the fallback is correct behaviour for a
--- genuinely unknown type, and the log line it writes is one of hundreds.
+-- `warn`/`warning` and `err`/`error` are the two pairs any Lua author reaches
+-- for interchangeably (`warn` is a global in several runtimes, `err` the
+-- idiomatic second-return name), so mapping them closes the class rather than
+-- patching each instance.
 --
--- Mapping closes the class instead of the three instances. `warn`/`warning` and
--- `err`/`error` are the two pairs any Lua author will reach for interchangeably
--- -- `warn` is a global in several runtimes and `err` is the idiomatic name of
--- the second return value -- so the next call site spelt that way is correct by
--- construction rather than being the fourth instance of this bug.
---
--- The log stays for anything NOT in here. An alias is a spelling of a type that
--- exists; a typo is still a typo, and silently rendering it as info is the
--- behaviour that hid these three for as long as it did.
+-- The log stays for anything else: an alias is a spelling of a type that
+-- exists, a typo is still a typo, and silently rendering it as info is what
+-- hid these three for as long as it did.
 local ALIASES = { warn = 'warning', err = 'error' }
 
 local function resolveType(value)

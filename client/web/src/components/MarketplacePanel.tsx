@@ -13,20 +13,10 @@
  */
 
 import type { OpenData } from "@tlib/shared/marketplace/ui";
-// Lucide comes from `lucide-solid/icons/*` here, never `~icons/lucide`.
-//
-// Both resolve the same icon set, and this app had four imports in the virtual
-// form against seven files in the package form -- the "dependency inconsistency
-// to fix" that `@tlib/internal/ui/meta.ts` names. One app, one spelling.
-//
-// `lucide-solid` is the one chosen FOR THIS APP, not for the repo: deep per-icon
-// paths are already the documented rule in `menu/components/lucide.ts` (the
-// barrel pulls ~400KB), and `lucide-solid` is in this bundle's dependencies.
-// `shared/ts/**` is the other side of a real boundary and keeps `~icons/lucide`
-// -- tLS, tDetector and tRadar mount those components and have unplugin-icons
-// but NOT `lucide-solid`, which is written up on `NuiButton`. The rule is
-// "`~icons` in shared, the package in an app", and it is now stated rather than
-// left to whichever file you opened first.
+// Lucide comes from `lucide-solid/icons/*` here, never `~icons/lucide`: this
+// app bundles `lucide-solid` (deep per-icon paths; the barrel is ~400KB), but
+// `shared/ts/**` consumers (tLS, tDetector, tRadar) have unplugin-icons and
+// not `lucide-solid`. Rule: `~icons` in shared, the package in an app.
 import IconStore from "lucide-solid/icons/store";
 import IconX from "lucide-solid/icons/x";
 import { createSignal, onCleanup, Show } from "solid-js";

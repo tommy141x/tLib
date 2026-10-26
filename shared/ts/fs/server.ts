@@ -1,51 +1,30 @@
-// The Node half of `tlib.fs.writeResourceFile` — shared as CODE, not as a
-// runtime export.
-//
-// Why this is a shared module and not one export on tLib
-//
-// It used to be one export: tLib registered `WriteResourceFile(resource, ...)`
-// and every consumer's Lua called `exports.tLib:WriteResourceFile(...)`. That
-// cannot work on this platform. FiveM's Node runtime sandboxes each resource to
-// its OWN directory, so tLib writing into tDetector's folder is refused before
-// it reaches the disk:
-//
-//   [warning] [tLib] Filesystem write permission check from 'tLib' for
-//     permission fs.write on resource '...\tDetector\data.json' - write not
-//     allowed
-//   [tLib] WriteResourceFile failed for 'tDetector/data.json': Access to this
-//     API has been restricted. Use --allow-fs-write to manage permissions.
-//
-// `--allow-fs-write` is a server STARTUP ARGUMENT, not a manifest key, so the
-// "fix" would be asking every customer to edit their launch command. It is not
-// available to us. What is available is the thing tLS and tRadio were already
-// doing by accident: each resource writes to itself from its own Node bundle.
-//
-// So the implementation is shared at BUILD time — tDetector and tRadar already
-// bundle `tLib/shared/ts/` (see marketplace/agent) — and each resource calls
-// `registerWriteResourceFile()` from its own `server/main.ts`. tLib calls it
-// too, for its own files. Every write then originates inside the resource it
-// lands in, and the sandbox has nothing to object to.
-//
-// Why the native is not enough
+// The Node half of `tlib.fs.writeResourceFile` — shared as code, not a runtime
+// export. Used to be one tLib export, but FiveM's Node runtime sandboxes each
+// resource to its own directory, so tLib writing into tDetector's folder is
+// refused before it reaches disk ("Filesystem write permission check ... write
+// not allowed"). The fix, `--allow-fs-write`, is a server startup argument, not
+// a manifest key — not something to ask every customer to add. So the
+// implementation is shared at build time (tDetector/tRadar already bundle
+// `tLib/shared/ts/`) and each resource calls `registerWriteResourceFile()` from
+// its own `server/main.ts`, so every write originates inside the resource it
+// lands in and the sandbox has nothing to object to.
 //
 // On FiveM for GTAV Enhanced, `SaveResourceFile` returns false for some
-// resources while Node's `fs` writes the identical path successfully. The cause
-// is still unknown; the workaround is proven. Untreated the failure is silent
-// and total: `data.json` never changes and every setting the customer saves is
-// gone on restart. `shared/imports/fs/server.lua` tries the native FIRST and
-// only falls back here, so Legacy behaviour is byte-for-byte unchanged and this
-// is never reached there.
+// resources while Node's `fs` writes the identical path successfully — cause
+// unknown, workaround proven. Untreated the failure is silent and total:
+// `data.json` never changes and every saved setting is gone on restart.
+// `shared/imports/fs/server.lua` tries the native first and only falls back
+// here, so Legacy behaviour is unchanged and this path is never reached there.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 // bun's CJS bundler wraps non-entry files in a module scope where `exports` is
-// the CommonJS module-exports object, which shadows FiveM's global
-// `exports(name, fn)` function. Resolving through `globalThis` is what keeps
-// the bundler's hands off it — the same reason server/lib/http/fivem.ts exists.
-// Read lazily rather than captured at module scope, because this file is
-// imported by consumers whose bundles may evaluate it before the host has
-// finished installing its globals.
+// the CommonJS module-exports object, shadowing FiveM's global `exports(name,
+// fn)` — resolving through `globalThis` keeps the bundler's hands off it (same
+// reason server/lib/http/fivem.ts exists). Read lazily, not captured at module
+// scope: a consumer's bundle may evaluate this before the host installs its
+// globals.
 type ExportsFn = (name: string, fn: (...args: unknown[]) => unknown) => void;
 
 function runtime(): {
@@ -61,15 +40,11 @@ function runtime(): {
 }
 
 /**
- * `true` on success, or a **non-empty error string** on failure — never `false`
- * and never `""`.
- *
- * The Lua consumer branches on `res == true` and treats anything else as the
- * message to surface; an empty string is truthy in Lua, so a blank error would
- * read as success while the write had failed. The string carries Node's errno,
- * because `SaveResourceFile` has none to offer and EACCES, a read-only mount
- * (EROFS) and a full disk (ENOSPC) need three different fixes from the server
- * owner.
+ * `true` on success, or a non-empty error string on failure — never `false` or
+ * `""`. The Lua consumer branches on `res == true`; an empty string is truthy
+ * in Lua, so a blank error would read as success. The string carries Node's
+ * errno, since EACCES, a read-only mount (EROFS) and a full disk (ENOSPC) each
+ * need a different fix from the server owner.
  */
 export type WriteResourceFileResult = true | string;
 
@@ -121,14 +96,12 @@ export function writeResourceFile(
   }
 
   try {
-    // Parent directories are created ONLY when genuinely absent, and that is
-    // load-bearing in both directions. Enhanced runs a write-permission check
-    // against the directory passed to mkdir, so calling it unconditionally
-    // (even with `recursive: true`, a no-op on an existing path) trips that
-    // check against the resource root and denies the whole write. Missing
-    // parents are still created, because writing to a path whose parent does
-    // not exist has been observed to fault the server rather than fail
-    // cleanly.
+    // mkdir only when genuinely absent: Enhanced runs a write-permission check
+    // against mkdir's target directory, so calling it unconditionally (even
+    // with `recursive: true`, a no-op on an existing path) trips that check
+    // against the resource root and denies the whole write. Still created when
+    // missing — writing to a path whose parent doesn't exist has faulted the
+    // server rather than failing cleanly.
     const parent = path.dirname(target);
     if (!fs.existsSync(parent)) fs.mkdirSync(parent, { recursive: true });
     fs.writeFileSync(target, contents);
@@ -140,17 +113,16 @@ export function writeResourceFile(
 }
 
 /**
- * Register this resource's own `WriteResourceFile` export.
- *
- * Call it once, at the top level of the resource's `server/main.ts`, so the
- * registration happens inside the bundle that owns the directory being written.
- * `shared/imports/fs/server.lua` then calls
+ * Register this resource's own `WriteResourceFile` export. Call once, at the
+ * top level of the resource's `server/main.ts`, so registration happens inside
+ * the bundle that owns the directory being written.
+ * `shared/imports/fs/server.lua` calls
  * `exports[GetCurrentResourceName()]:WriteResourceFile(...)`.
  *
- * The three-argument signature — `(resource, relPath, contents)` — is kept even
- * though the answer can now only ever be this resource, because that is the
- * shape `tlib.fs.writeResourceFile` already speaks and because a cross-resource
- * request has to be *answered*, not silently redirected.
+ * Kept the three-argument `(resource, relPath, contents)` signature even
+ * though the answer can now only be this resource: it's the shape
+ * `tlib.fs.writeResourceFile` already speaks, and a cross-resource request has
+ * to be answered, not silently redirected.
  */
 export function registerWriteResourceFile(): void {
   const g = runtime();
@@ -159,11 +131,9 @@ export function registerWriteResourceFile(): void {
   g.exports(
     "WriteResourceFile",
     (resourceName: unknown, relative: unknown, contents: unknown): WriteResourceFileResult => {
-      // A cross-resource request is refused HERE, with an explanation, rather
-      // than being handed to Node so it can answer with "Use --allow-fs-write".
-      // That message names a fix the customer cannot be asked to apply, and it
-      // sent a previous session looking for a manifest key that does not exist.
-      // The real fix is always the same: the other resource registers its own.
+      // Refused here, with an explanation, rather than handed to Node for its
+      // "Use --allow-fs-write" — a fix the customer can't apply, and one that
+      // previously sent a session looking for a manifest key that doesn't exist.
       if (typeof resourceName === "string" && resourceName !== self) {
         return (
           `EPERM: '${self}' cannot write into resource '${resourceName}' — FiveM's Node ` +

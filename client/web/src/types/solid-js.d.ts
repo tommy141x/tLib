@@ -13,22 +13,14 @@
 /**
  * The missing namespace, aliased to the real `@solidjs/web` types.
  *
- * `@ark-ui/solid@5.39.2` builds EVERY part's props from
- * `HTMLProps<E> = JSX.IntrinsicElements[E]`, importing `JSX` from `solid-js`.
- * Without this it collapses, so every Ark component rejects `class` and
- * `children` — which reads as our call sites being wrong and is the namespace
- * being empty. This bundle uses Dialog, Tabs, Toast, Select, Checkbox, Field,
- * RadioGroup and Slider, and all eight depend on it.
+ * `@ark-ui/solid@5.39.2` builds every part's props from
+ * `HTMLProps<E> = JSX.IntrinsicElements[E]`, imported from `solid-js`; without this it
+ * collapses, rejecting `class`/`children` on every Ark component (Dialog, Tabs, Toast,
+ * Select, Checkbox, Field, RadioGroup, Slider all depend on it).
  *
- * The namespace is re-exported WHOLE rather than member by member. ha-dash
- * lists six members because six were all its vendors touched; here that is not
- * enough, and the way it fails is the point: `lucide-solid` builds its props on
- * `Partial<JSX.SvgSVGAttributes<SVGSVGElement>>`, a seventh member, and with it
- * absent `LucideProps` silently keeps only its eight explicit keys. That showed
- * up as a single complaint about `role` at one call site — not as a props type
- * that had lost every standard SVG attribute. Re-exporting the namespace cannot
- * drift that way, and it is strictly more faithful: every member is the real
- * `@solidjs/web` type.
+ * Re-exported WHOLE, not member by member: `lucide-solid` also needs `JSX.SvgSVGAttributes`,
+ * and omitting that one member made `LucideProps` silently keep only its explicit keys —
+ * surfacing as a single `role` complaint at one call site rather than a visibly broken type.
  */
 export type { JSX } from "@solidjs/web";
 export * from "../../node_modules/solid-js/types/index";

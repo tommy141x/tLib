@@ -43,8 +43,6 @@ tlib = { demo = { active = function() return demoOn end } }
 
 local permission = dofile('shared/imports/permission/server.lua')
 
--- level / isAdmin ---------------------------------------------------------------
-
 assert(permission.level(7) == 0 and permission.isAdmin(7) == false, 'no aces => not an admin')
 
 aces = { ['tlib.admin'] = true }
@@ -70,8 +68,6 @@ IsPlayerAceAllowed = function() error('native unavailable') end
 assert(permission.level(7) == 0, 'a throwing native reads as no permission')
 IsPlayerAceAllowed = realAce
 
--- has ---------------------------------------------------------------------------
-
 hasPermission = function(src, key) return src == 7 and key == 'tRadar.use' end
 assert(permission.has(7, 'tRadar.use'), 'has() answers through tLib:HasPermission')
 assert(not permission.has(7, 'other.key'), 'and reports its denials')
@@ -87,12 +83,12 @@ assert(not permission.has(7, 'tRadar.use'), 'only a boolean true from tLib is a 
 
 assert(not permission.has(7, nil) and not permission.has(7, ''), 'a missing key is never granted')
 
--- hasBatch ----------------------------------------------------------------------
--- The batch sibling of has(). Its reason to exist is the number of export round
--- trips, so the two properties worth pinning are (a) it really does collapse to
--- one, and (b) when tLib cannot answer, it DENIES rather than falling through to
--- local ACE. There is no per-key fallback: this module and the export it calls
--- ship in the same tLib, so they cannot disagree about whether it exists.
+-- hasBatch, the batch sibling of has(). Its reason to exist is the number of
+-- export round trips, so the two properties worth pinning are (a) it really
+-- does collapse to one, and (b) when tLib cannot answer, it denies rather
+-- than falling through to local ACE. There is no per-key fallback: this
+-- module and the export it calls ship in the same tLib, so they cannot
+-- disagree about whether it exists.
 
 local function count(t) local n = 0; for _ in pairs(t) do n = n + 1 end; return n end
 
@@ -109,7 +105,7 @@ local batch = permission.hasBatch(7, {'a', 'b', 'c'})
 assert(batch.a == true and batch.b == false and batch.c == false, 'hasBatch mixes grants and denials')
 assert(batchCalls == 1 and singleCalls == 0, 'three keys cost ONE export round trip, not three')
 
--- Still goes THROUGH tLib. Asserting this is what stops the "optimisation" the
+-- Still goes through tLib. Asserting this is what stops the "optimisation" the
 -- header warns about: a local IsPlayerAceAllowed loop would be faster and would
 -- grant every key a registered resolver denies.
 aces = { a = true, b = true, c = true }
@@ -120,10 +116,11 @@ hasPermissionBatch = function() return { a = 1 } end
 assert(permission.hasBatch(7, {'a'}).a == false, 'only a boolean true from tLib is a grant')
 aces = {}
 
--- FAILS CLOSED, and does NOT silently loop has() instead. An export that
--- raises means tLib did not answer, and a resolver takes priority over ACE, so
--- falling through to the single-key path -- let alone to local ACE -- could grant
--- what the resolver denies. ACE is granted below precisely to prove it is ignored.
+-- Fails closed, and does not silently loop has() instead. An export that
+-- raises means tLib did not answer, and a resolver takes priority over ACE,
+-- so falling through to the single-key path -- let alone to local ACE --
+-- could grant what the resolver denies. ACE is granted below precisely to
+-- prove it is ignored.
 aces = { a = true, b = true, c = true }
 hasPermission = function(src, key) return src == 7 and key == 'a' end
 hasPermissionBatch = nil
@@ -155,11 +152,10 @@ assert(count(mixed) == 1 and mixed.a == true, 'non-string and empty keys get no 
 singleCalls, batchCalls = 0, 0
 assert(permission.hasBatch(7, {'a', 'a', 'a'}).a == true and batchCalls == 1, 'duplicates do not multiply calls')
 
--- hasAll ------------------------------------------------------------------------
--- The conjunction tMenu's shared/ace.lua had and this module did not. Over
--- hasBatch rather than a loop over has(), so a four-key gate is still ONE export
--- round trip -- which is the only reason to have it rather than let the caller
--- write the loop.
+-- hasAll: the conjunction tMenu's shared/ace.lua had and this module did not.
+-- Over hasBatch rather than a loop over has(), so a four-key gate is still one
+-- export round trip -- which is the only reason to have it rather than let
+-- the caller write the loop.
 
 aces = {}
 hasPermissionBatch = function(src, keys)
@@ -193,8 +189,6 @@ assert(not permission.hasAll(7, {'a', 'b'}),
 hasPermissionBatch = nil
 assert(not permission.hasAll(7, {'a'}), 'a tLib that cannot answer grants nothing')
 aces = {}
-
--- demo mode ---------------------------------------------------------------------
 
 aces = {}
 hasPermissionBatch = nil

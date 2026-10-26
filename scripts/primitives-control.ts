@@ -1,64 +1,34 @@
-// Negative control for the three shared primitives ten resources are about to be
-// migrated onto: tlib.permission's client half, tlib.net and tlib.opengate.
+// Negative control for three shared primitives (tlib.permission's client
+// half, tlib.net, tlib.opengate) plus imports.lua's AUTOLOAD list, patched by
+// the same machinery since tests/lua/imports-autoload.lua `dofile`s it like
+// any other module. `bun run test:lua:control`
 //
-// Plus imports.lua's AUTOLOAD list, which is not a primitive but is patched by the
-// same machinery for free, because tests/lua/imports-autoload.lua loads imports.lua
-// by name the way the others `dofile` a module. The failure it guards raises no
-// error at all: a consumer that declares nothing and never calls tlib.telemetry
-// from Lua simply never loads the module, so the NUI's flush lands on an
-// unregistered callback and nothing transmits.
+// Six suites from one file (net-guards, opengate, permission-onchange,
+// permission-consumer, imports-autoload, imports-has): every defect is
+// planted the same way, so one patcher, one broken-gate drill, one baseline
+// pass covers all of them rather than triplicating the machinery.
 //
-// It covers six suites — tests/lua/{net-guards,opengate,
-// permission-onchange,permission-consumer,imports-autoload,imports-has}.lua — from ONE file, because every defect is planted
-// the same way and the whole value is in the shared machinery: one patcher that
-// counts its own substitutions, one broken-gate drill over that patcher, one
-// baseline pass. Three files would triplicate all of it and the drill would then
-// only cover whichever copy was run.
+// Each defect patches the MODULE'S OWN SOURCE by one exact substitution (not
+// a stub), writing the patched module and a line-count-preserving copy of the
+// suite into the OS temp dir (never the tree, which other agents work in),
+// then repoints the suite copy's one `dofile` at the patched file. Patching
+// happens in TS, not Lua, because fengari ships no `io`.
 //
-// How a defect is planted
+// Every defect declares the suite line AND message text its first failing
+// `assert` must produce (these suites stop at the first failure, so this is
+// stronger than "something went red"), and each run must exit non-zero
+// (scripts/run-lua-suite.lua converts fengari's exit-0-on-unhandled-error)
+// and must not print the suite's success line.
 //
-// In THE MODULE'S OWN SOURCE, one substitution at a time, never in a stub that
-// resembles it. The patched module and a copy of the suite go into the OS temp
-// directory — nothing is written to the tree, because other agents work in this
-// tree — and the suite copy's one `dofile` of that module is repointed at the
-// patched file. The patching happens here rather than in Lua because fengari
-// ships no `io`. The suite copy is required to keep its line count, since the
-// expectations below are stated as line numbers.
+// Two broken-gate drills (an unmatchable module anchor; a module the target
+// suite never loads) must both REFUSE the run -- without them, "every defect
+// reddened something" isn't evidence the patcher fired at all.
 //
-// What each defect must do
-//
-// Every defect declares the code PATH it travels and the EXACT assertion that
-// must redden: a suite line number AND that assertion's own message text. These
-// suites use plain `assert`, which stops at the first failure, so the claim is
-// narrower and stronger than "a set went red" — it is "this is the FIRST
-// assertion to fail". Four defects redden assertions in two suites; each
-// (defect × suite) pair is run and checked separately.
-//
-// Unlike framerelay/runtimetxd, these suites print no control summary of their
-// own, so the stand-in for that line is the assertion's text and location. Each
-// run is also required to exit NON-ZERO (fengari can print an unhandled error
-// and still exit zero; scripts/run-lua-suite.lua is what converts it) and NOT to
-// print the suite's success line.
-//
-// There are TWO broken-gate drills, one per anchor kind: an unmatchable module
-// anchor, and a module the target suite does not load. Both must REFUSE the run.
-// Without them, "every defect reddened something" is not evidence the patcher
-// fired at all.
-//
-// Two limits of this control
-//
-// The client source guard is asserted by ONE suite line covering six spoof
-// values, so three separate defects there are distinguishable only by which
-// value's message appears — the 0-is-truthy case is never the first failure on
-// its own. And `broken-routed-to-denied` has to be planted as `do return ... end`:
-// a bare `return` mid-block is a Lua syntax error, and a defect that cannot parse
-// proves nothing about any assertion.
-//
-// A passing run proves the assertions still FIRE. It does not prove the rule set
-// is complete, nor that an assertion covers the path where the defect would
-// really occur.
-//
-//   bun run test:lua:control
+// Known limits: the client source guard is one suite line covering six spoof
+// values, so three defects there are distinguishable only by which value's
+// message appears. `broken-routed-to-denied` must be planted as
+// `do return ... end`, since a bare mid-block `return` is a Lua syntax error.
+// A pass proves the assertions still fire, not that the rule set is complete.
 
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -69,14 +39,13 @@ const root = resolve(import.meta.dir, "..");
 interface Expectation {
   /** Suite basename under tests/lua, without .lua. */
   suite: string;
-  /** The line the first failing assert must be on.
-   *
-   * Optional for ONE shape only: a defect that makes imports.lua raise at its
-   *  own file scope kills the suite inside `fixture()`, so the error carries
-   *  imports.lua's position (or none at all for `error(msg, 0)`) and never the
-   *  suite's. There is no suite line to name. The message text plus a non-zero
-   *  exit and the absent success line are the whole claim there, which is weaker
-   *  than every other entry here — omit it nowhere else. */
+  /**
+   * The line the first failing assert must be on. Optional only when a
+   * defect makes imports.lua raise at file scope: the error then carries
+   * imports.lua's own position (or none, for `error(msg, 0)`), never the
+   * suite's, so there is no suite line to name -- a weaker claim than every
+   * other entry here. Omit it nowhere else.
+   */
   line?: number;
   /** A substring of that assert's own message. */
   message: string;
@@ -330,17 +299,9 @@ const DEFECTS: Defect[] = [
     ],
   },
 
-  // imports.lua's AUTOLOAD list
-  //
-  // The odd ones out: the "module" patched here is imports.lua itself, which
-  // tests/lua/imports-autoload.lua loads by name exactly as the other suites
-  // `dofile` theirs, so the same machinery repoints it with no special case.
-  //
-  // Needed because the failure the list prevents has no error in it. A consumer
-  // that declares nothing and never calls `tlib.telemetry` from Lua simply never
-  // loads the module, so the NUI's flush lands on a callback nobody registered
-  // and nothing transmits. Without a planted defect here, nothing proves the
-  // list is what loads it rather than something else in the chain.
+  // imports.lua's AUTOLOAD list: the "module" patched here is imports.lua
+  // itself. Without a planted defect here, nothing proves the list is what
+  // loads telemetry rather than something else in the chain.
   {
     mode: "autoload-emptied",
     path:
@@ -530,12 +491,10 @@ function check(defect: Defect, want: Expectation) {
   console.log(`ok   ${label}  ${want.message}`);
 }
 
-// BROKEN-GATE DRILL
-// Without it, "every defect reddened something" is not evidence the patcher
-// fired at all: a substitution that matched nothing hands the suite the
-// unmodified module, which then passes, and a control that read that as a pass
-// would be testing nothing. Both anchors are drilled, because they fail
-// differently — a multi-line anchor has already matched nothing in this repo
+// Broken-gate drill: without it, "every defect reddened something" isn't
+// evidence the patcher fired -- a substitution matching nothing hands the
+// suite the unmodified module, which passes. Both anchors are drilled since
+// they fail differently; a multi-line anchor has matched nothing here before
 // purely because one file is CRLF and another LF.
 function drill(name: string, defect: Defect, suite: string) {
   try {
@@ -566,9 +525,7 @@ drill(
 // have run entirely against unpatched code.
 drill("suite-dofile-anchor", defectNamed("hasall-skips-nil"), "net-guards");
 
-// GREEN BASELINE
-// First, because without it no red result below is attributable: a suite that is
-// already red needs no defect to go red.
+// Green baseline, run first: a suite already red needs no defect to go red.
 for (const suite of [...new Set(DEFECTS.flatMap((d) => d.expect.map((e) => e.suite)))].sort()) {
   const result = Bun.spawnSync(
     [

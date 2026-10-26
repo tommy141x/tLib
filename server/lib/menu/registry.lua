@@ -169,10 +169,8 @@ end
 
 -- Read-only answer to "what would this player see, and why not?". A denied
 -- namespace ACE and a denied page ACE both just make the page absent, so one
--- missing grant reads as two unrelated bugs; this separates the layers.
---
--- It calls the same allowed/itemAllowed the snapshot does. A diagnostic that
--- re-derives authority eventually disagrees with it, which is worse than none.
+-- missing grant reads as two unrelated bugs; this separates the layers. Calls
+-- the same allowed/itemAllowed the snapshot does rather than re-deriving authority.
 function R:diagnostics(source)
     local result = { namespaces = {}, menus = {} }
     for owner, ns in pairs(self.namespaces) do

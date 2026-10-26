@@ -1,29 +1,15 @@
--- Seeding, versioning and migration of a resource's JSON data file.
+-- Oracle for the JSON store's LIFECYCLE: seeded on first boot, migrated
+-- forward when the shape changes, never clobbered along the way.
+-- `tests/lua/jsonstore.lua` covers the WRITER instead; kept separate because
+-- that suite's stub codec stores tables BY IDENTITY, so "the backup holds the
+-- old shape" would pass with no backup at all. This codec SNAPSHOTS on encode
+-- and decode so a backup is a real copy.
 --
--- `tests/lua/jsonstore.lua` is the oracle for the WRITER -- one store per
--- document, read-modify-write over the whole file, a burst that loses nothing.
--- This one is the oracle for the LIFECYCLE: the file is created on first start,
--- migrated forward when the shape changes, and never clobbered on the way.
---
--- Separate rather than appended, for a reason that is about the stub and not
--- about tidiness. The other suite's codec stores tables BY IDENTITY --
--- `encode` keeps the live table and `decode` hands the same one back -- which is
--- right there, because what it tests is whether the correct DOCUMENT was
--- written. It is wrong here: the pre-migration backup would then be the very
--- table the migration goes on to mutate, so "the backup holds the old shape"
--- would pass with no backup at all. The codec below SNAPSHOTS on encode and
--- again on decode, so a backup is a real copy and an on-disk document cannot be
--- changed by mutating something a reader was handed.
---
--- What is assertion-worthy here is, in every case, something that fails
--- SILENTLY and destroys live customer data when it does:
---
---   · seeding defaults over a file whose JSON a hand-edit broke
---   · migrating without a backup, so a failed migration is unrecoverable
---   · a migration that runs twice, or that runs again on the next boot
---   · a document from a NEWER build being reset, or written in the old shape
---   · a migration quietly dropping a top-level key
---   · a migration "succeeding" in demo mode while every reader sees the old shape
+-- Cases here are all things that fail SILENTLY and destroy live data: seeding
+-- over a hand-edit-broken file, migrating with no backup, a migration that
+-- re-runs, a newer-build document getting reset or overwritten, a migration
+-- dropping a top-level key, a migration "succeeding" in demo mode while
+-- readers keep seeing the old shape.
 --
 -- Run via `bun run test:lua`.
 
@@ -35,11 +21,10 @@ local files = {}
 function LoadResourceFile(resource, name) return files[resource .. '|' .. name] end
 function GetCurrentResourceName() return 'tProbe' end
 
--- A snapshotting codec. Not a real JSON serialiser -- what is under test is the
--- lifecycle, not whether Lua can serialise -- but it has the one property a
--- real one has and identity does not: a round trip produces a table that is
--- EQUAL TO and NOT IDENTICAL WITH the one that went in. tCAD's json-adapter
--- suite makes the same choice for the same reason.
+-- Not a real JSON serialiser -- the lifecycle is under test, not Lua's
+-- ability to serialise -- but it has the one property a real one has and
+-- identity does not: a round trip is EQUAL TO, NOT IDENTICAL WITH, the input.
+-- tCAD's json-adapter suite makes the same choice for the same reason.
 local function snapshot(value)
     if type(value) ~= 'table' then return value end
     local copy = {}
@@ -71,9 +56,9 @@ local function loggedContains(needle)
     return false
 end
 
--- `refuseWrites` names the paths that must fail; `droppedWrites` is demo mode,
--- which reports SUCCESS and writes nothing. Those two being different is the
--- whole reason the mirror exists.
+-- `refuseWrites` names paths that must fail; `droppedWrites` is demo mode,
+-- which reports SUCCESS and writes nothing. That difference is why the mirror
+-- exists.
 local refuseWrites, droppedWrites = {}, false
 local writes = {}
 local function defaultWrite(file, contents, resource)
@@ -89,10 +74,8 @@ local recordedTimings = {}
 tlib = {
     logger = { DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4 },
     fs = { writeResourceFile = defaultWrite },
-    -- A sink for jsonstore's instrumented write path. A RECORDER rather than
-    -- a no-op even where this suite does not read it, so the call is exercised
-    -- rather than merely tolerated; tests/lua/jsonstore.lua is where the
-    -- assertion that the instrumentation still FIRES lives.
+    -- A recorder, not a no-op, so the call is exercised even where this suite
+    -- doesn't read it; jsonstore.lua asserts the instrumentation still FIRES.
     telemetry = { record = function(op, budget, ms)
         recordedTimings[#recordedTimings + 1] = { op = op, budget = budget, ms = ms }
     end },
@@ -135,9 +118,8 @@ end
 
 -- 1. Created on first start
 --
--- Property 2 of the three the module exists for. The release never ships the
--- file (that half is a build gate), so an absent file is the ORDINARY state of
--- a fresh install and not an error.
+-- The release never ships the file (a build gate's job), so an absent file is
+-- the ORDINARY state of a fresh install, not an error.
 
 reset()
 local store = JsonStore.open({
@@ -175,12 +157,11 @@ if #writes ~= 0 then fail('a current document was rewritten at boot: ' .. #write
 
 -- 2. An unparseable file is NEVER seeded over
 --
--- The single most destructive thing this module could do. `read()` answers an
--- empty table for an absent file AND for an unparseable one, so a seeder that
--- decides on `next(doc) == nil` meets a file whose JSON a hand-edit broke,
--- concludes "fresh install", and writes defaults over the one copy of the
--- owner's data that was still repairable by hand. tRadio's loadDataFile calls
--- this out in its own words and reports a corrupt file as PRESENT on purpose.
+-- `read()` answers an empty table for both an absent file and an unparseable
+-- one, so a seeder deciding on `next(doc) == nil` would meet a hand-edit-broken
+-- file, conclude "fresh install", and overwrite the owner's only repairable
+-- copy with defaults. tRadio's loadDataFile reports a corrupt file as PRESENT
+-- for the same reason.
 
 reset()
 files['tProbe|data.json'] = '{ "props": { oops'
@@ -290,9 +271,9 @@ if files['tProbe|data.json'] == nil then fail('the migrated document is not on d
 
 -- 4. A migration never runs twice, and is idempotent anyway
 --
--- Two separate guarantees. "Never twice" is the stamp plus the memoisation.
--- "Idempotent" is required ANYWAY, because in demo mode the stamp never reaches
--- the disk and the same migration runs again on every single start.
+-- "Never twice" is the stamp plus memoisation. "Idempotent" is required
+-- anyway because in demo mode the stamp never reaches disk, so the same
+-- migration runs again on every start.
 
 local migrated = files['tProbe|data.json']
 local runs = 0
@@ -576,7 +557,7 @@ end
 -- Filling and versioning are separate acts.
 
 reset()
-onDisk({ props = { a = 1 }, settings = { volume = 0.2 } })  -- no stamp at all
+onDisk({ props = { a = 1 }, settings = { volume = 0.2 } })
 store = JsonStore.open({
     log = log,
     schema = {

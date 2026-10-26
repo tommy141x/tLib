@@ -1,13 +1,7 @@
 --[[
-    tLib/imports.lua
-    Single entry point for consumer resources.
-
-    Usage in consumer fxmanifest.lua:
-        shared_scripts { '@tLib/imports.lua' }
-
+    The consumer entry point: `shared_scripts { '@tLib/imports.lua' }`.
     Modules lazy-load on first access of `tlib.<name>`.
     Design notes: docs/internal/imports-entrypoint.md
-
 ]]
 
 local resourceName = GetCurrentResourceName()
@@ -48,12 +42,10 @@ if requiredVersion and requiredVersion ~= '' then
     end
 end
 
---- The ONE file that implements `name` in this VM, as source plus the path it
---- came from, or nil when the installed tLib ships neither. A module is either
---- context-specific or context-agnostic, never both: nothing is concatenated,
---- so a `shared.lua` beside a `client.lua` would be dead weight rather than a
---- prelude. Reads files, never the module cache, so it is also the honest
---- answer to `has`.
+--- The ONE file implementing `name` in this VM, as source plus its path, or nil.
+--- `<context>.lua` wins and `shared.lua` is the fallback; they are never
+--- concatenated, so a module is context-specific or context-agnostic, not both.
+--- Reads files rather than the module cache, so it is also `has`'s honest answer.
 local function moduleSource(name)
     if type(name) ~= 'string' or name == '' then return nil end
 
@@ -107,8 +99,7 @@ local tlib = setmetatable({
     resource = resourceName,
     -- `tlib.<anything>` is never falsy -- an unknown name resolves to the
     -- forwarding function above -- so `if tlib.diag then` is not a guard. This
-    -- is, and it never runs the module body. Safe only behind the version gate
-    -- above: see docs/internal/imports-entrypoint.md.
+    -- is, and it never runs the module body.
     has = function(name) return moduleSource(name) ~= nil end,
 }, { __index = resolve })
 
@@ -170,13 +161,12 @@ for _, entry in ipairs(AUTOLOAD) do
     end
 end
 
--- Eagerly load modules declared in the consumer's fxmanifest:
+-- Eagerly load modules the consumer's manifest declares:
 --   tlib_module { 'coords' }   /   tlib_modules { 'coords', 'kvp' }
 --
--- Not load-bearing any more except for `realtime`, which tLib's server bundle
--- reads off the manifest to decide whether to install the realtime hub. Kept as
--- an auditable parts list. See docs/internal/imports-entrypoint.md.
---
+-- Load-bearing only for `realtime`, which tLib's server bundle reads off the
+-- manifest to decide whether to install the realtime hub. Otherwise an auditable
+-- parts list. See docs/internal/imports-entrypoint.md.
 for _, key in ipairs({ 'tlib_module', 'tlib_modules' }) do
     local declared = GetNumResourceMetadata(resourceName, key)
     for index = 0, declared - 1 do

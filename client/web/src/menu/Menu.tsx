@@ -10,8 +10,8 @@ import {
   Show,
   untrack,
 } from "solid-js";
-// One notification timing table for the whole bundle. See `notify()` below for
-// why this surface is not itself a toast.
+// One notification timing table for the whole bundle; see `notify()` for why
+// this surface is not itself a toast.
 import { TOAST_DURATIONS } from "../lib/toast-lifetime";
 import { applyScopedTheme, themeRevision } from "../stores/theme-store";
 import {
@@ -67,27 +67,14 @@ import { FormattedText, plainText } from "./text";
 import type { ActionRequest, MenuItem, NavigationCommand, NuiMessage, Snapshot } from "./types";
 
 /*
- * The feedback copy, as settled, in one place
+ * The subtitle line is load-bearing, not decoration: it is the only text box
+ * in front of the player, so it must say where the message goes ("not your
+ * server's staff") or reports go unread. Don't add a second sentence pointing
+ * server problems at the operator's own admins — a dialog nobody reads is
+ * worse than one line they do.
  *
- * THE SECOND LINE IS NOT DECORATION AND MUST NOT BE SHORTENED. A text box in
- * a game menu WILL be used to report griefers and ask for help, because it is
- * the only text box in front of the player. Without a line saying where the
- * message goes, this becomes a dead letter box: people type a complaint about
- * their server and nobody who could act on it ever reads it.
- *
- * Why these exact words:
- *   · "reaches" states direction without jargon — no "forwarded to", no "ticket".
- *   · "not your server's staff" is the whole misuse prevention in four words,
- *     and "staff" covers moderators, where "admins" would not.
- *   · the placeholder maps onto the error / performance / product-feedback split,
- *     so it invites something actionable instead of "it's broken".
- *
- * DO NOT add a second sentence pointing server problems at the operator's own
- * admins. It doubles the length to restate what the first line already says, and
- * a dialog nobody reads is worse than one line they do.
- *
- * These are `t()` SOURCE KEYS as well as the English copy; `locales/en.ts` holds
- * them verbatim and `locales/fr.ts` translates them.
+ * These are `t()` SOURCE KEYS as well as the English copy; `locales/en.ts`
+ * holds them verbatim and `locales/fr.ts` translates them.
  */
 const FEEDBACK_TITLE = "Send feedback";
 const FEEDBACK_SUBTITLE =
@@ -95,22 +82,16 @@ const FEEDBACK_SUBTITLE =
 const FEEDBACK_PLACEHOLDER = "What's broken, slow, or worth changing?";
 const FEEDBACK_SEND = "Send";
 
-/**
- * tWeb's `SUPPORT_MESSAGE_MAX`.
- *
- * Enforced here as well as at the server and at tWeb, because this is the
- * only one of the three that can stop a player typing a 4,000-character report
- * and only then being told it was refused.
- */
+/** tWeb's `SUPPORT_MESSAGE_MAX`. Enforced here too — the only one of the
+ * three (server, tWeb, this) that can stop a 4,000-character report before
+ * the player types it rather than after. */
 const FEEDBACK_MAX = 2000;
 
 /**
  * The failure vocabulary `server/sv_feedback.lua` and the bundle answer with.
- *
- * A reason outside this table falls through to the generic line rather than
- * being shown raw: the channel's own refusals ("Server request timed out",
- * "Rate limit exceeded") are engine strings in one language, and a player
- * reading French would get them in English beside translated copy.
+ * A reason outside this table falls through to the generic line: the
+ * channel's own refusals are untranslated engine strings, and showing them
+ * raw would mix English into otherwise-translated copy.
  */
 const FEEDBACK_FAILURES: Record<string, string> = {
   "rate-limited": "Too many messages just now. Try again in a minute — your text is still here.",
@@ -157,66 +138,48 @@ export default function Menu() {
   const [confirmChoice, setConfirmChoice] = createSignal(false);
   const [notice, setNotice] = createSignal<{ text: string; error: boolean }>();
   const [confirmation, setConfirmation] = createSignal<CapturedAction>();
-  /*
-   * The shared feedback dialog.
-   *
-   * FOUR SIGNALS AND NOT A STORE, deliberately. A Solid 2 store write is not
-   * readable in the tick it happened, and `send()` reads the draft immediately
-   * after setting the sending flag — a store would hand it the pre-write value.
-   *
-   * `feedbackFor` doubles as the open flag: it is the resource the dialog is
-   * about, and there is no state where the dialog is open about nothing.
-   */
+  // Four signals, not a store: a Solid 2 store write isn't readable in the
+  // tick it happened, and `send()` reads the draft right after setting the
+  // sending flag. `feedbackFor` doubles as the open flag — the dialog is
+  // always about a resource when open, never about nothing.
   const [feedbackFor, setFeedbackFor] = createSignal<string>();
   const [feedbackText, setFeedbackText] = createSignal("");
   const [feedbackSending, setFeedbackSending] = createSignal(false);
   const [feedbackSent, setFeedbackSent] = createSignal(false);
-  // Its own line INSIDE the dialog rather than `notify()`. The notice strip
-  // lives in the panel and the dialog's shade is absolutely positioned over the
-  // whole panel at z-index 2 — a refusal reported through notify() would be
-  // painted underneath the dialog that caused it and the player would see
-  // nothing happen at all.
+  // Its own line inside the dialog, not `notify()`: the dialog's shade sits at
+  // z-index 2 over the whole panel, so a notice through notify() would paint
+  // underneath it and the player would see nothing happen.
   const [feedbackError, setFeedbackError] = createSignal<string>();
   const parents = new Map<string, string | undefined>();
   const positions = new Map<string, number>();
-  // A signal, not a counter: validAction() reads it from the confirmedItem memo,
-  // so a bare `let` bump would be invisible to the reactive graph and leave a
-  // stale confirmation dialog over an action that is no longer valid.
+  // A signal, not a `let` counter: validAction() reads it via the
+  // confirmedItem memo, so a plain bump would be invisible to the reactive
+  // graph and leave a stale confirmation over an action no longer valid.
   const [epoch, setEpoch] = createSignal(0);
   let search!: HTMLInputElement;
   let feedback: HTMLTextAreaElement | undefined;
   let panel!: HTMLElement;
   let root!: HTMLDivElement;
   // A theme may supply full menu colors or shared shadcn HSL channels. Only the
-  // owner root is adapted, never :root or the shared registry; explicit menu
-  // colors win over aliases, and synthesized properties are tracked for removal.
+  // owner root is adapted; explicit menu colors win over aliases, and
+  // synthesized properties are tracked for removal.
   //
-  // The tokens whose translucent tints tokens.css writes as `hsl(var(--x-raw) / a)`
-  // — the menu's hover wash, its control border, its hairline rulings, the
-  // vMenu skin's row separator, the shared focus ring. NUI is CEF 103, which
-  // predates color-mix(), so slash-alpha over a bare triplet is the only way to
-  // say "this colour at a% alpha" that the engine will parse at all.
-  //
-  // Which means every one of those tokens needs a partner holding the SAME
-  // colour in unresolved channel form, and a partner cannot be computed from the
-  // colour beside it: once `0 0% 93.33%` has been resolved to `hsl(0 0% 93.33%)`
-  // the channels are gone as far as CSS is concerned, and no function takes them
-  // back out again. That is the whole reason `-raw` partners are hand-written
-  // constants in tokens.css rather than derived there.
-  //
-  // This effect is the last place in the program that still holds the theme's
-  // value BEFORE it is resolved, so it is the only place a themed partner can be
-  // written at all. Skipping it left a themed menu with correct opaque surfaces
-  // and every tint beside them still keyed to stock tLib grey.
-  //
-  // --accent and --muted are absent on purpose: neither has a `-raw` partner in
-  // tokens.css because nothing ever asks for a share of them, and inventing one
-  // here would be a token with no readers.
+  // CEF 103 predates color-mix(), so `hsl(<raw-channels> / a)` is the only
+  // alpha syntax it parses — which is how tokens.css writes every translucent
+  // tint (hover wash, control border, hairlines, vMenu's row separator, the
+  // shared focus ring). Each such token needs a `-raw` partner holding the
+  // UNRESOLVED channels, because once a value resolves to `hsl(...)` the
+  // channels can't be extracted back out — hence `-raw` partners are
+  // hand-written constants, not derived. This effect is the last place that
+  // still holds the pre-resolution theme value, so it's the only place one
+  // can be synthesized; skipping it left correct opaque surfaces with every
+  // tint still keyed to stock tLib grey. --accent/--muted get no partner:
+  // nothing reads one.
   const rawPartners = new Set(["text", "panel", "border", "selected", "selected-ink"]);
   let themeAliases: string[] = [];
-  // Two-argument form. The ONLY reactive read in this whole effect is the theme
-  // id, so it is the entire compute half; everything below is DOM measurement
-  // and DOM writes, which must not subscribe to anything.
+  // Two-argument form: the theme id is the only reactive read, so it's the
+  // whole compute half. Everything below is DOM measurement/writes and must
+  // not subscribe to anything.
   createEffect(
     () => {
       // themeRevision() belongs in compute: applyScopedTheme reads it
@@ -234,14 +197,10 @@ export default function Menu() {
           : CSS.supports("color", `hsl(${value})`)
             ? `hsl(${value})`
             : undefined;
-      // The bare HSL triplet inside a theme value, or nothing.
-      //
-      // The one question asked is whether the consumers' own expression parses,
-      // because that is the only property of a partner that matters. Asking it in
-      // exactly the shape tokens.css writes means the check cannot drift from what
-      // is being checked. It is also why the legacy comma form is refused rather
-      // than unwrapped: `hsl(0, 0%, 93% / 0.5)` is invalid CSS, and a partner that
-      // makes its readers drop their declaration is worse than no partner at all.
+      // The bare HSL triplet inside a theme value, or nothing. Checked in
+      // exactly the shape tokens.css writes it, so the check can't drift from
+      // what it's checking — which is also why legacy comma-form hsl() is
+      // refused rather than unwrapped: `hsl(0, 0%, 93% / 0.5)` is invalid CSS.
       const triplet = (value: string) => {
         // `hsl(0 0% 93%)` is a triplet wearing a coat; take the coat off. An hsla()
         // that carries its own alpha fails the test below, correctly — an alpha
@@ -281,24 +240,17 @@ export default function Menu() {
           root.style.setProperty(property, resolved);
           if (!own) themeAliases.push(property);
           const partner = `${property}-raw`;
-          // A hex, a named colour or a comma-form hsl() gets no partner, and that
-          // is deliberate: tokens.css's stock triplet stays in force, so the tint
-          // paints a visible wash in the wrong hue instead of resolving to
-          // `hsl( / 0.32)` and painting nothing. Wrong-hue is a theme the owner can
-          // finish — name the colour as a triplet, or set the partner directly.
-          // Dropped is invisible, and reads as a broken control rather than an
-          // unfinished theme. That failure is the entire class of bug this pass
-          // exists to remove, so it is never the one chosen here.
-          //
-          // An explicitly themed partner wins over a derived one, the same way
-          // `own` wins over `alias` above: the owner stated it, so it is not ours
-          // to overwrite.
+          // A hex, named colour or comma-form hsl() gets no partner on purpose:
+          // tokens.css's stock triplet stays in force, painting a wrong-hue
+          // (but visible) wash instead of resolving to nothing. Dropped-tint
+          // reads as a broken control; wrong-hue reads as an unfinished theme
+          // the owner can still fix. An explicit partner wins over a derived
+          // one, same as `own` over `alias` above.
           if (raw && !root.style.getPropertyValue(partner).trim()) {
             root.style.setProperty(partner, raw);
-            // Tracked for removal even when the theme set the colour itself.
-            // applyScopedTheme only remembers properties a theme actually named,
-            // and this one is synthesized — untracked, it would outlive the theme
-            // that justified it and go on tinting the next one.
+            // Tracked for removal even though the theme didn't name this
+            // property itself — applyScopedTheme only remembers properties a
+            // theme named, and an untracked synthesized one would outlive it.
             themeAliases.push(partner);
           }
         } else if (own) root.style.removeProperty(property);
@@ -306,17 +258,16 @@ export default function Menu() {
     }
   );
   let dialog!: HTMLDivElement;
-  // Its own ref rather than sharing `dialog` with the confirmation: the two are
-  // mutually exclusive on screen, but a ref is only written on mount, so sharing
-  // would leave Tab querying a detached node after a confirmation had closed.
+  // Its own ref rather than sharing `dialog`: the two are mutually exclusive
+  // on screen, but a ref is written only on mount, so sharing would leave Tab
+  // querying a detached node after a confirmation closed.
   let feedbackDialog: HTMLDivElement | undefined;
   let noticeTimer: number | undefined;
   let disposed = false;
 
-  // Hidden is a third state between open and closed: mounted, holding every draft,
-  // simply not on screen. Anything deciding whether to accept input or talk to the
-  // game asks this. validAction still reads state.visible, because an action
-  // captured before the pause menu came up is still valid behind it.
+  // Hidden is a third state between open and closed: mounted, drafts intact,
+  // just off screen. validAction still reads state.visible — an action
+  // captured before the pause menu came up stays valid behind it.
   const shown = createMemo(() => state.visible && !state.hidden);
   // A banner that 404s will 404 for every later render of the same URL, so the
   // miss is remembered rather than re-requested, as MenuIcon does.
@@ -329,9 +280,9 @@ export default function Menu() {
     return url && url !== failedBanner() ? url : undefined;
   });
   const accent = createMemo(() => accentFor(state.branding, menuId()));
-  // Header text follows the brand's luminance rather than staying white, or a pale
-  // banner or accent renders the title white on white. Measured banner ink wins
-  // where the image could be sampled: that is what is actually behind the word.
+  // Header text follows the brand's luminance, or a pale banner/accent renders
+  // the title white on white. Measured banner ink wins when sampleable — it's
+  // what's actually behind the word.
   const brandStyle = createMemo(() => {
     const colour = accent();
     const ink = (banner() ? bannerInk() : undefined) ?? (colour ? readableInk(colour) : undefined);
@@ -344,9 +295,9 @@ export default function Menu() {
     };
   });
   const menu = createMemo(() => state.menus.find((entry) => entry.id === menuId()));
-  // Separate memos: fused, every keystroke re-ran menuEntries and minted fresh row
-  // objects, so <For> rebuilt the whole window per character. filterItems returns
-  // the same references, so only the set of rows changes.
+  // Separate memos: fused, every keystroke re-ran menuEntries and minted fresh
+  // row objects, rebuilding the whole <For> window per character. filterItems
+  // returns the same references, so only the set of rows changes.
   const entries = createMemo(() => menuEntries(menu()?.items ?? []));
   const local = createMemo(() => filterItems(entries(), query()));
   // Cached against the index's identity rather than held in a memo. Building it
@@ -375,27 +326,20 @@ export default function Menu() {
     query().trim() ? searchCatalog(prepared(), query(), menuId(), state.menus) : []
   );
   /*
-   * The shared "Send feedback" row
+   * Client-side synthetic "Send feedback" row, injected here rather than
+   * mounted by each of the 8 consumers (tLS, tRadar, tDetector, tUnit, tAFK,
+   * tCAD, tChirp, tRadio) so one row here covers all of them with no
+   * per-resource wiring to drift.
    *
-   * INJECTED BY tLib'S MENU, NOT MOUNTED BY EIGHT RESOURCES. tLS, tRadar,
-   * tDetector, tUnit, tAFK, tCAD, tChirp and tRadio all render through THIS
-   * bundle, so one row here is one row in every one of their menus and none of
-   * them has to wire anything. That is the whole point: the alternative is
-   * eight copies of a dialog that then drift.
+   * Same reasons as a cross-menu search hit: a server-side row would break
+   * the catalogued-page contract (a page travels as a positional bitmap
+   * against a signature, so appending breaks the 256-row-costs-256-bytes
+   * guarantee) and need a per-owner ACE + handler. Appending into `items()`
+   * instead inherits the cursor, scroll window, counter and bindings free.
    *
-   * It is a CLIENT-SIDE synthetic row, exactly as a cross-menu search hit
-   * is, and for the same two reasons. A server-side injection would have to
-   * append an item to a registered page — and a CATALOGUED page travels as a
-   * positional bitmap against a signature, so appending to one breaks the
-   * contract that makes a 256-row menu cost 256 bytes. It would also need an
-   * ACE and an action handler per owner, which is the per-resource wiring this
-   * avoids. Appended into `items()` means it inherits the cursor, the scroll
-   * window, the counter and every binding for free.
-   *
-   * ONLY ON AN OWNER'S ENTRY PAGE. A resource has up to 240 pages; a row on
-   * all of them is noise, and the entry page is the one every player passes
-   * through. A page with no `owner:` prefix — tLib's own `main` hub — gets no
-   * row, because there is no resource for the copy to name.
+   * Only on an owner's entry page — a resource has up to 240 pages, so a row
+   * on all of them is noise. tLib's own `main` hub has no owning resource, so
+   * it gets none.
    */
   const FEEDBACK_ROW = "tlib:menu:feedback";
   const feedbackResource = createMemo(() => {
@@ -424,9 +368,9 @@ export default function Menu() {
       feedback: resource,
     } as MenuEntry;
   });
-  // The page's own rows first, then the rest of the catalog under a heading.
-  // Appended rather than rendered as a second list so the results inherit the
-  // cursor, scroll window, counter and bindings -- in game there is no pointer.
+  // The page's own rows first, then the catalog under a heading — appended
+  // rather than a second list, so results inherit the cursor, scroll window,
+  // counter and bindings (there's no pointer in game).
   const items = createMemo<MenuEntry[]>(() => {
     const extra = feedbackRow();
     const rows = extra ? [...local(), extra] : local();
@@ -464,12 +408,10 @@ export default function Menu() {
       ? previous
       : rows[Math.min(positions.get(menuId()) ?? 0, rows.length - 1)]?.id;
   });
-  // Solid 2 does not ship `createSelector`, so this is a plain comparison.
-  // The difference is real and accepted: `createSelector` kept one signal per
-  // key, so changing the cursor notified exactly the two rows involved, while
-  // this notifies every row's `active` prop and lets each one settle. The page
-  // is a menu — tens of rows, not thousands — and the previous version's only
-  // claim was that O(1) narrowing, not any behaviour the player can see.
+  // Solid 2 has no `createSelector`, so this is a plain comparison: every
+  // row's `active` prop gets notified instead of just the two that changed.
+  // Accepted — a menu page is tens of rows, not thousands, so the lost O(1)
+  // narrowing has no visible behaviour cost.
   const isSelected = (id: string | undefined) => selectedId() === id;
   const selectedIndex = createMemo(() => items().findIndex((item) => item.id === selectedId()));
   const selected = createMemo(() => items()[selectedIndex()]);
@@ -546,36 +488,14 @@ export default function Menu() {
   }
 
   /**
-   * The menu's own in-panel notice strip.
-   *
-   * Why this is NOT a toast, having been asked
-   *
-   * tLib shipped two notification lifetimes with two sets of numbers: this one
-   * (error 7000, everything else 2500) and `lib/toast-lifetime.ts`'s
-   * `TOAST_DURATIONS` (error 6000, warning 5000, success/info 4000). Two tables
-   * is one table too many and the duplicate is gone -- the deadline below is read
-   * out of `TOAST_DURATIONS` now, so there is one place a timing changes.
-   *
-   * The SURFACE stays, deliberately, and it is not a near-miss of the toast:
-   *
-   *   1. The toast host is a HUD element whose anchor the PLAYER positions, in
-   *      the layout editor. It can legitimately sit in any corner, including
-   *      behind this panel. A refusal reason is the answer to the keypress just
-   *      made and has to be beside the row that refused it; "somewhere the player
-   *      chose, earlier, for a different purpose" is not that.
-   *   2. This menu is driven entirely by ↑↓/↵ with the eye on the panel. A corner
-   *      toast is exactly what gets missed, and `role="alert"` on the strip is
-   *      what announces it to a screen reader in the menu's own reading order.
-   *   3. Mechanically there is nothing to call. `createToastLifetime` is
-   *      instantiated inside `components/Toast.tsx` and fed only by Lua's
-   *      `showToast` NUI event; reaching it from here needs either a new
-   *      cross-component bus or a NUI→Lua→NUI round trip for a string that is
-   *      already in the browser. Both are new mechanisms, which is the thing not
-   *      to add.
-   *
-   * So: one timing table, two surfaces, each where it belongs. `error` picks the
-   * `error` deadline and anything else picks `info`'s; this strip has no
-   * success/warning/loading states to key off.
+   * The menu's own in-panel notice strip — deliberately not the toast. Both
+   * now read timing from `lib/toast-lifetime.ts`'s `TOAST_DURATIONS` (one
+   * table, not the two tLib used to ship), but the surface stays separate:
+   * the toast's anchor is player-positioned in the layout editor and can sit
+   * behind this panel, while a refusal has to appear beside the row that
+   * caused it; this menu is also ↑↓/↵-driven with the eye on the panel, so a
+   * corner toast is exactly what gets missed. `error` picks the `error`
+   * deadline, anything else picks `info`'s.
    */
   function notify(text: string, error = false) {
     if (error) play("error");
@@ -599,8 +519,8 @@ export default function Menu() {
   }
 
   // A snapshot contextualizes one page; the rest arrive as empty placeholders.
-  // Staying on a page the game is no longer tracking draws a placeholder as if it
-  // were real and then rejects every navigation off it, Back included.
+  // Staying on a page the game no longer tracks draws a placeholder as real
+  // and then rejects every navigation off it, Back included.
   function applySnapshot(data: Snapshot) {
     snapshot(data);
     if (
@@ -615,30 +535,25 @@ export default function Menu() {
   let navigationTimer: number | undefined;
   async function navigate(id: string, reason: "enter" | "back" = "enter") {
     if (!state.visible || closing() || !state.menus.some((entry) => entry.id === id)) return;
-    // The coalesced value names a row on the page being left, and `submit` reads
-    // the CURRENT menuId -- so flushing after the page changed would address the
-    // request to the wrong page and lose it.
+    // Before the page changes: `submit` reads the CURRENT menuId, so flushing
+    // after would address the coalesced value to the wrong page.
     flushChange();
     const serial = ++navigationSerial;
     const from = menuId();
     const contextKey = menu()?.contextKey;
-    // A page whose rows are already here is painted now and confirmed afterwards.
-    // The game answers in about 19ms, and the rows in that reply are the rows
-    // already in the store -- either prefetched while the cursor rested on the row
-    // pointing here, or left from a previous visit. So the wait confirms rather
-    // than decides, and it can happen behind a page the player is already reading.
-    // A page still a placeholder has nothing to draw and keeps its round trip.
-    //
-    // The reply stays authoritative: its `menus` replace what was painted and a
-    // refusal puts the player back. Acting on the painted page meanwhile is safe
-    // because an action is validated against the game's projection, not the DOM.
+    // A page whose rows are already in the store (prefetched or from a prior
+    // visit) paints optimistically — the ~19ms round trip then confirms
+    // rather than decides, behind a page the player is already reading. The
+    // reply stays authoritative (its `menus` replace the paint; a refusal
+    // backs out), and acting on the painted page is safe because actions
+    // validate against the game's projection, not the DOM.
     const painted = state.menus.some((entry) => entry.id === id && !entry.placeholder);
     if (painted) showMenu(id);
     // After the optimistic paint, since showMenu bumps the epoch: this is the
     // generation the reply is judged against.
     const generation = epoch();
-    // Only a page actually waited on gets an indicator, and under 120ms one reads
-    // as a flicker.
+    // Only a page actually waited on gets an indicator; under 120ms reads as
+    // a flicker.
     window.clearTimeout(navigationTimer);
     if (!painted)
       navigationTimer = window.setTimeout(() => {
@@ -925,22 +840,13 @@ export default function Menu() {
   }
 
   /**
-   * Trailing-edge coalescing for `change` events.
-   *
-   * Stepping a select or a slider is a HELD arrow key, and each step used to be
-   * its own server request. Measured against a live server: a round trip is
-   * ~26ms, so holding one key produces ~39 requests a second, which tripped the
-   * engine's request limiter in 174ms and then refused every further step of an
-   * ordinary colour or ped-model row. The limiter was raised, but the requests
-   * were never worth sending in the first place -- the player passing through
-   * value 7 on the way to value 30 is not asking for 7 to be applied.
-   *
-   * Only the SUBMIT is delayed. The draft store still advances on every repeat,
-   * so the row reads as responsive and nothing about stepping feels throttled.
-   *
-   * Every path that leaves the row flushes first (`flushChange`), because a
-   * coalesced value that is never sent is a value the player set and lost -- a
-   * far worse bug than the one this fixes.
+   * Trailing-edge coalescing for `change` events. A held arrow key on a
+   * select/slider used to send one request per step — measured ~26ms round
+   * trip, so holding a key produced ~39 req/s, which tripped the server's
+   * request limiter in 174ms. Only the submit is delayed; the draft store
+   * still advances on every repeat, so stepping still reads as responsive.
+   * Every exit path flushes first (`flushChange`), since a coalesced value
+   * that's never sent is a value the player set and lost.
    */
   const CHANGE_COALESCE_MS = 120;
   let changeTimer: number | undefined;
@@ -1041,20 +947,17 @@ export default function Menu() {
     queueMicrotask(() => feedback?.focus());
   }
 
-  // The draft is NOT cleared here. Dismissing the dialog on a 429 and
-  // reopening it has to find the text still there — that is the whole of "handle
-  // a 429 without losing what the player typed", and clearing on close would
-  // undo it from the one direction nobody tests.
+  // The draft is NOT cleared here: dismissing the dialog on a 429 and
+  // reopening it has to find the text still there.
   function closeFeedback() {
     setFeedbackFor(undefined);
     feedback?.blur();
     panel?.focus();
   }
 
-  // Dismiss AND discard, for the two events that invalidate the draft rather
-  // than interrupting it: the page changing under the dialog (the text was about
-  // the old page's resource) and the menu closing (which discards every other
-  // draft too).
+  // Dismiss AND discard — for events that invalidate the draft rather than
+  // interrupt it: the page changing under the dialog (text was about the old
+  // resource), or the menu closing (which discards every other draft too).
   function resetFeedback() {
     setFeedbackFor(undefined);
     setFeedbackText("");
@@ -1064,14 +967,10 @@ export default function Menu() {
   }
 
   /**
-   * Send, once.
-   *
-   * THE DRAFT SURVIVES EVERY FAILURE and is cleared only on a confirmed
-   * success. A rate limit is the expected failure here — tWeb allows ten a
-   * minute per IP, which for a game server is ten for the WHOLE server, so two
-   * players reporting the same bug in the same minute is enough to hit it — and
-   * a box that empties itself on a refusal makes the player retype a paragraph
-   * they already wrote.
+   * Send, once. The draft survives every failure, clearing only on confirmed
+   * success — tWeb allows 10/minute per IP, which for a game server behind
+   * one IP is 10 for the whole server, so two players reporting the same bug
+   * in the same minute is enough to hit it.
    */
   async function sendFeedback() {
     const resource = feedbackFor();
@@ -1174,43 +1073,25 @@ export default function Menu() {
   }
 
   /*
-   * Escape is NOT in here. It is a registered layer; see `createEscapeLayer`
-   * below.
-   *
-   * This handler had two Escape branches — one for the confirmation, one for the
-   * page — and no `defaultPrevented` check. That matters specifically here,
-   * because `MarketplaceBrowser` mounts a REGISTERED layer beside this host, so
-   * a press the registry consumed still arrived and still ran `back()`: one
-   * press, two dismissals.
-   *
-   * Adding `if (event.defaultPrevented) return` would NOT have fixed it, and
-   * that is worth writing down because it is the obvious fix. Both this listener
-   * and the registry's deciding listener are bubble-phase on `window`, and
-   * within one target and phase the order is REGISTRATION order. This one is
-   * added in `onSettled` at app start; the registry attaches lazily on its first
-   * `add()`, which is when the browser mounts — strictly later. The registry's
-   * capture handler runs first but only SAMPLES; the `preventDefault()` happens
-   * in its bubble handler, after this one. So the guard would have read `false`
-   * every time: a check that can never fire, which is worse than no check.
-   *
-   * The guard below is still here, for anything that does prevent in capture.
+   * Escape is NOT handled here — it's a registered layer, see
+   * `createEscapeLayer` below. A `defaultPrevented` check here would NOT fix
+   * a double dismiss with `MarketplaceBrowser`'s registered layer: both are
+   * bubble-phase on `window`, where order is registration order. This
+   * handler attaches in `onSettled` at app start; the registry attaches
+   * lazily on its first `add()` — later. The registry's capture handler only
+   * samples; its `preventDefault()` runs in the bubble handler, after this
+   * one — so the guard would read `false` every time. Kept below anyway for
+   * anything that does prevent in capture phase.
    */
   function onKey(event: KeyboardEvent) {
     if (!shown() || event.defaultPrevented) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     /*
-     * WHILE THE FEEDBACK DIALOG IS OPEN, THE BOX GETS EVERYTHING.
-     *
-     * This early return is not politeness, it is the feature: without it
-     * Backspace runs `back()` instead of deleting a character, Enter is
-     * swallowed instead of starting a line, and the arrow keys move the menu
-     * cursor behind the dialog instead of the caret. The confirmation branch
-     * below can get away with being narrower because it has no text field.
-     *
-     * Two keys are kept: Tab moves between the box and the buttons, which is
-     * the only way to reach Send in game — there is no cursor in NUI — and F1
-     * still closes the whole menu, because it is the key the game bound and the
-     * player's guaranteed way out.
+     * While the feedback dialog is open, the box gets everything: without
+     * this early return Backspace runs `back()`, Enter is swallowed, and
+     * arrows move the menu cursor instead of the caret. Tab and F1 stay —
+     * Tab reaches Send (no cursor in NUI), F1 is the game-bound close key and
+     * the player's guaranteed way out.
      */
     if (feedbackFor()) {
       if (event.key === "Tab") {
@@ -1293,13 +1174,12 @@ export default function Menu() {
     }
   }
 
-  // In game the box can only receive characters while the game has handed CEF its
-  // keyboard, so the box being open and the grab being held are one state. Held
-  // here rather than at each of the five exits, where only the ones that remembered
-  // to call back into the game released it.
-  // The feedback box needs the SAME grab, so the two are one condition. Two
-  // effects would race: closing the dialog while search had never been open
-  // would release a grab the box still needed, or the reverse.
+  // In game, text only reaches the box while the game has handed CEF its
+  // keyboard, so "open" and "grab held" are one state — held here rather than
+  // at each of the five exits, to avoid one that forgets to release it. The
+  // feedback box needs the same grab, so both are one condition: two separate
+  // effects would race (closing one while the other is still open would
+  // release a grab the other still needs).
   createEffect(
     () => searchOpen() || Boolean(feedbackFor()),
     (open) => {
@@ -1448,19 +1328,13 @@ export default function Menu() {
     const unlisten = listen(runtimeMessage, (reason) => void resync(reason));
     window.addEventListener("keydown", onKey);
     /*
-     * Escape, as the one arbitrated layer rather than two branches of the raw
-     * handler above.
-     *
-     * `back()` already distinguishes the three things Escape can mean here — it
-     * dismisses the confirmation, else leaves search taking the query with it,
-     * else walks up the page stack and finally closes — so there is nothing for
-     * `onInternal` to split out. Depth 0: this is the HOST, and the marketplace
-     * browser mounted inside it registers at depth 1 and wins while it is open,
-     * which is the whole arrangement the registry exists to express.
-     *
-     * `blocked` carries the modifier rule the raw handler had, and it is
-     * `blocked` rather than `active` on purpose: a `Ctrl`-Escape is "not mine",
-     * so the layer below should get a chance at it, not "mine, do nothing".
+     * Escape as one arbitrated layer rather than two branches of the raw
+     * handler. `back()` already covers everything Escape can mean here
+     * (dismiss confirmation, else close search, else walk up/close), so
+     * there's nothing for `onInternal` to split out. Depth 0: this is the
+     * host; the marketplace browser registers at depth 1 and wins while
+     * open. `blocked`, not `active`: a Ctrl-Escape is "not mine", so the
+     * layer below should get a chance at it.
      */
     const disposeEscape = createEscapeLayer({
       label: "menu",
@@ -1603,10 +1477,10 @@ export default function Menu() {
             role="group"
             aria-label={plainText(t(menu()?.title ?? "Menu items"))}
           >
-            {/* Keyed by reference: rows read through to the store, so identity only
-                changes when the page's structure does and scrolling moves nodes
-                rather than re-running every binding. pending is compared per row so
-                one slow spawn does not grey out the whole page. */}
+            {/* Keyed by reference: identity changes only when the page's
+                structure does, so scrolling moves nodes rather than re-running
+                bindings. `pending` is compared per row so one slow spawn
+                doesn't grey out the whole page. */}
             <For each={visibleItems()}>
               {(item) => (
                 <MenuRow
@@ -1903,9 +1777,9 @@ export default function Menu() {
                   <p id="confirm-description">
                     <FormattedText text={item().confirm} />
                   </p>
-                  {/* AFFIRMATIVE LEFT, deliberately. The source order is the
-                      visual order and the Tab order both; the reasoning and the
-                      count behind it are in `layout/LayoutEditor.tsx`. */}
+                  {/* Affirmative left, deliberately: source order is both visual
+                      and Tab order. Opposite of the destructive-confirm pattern
+                      (`data-discard-answer`), which puts the lossy choice right. */}
                   <div class="flex gap-2 mt-5">
                     <button type="button" class="dialog-confirm" onClick={confirm}>
                       <Check aria-hidden="true" />
@@ -1992,11 +1866,9 @@ export default function Menu() {
                       buttons are part of the dialog rather than a hint. */}
                   <p class="feedback-keys">
                     <kbd>Tab</kbd> {t(FEEDBACK_KEYS)}
-                    {/* In game the exit is Tab-to-Cancel and Enter, NOT Escape.
-                        The search box above says the same thing by offering F3
-                        instead of Esc in game: with the keyboard handed to CEF,
-                        Escape is not a key this surface can rely on. Promising
-                        it here would be a hint that does nothing. */}
+                    {/* In game, exit is Tab-to-Cancel/Enter, not Escape — the
+                        keyboard is handed to CEF, so Escape isn't reliable here
+                        (same reason the search box offers F3 instead of Esc). */}
                     <Show
                       when={inGame}
                       fallback={

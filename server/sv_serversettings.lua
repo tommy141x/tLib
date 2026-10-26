@@ -18,19 +18,12 @@ local log = Logger.create('tLib/serversettings')
 
 ServerSettings = {}
 
--- PER-PLAYER RATE LIMITING
---
--- saveEvent goes through Permission.registerAdminEvent and is bounded by that
--- check. requestEvent is not: anyone may fire it, and it costs an admin lookup,
--- the onRequest callback (which consumers use for directory scans and other
--- real work) and a full settings payload back down the wire. Unlimited, that is
--- a free amplifier — a few bytes in, a whole panel payload out.
---
--- A floor on the interval between calls rather than a token bucket: the client
--- fires this once per panel open, so there is no legitimate burst to allow for.
---
--- Keyed by event name, because each consumer resource creates its own
--- ServerSettings with its own requestEvent and they must not share a budget.
+-- saveEvent is bounded by Permission.registerAdminEvent; requestEvent is not --
+-- anyone may fire it, and it costs an admin lookup, the onRequest callback and
+-- a full settings payload back down the wire. A floor on the call interval
+-- (not a token bucket) is enough since the client only fires once per panel
+-- open. Keyed by event name since each consumer's ServerSettings has its own
+-- requestEvent and must not share a budget.
 local _rateBuckets = {}
 
 local function rateLimited(bucket, src, intervalMs)
@@ -49,8 +42,7 @@ local function rateLimited(bucket, src, intervalMs)
     return false
 end
 
--- Otherwise every bucket keeps one timestamp per player who has ever connected,
--- for the life of the server.
+-- Otherwise each bucket keeps one timestamp per player who ever connected, for the server's life.
 Platform.onPlayerDropped(function(src)
     for _, b in pairs(_rateBuckets) do b[src] = nil end
 end)

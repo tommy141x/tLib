@@ -1,51 +1,20 @@
 --[[
     tLib/shared/imports/lockedmodels — vehicles a server refuses to re-configure.
+    For a reference build (e.g. the two Matrix vehicles) where every OTHER
+    vehicle should stay editable; narrower than demo mode and composes with it.
 
-    Usage, in a resource's per-model save path:
+        if tlib.lockedmodels.isLocked(model) then -- keep stored, drop incoming
 
-        if tlib.lockedmodels.isLocked(model) then
-            -- keep the stored entry, drop the incoming one
-        end
+    A convar, not a data file, because it's a property of the SERVER, not the
+    build: `set tlib_locked_models "18charger21tr,fpiu21tr"`. Unset locks
+    nothing. The set is snapshotted ONCE here, never from a payload, so a
+    client cannot lock/unlock by sending a flag — changing it needs editing
+    server.cfg and a restart. (tLS's own `"locked": true` flag in
+    server/sv_configs.lua predates this and stays as-is.)
 
-     What this is for
-
-    A reference build on a public or test server. The two Matrix vehicles are
-    set up exactly as they should be demonstrated, and a visitor who drags the
-    radar off the dashboard or clears the lightbar config has broken the thing
-    everyone else came to look at. Every OTHER vehicle stays editable, which is
-    the point: this is narrower than demo mode and composes with it.
-
-     Why a convar and not a data file
-
-    Because it is a property of the SERVER, not of the build. The same tree is
-    editable on a developer machine and locked on the test box, and a convar is
-    the one piece of configuration that cannot travel inside a release -- the
-    same reasoning `demo` already states. `tlib_locked_models` unset is the
-    normal case and locks nothing, so a customer is never affected by a switch
-    they did not set.
-
-        set tlib_locked_models "18charger21tr,fpiu21tr"
-
-     The security property
-
-    The set is snapshotted ONCE, here, from the convar -- never from a payload.
-    A client cannot unlock a vehicle by sending `locked = false`, and cannot
-    lock someone else's by sending `true`. Changing the set means editing
-    server.cfg and restarting, which is the right bar for something only the
-    operator should decide. tLS reached the same conclusion independently for
-    its own `"locked": true` flag (server/sv_configs.lua), which predates this
-    and stays as it is: it is already correct and already shipped.
-
-     Name or hash
-
-    Consumers disagree about what a "model" is, and both are right for their own
-    storage. tLS keys configs by NAME (`18charger21tr`); tUnit keys elements by
-    the model HASH as a string, because that is what the client has in hand.
-    So the snapshot holds both forms and `isLocked` accepts either, rather than
-    making every caller remember which it has.
-
-    Server-only: a client's copy of this would be presentation, and a gate that
-    runs on the client is not a gate.
+    Consumers key models differently — tLS by NAME, tUnit by HASH-as-string —
+    so the snapshot holds both forms and `isLocked` accepts either.
+    Server-only: a client-side gate is not a gate.
 ]]
 
 local LockedModels = {}

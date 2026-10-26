@@ -10,25 +10,16 @@
 --   })
 --   if not ok then return end
 --
--- Why this exists: across the seven tScripts resources, a mistyped config key
--- did nothing at all, forever, without a word. Six of seven had no config
--- validation of any kind, and the ad-hoc guards that did exist substituted a
--- hardcoded fallback for whatever the owner had written -- sometimes a fallback
--- that differed from the shipped default, so the product disagreed with both
--- the file and the docs.
+-- Why this exists: a mistyped config key used to do nothing at all, forever,
+-- without a word, and the ad-hoc guards some resources had would silently
+-- substitute a hardcoded fallback that could differ from the shipped default.
 --
--- The rules it enforces come from the shared config standard these resources follow:
---   * report EVERY problem at once, never just the first
---   * every message names the file, the key, what was expected, what was found,
---     and how to fix it
---   * an unknown key warns and suggests what was probably meant
---   * a missing required value is fatal -- refuse to start rather than fail
---     later in a way that names an innocent file
---   * a rejected value is NEVER silently replaced by the default
---
--- Defaults ARE written into the table for keys the owner omitted, which is what
--- makes a config file optional. The distinction that matters: filling a gap is
--- fine, overwriting a stated intention is not.
+-- Rules enforced: report every problem at once, not just the first; every
+-- message names the file, the key, what was expected and how to fix it; an
+-- unknown key warns with a suggestion; a missing required value is fatal; a
+-- rejected value is NEVER silently replaced by the default. Defaults ARE
+-- written in for keys the owner omitted -- filling a gap is fine, overwriting
+-- a stated intention is not.
 
 local configMod = {}
 
@@ -111,22 +102,11 @@ end
 
 --- The known key an unknown one was probably meant to be, or nil.
 ---
---- Two rules, because owner mistakes come in two shapes and edit distance only
---- catches one of them:
----
----   * A slip: `detetcionRange`. Close by edit distance. Budget scales with
----     length -- "cfg" vs "cf" is a different kind of near-miss than a
----     20-character key with one letter dropped.
----   * A stale or shortened name: `detectionRnge` for `detectionRangeMeters`.
----     Edit distance 7, because the `Meters` suffix dominates, so the distance
----     rule rejects it outright. But §6 REQUIRES units in key names, which
----     means owners writing the unit-less name they remember is the typo this
----     standard actively manufactures. It is a shared-prefix mistake, so match
----     on the prefix.
----
---- A wrong suggestion is worse than none, so both rules stay conservative and
---- the prefix rule needs a substantial absolute prefix, not just a shared
---- first letter.
+--- Two rules: a slip (`detetcionRange`) is caught by edit distance, budgeted by
+--- length. A stale/shortened name (`detectionRnge` for `detectionRangeMeters`,
+--- edit distance 7) is not -- the required unit suffix dominates the distance,
+--- so that case is matched on a substantial shared prefix instead. A wrong
+--- suggestion is worse than none, so both rules stay conservative.
 local function suggest(unknown, knownKeys)
     local lowerUnknown = unknown:lower()
     local budget = math.max(2, math.floor(#unknown / 4))
@@ -313,20 +293,13 @@ end
 
 -- What the owner actually configured
 
--- Several resources deliberately use their `Config` table as the LIVE value,
--- not just the configured one -- tRadar's `Config.speedUnit` is rewritten
--- client-side when a player picks a unit, because the conversion path wants the
--- live value. That is coherent, and not a bug to fix here.
---
--- It does break one thing, though. A diagnostic that prints `Config.speedUnit`
--- after that point reports the PLAYER'S pick as though the owner had written
--- it. The owner's configured value is gone, and the one tool they would reach
--- for to check their config confidently tells them something they never wrote.
--- A wrong default is recoverable; a diagnostic that lies is not.
---
--- So validation snapshots what it saw, at the one moment it is guaranteed
--- pristine: startup, before the resource does real work. `<resource>_diag`
--- should print `tlib.config.configured()`, not the live table.
+-- Some resources deliberately use `Config` as the LIVE value, not just the
+-- configured one -- tRadar rewrites `Config.speedUnit` client-side when a
+-- player picks a unit. That's coherent, but it means a diagnostic printing
+-- `Config.speedUnit` later reports the player's pick as though the owner had
+-- written it. So validation snapshots what it saw at startup, before anything
+-- mutates it; `<resource>_diag` should print `tlib.config.configured()`, not
+-- the live table.
 local snapshots = {}
 
 --- Shallow copy. Deliberately NOT deep: the values a diagnostic prints are
@@ -394,28 +367,21 @@ end
     Is an operator-merged file older than this build expects?
 
     `check` above answers "is what the operator wrote VALID". This answers what no
-    amount of validation can reach: is their copy of a file WE ship still the
-    generation this build is written against. A merged-forward file can be
-    perfectly valid Lua and still be the wrong file.
+    validation can reach: is their copy of a file WE ship still the generation
+    this build is written against. A merged-forward file can be perfectly valid
+    Lua and still be the wrong file -- tRadio's client config has drifted this
+    way across renamed hooks (`MakeAnimHandler` -> `RadioMakeAnimHandler`,
+    `resolveSirenSystem` -> `RadioResolveSirenMode`, `_k9Hashes` -> `RadioIsK9Ped`),
+    where the hook calls a global that no longer exists, the caller pcalls it, and
+    the audio goes silent with nothing in any console.
 
-    HERE AND NOT IN EACH RESOURCE because the wording is the part worth sharing,
-    and every t* resource ships files the operator merges forward. tRadio has had
-    this on its server config since v6.3.1 and nothing on its client config, where
-    the same drift has cost two runs of tickets: `MakeAnimHandler` ->
-    `RadioMakeAnimHandler`, then `resolveSirenSystem` -> `RadioResolveSirenMode`
-    and `_k9Hashes` -> `RadioIsK9Ped`. Their hook calls a global that no longer
-    exists, the caller pcalls it, and the audio is silent with nothing in any
-    console.
-
-    THE HONEST LIMIT: it compares two numbers, one of which is in a file a human
-    edits. It cannot detect a rename, and it does not say which call broke -- the
-    caller still has to report its own hook failures. `expected` is the resource's
-    to bump, and the gate asserting the two agree has to read that resource's file
-    shapes, so it cannot live here.
-
-    `declared` goes through tonumber() and never a type test: a copy predating the
-    constant has nil, a hand-edited one may have "3", and garbage must degrade to
-    "old" rather than throw inside a startup path.
+    Shared here because the wording is the part worth sharing across every t*
+    resource that ships merge-forward files. THE HONEST LIMIT: it compares two
+    numbers, one of which is in a file a human edits -- it cannot detect a rename
+    and does not say which call broke, so the caller still reports its own hook
+    failures. `declared` goes through tonumber() and never a type test: a copy
+    predating the constant has nil, a hand-edited one may have "3", and garbage
+    must degrade to "old" rather than throw inside a startup path.
 ]]
 
 --- @param opts table
@@ -464,9 +430,9 @@ function configMod.generation(opts)
         for line in opts.detail:gmatch('[^\r\n]+') do say(line) end
     end
 
-    -- Yellow and not red, for both directions: the resource still starts, and
-    -- the operator's copy is a working copy. Printed rather than returned-only,
-    -- because the shared wording is the point of this living in tLib.
+    -- Yellow, not red: the resource still starts and the operator's copy still
+    -- works. Printed rather than returned-only, since the shared wording is the
+    -- point of this living in tLib.
     print(('^3[%s] %s^7'):format(resource, string.rep('-', 60)))
     for _, line in ipairs(verdict.lines) do
         print(('^3[%s] %s^7'):format(resource, line == '' and ' ' or line))

@@ -4,11 +4,9 @@ import Toast from "@/components/Toast";
 import LayoutEditor from "@/layout/LayoutEditor";
 import Menu from "@/menu/Menu";
 
-// Theme store initializes its NUI listeners on import
+// Side-effect import: registers theme-store's NUI listeners.
 import "@/stores/theme-store";
-// Same, but from `shared/` rather than from this app: every consumer that
-// animates anything needs the identical `setMotion` listener, and tLib's own
-// page is just the first of them.
+// Side-effect import: registers shared/motion's setMotion listener, shared by every animating consumer.
 import "@tlib/shared/motion";
 
 export default function App() {

@@ -1,64 +1,28 @@
 #!/usr/bin/env bun
 /**
- * Two contracts over a resource, both about a file that must never ship.
+ * Two contracts over a resource, both about a file that must never ship. Exit codes for
+ * both CLIs: 0 pass, 1 a finding, 2 the gate could not run (not a pass).
  *
- * ## 1. `checkStagedTree` — no runtime state in a release
+ * `checkStagedTree`: a FiveM update unzips over the live install with no merge step, so one
+ * `data.json` in the archive replaces the owner's entire saved config in one step —
+ * `data.json.bak` can't help since the replacement parses cleanly and recovery only fires
+ * on a file that doesn't. This happened: tRadio shipped one, replacing every zone, codeplug,
+ * alert, tower and tone mapping plus `settings.generatedAdminPassword` — the developer's own
+ * admin-panel password, handed to every customer. Five of seven data-file resources already
+ * exclude it three different ways (tLS/tAFK allowlist, tCAD named forbidden list, tRadio's
+ * `assertNoRuntimeStateStaged`); this generalises tRadio's and asserts the built artifact, so
+ * a post-staging copy can't sail past a staging-time check. Matched by basename at any
+ * depth: tCAD's temp file is `data.json.tmp-<pid>`, so a bare `data.json.tmp` pattern matches
+ * nothing real (measured with `git check-ignore -v`), and `data.json` isn't always at the root.
  *
- * A FiveM resource is updated by extracting the new zip OVER the live install.
- * There is no installer, no merge step and no prompt. So one `data.json` in the
- * archive replaces the owner's entire saved configuration in a single step, and
- * `data.json.bak` cannot help, because the replacement parses cleanly and every
- * recovery path in this estate only fires on a file that does NOT parse.
- *
- * This has happened. tRadio shipped one, and `shared/data_defaults.lua` records
- * both halves of the damage: every zone, codeplug, alert, tower, speaker,
- * geo-zone, placed prop and tone mapping replaced, plus
- * `settings.generatedAdminPassword` — the developer's own working admin-panel
- * password — handed to every customer.
- *
- * Five of the seven resources with a data file already exclude it, and three
- * different ways: tLS and tAFK by an INCLUDE allowlist, tCAD by a named
- * forbidden list with a reason per entry, tRadio by `assertNoRuntimeStateStaged`.
- * tRadio's is the one worth generalising and its own docstring says why — the
- * other two are tests of the POLICY, and the zip is built by walking the
- * finished tree, so anything that puts a copy there AFTER staging (a re-added
- * EXTRA_FILES entry, a post-staging step, a hand-copied file) sails past them.
- * This asserts the artifact.
- *
- * Matched by BASENAME at any depth, not just at the staged root. tCAD's
- * `.gitignore` already found the sharp edge: the temp file is
- * `data.json.tmp-<pid>`, so the bare `data.json.tmp` that preceded it matched
- * nothing that is ever created — MEASURED with `git check-ignore -v`. Depth
- * matters for the same reason: `data.json` is written next to whichever file the
- * resource points its writer at, which is not always the root.
- *
- * ## 2. `checkDeclaredModules` — `tlib_modules` is an honest inventory
- *
- * `tlib_modules` in a consumer's fxmanifest only makes a load EAGER; `tlib.<x>`
- * would lazy-load either way. It matters anyway, for a reason every manifest in
- * the estate writes out: tLib's `imports.lua` answers an unknown module name
- * with a truthy export PROXY rather than nil, so an absent module is not caught
- * by any `if tlib.x` guard — the first index throws "attempt to index a function
- * value" halfway down a script and takes the whole file with it.
- *
- * And `imports.lua`'s eager loop is worse than that: `loadModule` returns nil
- * for a name that resolves to no file, with **no error**. A typo in
- * `tlib_modules` is therefore completely silent — it is not a failed load, it is
- * not a load at all.
- *
- * ### What this does NOT check, and why — read before adding it
- *
- * **The undeclared direction.** `tlib.<name>` used without declaring it is NOT a
- * bug: lazy loading is legal and is what most consumers rely on. It is only a
- * bug when the use is at FILE SCOPE, because then the chunk runs before any
- * lazy load could happen. Deciding "is this reference at file scope" needs a Lua
- * parser, and this gate has a regex. A rule that flagged every undeclared use
- * would be wrong about the majority of them, and a gate that is usually wrong is
- * a gate everyone learns to skip — so there is no rule here rather than a noisy
- * one. Stated, not silently omitted.
- *
- * Exit codes for both CLIs: 0 pass, 1 a finding, 2 the gate could not run.
- * Exit 2 is NOT a pass.
+ * `checkDeclaredModules`: `tlib_modules` only makes a load eager, but matters because tLib's
+ * `imports.lua` answers an unknown module with a truthy export proxy, not nil — an undeclared
+ * module isn't caught by `if tlib.x`, it throws "attempt to index a function value" partway
+ * through a script. Worse, the eager loop's `loadModule` returns nil with no error for a name
+ * resolving to no file, so a typo in `tlib_modules` is silent. Does NOT flag `tlib.<name>`
+ * used without declaring it — legal lazy-loading, and only a bug at file scope (runs before
+ * any lazy load could happen), which needs a Lua parser to detect and this gate has a regex;
+ * a rule wrong about most uses teaches everyone to skip it.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -72,19 +36,12 @@ export interface RuntimeStateFinding {
   file: string;
   detail: string;
   /**
-   * Reported, but does not fail the gate unless `--strict`.
-   *
-   * Exactly one rule is soft — `R-MODULE-UNUSED` — and it is soft because it
-   * cannot distinguish a stale declaration from a legitimate one. A consumer may
-   * declare a module it never names itself, because a tLib module it DOES use
-   * needs that one loaded eagerly: tDetector declares `assets` and never calls
-   * `tlib.assets`, but `soundstore` calls `tlib.assets.reconcile` at boot.
-   * MEASURED across the eight resources here: 1 ghost-free, 4 unused, and at
-   * least one of the four is that pattern rather than a mistake.
-   *
-   * Hard-failing it would make the gate wrong about a quarter of what it says,
-   * and a gate that is often wrong is one everybody learns to pass with a skip
-   * flag. Everything else here is provable and fails.
+   * Reported, but fails the gate only with `--strict`. Exactly one rule is soft —
+   * `R-MODULE-UNUSED` — because it can't tell a stale declaration from a legitimate one: a
+   * consumer may declare a module it never names itself because a module it DOES use needs
+   * it loaded eagerly (tDetector declares `assets`, never calls it, but `soundstore` calls
+   * `tlib.assets.reconcile` at boot). Across the eight resources here: 1 ghost-free, 4
+   * unused, at least one of those four this pattern rather than a mistake.
    */
   soft?: boolean;
 }
@@ -97,12 +54,9 @@ export function failing(findings: RuntimeStateFinding[], strict = false): Runtim
 // 1. The staged tree
 
 /**
- * Basenames a release may never contain, with the reason travelling with the
- * rule. tCAD does this and it is right: "Staged tree contains data.json" on its
- * own tells whoever hits it nothing about why it matters.
- *
- * Patterns, not literals, because three of the five names carry a suffix that is
- * generated at runtime — a pid, a unix timestamp, a schema version.
+ * Basenames a release may never contain, with the reason travelling with the rule — "Staged
+ * tree contains data.json" alone tells whoever hits it nothing. Patterns, not literals:
+ * three of the five names carry a runtime-generated suffix (pid, unix timestamp, schema version).
  */
 export const FORBIDDEN_RUNTIME_STATE: Array<{ rule: string; match: RegExp; why: string }> = [
   {
@@ -148,15 +102,9 @@ export const FORBIDDEN_RUNTIME_STATE: Array<{ rule: string; match: RegExp; why: 
       "default is off and a stored `true` would silently opt an install in. It is written " +
       "beside the resource at runtime; a new install correctly has none.",
   },
-  // `R-TELEMETRY-INSTALL-ID` (`/^telemetry-install-id\.txt$/`) WAS HERE AND IS
-  // DELETED, not disabled. The per-install id moved inside tLib's own
-  // `data.json` (see `shared/ts/install-id.ts`), so `R-DATA-FILE` above already
-  // covers it — by BASENAME AT ANY DEPTH, which
-  // `runtime-state-contract-control.ts` asserts with a `server/storage/data.json`
-  // fixture — and for a strictly stronger reason: that rule exists because the
-  // document has shipped a real admin password. There is no location the id can
-  // now reach that `R-DATA-FILE` does not match, so a second rule would have
-  // been a rule with no fixture that could ever go red.
+  // `R-TELEMETRY-INSTALL-ID` was deleted, not disabled: the per-install id moved into tLib's
+  // own `data.json` (`shared/ts/install-id.ts`), already covered by `R-DATA-FILE` above at
+  // any depth — a second rule here could never go red.
   {
     rule: "R-DATA-CORRUPT",
     match: /^data\.json\.corrupt\..*$/,
@@ -227,11 +175,9 @@ export function checkStagedTree(options: StagedTreeOptions): StagedTreeResult {
     }
   }
 
-  // The floors. Without these the gate passes PERFECTLY on an empty
-  // directory, and "no data.json in the staged tree" and "no staged tree" are
-  // otherwise the same green. This is not hypothetical for this check: it is
-  // pointed at a build output directory, and a build that failed early, a
-  // cleaned `.build/`, or a path typo all produce exactly that shape.
+  // Without these floors the gate passes perfectly on an empty directory, and "no
+  // data.json" and "no staged tree" read as the same green — a failed build, a cleaned
+  // `.build/`, or a path typo all produce exactly that shape.
   if (files.length < minFiles && !skip.includes("R-FILE-FLOOR")) {
     findings.push({
       rule: "R-FILE-FLOOR",
@@ -243,10 +189,8 @@ export function checkStagedTree(options: StagedTreeOptions): StagedTreeResult {
     });
   }
 
-  // A second, independent witness, in the sense of the web-perf playbook §1.5:
-  // it can only be produced by the thing under test having actually run. Every
-  // staged FiveM resource has an fxmanifest at its root; a tree without one is
-  // not a staged resource, however many files it happens to contain.
+  // A second, independent witness: every staged FiveM resource has an fxmanifest at its
+  // root, so a tree without one isn't a staged resource, however many files it contains.
   if (!sawManifest && !skip.includes("R-MANIFEST-FLOOR")) {
     findings.push({
       rule: "R-MANIFEST-FLOOR",
@@ -378,10 +322,8 @@ export function checkDeclaredModules(options: DeclaredModulesOptions): DeclaredM
       continue;
     }
 
-    // Declared and present. Is it referenced at all? The manifests state the
-    // goal themselves -- "the manifest is an honest inventory of what this
-    // resource uses" -- and a stale entry costs an eager load of a module
-    // nobody calls, in a chain where load order is already load-bearing.
+    // Declared and present — is it referenced? A stale entry costs an eager load of a
+    // module nobody calls, in a chain where load order is already load-bearing.
     const used = new RegExp(
       `\\btlib\\s*[.:]\\s*${name}\\b|tlib\\.has\\s*\\(\\s*['"]${name}['"]`
     ).test(source);
@@ -438,13 +380,8 @@ export function formatFindings(
   return lines.join("\n");
 }
 
-// CLI
-//
-//   bun runtime-state-contract.ts --dist <staged tree>
-//   bun runtime-state-contract.ts --root <resource> --tlib <tLib root>
-//
-// Either or both. Runnable by path, so it needs no package.json entry to be
-// usable from a prod.ts that imports the functions directly instead.
+// CLI: `bun runtime-state-contract.ts --dist <staged tree>` and/or `--root <resource> --tlib
+// <tLib root>`. Runnable by path, so it needs no package.json entry.
 
 if (import.meta.main) {
   const argv = process.argv.slice(2);

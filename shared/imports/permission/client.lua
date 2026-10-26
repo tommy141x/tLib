@@ -7,71 +7,32 @@
 
         if tlib.permission.isAdmin() then addAdminTab() end
 
-     What this replaces
+    Replaces the same six-line `tLib:receiveAdminPermission` handler
+    duplicated in tLS, tRadar and tDetector; tAFK had none, so revoking a
+    player's `tlib.admin` mid-session left its /tafk panel drawing the admin
+    section for the rest of it.
 
-    Three resources carried the SAME six lines, byte for byte, and a fourth
-    forgot them:
+    The wire event name appears exactly once below and must never appear in
+    a consumer again — that's what lets it be renamed later as an internal
+    edit. Callers see only `onChange`, `isAdmin`, `level`, `refresh`.
 
-        RegisterNetEvent("tLib:receiveAdminPermission")
-        AddEventHandler("tLib:receiveAdminPermission", function(result)
-            if source ~= 65535 then return end
-            local level = type(result) == "number" and result or (result == true and 1 or 0)
-            isAdmin = level >= 1
-        end)
+    Seeded from tLib's own client cache (`GetPermissionLevel`, pcall'd since
+    it crosses a resource boundary at load scope) because tLib's client asks
+    the server only once, at its own resource start — a consumer loading
+    later would otherwise report 0 until something re-asks. If the seed
+    can't be read, this asks the server directly instead of assuming 0.
 
-    tLS/client/cl_lights.lua, tRadar/client/cl_hud.lua and
-    tDetector/client/cl_hud.lua each had it. tAFK had none, so revoking a
-    player's `tlib.admin` on a running server left their /tafk panel drawing the
-    admin section for the rest of the session — the panel lying about what the
-    player could do. A copy nobody can forget is the whole point.
+    Accepts only a number; anything else (including a boolean, which old
+    senders used) reads as level 0 — the same answer a spoofed payload gets.
 
-     The wire event is NOT part of this interface
+    Answers about THIS player, no argument — the server half
+    (`shared/imports/permission/server.lua`) answers about a given player.
+    Same asymmetry as `access`, same reason: only one player on this side.
 
-     `tLib:receiveAdminPermission` appears exactly once below and must never
-    appear in a consumer again. Those three copies are the only thing blocking
-    the rename to `tlib:permission:receive`: once the only files naming it are
-    tLib's own (client/cl_permission.lua, server/sv_permission.lua) and this
-    module, the rename is an internal edit. Callers see `onChange`, `isAdmin`,
-    `level` and `refresh`, and nothing about how the answer arrives.
-
-     Why there is a seed and not just a handler
-
-    tLib's server sends this only in answer to `requestAdminPermission`, and
-    tLib's own client asks once, at ITS resource start. A consumer that starts
-    later — or this module loading lazily on a consumer's first `onChange` —
-    has already missed that reply, and a handler alone would then report 0 until
-    something happened to re-ask. So the level is seeded from tLib's own client
-    cache via `GetPermissionLevel`, which is the same number the reply carries.
-
-    The export call is pcall'd because it crosses a resource boundary at load
-    scope. `dependency 'tLib'` makes that ordering normal rather than
-    guaranteed, and an uncaught error here would abort the consumer's whole file
-    — the failure tRadar and tDetector both document at the top of their
-    cl_hud.lua, where neither surface then initialises and nothing in the log
-    connects the two. If the seed cannot be read, this asks the server itself
-    rather than reporting a confident 0.
-
-     A number, and only a number
-
-    The three copies all accepted a boolean as well, labelled "old servers sent
-    a boolean", and so did tLib's own cl_permission.lua until 2026-10-12. All of
-    them are gone: tLib's client and server ship in one resource and cannot
-    disagree about the shape, and every tagged release v0.1..v0.6 sends
-    Permission.getPlayerLevel, which has always returned a number. Anything that
-    is not a number is level 0 — which is also the right answer for a spoofed
-    payload.
-
-     Not the same interface as the server half
-
-    `shared/imports/permission/server.lua` answers ABOUT a player —
-    `tlib.permission.isAdmin(src)`. This one answers about THIS player and takes
-    no argument. Same asymmetry `access` has between its two halves, and for the
-    same reason: there is only one player on this side.
-
-     And the same warning applies. This is a cached copy of a decision the
-    server made, living in a process the player controls. It answers "should I
-    draw the admin tab?" and never "may this player do the thing". Every
-    privileged net event still re-resolves the ace server-side.
+    This is a cached copy of a server decision, living in a process the
+    player controls. It answers "should I draw the admin tab?", never "may
+    this player do the thing" — every privileged net event still re-resolves
+    the ace server-side.
 ]]
 
 local Permission = {}

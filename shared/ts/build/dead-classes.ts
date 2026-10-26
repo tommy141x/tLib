@@ -9,16 +9,12 @@ import {
 } from "./css-contract.ts";
 
 /**
- * Finds utility class names that generate no CSS at all.
- *
- * UnoCSS has no failure mode for a class it does not recognise — it emits
- * nothing, so a typo or a wrong-preset spelling looks normal in source and does
- * nothing in the browser. Measured: `bg-linear-to-r` (Wind4-only) left tLib's
- * colour-picker hue track with no gradient, and 271 Tailwind-v4 spellings across
- * the four Wind4 projects meant no form primitive had invalid-state styling.
- *
- * Class names are read out of the project's own CSS rather than from a hand-kept
- * allowlist, which is the part that always goes stale.
+ * Finds utility class names that generate no CSS. UnoCSS has no failure mode for an
+ * unrecognised class — it emits nothing, so a typo or wrong-preset spelling looks normal
+ * in source and does nothing in the browser (`bg-linear-to-r`, Wind4-only, left tLib's
+ * colour-picker hue track with no gradient; 271 Tailwind-v4 spellings across the Wind4
+ * projects left no form primitive with invalid-state styling). Class names come from the
+ * project's own CSS, not a hand-kept allowlist, which always goes stale.
  */
 export interface DeadClassOptions {
   /**

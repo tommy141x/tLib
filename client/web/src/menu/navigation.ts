@@ -182,15 +182,11 @@ export function filterItems<T extends MenuItem>(items: readonly T[], query: stri
   );
 }
 
-// Recursive search. filterItems above only sees the page the player is standing
-// on, because a snapshot carries items for one menu; the catalog index closes that
-// gap, so searching from a page searches everything beneath it too. Results
-// navigate rather than dispatch -- validAction pins a request to the page on
-// screen, so a row elsewhere cannot be actioned from here anyway.
-//
-// Every string carried out is raw, as the wire sent it. FormattedText runs t()
-// over whatever it is handed, so a pre-translated hit would be looked up twice.
-// Matching still happens against the translated form.
+// Recursive search: filterItems above only sees the page the player is on (a snapshot
+// carries one menu's items); the catalog index searches everything beneath it too. Results
+// navigate rather than dispatch, since validAction pins a request to the page on screen.
+// Strings carried out stay raw — FormattedText runs t() on them, so a pre-translated hit
+// would be looked up twice — but matching itself happens against the translated form.
 export interface SearchHit {
   menuId: string;
   itemId: string;

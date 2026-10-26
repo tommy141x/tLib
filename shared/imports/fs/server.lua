@@ -5,43 +5,27 @@
 --
 -- Server-only: it writes a resource file, which does not work from a client VM.
 --
--- Why this exists
+-- On Enhanced, `SaveResourceFile` returns false for some resources while
+-- Node's `fs` writes the identical path successfully (cause unknown; the
+-- workaround is proven). tRadio, tLS and tDetector each shipped their own
+-- Node bridge for this before it became a tLib module.
 --
--- On Enhanced, `SaveResourceFile` returns false for some resources while Node's
--- `fs` writes the identical path successfully. The cause is still unknown; the
--- workaround is proven. tRadio hit it first, then tLS, then tDetector — and
--- each one shipped its own Node bridge for it, which is why this is a tLib
--- module rather than a fourth copy.
+-- The bridge is the CALLING resource's own export (`exports[resource]:WriteResourceFile`),
+-- registered by `registerWriteResourceFile()` from tLib/shared/ts/fs/server.ts
+-- in each resource's own bundle. It used to be one central `exports.tLib:...`
+-- bridge; that failed because FiveM's Node runtime sandboxes each resource to
+-- its own directory, so tLib writing into tDetector's folder was refused with
+-- "Access to this API has been restricted. Use --allow-fs-write" (a server
+-- startup argument, not a manifest key) -- so the write has to originate
+-- inside the resource it lands in. A consumer must therefore register the
+-- export in its own server/main.ts, or the error below names that.
 --
--- The bridge is the CALLING resource's own export
+-- Untreated the failure is silent and total: the file never changes, every
+-- saved setting is gone on restart, and the caller still logs "Saved". Do not
+-- drop the returned `err` on the floor.
 --
--- The Node half is `WriteResourceFile`, registered by
--- `registerWriteResourceFile()` from tLib/shared/ts/fs/server.ts. The
--- implementation is shared at BUILD time and every resource registers it in its
--- own server bundle, so this looks it up on the LOCAL resource:
--- `exports[GetCurrentResourceName()]`.
---
--- It used to call `exports.tLib:WriteResourceFile(...)` — one central bridge.
--- That cannot work: FiveM's Node runtime sandboxes each resource to its own
--- directory, so tLib writing into tDetector's folder was refused outright with
--- "Access to this API has been restricted. Use --allow-fs-write". That flag is a
--- server STARTUP ARGUMENT, not a manifest key, so the only fix available to a
--- shipped product is for the write to originate inside the resource it lands in.
---
--- The consequence for a consumer: a resource that calls this must register the
--- export in its own server/main.ts. If it has not, the error below says so by
--- name rather than leaving a silent no-op.
---
--- Untreated the failure is silent and total: the file never changes and every
--- setting the customer saves is gone on restart, while the code that asked for
--- the write logs a cheerful "Saved". Do not drop the returned `err` on the
--- floor; that silence is the whole bug.
---
--- Legacy safety
---
--- The native is tried FIRST and the bridge is consulted only when it fails, so
--- Legacy behaviour is byte-for-byte unchanged and the bridge is never reached
--- there.
+-- The native is tried first and the bridge consulted only when it fails, so
+-- Legacy behaviour is unchanged and never reaches the bridge.
 
 local fs = {}
 
@@ -72,16 +56,11 @@ local nativeWriteUsable = {}
 function fs.writeResourceFile(relPath, contents, resource, log)
     resource = resource or GetCurrentResourceName()
 
-    -- Demo mode: the write is dropped and reported as a success. The caller's
-    -- in-memory state is already the live answer for the rest of this resource's
-    -- lifetime, and the file on disk stays exactly as it shipped, which is what
-    -- makes the next start pristine.
-    --
-    -- `true`, not an error, is deliberate. Every caller of this treats a failure
-    -- as data loss and says so to the player -- correctly, because normally it
-    -- is. On a demo server the save did precisely what was asked of it, so
-    -- failing it would put a red toast behind every settings change and make a
-    -- working demo look broken. The console says once per target what happened.
+    -- Demo mode: the write is dropped and reported as a success, so the file on
+    -- disk stays pristine for the next start while the caller's in-memory state
+    -- is already the live answer. Reporting `true` is deliberate -- every other
+    -- caller treats a failure as data loss and tells the player so, which would
+    -- put a red toast behind every settings change on an otherwise-working demo.
     if tlib.demo.dropWrite(('%s/%s'):format(resource, relPath)) then return true end
 
     if nativeWriteUsable[resource] ~= false then

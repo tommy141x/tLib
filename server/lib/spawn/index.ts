@@ -41,10 +41,10 @@ const probes: Probes = {
   },
   sha256: (target) => crypto.createHash("sha256").update(fs.readFileSync(target)).digest("hex"),
   authors: resourceAuthors,
-  // The one place the real platform is read; everything downstream takes it as an
-  // argument, which is what lets the gate's suite run under both shapes. Anything
-  // that is not Windows is treated as Linux -- a third platform has no binaries
-  // in any catalog entry and fails at "not present inside <resource>".
+  // The one place the real platform is read; downstream takes it as an
+  // argument, letting the gate's suite run under both shapes. Non-Windows is
+  // treated as Linux — a third platform has no binaries in any catalog entry
+  // and fails at "not present inside <resource>".
   platform: () => (process.platform === "win32" ? "win32" : "linux") as Platform,
   join: (...parts) => path.join(...parts),
   resolve: (...parts) => path.resolve(...parts),
@@ -77,28 +77,18 @@ function announce(resource: string, plan: Resolved | Refusal, what: string): voi
   }
   if (plan.authorWarning) console.log(`[tLib] spawn: ${plan.authorWarning}`);
 
-  // Once per (resource, program), not per invocation: tDB runs the same binary
-  // four times at boot -- update, superuser upsert, migrate, serve -- and the
-  // fourth copy of a sentence does not make it louder.
-  //
-  // Keyed on the PROGRAM, not the arguments, so a second program or a second
-  // resource is still a new fact and still announces. The refusal branch above
-  // is never deduplicated.
+  // Once per (resource, program), keyed on the program not the arguments: tDB
+  // runs the same binary four times at boot (update, superuser upsert,
+  // migrate, serve) and a fourth copy of the sentence adds nothing. The
+  // refusal branch above is never deduplicated.
   const key = `${resource}\u0000${plan.program}`;
   if (announced.has(key)) return;
   announced.add(key);
 
-  // Still says yes, once, per the contract above -- but WITHOUT the argument
-  // list and the absolute cwd. Those made each line ~200 characters, and tDB
-  // alone spawns four times at boot (update, superuser upsert, migrate, serve),
-  // so the single noisiest thing in a startup log was tLib narrating its own
-  // plumbing in full. The program and the resource are what an operator needs
-  // to see; the arguments are a debugging detail, and `plan` is already
+  // Without the argument list and absolute cwd — those pushed each line to
+  // ~200 chars and made tDB's four boot-time spawns the noisiest thing in the
+  // log. Program + resource is what an operator needs; `plan` is already
   // reachable from the gate's own tests and docs/internal/spawn-gate.md.
-  //
-  // The REFUSAL branch above is deliberately untouched and stays verbatim.
-  // A refusal that is quiet reads as "the feature just does not work", which is
-  // the exact failure this function's docstring exists to prevent.
   console.log(`[tLib] spawn: ${resource} → ${plan.program}`);
 }
 
@@ -121,18 +111,12 @@ function guarded(name: string, fn: (...args: unknown[]) => string): (...args: un
 }
 
 export function installSpawn(): void {
-  // The allowlist is hardcoded, so server.cfg no longer tells an operator who
-  // may spawn. This is still where they find out -- but it is now a ROW IN
-  // tLib'S BANNER rather than a separate line above it, because it is a static
-  // startup fact and that is what the banner is for. The intent is unchanged:
-  // the catalogue has to be visible somewhere an operator will actually look.
+  // The allowlist is hardcoded, so this row in tLib's startup banner is now
+  // the operator's only visibility into who may spawn.
   //
-  // DEFERRED BY A TICK, and it does not work without that. `installSpawn()`
-  // runs while this bundle is loading, which is BEFORE sv_main.lua calls the
-  // version check and subscribes to this event -- so emitting inline fired it
-  // into nothing and the row silently never appeared. Measured: the `Hub:` row
-  // landed and `Spawns:` did not, because the hub becomes ready later and this
-  // is known immediately. Being early is what broke it.
+  // Deferred by a tick: `installSpawn()` runs while this bundle is loading,
+  // before sv_main.lua subscribes to this event. Emitting inline fires into
+  // nothing and the row never appears.
   setTimeout(() => {
     fEmit(
       "tlib:vcInfo:spawns",
@@ -211,29 +195,22 @@ export function installSpawn(): void {
     guarded("SpawnList", (): string => JSON.stringify(host.list()))
   );
 
-  // Reaping
-  //
-  // The feature, not an afterthought. See host.ts: a child started here belongs
-  // to tLib's VM and will not die with its owner unless this fires.
+  // Reaping: see host.ts — a child started here belongs to tLib's VM and will
+  // not die with its owner unless this fires.
   fOn("onResourceStop", (resource: unknown) => {
     if (typeof resource !== "string") return;
     if (resource === currentResource()) {
-      // tLib going down. Everything it is holding open on someone else's behalf
+      // tLib going down: everything it holds open on someone else's behalf
       // goes with it, or the restart finds its own ports held by its children.
       const killed = host.killEverything();
       if (killed > 0) console.log(`[tLib] spawn: stopped ${killed} process(es) on shutdown`);
       return;
     }
-    // Forget what was announced for it, or the dedupe above makes every spawn
-    // after a resource's first restart silent for the rest of tLib's life --
-    // a quiet grant being the thing announce() exists to prevent.
+    // Forget what was announced, or the dedupe above silences every spawn
+    // after this resource's first restart for the rest of tLib's life.
     for (const key of announced) {
       if (key.startsWith(`${resource}\u0000`)) announced.delete(key);
     }
-
-    // Silent. Reaping a stopped resource's children is bookkeeping that always
-    // happens; tLib's OWN shutdown above still says so, because there the
-    // children outliving it is the failure this exists to prevent.
     host.killAll(resource);
   });
 }

@@ -10,8 +10,6 @@
 
 local function fail(message) error(message, 2) end
 
--- Host stubs
-
 local now = 0
 function GetGameTimer() return now end
 
@@ -31,8 +29,6 @@ end
 
 local RateLimit = dofile('shared/imports/ratelimit/server.lua')
 
--- A floor on the interval, per player
-
 local gate = RateLimit.bucket('requestVehicleProps', 1000)
 
 now = 5000
@@ -51,8 +47,6 @@ if gate(1) then fail('a call exactly at the interval was refused') end
 -- caller's own `if not src` guard is what rejects those, and answering `true`
 -- here would make an absent source look like a flood.
 if gate(nil) then fail('a nil source was reported as rate limited') end
-
--- Two buckets are independent
 
 local other = RateLimit.bucket('requestOpenSettings', 1000)
 now = 6000
@@ -149,10 +143,8 @@ if pcall(RateLimit.bucket, nil, 1000) then fail('a nil bucket name was accepted'
 if pcall(RateLimit.bucket, 'x', nil) then fail('a nil interval was accepted') end
 if pcall(RateLimit.bucket, 'x', -1) then fail('a negative interval was accepted') end
 
--- NEGATIVE CONTROLS
---
 -- Two sweeps that are wrong in ways nothing raises about, asserted to be caught
--- by the scenarios above. Reported BY NAME, never by count: the point of a
+-- by the scenarios above. Reported by name, never by count: the point of a
 -- control is to say which rule is doing the catching, and a total goes stale.
 
 local controls = {}

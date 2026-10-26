@@ -45,11 +45,9 @@ import {
   isInstallId,
   mintInstallId,
 } from "../../shared/ts/install-id";
-// `telemetry/fivem.ts` rather than one of the other three copies, because it
-// is the only one that resolves its globals LAZILY — its own header explains
-// why, and the reason applies verbatim here: this module is reachable from the
-// header builders before `onResourceStart`, so a handle captured at module
-// scope makes "has the host installed its globals" a load-order question.
+// `telemetry/fivem.ts`, not one of the other three copies: it's the one that
+// resolves globals lazily, needed since this module is reachable from the
+// header builders before `onResourceStart`.
 import { fGetCurrentResourceName, fGetResourcePath } from "./telemetry/fivem";
 
 /** Memoised after the first successful resolve. `""` is never cached. */

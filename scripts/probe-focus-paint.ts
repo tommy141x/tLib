@@ -1,56 +1,28 @@
 /**
- * Does the focus indicator actually PAINT PIXELS?
+ * Does the focus indicator actually PAINT PIXELS? `bun run probe:focus`
  *
- *   bun run probe:focus
+ * The shared kit draws focus as a negative-offset `outline`, not a `ring-*`:
+ * `ring-*` compiles to an outward `box-shadow` under presetWind3, which an
+ * `overflow: hidden` ancestor clips to nothing, while an inward outline
+ * survives. Everything here reads the SHIPPED artefacts: the real built CSS
+ * per bundle (exits 1 if unbuilt), class strings asserted verbatim against
+ * their component source, focus reached via a real CDP Tab keypress (not
+ * `.focus()`, which Chromium's `:focus-visible` heuristic ignores on a
+ * button), and the verdict is a pixel count off `Page.captureScreenshot` in
+ * the pinned Chromium 103 CEF actually runs -- not `getComputedStyle`, which
+ * only proves the cascade resolved.
  *
- * The shared kit draws focus as an `outline`, not as a `ring-*`. That decision
- * rests on one measurement, and this is the thing that takes it: `ring-*`
- * compiles to a `box-shadow` under presetWind3, and a box-shadow painted
- * OUTWARD from an element that fills an `overflow: hidden` ancestor is clipped
- * to nothing. An `outline` at a NEGATIVE offset is drawn inside the box and
- * survives.
+ * Each case is measured off vs on; the verdict is the delta, so a
+ * pre-existing border can't fake a pass. Two per-case negative controls must
+ * paint 0: `ring` (the box-shadow a ring compiles to, inline) proves the
+ * clipper clips; `outward` (same outline, positive offset) isolates the
+ * negative offset as what matters. tUnit was missing from the case table
+ * until 2026-10-07, which is how two live `focus-visible:outline-ring`
+ * deletions shipped there unnoticed -- every consumer must be listed.
  *
- * Everything here is read off the SHIPPED artefacts, so it cannot drift into
- * agreeing with itself:
- *
- *   - the stylesheet is each bundle's real built CSS, not a stylesheet this file
- *     writes. If a bundle has not been built, this exits 1 rather than
- *     measuring nothing;
- *   - every class string is asserted to appear VERBATIM in the real component
- *     source named beside it, so a source edit that changes the spelling fails
- *     this probe instead of leaving it measuring a string nobody ships;
- *   - focus is reached with a real Tab key through CDP's input domain, not with
- *     `el.focus()`. That matters: Chromium's `:focus-visible` heuristic does not
- *     match a programmatic focus on a button, so a probe that called `.focus()`
- *     would measure zero and read exactly like a broken indicator;
- *   - the verdict is a pixel count off `Page.captureScreenshot`, in the pinned
- *     Chromium 103 that CEF actually is -- not `getComputedStyle`. A computed
- *     `outline-color` proves the cascade resolved, which is the half that was
- *     never in doubt.
- *
- * Each case is measured TWICE, indicator off and indicator on, and the verdict
- * is the DELTA. An absolute count would be satisfied by a border that was
- * already there.
- *
- * Two negative controls run per bundle, and they are the reason this is evidence
- * rather than a demonstration:
- *
- *   `ring`    the same geometry with the `box-shadow` that `ring-2 ring-ring`
- *             compiled to, applied inline. REQUIRED to paint 0. If this ever
- *             paints, the clipper is not clipping and every pass here is void.
- *   `outward` the shipped spelling with `outline-offset` forced positive.
- *             REQUIRED to paint 0. This is what isolates the negative offset as
- *             the load-bearing part, rather than "an outline" in general.
- *
- * Every consumer of the kit must be listed in the case table. tUnit was the one
- * that was not, which is how two live `focus-visible:outline-ring` deletions
- * shipped in it unnoticed.
- *
- * NOT in `verify`, for two reasons: it needs tLS, tAFK, tCAD, tUnit and
- * tRadio/server BUILT first and `verify` does not build them, and
- * `shared/ts/build/nui-chromium.ts` is Windows-only (a `Win_x64` snapshot,
- * `chrome-win/chrome.exe`, `powershell Expand-Archive`) while `verify` must run
- * on Linux. `probe:preview` is out for that second reason too.
+ * Not in `verify`: needs tLS/tAFK/tCAD/tUnit/tRadio-server built first, and
+ * `shared/ts/build/nui-chromium.ts` is Windows-only, while `verify` runs on
+ * Linux. `probe:preview` is excluded for the same Windows-only reason.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -63,54 +35,30 @@ const TSCRIPTS = resolve(import.meta.dir, "../..");
 type Ink = "accent" | "white";
 
 interface Case {
-  /** Reported name. */
   readonly name: string;
-  /** The real component source the class string is lifted from, asserted verbatim. */
+  /** Real component source the class string is lifted from, asserted verbatim. */
   readonly source: string;
-  /** The class string under test, exactly as that source spells it. */
   readonly classes: string;
   /**
-   * How the indicator is turned on.
-   *   `tab`    a real Tab keypress lands focus on the target
-   *   `tab-in` a real Tab keypress lands focus on a CHILD (for focus-within)
-   *   `attr`   zag's mirrored attribute is set, which is what Ark does
-   *   `static` the class string is not conditional on focus at all
+   * How the indicator is turned on: `tab`/`tab-in` a real Tab keypress lands
+   * on the target or (for focus-within) a CHILD; `attr` sets zag's mirrored
+   * attribute, as Ark does; `static` is not focus-conditional at all.
    */
   readonly trigger: "tab" | "tab-in" | "attr" | "static";
-  /** `input` where the real element is a text field, else `button`/`div`. */
   readonly tag: "button" | "input" | "div";
   /**
-   * Mount the target with `tabindex="0"`, because the real element has it.
-   *
-   * NOT A CONVENIENCE. A `div` is not focusable, so a `tab` trigger on one
-   * lands the Tab somewhere else entirely and the case measures zero -- which
-   * reads exactly like a broken indicator rather than like a mis-specified
-   * probe. tUnit's `ElementList` row is a real `role="option"` div carrying
-   * `tabindex={0}` and its OWN `focus-visible:` utilities, so it is genuinely a
-   * keyboard-focusable div and must be mounted as one. The `tab-in` trigger is
-   * not the same thing: that is for `focus-within`, where the focus lands on a
-   * CHILD and the parent never receives it.
+   * Mount with `tabindex="0"` because the real element has it -- a plain
+   * `div` isn't focusable, so `tab` lands elsewhere and measures a false 0.
+   * tUnit's `ElementList` row is a real `role="option"` div with its own
+   * `tabindex={0}` and `focus-visible:` utilities.
    */
   readonly focusable?: boolean;
   /**
-   * Skip the `outward` negative control for this case, because its premise does
-   * not hold here.
-   *
-   * NOT A TOLERANCE, and not a way to quiet a control that is telling you
-   * something. `outward` forces `outline-offset` positive and REQUIRES 0 ink,
-   * which isolates the negative offset as the load-bearing part. That is only
-   * true when the target is flush with the `overflow: hidden` clipper on all four
-   * sides -- which every case mounting a bare element with no intrinsic box is.
-   *
-   * `.prop-input` is not: it sets its own `padding: 6px 9px` and takes its
-   * intrinsic input height, so its top and bottom edges sit INSIDE the clipper
-   * and an outline 2px outward of them is not clipped at all. Measured: 12 px of
-   * ink. For that element the negative offset genuinely is not what makes the
-   * affordance visible -- its own box is -- so asserting 0 here would be
-   * asserting something false about the geometry.
-   *
-   * The `ring` control still runs, and it is the one that proves the clipper is
-   * clipping at all.
+   * Skip the `outward` control (which requires 0 ink at a positive offset)
+   * when the target isn't flush with the clipper on all sides. `.prop-input`'s
+   * own padding keeps its edges inside the clipper, so a positive offset there
+   * measured 12px of real ink -- a true 0 could not be asserted. `ring` still
+   * runs for that case.
    */
   readonly skipOutwardControl?: boolean;
   readonly ink: Ink;
@@ -162,13 +110,10 @@ const FOCUS_VISIBLE =
   "focus-visible:outline-ring/40 focus-visible:-outline-offset-1";
 
 /**
- * tUnit's spelling, which is NOT `FOCUS_VISIBLE` and must not be unified with it.
- *
- * Two real differences, both in the shipped source: there is no
- * `focus-visible:border-ring` (neither element has a border to tint), and the
- * colour is the full-opacity `outline-ring` rather than `outline-ring/40`. Both
- * strings are asserted verbatim against their components, so folding them into
- * one constant would fail the verbatim check rather than tidying anything.
+ * tUnit's spelling, not `FOCUS_VISIBLE`: no `border-ring` (neither element
+ * has a border to tint) and full-opacity `outline-ring` not `outline-ring/40`.
+ * Both are asserted verbatim against their components, so unifying them would
+ * fail that check.
  */
 const TUNIT_FOCUS =
   "outline-none focus-visible:outline-2 focus-visible:outline-solid " +
@@ -218,23 +163,9 @@ const BUNDLES: readonly Bundle[] = [
     tokens: HSL_TOKENS,
     cases: [
       {
-        /*
-         * RETARGETED. This case used to name
-         * `tAFK/client/web/src/components/ui/input.tsx` and a six-utility focus
-         * string. That file is GONE -- tAFK's Input converged into
-         * `@tlib/internal/ui/input`, whose affordance is one hand-written class,
-         * `.prop-input` in `@tlib/shared/css/surface.css`, not a utility string.
-         * So the old case could not pass: the probe reads `source` off disk and
-         * threw ENOENT before tCAD, tUnit and tRadio's bundles were reached at
-         * all.
-         *
-         * It is still tAFK's real input, and the rule is still in tAFK's built
-         * sheet (`.prop-input` is emitted there), so the paint measurement is
-         * unchanged in substance -- it just measures the class the control
-         * actually carries. `:focus` with `outline: 2px solid hsl(var(--ring)/0.4)`
-         * at `outline-offset: -1px`, which is the same affordance the deleted
-         * utility string spelt.
-         */
+        // Retargeted from tAFK's own input.tsx utility string: that file is
+        // gone, Input converged into @tlib/internal/ui/input's `.prop-input`
+        // class in shared/css/surface.css. Same affordance, different source.
         name: "input, real Tab",
         source: "tLib/shared/css/surface.css",
         classes: "prop-input",
@@ -281,32 +212,15 @@ const BUNDLES: readonly Bundle[] = [
     ],
   },
   {
-    /*
-     * tUnit WAS NOT COVERED HERE UNTIL 2026-10-07, AND THAT IS WHY ITS TWO
-     * DEFECTS WENT UNNOTICED.
-     *
-     * Both were the same `unocss-merge` 0.10.0 fault, in the outline namespace:
-     * a POSITIVE `outline-offset-*` and an outline COLOUR are filed into one
-     * conflict group and the colour is deleted. `ElementList.tsx`'s rows and
-     * `CharacterEditor.tsx`'s slot chips each shipped without
-     * `focus-visible:outline-ring` and painted focus in `currentColor` instead
-     * of `--ring`. Every class involved is real and resolves to CSS, so nothing
-     * reported it and no review would have.
-     *
-     * THIS PROBE WOULD NOT HAVE CAUGHT THEM EITHER, AND SAYING SO IS THE
-     * POINT OF THIS NOTE. It measures the class string the component really
-     * ships; both defects were in the MERGED OUTPUT of `cn()`, so the shipped
-     * string was already the broken one and this probe would have measured it
-     * faithfully and reported a visible indicator in `currentColor`. The gate
-     * for that is the `outline-*` shield in `shared/ts/cn.ts` and its contract
-     * suite. What this covers is the half that shield cannot: that the settled
-     * spelling, in tUnit's OWN built stylesheet, paints pixels in Chromium 103
-     * inside a clipping ancestor. Both halves are needed; neither is the other.
-     *
-     * Tokens are the HSL dialect (`--ring:211 80% 55%` in the built sheet, read
-     * through `hsl(var(--ring))`), and `uno.config.ts` sets `target: "nui"` with
-     * no `nuiElevationException`, so the ring blocklist applies and is asserted.
-     */
+    // tUnit was missing from this table until 2026-10-07: `unocss-merge`
+    // 0.10.0 files a positive `outline-offset-*` and an outline colour into
+    // one conflict group and drops the colour, so ElementList's rows and
+    // CharacterEditor's slot chips shipped without `focus-visible:outline-ring`
+    // and painted in `currentColor`. This probe would not have caught that
+    // either -- it measures the shipped class string faithfully, and that
+    // string was already the merged, broken one. The `outline-*` shield in
+    // shared/ts/cn.ts covers the merge; this covers the other half, that the
+    // settled spelling paints pixels inside a clipping ancestor.
     name: "tUnit/client/web",
     blocklisted: true,
     cssDir: `${TSCRIPTS}/tUnit/client/ui/assets`,
@@ -593,17 +507,12 @@ function check(ok: boolean, msg: string): void {
 }
 
 /**
- * The built stylesheet for one bundle.
- *
- * The hash in the filename is OPTIONAL, and that is not a tolerance -- it is the
- * estate's two real spellings. Most bundles emit vite's default `index-<hash>.css`;
- * `tLS/client/web` sets `assetFileNames: "assets/[name][extname]"` deliberately
- * (see its vite.config.ts: a renamed bundle 404s off FiveM's file table until a
- * `refresh`, and FiveM keys its cache on the file hash, not the name), so it emits
- * a bare `index.css`. Matching only `<prefix>*` made this probe throw
- * "expected exactly one index-*.css ... found 0" on a CORRECT tLS build, so
- * `bun run probe:focus` exited 1 and tLS's cases could never run at all --
- * a gate that cannot pass, which is worse than no gate.
+ * The built stylesheet for one bundle. The hash in the filename is optional:
+ * tLS/client/web sets `assetFileNames: "assets/[name][extname]"` (FiveM keys
+ * its cache on the file hash, not the name, so a renamed bundle 404s until a
+ * `refresh`), so it emits a bare `index.css` while other bundles emit vite's
+ * default `index-<hash>.css`. Matching only `<prefix>*` made this throw on a
+ * correct tLS build.
  */
 function newestCss(dir: string, prefix: string): string {
   if (!existsSync(dir)) {
@@ -644,14 +553,10 @@ try {
     const css = readFileSync(cssPath, "utf8");
     console.log(`     stylesheet: ${cssPath.slice(TSCRIPTS.length + 1)} (${css.length} bytes)`);
 
-    // The sheet must have left the ring namespace behind. A `.ring` emitted from
-    // prose is dead CSS, and dead CSS is what makes "search the build for a
-    // box-shadow" cry wolf -- so it is reported, not ignored.
-    // Both spellings. MEASURED: a class-only pattern reported 0 for tLS while
-    // its sheet still carried `[-ring=""]{--un-ring-width:-3px; …}` -- 375 bytes
-    // of the full ring box-shadow machinery, emitted through attributify mode
-    // from text nobody wrote as a class. Dead CSS that a class-shaped search
-    // cannot see is exactly what this check exists to catch.
+    // Both the class and attributify spellings: a class-only pattern reported
+    // 0 for tLS while its sheet still carried `[-ring=""]{--un-ring-width:…}`
+    // via attributify mode, 375 bytes of ring box-shadow machinery a
+    // class-shaped search can't see.
     const ringRules =
       [...css.matchAll(/\.(?:[a-z-]+\\:)*-?ring(?:\\\/|-|\{|,|\[)/g)].length +
       [...css.matchAll(/\[[a-z:\\-]*-?ring[a-z0-9:\\/-]*=""\]/g)].length;

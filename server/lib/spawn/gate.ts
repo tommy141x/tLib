@@ -24,9 +24,8 @@ import {
   type ValueKind,
 } from "./catalog";
 
-// `Probes.platform()` returns this, so anyone implementing Probes needs the type.
-// Re-exported because `gate` is this directory's facade and `catalog` is internal:
-// `index.ts` and `gate.test.ts` both already imported `Platform` from here.
+// Re-exported: `gate` is this directory's facade, `catalog` is internal, and
+// `Probes.platform()` returns this type.
 export type { Platform } from "./catalog";
 
 /** The filesystem and engine facts the gate needs. Injected so it can be faked. */
@@ -113,11 +112,9 @@ function valueOk(kind: ValueKind, value: string): boolean {
   if (hasControlCharacters(value)) return false;
   switch (kind) {
     case "path":
-      // Not containment-checked, deliberately. `--dir` is a PocketBase data
-      // directory an operator may legitimately point at another disk; the
-      // control that matters is which *executable* runs, and it is enforced
-      // separately and absolutely. Stated here so nobody later reads the
-      // absence of a check as an oversight.
+      // Not containment-checked: `--dir` is a PocketBase data directory an
+      // operator may legitimately point at another disk. The control that
+      // matters is which *executable* runs, enforced separately in full.
       return true;
     case "int":
       return INTEGER.test(value);
@@ -236,11 +233,10 @@ function matchInvocation(shape: Invocation, tokens: readonly string[]): Matched 
 /**
  * Where a resource-relative path really is, or "" when it is not the caller's.
  *
- * `realpath` on both sides rather than a string prefix test. A prefix test
- * passes for `tRadio/../tCAD/x` before normalisation and for a symlink that
- * resolves to `/usr/bin/bash` after it; this is the only thing standing between
- * "tLib may spawn" and "any resource may run anything", so it compares the paths
- * the kernel will actually use.
+ * `realpath` on both sides, not a string prefix test — a prefix test passes
+ * `tRadio/../tCAD/x` before normalisation, and a symlink resolving to
+ * `/usr/bin/bash` after it. This is the only thing standing between "tLib may
+ * spawn" and "any resource may run anything".
  */
 function contained(probes: Probes, root: string, relative: string): string {
   try {
@@ -266,11 +262,10 @@ function pickPath(probes: Probes, root: string, candidates: readonly string[]): 
 /**
  * glibc's interpreter, by the only name it has on x86-64.
  *
- * Hard-coded rather than read from the binary's `PT_INTERP`, because the name is
- * the ABI — every x86-64 glibc build names it this — and the alternative is tLib
- * parsing an ELF header to decide what to exec. The bundling script takes the
- * real interpreter from `PT_INTERP` and installs it under this name precisely so
- * nothing at runtime has to look.
+ * Hard-coded, not read from the binary's `PT_INTERP`: the name is the ABI —
+ * every x86-64 glibc build uses it — so tLib never has to parse an ELF header
+ * to decide what to exec. The bundling script installs the real interpreter
+ * under this name at build time for the same reason.
  */
 const LOADER_NAME = "ld-linux-x86-64.so.2";
 
@@ -284,21 +279,15 @@ interface BundledLoader {
 /**
  * The bundled loader, or nothing — in which case the binary is exec'd directly.
  *
- * "Or nothing" is the important half and covers four cases, all of them the
- * normal behaviour rather than an error: the product declares no `loaderDir`;
- * it declares one that the release does not carry; the directory is there but
- * holds no loader; or the directory resolves outside the resource. The first
- * three are a release built on a glibc host for glibc hosts, which is every
- * release today. The fourth is a symlink escape, and falling back is safe
- * because the *binary* has already been proven contained — refusing would be
- * defensible too, but it would mean a planted symlink could stop a working
- * engine starting, which is a denial of service bought for nothing.
+ * "Nothing" is normal, not an error: no declared `loaderDir`, one the release
+ * doesn't carry, an empty directory, or (a symlink escape) one that resolves
+ * outside the resource. Falling back in the escape case is deliberate: the
+ * *binary* is already proven contained, and refusing would let a planted
+ * symlink deny service to a working engine for nothing.
  *
- * The loader goes through `contained` like every other path here, not merely
- * `join`ed onto a contained directory. A directory inside the resource can hold
- * a symlink pointing at `/bin/sh`, and the loader is the thing that gets exec'd:
- * checking the directory and not the file would make it the one path in this
- * module a caller's own shipped tree could aim.
+ * The loader path itself goes through `contained`, not a plain `join` onto a
+ * contained directory — a symlink inside the resource could point the loader
+ * (which gets exec'd) at `/bin/sh` otherwise.
  */
 function loaderFor(probes: Probes, root: string, loaderDir: string): BundledLoader | undefined {
   const libraryDir = contained(probes, root, loaderDir);
@@ -311,19 +300,14 @@ function loaderFor(probes: Probes, root: string, loaderDir: string): BundledLoad
     /**
      * Two directories, in that order.
      *
-     * `--library-path` *replaces* `LD_LIBRARY_PATH` rather than adding to it —
-     * see ld.so(8) — so the bundled glibc closure being on it is not enough:
-     * each engine's own shared objects (llama.cpp's 13 dlopen'd ggml CPU
-     * backends among them) sit beside the binary, which is where the
-     * environment variable used to point them. Dropping that directory would
-     * start the process and leave it with no backend at all, which looks like a
-     * broken model rather than a missing path.
+     * `--library-path` *replaces* `LD_LIBRARY_PATH` (ld.so(8)), so the bundled
+     * glibc closure alone isn't enough — each engine's own shared objects
+     * (llama.cpp's 13 dlopen'd ggml CPU backends among them) sit beside the
+     * binary, where `LD_LIBRARY_PATH` used to point. Omitting it starts the
+     * process with no backend, which reads as a broken model, not a bad path.
      *
-     * The colon is ld.so's separator and a path containing one cannot be
-     * expressed on this list, so such a directory is left off rather than
-     * silently cutting the search path in half. A resource directory with a
-     * colon in it does not occur under FXServer, and if it ever does, the
-     * bundled closure alone is the safer of the two wrong answers.
+     * `:` is ld.so's separator, so a directory containing one is dropped from
+     * the list rather than corrupting it — doesn't occur under FXServer today.
      */
     searchPath(binary: string): string {
       const beside = probes.join(binary, "..");
@@ -351,11 +335,10 @@ function strings(value: unknown): string[] | null {
 /**
  * Identify the caller, or refuse.
  *
- * `resource` comes from `GetInvokingResource()`, which the engine fills in and
- * the caller cannot set. That makes it a trustworthy answer to "which resource
- * container is calling" and — see catalog.ts — no answer at all to "who wrote
- * it". A rogue folder named `tAI` passes, exactly as it passes today's
- * `add_unsafe_child_process_permission tAI`.
+ * `resource` comes from `GetInvokingResource()` — engine-filled, caller
+ * cannot set it — so it trustworthily answers "which container is calling"
+ * but not "who wrote it" (see catalog.ts). A rogue folder named `tAI` passes,
+ * same as today's `add_unsafe_child_process_permission tAI`.
  */
 export function admit(resource: string): Caller | Refusal {
   if (!resource) return { error: "the calling resource could not be identified" };
@@ -372,20 +355,15 @@ export function admit(resource: string): Caller | Refusal {
 }
 
 /**
- * Rung 3, and the weakest thing in this file by a wide margin.
+ * Rung 3, and the weakest check in this file: not wired into any decision,
+ * only printed by `index.ts`. A resource writes its own fxmanifest, so an
+ * attacker just copies the expected author in — a match authorises nothing.
+ * It catches the honest case (fork, vendored copy, accidental rename) and no
+ * more than that.
  *
- * Returns a warning string or nothing. It is deliberately *not* wired into any
- * decision: `resolveSpawn` carries the result out untouched and the only thing
- * `index.ts` does with it is print it. A resource writes its own fxmanifest, so
- * an attacker copies the expected author in, and a match therefore authorises
- * nothing whatsoever. What this does catch is the honest case — a fork, a
- * vendored copy, a resource renamed into the family's slot by accident — which
- * is worth a loud line in the console and worth nothing more than that.
- *
- * Every declared author is considered, not index 0. These manifests carry two
- * lines, a person and a studio, and which lands first differs between them;
- * reading only the first made two of the three warn on every boot, which is how
- * you train an operator to ignore a warning.
+ * Checks every declared author, not index 0: these manifests carry a person
+ * and a studio line in varying order, and checking only the first warned on
+ * every boot for two of the three.
  */
 function authorWarning(probes: Probes, caller: Caller): string | undefined {
   const declared = probes.authors(caller.resource);
@@ -489,13 +467,12 @@ export function resolveSpawn(
     }
   }
 
-  // Absent means the binary's own directory. `""` is NOT absent — it is the
-  // resource root, and the difference is load-bearing: PocketBase is handed
-  // `--dir=.runtime/pb_data` and `--hooksDir=pb_hooks`, which are relative to
-  // tDB's root, and running it from `.runtime/` instead resolves every one of
-  // them a level too deep. That is the exact `.runtime/pb_hooks` failure tDB
-  // already has a comment about — PocketBase starts, /api/health answers 200,
-  // and every route its hooks register is simply absent.
+  // Absent means the binary's own directory; `""` is NOT absent — it is the
+  // resource root. The difference is load-bearing: PocketBase's
+  // `--dir=.runtime/pb_data` and `--hooksDir=pb_hooks` are relative to tDB's
+  // root, so running from `.runtime/` instead resolves both a level too deep
+  // — PocketBase starts, `/api/health` answers 200, and every hook route is
+  // simply absent.
   let cwd = probes.join(binary, "..");
   if (request.cwd !== undefined && request.cwd !== null) {
     if (typeof request.cwd !== "string") return { error: "cwd must be a string" };

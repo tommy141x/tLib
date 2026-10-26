@@ -1,57 +1,29 @@
 --[[
     tLib/shared/imports/demo — the demo-server switch.
 
-    Usage:
         if tlib.demo.active() then ... end
         if tlib.demo.dropWrite('data.json') then return true end   -- server
 
-     What demo mode is
+    One convar, `tlib_demo`, turns a server into a throwaway showroom: every
+    access/permission check answers YES, no resource writes its state file
+    (changes live in memory until `ensure <resource>`), and marketplace
+    installs land for real but are swept off disk on next start.
 
-    One convar, `tlib_demo`, that turns a server into a throwaway showroom:
+    A convar, not config, because it cannot travel inside the release —
+    `server.cfg` is the owner's file, not in the zip or escrow-packed — so
+    the same shipped artifact runs for real on a customer server with
+    nothing to strip or forget.
 
-      * every access gate and every permission check answers YES, so a visitor
-        can open the admin surfaces and drive every feature;
-      * no resource ever writes its state file, so whatever a visitor changes
-        lives in memory for that resource's lifetime and is gone the moment it
-        restarts;
-      * marketplace installs still really happen -- you can watch one land and
-        use it -- and are swept off disk on the next start, leaving the shipped
-        tree exactly as it came out of the zip.
+    Fail-OPEN by design, the only thing in tLib that is: everything else
+    (`access`, `permission`, the marketplace admin rule) fails closed, and
+    demo mode overrides all of them, making every connected player a
+    superadmin. `active()` is checked at the top of each gate rather than
+    woven through, so it can't be half-applied. Never set it on a server
+    with data or players you care about — see server/sv_demo.lua.
 
-    The result is a server that resets itself on `ensure <resource>` and needs no
-    cleanup between visitors, and which doubles as the test box: the same build
-    that ships is the one running, with nothing patched out of it.
-
-     Why it is a convar and not config
-
-    Because a convar is the one piece of configuration that CANNOT travel inside
-    the release. `server.cfg` is the server owner's file; it is not in the zip,
-    is not escrow-packed and is not something a build step can leak. So the demo
-    box keeps demo mode across updates without a per-release edit, and a customer
-    who installs the very same artifact gets the real thing, with no build flag,
-    no stripped code path and no "did we remember to turn it off" step. There is
-    nothing to forget.
-
-     It is not a security feature, it is the absence of one
-
-    Demo mode is fail-OPEN by design and it is the only thing in tLib that is.
-    Everything else here -- `access`, `permission`, the marketplace admin rule --
-    fails closed on purpose, and demo mode deliberately overrides all of them.
-    Turning it on makes every connected player a superadmin. That is the point,
-    and it is why `active()` is checked at the top of those gates rather than
-    woven through them: one branch, easy to read, impossible to half-apply.
-
-    Never set it on a server whose data you care about or whose players you do
-    not. tLib says so on every start, in red, and keeps saying it -- see
-    server/sv_demo.lua.
-
-     Reading it
-
-    The convar is authoritative on the server and is read directly there. A
-    client VM can only see a convar set with `setr`, so rather than make `setr`
-    load-bearing, tLib pushes the state to clients and this module listens. The
-    convar is still used as the client's opening guess so the very first frame is
-    usually right; the push corrects it either way.
+    The server reads the convar directly. A client only sees a convar set
+    with `setr`, so tLib pushes the real state to clients instead; the
+    convar is just the client's opening guess before the push corrects it.
 ]]
 
 local demo = {}

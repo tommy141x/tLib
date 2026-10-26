@@ -1,44 +1,29 @@
 /**
  * The one `pre-commit` hook body, and the writer that puts a copy in every
- * resource.
+ * resource. Tracked `.githooks/` + `core.hooksPath`, not `.git/hooks`, which
+ * is untracked and gone on the next clone — but `core.hooksPath` is still
+ * per-clone config, so this layer is a convenience, not the guarantee; the CI
+ * assertion on HEAD is what can't be skipped.
  *
- * Why a tracked `.githooks/` and not `.git/hooks`
+ * Refuses rather than strips: silently rewriting the staged blob would leave
+ * `git show HEAD:config.lua` disagreeing with the working tree, and the next
+ * checkout/pull touching that file overwrites the live value with the
+ * committed blank, with no copy anywhere. The value belongs in the gitignored
+ * sidecar (`tlib.secrets`) instead, so there's nothing to strip — only a
+ * credential typed into the tracked file anyway to refuse, loudly.
  *
- * `.git/hooks` is not tracked and cannot ship: a hook put there exists on
- * exactly one clone and is gone the next time the repo is cloned. The standard
- * fix is a tracked directory plus `core.hooksPath`, which is what this is.
- *
- * `core.hooksPath` is still PER-CLONE config. A developer who never runs
- * `bun run setup` has no hook, and nothing on their machine says so. That is
- * why this layer is explicitly the convenience and not the guarantee — the CI
- * assertion on HEAD is the layer that cannot be skipped, and `secrets:check`
- * in `verify` plus `--check-hooks` are how a missing hook becomes visible.
- *
- * Why it REFUSES instead of stripping
- *
- * A hook that silently rewrote the staged blob would leave the developer's
- * `git show HEAD:config.lua` disagreeing with their own working tree, and the
- * next `checkout` or `pull` touching that file would overwrite the live value
- * with the committed blank. There is no copy anywhere when that happens.
- *
- * So the value does not belong in the tracked file at all; it belongs in the
- * gitignored sidecar (`tlib.secrets`). With the sidecar in place there is
- * nothing to strip, and the only thing left for a hook to do is say so when
- * somebody types a credential into the tracked file anyway. A refusal with the
- * key name and the fix in it does that; a silent strip hides it.
- *
- * Written as the SAME BYTES into every repo, and `secret-gate-control.ts`
- * asserts that. Eleven hand-edited copies of a shell script is eleven chances
- * for one of them to be the stale one, and the stale one is silent.
+ * Written as the same bytes into every repo; `secret-gate-control.ts` asserts
+ * that, since eleven hand-edited copies is eleven chances for a stale, silent
+ * one.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 /**
- * POSIX `sh`. No bashisms, no PowerShell, no per-platform binary: these repos
- * build and run inside Fedora containers as well as on this Windows machine,
- * and Git for Windows runs hooks under its own `sh` anyway.
+ * POSIX `sh`, no bashisms or PowerShell: these repos run inside Fedora
+ * containers as well as on Windows, and Git for Windows runs hooks under its
+ * own `sh` anyway.
  */
 export const PRE_COMMIT = `#!/bin/sh
 # Managed by tLib — shared/ts/secrets/hook.ts writes this file.

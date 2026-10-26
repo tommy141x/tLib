@@ -1,39 +1,22 @@
 /**
- * `LayoutEditor`'s discard prompt — the one confirmation footer in the stack
- * that put the lossy answer on the left.
+ * `LayoutEditor`'s discard prompt. It shipped `Discard` first, with
+ * `tone="primary"` and `autofocus` — every other confirmation footer in the
+ * estate (tLS's discard guard, tUnit's `CharacterEditor`, tLib's shared
+ * `PropEditor` prompt) puts the lossy action on the right and the affirmative
+ * slot on the safe answer, since "Keep editing" IS the affirmative answer to
+ * "discard?". The autofocus made it dangerous, not just inconsistent: one
+ * Enter threw the layout away on a dialog that says "This cannot be undone".
+ * The Save/Cancel footer above it is unchanged and deliberately
+ * affirmative-left — a destructive confirmation answers a different question.
  *
- * The fix this pins
- *
- * It shipped `Discard` first, with `tone="primary"` AND `autofocus`, under an
- * affirmative-left reading of the pair. Every other confirmation footer in the
- * estate — tLS's discard guard, tUnit's `CharacterEditor`, and tLib's own
- * shared `PropEditor` prompt — puts the lossy action on the right and gives the
- * affirmative slot to the safe answer, because "Keep editing" IS the affirmative
- * answer to "discard?".
- *
- * The autofocus is what made it more than a convention argument: one Enter threw
- * the whole layout away, on a dialog whose own body says "This cannot be undone".
- *
- * THE SAVE/CANCEL FOOTER ABOVE IT IS NOT PART OF THIS AND IS UNCHANGED. That
- * one is affirmative-left, which is where all four of tLib's affirmative/cancel
- * pairs were deliberately moved. A destructive confirmation is a different widget
- * answering a different question; the comment at the call site says so.
- *
- * A FINDING THAT IS NOW FIXED
- *
- * `requestCancel()` used to be `if (canUndo()) setDiscarding(true); else
- * finish(false)` with NO settle of an in-flight gesture — unlike the shared
- * `PropEditor`, whose `isDirty()` gate is reached only after a blur has
- * committed. The note here said it got away with that because its batches are
- * opened and closed by pointer capture, so one is never open when the prompt
- * appears. That was WRONG about the keyboard: a held arrow key opens a batch and
- * closes it on `keyup`, so Escape with the key still down reached the gate with
- * one open — and an open batch counts as dirty whether or not it changed
- * anything, so a nudge against a clamped edge asked the question about nothing.
- *
- * `requestCancel()` settles first now. The last test in this file still pins the
- * consequence either way: by the time the prompt can be reached, the edit is
- * complete, so the question is never about a no-op.
+ * Also fixed: `requestCancel()` used to skip settling an in-flight gesture
+ * before reading `canUndo()`, unlike `PropEditor`'s blur-gated `isDirty()`.
+ * A held arrow key opens an undo batch on keydown and closes it on keyup, so
+ * Escape with the key still down reached the gate with a batch open — and an
+ * open batch counts as dirty even if it moved nothing, so a nudge against a
+ * clamped edge asked the question about a no-op. `requestCancel()` now
+ * settles first; the last test here pins that the edit is always complete by
+ * the time the prompt can be reached.
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -43,21 +26,16 @@ import { flush } from "solid-js";
 import LayoutEditor from "../src/layout/LayoutEditor";
 
 /*
- * `lucide-solid` IS NO LONGER STUBBED HERE, AND THAT IS THE POINT.
- *
- * It was, until `shared/ts/solid-compat/solid-1-compat-web.ts` gained a
- * Solid-1-arity `spread`. Before that export existed, this editor's own chrome
- * took every icon through `lucide-solid/dist/esm/Icon.mjs:37` —
- * `spread(_el$, mergeProps(…), true, true)`, Solid 1's
- * `spread(node, accessor, isSVG, skipChildren)` — whose fourth argument arrives
- * in Solid 2's `skip`, a PREDICATE. `skip("children")` then threw inside a
- * render effect, so Solid 2 halted the reactive graph for the whole process and
- * this editor rendered an EMPTY container; nine tests in this file failed in a
- * cascade naming none of the cause.
- *
- * The icons are therefore REAL here, and the arity regression reddens this file
- * the loud way rather than being masked by a stub. `lucide-spread-arity.test.tsx`
- * is the specific, named assertion; this file is the blast radius it would have.
+ * `lucide-solid` is deliberately not stubbed here. Before
+ * `shared/ts/solid-compat/solid-1-compat-web.ts` gained a Solid-1-arity
+ * `spread`, this editor's icons went through `lucide-solid`'s
+ * `spread(node, accessor, isSVG, skipChildren)` (Solid 1 arity), whose
+ * fourth argument landed in Solid 2's `skip`, a predicate — `skip("children")`
+ * threw inside a render effect and halted the reactive graph process-wide,
+ * rendering an empty container and failing nine tests here in a cascade that
+ * named none of the cause. Real icons mean an arity regression reddens this
+ * file loudly; `lucide-spread-arity.test.tsx` is the named assertion, this
+ * file is the blast radius.
  */
 
 let sent: Array<{ event: string; data: unknown }> = [];

@@ -1,8 +1,5 @@
 --[[
-    tLib — THE VEHICLE FRAME RELAY
-
-    Loaded into the CONSUMER's VM like every other module under shared/imports/:
-    `tlib.framerelay`. Client only.
+    tLib — THE VEHICLE FRAME RELAY. Client-only, loaded as `tlib.framerelay`.
 
         local relay = tlib.framerelay.create({
             key       = 'tdetScreenFrame',
@@ -12,54 +9,30 @@
             differs   = tdetScreenFrameDiffers,
         })
 
-     What this is for
+    Lets a screen belonging to a car you are NOT operating show something: the
+    client that computes the picture publishes it on the VEHICLE's statebag
+    (readable by anyone in scope — rear passengers, the officer outside, a
+    front passenger whose own device is off), instead of a point-to-point
+    relay that only reaches one partner.
 
-    How a screen belonging to a car you are NOT operating gets something to show.
-    Only the client running the device computes its picture, and that client is
-    not the one looking at the prop.
+    The relay owns publication/expiry/withdrawal; the consumer owns the frame.
+    Three contract fields: `seq` (publisher-written, expiry rides on it —
+    don't reuse the name), `netId` (publisher-written, for manual
+    cross-checking), `powered` (read-only; an off device publishes NOTHING
+    rather than an off frame, since the prop's baked artwork already is the
+    off state).
 
-    So the client that HAS the picture publishes it, on the VEHICLE's statebag, and
-    everyone who can see the vehicle reads it — the rear passengers, the officer at
-    the window, and the front passenger whose own device is stopped. A statebag is
-    readable by anyone in scope, where a point-to-point seat relay only ever reaches
-    one partner.
+    Election: two occupants would otherwise overwrite the same key every
+    tick, so exactly one publisher runs, gated by `occupancy.isController()`
+    (proved by tests/lua/framerelay-election.lua, which needs two clients
+    over one statebag world).
 
-     What is OWNED HERE and what is the consumer's
-
-    The relay owns publication, expiry and withdrawal. The consumer owns the frame
-    itself — producing it, sanitising it, and deciding whether two differ.
-
-    THE RELAY TOUCHES EXACTLY THREE FIELDS of a payload, and they are part of the
-    contract:
-      * `seq`     — written by the publisher, read by the reader. The expiry rides on
-                    it, so a payload may not use that name for anything else.
-      * `netId`   — written by the publisher, for cross-checking by hand.
-      * `powered` — READ, never written. A switched-off device publishes NOTHING
-                    rather than an off frame: the prop's baked artwork already IS the
-                    off state, so the absence of a value renders correctly with no
-                    work anywhere. Every consumer wanted this and stating it once is
-                    the point.
-
-     WHY THE ELECTION
-
-     Two occupants of one vehicle would otherwise write the same statebag key with
-     two different pictures, each overwriting the other every tick. So exactly one
-     publishes: `occupancy.isController()`. The suite that proves this is
-     tests/lua/framerelay-election.lua, and it needs two clients over one statebag
-     world because no single-VM resource suite can reach the state at all.
-
-     TWO HARD-WON FACTS ABOUT THIS PATTERN
-
-     * POLL IT; DO NOT USE AddStateBagChangeHandler. The condition is not "the value
-       changed", it is "the value changed AND the consumer still names this vehicle
-       AND it has not gone stale", and two of those three produce no statebag event
-       at all. A handler latches on whatever it last heard.
-     * A STATEBAG IS NOT WITHDRAWN WHEN ITS WRITER DISCONNECTS, and the write only
-       lands while the writer OWNS the entity — ownership migration silently stops
-       it. Hence `seq`, which moves on every publish including an identical one, and
-       hence the stale window. Without them a driver whose game crashed leaves their
-       last alert painted on the prop for as long as the car exists.
-
+    Poll it — do not use AddStateBagChangeHandler, since "changed AND still
+    names this vehicle AND not stale" produces no event for two of those
+    three and a handler latches on stale data. A statebag is not withdrawn
+    when its writer disconnects or loses entity ownership, hence `seq`
+    (moves on every publish) and the stale window — without them a crashed
+    driver's last frame stays painted on the prop forever.
 ]]
 
 local FrameRelay = {}

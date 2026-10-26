@@ -64,13 +64,7 @@ interface Gesture {
   corner?: Corner;
   target?: HTMLElement;
 }
-/**
- * A burst of wheel notches is one thing the player did, so it is one undo step.
- *
- * There is no `before` here any more: the open batch holds it. The first notch
- * calls `history.push`, every later notch in the burst extends that same batch
- * (same label, same key), and `flushWheel` commits it once the burst settles.
- */
+/** One wheel burst is one undo step: the first notch opens the batch, later notches extend it, `flushWheel` commits it once the burst settles. */
 interface WheelGesture {
   key: string;
   timer: number;
@@ -85,28 +79,15 @@ export default function LayoutEditor() {
   const [components, setComponents] = createSignal<Component[]>([]);
   const [layouts, setLayouts] = createStore<Record<string, Layout>>({});
   /**
-   * The same placements as `layouts`, readable synchronously.
-   *
-   * A SOLID 2 STORE WRITE IS NOT READABLE IN THE TICK IT HAPPENED, and three
-   * things here read a placement back in the tick they wrote it:
-   *
-   *  - `UndoHistory.with()`, which captures, mutates and captures again inside
-   *    one call. Every discrete edit goes through it — hide, show, Reset this,
-   *    Reset all.
-   *  - `settleKey`, which re-anchors from where the gesture ended.
-   *  - any gesture settled by the same event that flushed its last frame: a
-   *    quick drag whose only `pointermove` is flushed by its own `pointerup`.
-   *
-   * Reading the proxy there compares a value against ITSELF. The consequences
-   * were not subtle: `capture()` returned the pre-write value, `UndoHistory`
-   * discarded the batch as a no-op, and so hiding six components recorded
-   * nothing — `canUndo()` stayed false, and that flag IS this editor's dirty
-   * flag, so Cancel then threw the whole session away WITHOUT ASKING. The same
-   * read made `settleKey` re-anchor the pre-drag placement back over a flicked
-   * drag, undoing it.
-   *
-   * So: the store is what the DOM subscribes to, this is what every decision is
-   * made from, and `update()` is the only writer of either.
+   * Mirror of `layouts`, readable synchronously — a Solid 2 store write isn't
+   * readable in the same tick it happened, and `UndoHistory.with()`,
+   * `settleKey`, and a gesture settled by its own last pointermove frame all
+   * read a placement back same-tick. Reading the store proxy there used to
+   * compare a value against itself: `capture()` got the pre-write value, so
+   * hiding six components recorded nothing (`canUndo()` stayed false, which
+   * is this editor's dirty flag, so Cancel discarded without asking), and
+   * `settleKey` re-anchored the pre-drag placement back over a flicked drag.
+   * `update()` is the only writer of either.
    */
   let placed: Record<string, Layout> = {};
   const [selected, setSelected] = createSignal("");
@@ -120,30 +101,10 @@ export default function LayoutEditor() {
   const [finishing, setFinishing] = createSignal(false);
   const [notice, setNotice] = createSignal("");
   /**
-   * Whether the discard question is up.
-   *
-   * Why this editor now has one
-   *
-   * Cancel called `finish(false)` straight out, which cancels every pending
-   * preview and tells the game `save: false` — the backend rolls the HUD back and
-   * the whole positioning session is gone. Hand-placing a HUD is minutes of work
-   * with no undo once the editor closes, and this surface threw it away without
-   * asking.
-   *
-   * The sentence that used to be here — "this was the ONLY surface in the
-   * stack that threw it away without asking: tLS prompts, the prop editor
-   * prompts, tAFK prompts" — was WRONG about the prop editor, and being wrong
-   * here sent a later audit down the wrong path. tLS and tAFK did prompt;
-   * tLib's own shared `PropEditor` did not, and had no dirty tracking anywhere
-   * in its chain — Escape and Cancel both called `propEditorCancel` straight
-   * out, in tRadar, tDetector and tRadio simultaneously. It prompts now, off the
-   * same `isDirty()` this editor uses, so the claim is finally true; it was not
-   * when it was written.
-   *
-   * Gated on `canUndo()`, so Cancel on a session where nothing was touched still
-   * closes in one click. The question is only worth asking when there is
-   * something to lose, and asking it every time is how a prompt gets dismissed
-   * without being read.
+   * Whether the discard question is up. Cancel used to call `finish(false)`
+   * straight out, discarding a hand-placed HUD with no undo once the editor
+   * closed. Gated on `canUndo()` so a session where nothing was touched still
+   * closes in one click — asking every time is how a prompt stops being read.
    */
   const [discarding, setDiscarding] = createSignal(false);
   const [panelPosition, setPanelPosition] = createSignal<{ x: number; y: number } | null>(null);
@@ -156,21 +117,12 @@ export default function LayoutEditor() {
     | { pointer: number; x: number; y: number; left: number; top: number; target: HTMLElement }
     | undefined;
   /**
-   * One instance, scoped to this editor.
-   *
-   * This used to be `LayoutHistory`, a class that lived next door and was
-   * hard-typed to `Layout`. It is gone; `@tlib/shared/undo`'s `UndoHistory` is
-   * the one primitive for the estate and carries both of the things that class
-   * knew — `remove(key)` and a no-op guard — as general capabilities. The guard
-   * is `sameLayout`, passed per tag at `register()` rather than hard-coded,
-   * which is the whole reason the class could not be reused elsewhere.
-   *
-   * One tag per component (`layout:<key>`), registered when the host announces
-   * the component and disposed when it withdraws it. That is what makes an entry
-   * per-component — the `key` on the entry — and what makes `remove(key)`
-   * meaningful here. This editor is the one surface in the estate that needs it:
-   * the host can unregister a HUD component mid-session, and the entries about
-   * it are then about something that no longer exists.
+   * One instance, scoped to this editor. Replaces the old hard-typed
+   * `LayoutHistory` class; `@tlib/shared/undo`'s `UndoHistory` carries the
+   * same `remove(key)` and no-op guard (`sameLayout`, passed per tag at
+   * `register()`) as general capabilities instead. One tag per component
+   * (`layout:<key>`) is what makes `remove(key)` meaningful: this editor is
+   * the one surface where the host can unregister a component mid-session.
    */
   const history = new UndoHistory({ label: "hud-layout" });
   const [undoState, setUndoState] = createSignal<UndoState>(history.state());
@@ -190,10 +142,9 @@ export default function LayoutEditor() {
   const index = createMemo(() => new Map(components().map((c) => [c.key, c])));
   const active = () => index().get(selected());
   /**
-   * Where a component is. The store read is the SUBSCRIPTION the render needs
-   * and is load-bearing even though the mirror answers first — drop it and the
-   * proxies stop following a drag. The mirror is the VALUE, because for the rest
-   * of the tick after a write the two disagree and only the mirror is right.
+   * The store read is the subscription the render needs — drop it and the
+   * proxies stop following a drag — but the mirror is the value: for the
+   * rest of the tick after a write the two disagree and only it is right.
    */
   const current = (component: Component) => {
     const rendered = layouts[component.key];
@@ -202,14 +153,10 @@ export default function LayoutEditor() {
   const canUndo = () => undoState().canUndo;
   const canRedo = () => undoState().canRedo;
   /**
-   * No edit may start right now: a save is in flight, or the discard question is
-   * up and is supposed to be MODAL.
-   *
-   * `discarding()` belongs here because the question's shade only covers the
-   * panel. Everything outside it — every proxy outline, its eye button, the
-   * wheel, the arrow keys, the panel's own drag handle — kept working behind a
-   * dialog that says "This cannot be undone", so the player could keep
-   * positioning a HUD that the pending answer was about to throw away.
+   * No edit may start during a save, or while the discard question is up.
+   * The question's shade only covers the panel, so without `discarding()`
+   * here every proxy, the wheel, arrow keys and the panel drag kept working
+   * behind a dialog saying the session was about to be thrown away.
    */
   const busy = () => finishing() || discarding();
   const undoTitle = () => {
@@ -231,13 +178,12 @@ export default function LayoutEditor() {
     undoables.set(
       key,
       history.register<Layout>(tagOf(key), {
-        // The mirror, NEVER the store proxy — see `placed`. This capture runs
-        // from `push()`/`commit()`, so a proxy read here both returns a stale
-        // value and subscribes the snapshot to the store it is snapshotting.
+        // The mirror, never the store proxy — see `placed`. A proxy read
+        // here would return a stale value and subscribe the snapshot to the
+        // store it's snapshotting.
         capture: () => ({ ...(placed[key] ?? component.layout) }),
         restore: (layout) => update(key, layout),
-        // The no-op guard: a gesture that ended where it started records nothing,
-        // which is what `LayoutHistory.record`'s early return did.
+        // No-op guard: a gesture that ended where it started records nothing.
         equal: sameLayout,
       })
     );
@@ -255,15 +201,12 @@ export default function LayoutEditor() {
   function update(key: string, layout: Layout) {
     const component = index().get(key);
     if (!component) return;
-    // The single choke point for placement: every drag, nudge, scale, resize,
-    // undo and resize-response goes through here, so all of them are clamped.
-    // The anchor is re-derived once at gesture end; mid-drag it would thrash.
+    // Single choke point: every drag, nudge, scale, resize, undo and
+    // resize-response is clamped here. Anchor is re-derived once at gesture
+    // end rather than mid-drag, to avoid thrashing.
     const next = constrainLayout(component, layout, viewport());
-    // Nothing moved, so there is nothing to paint and nothing to tell the game.
-    // Worth the two lines because the no-op callers are the bulk ones: `resized`
-    // re-clamps EVERY component (one `layoutPreview` post each, for placements
-    // that a resize left legal) and `restore` can put a component back where it
-    // already is.
+    // No-op guard matters for the bulk callers: `resized` re-clamps every
+    // component and `restore` can put one back where it already is.
     if (placed[key] && sameLayout(placed[key], next)) return;
     placed[key] = next;
     setLayouts((draft) => {
@@ -273,12 +216,8 @@ export default function LayoutEditor() {
   }
 
   /**
-   * Re-derive the anchor from where it ended up, then close the open batch.
-   *
-   * The batch was opened at gesture START (`grab`, the first wheel notch, the
-   * first arrow key), so the "before" it compares against is the state the
-   * gesture began from — one entry for a whole drag, not one per frame. It no
-   * longer takes a `before` argument, because the history holds it.
+   * Re-derives the anchor from where the gesture ended, then closes the
+   * batch opened at gesture start — one undo entry per drag, not per frame.
    */
   function settleKey(key: string) {
     const component = index().get(key);
@@ -309,11 +248,9 @@ export default function LayoutEditor() {
     gesture = undefined;
     snapTargets = undefined;
     setGuides({});
-    // Here rather than at the pointer handlers that used to carry it: the
-    // badge is a property of a gesture being in flight, and `settle()` ends
-    // one from `blur`, from `resize` and before every discrete edit. Cleared
-    // only there, a corner resize interrupted by losing focus left a stale
-    // percentage pinned to the widget for the rest of the session.
+    // Cleared here, not in the pointer handlers: `settle()` also ends a
+    // gesture from blur/resize/before a discrete edit, and clearing it only
+    // there left a stale scaling percentage pinned after a focus loss.
     setScalingKey("");
     releaseGestureCapture(completed);
     if (!placed[completed.key]) {
@@ -322,9 +259,7 @@ export default function LayoutEditor() {
     }
     if (cancel) {
       update(completed.key, completed.before);
-      // The caller has already put the old value back, so there is nothing to
-      // compare and nothing to record. `abort` makes no claim about the current
-      // state, which is why it is not `commit` on an unchanged batch.
+      // The old value is already restored — nothing to compare or record.
       history.abort();
     } else settleKey(completed.key);
   }
@@ -356,12 +291,10 @@ export default function LayoutEditor() {
     );
   }
   /**
-   * The factory placement for one component, sanitised. `defaults` crosses the
-   * NUI boundary as JSON and a consumer can register a component whose defaults
-   * predate a schema change, so nothing here may assume the fields are usable:
-   * anything non-finite or out of range falls back to a centred, visible widget,
-   * and `update()` clamps whatever survives. Reset is the safety net, so it is
-   * the one path that must not be able to produce an unreachable widget.
+   * Factory placement, sanitised. `defaults` crosses the NUI boundary as JSON
+   * and may predate a schema change, so anything non-finite or out of range
+   * falls back to a centred, visible widget; `update()` clamps the rest.
+   * Reset is the safety net and must not produce an unreachable widget.
    */
   function factory(component: Component): Layout {
     const d = (component.defaults ?? {}) as Partial<Layout>;
@@ -388,11 +321,9 @@ export default function LayoutEditor() {
     change(component, factory(component), "reset");
   }
   /**
-   * Every component at once, for when more than one has been lost. History is
-   * per component, so this pushes one undo entry per component that MOVED — the
-   * ones that were already at their defaults are filtered out by the registered
-   * `sameLayout` guard rather than by a hand-written check here, which is what
-   * this loop used to carry.
+   * One undo entry per component that actually moved — components already
+   * at their defaults are filtered by the registered `sameLayout` guard
+   * rather than a hand-written check.
    */
   function resetAll() {
     if (busy()) return;
@@ -408,10 +339,8 @@ export default function LayoutEditor() {
   function travel(direction: "undo" | "redo") {
     if (busy()) return;
     settle();
-    // The history applies the snapshot itself through the registered `restore`,
-    // which routes back through `update` and so is clamped and previewed like any
-    // other placement. What comes back is which entry it applied, so the
-    // component that just moved can be re-selected.
+    // `restore` routes through `update`, so the applied snapshot is clamped
+    // and previewed like any other placement; re-select whichever moved.
     const applied = history[direction]();
     if (applied?.key) setSelected(applied.key);
   }
@@ -477,23 +406,14 @@ export default function LayoutEditor() {
       )
     );
   }
-  // Pointer move, one application per animation frame
-  //
-  // `pointermove` fires well above the frame rate — a 1000 Hz mouse delivers a
-  // coalesced burst per frame at best and several events per frame at worst — and
-  // every application writes a store path, which Solid turns straight into a DOM
-  // style write. PreviewChannel already coalesced the NUI post (the expensive
-  // half); this coalesces the DOM half, so both ends of a drag do exactly one
-  // unit of work per frame. Same contract as shared/ts/camera-drag.ts.
-  //
-  // The delta stays in CLIENT coordinates, unlike camera-drag's `movementX`. That
-  // module drives a camera, where there is nothing under the cursor to stay under
-  // and a stall at the screen edge is the whole bug. This is direct manipulation:
-  // the outline has to stay under the pointer, and `clientX - downX` against the
-  // rect captured at pointerdown IS the 1:1 guarantee — accumulating `movementX`
-  // would let the outline drift out from under the cursor every time the clamp
-  // refuses a frame. Nothing in the loop reads layout, so there is no reflow:
-  // `gesture.before`, `snapTargets` and `viewport()` are all captured up front.
+  // One application per animation frame: a 1000 Hz mouse delivers several
+  // pointermove events per frame, and every application is a store write
+  // Solid turns into a DOM style write. PreviewChannel coalesces the NUI
+  // post; this coalesces the DOM half — same contract as
+  // shared/ts/camera-drag.ts. Deltas stay in CLIENT coordinates, not
+  // `movementX`: this is direct manipulation, so the outline must track the
+  // cursor 1:1, and accumulating `movementX` would drift whenever the clamp
+  // refuses a frame.
   let moveFrame = 0;
   let pendingMove: { x: number; y: number; alt: boolean } | undefined;
   let pendingPanel: { x: number; y: number } | undefined;
@@ -511,8 +431,7 @@ export default function LayoutEditor() {
         })
       );
     }
-    // Captured once: `gesture` is mutable module-scope state and narrowing it
-    // across the closure below is what forced the non-null assertions.
+    // Captured once: `gesture` is mutable module-scope state, narrowed for the closure below.
     const held = gesture;
     if (!move || !held || finishing()) return;
     const component = index().get(held.key);
@@ -537,10 +456,9 @@ export default function LayoutEditor() {
       snapGuides = snap.guides;
     }
     const placed = placeRect(held.before, { ...start, left, top }, viewport());
-    // One update pass for the guides and the placement together, so the frame
-    // cannot paint a guide line against the previous position. Solid 2 defers
-    // every write to the end of the tick, so this no longer needs a `batch`
-    // wrapper to get that — the two writes land together by construction.
+    // Guides and placement update together so a frame never paints a guide
+    // against the stale position; Solid 2 defers writes to tick end, so no
+    // `batch` wrapper is needed for that.
     setGuides(snapGuides);
     update(component.key, placed);
   }
@@ -572,8 +490,7 @@ export default function LayoutEditor() {
     }
   }
   function pointerCancel(event: PointerEvent) {
-    // A cancelled gesture is discarded wholesale, so the queued frame is dropped
-    // rather than flushed — applying it would be a move the player took back.
+    // A cancelled gesture is discarded wholesale: drop the queued frame rather than flush it.
     if (moveFrame) {
       cancelAnimationFrame(moveFrame);
       moveFrame = 0;
@@ -655,24 +572,16 @@ export default function LayoutEditor() {
     ArrowDown: [0, 1],
   };
   /*
-   * Escape is NOT handled here. It is a registered layer — see the
-   * `createEscapeLayer` call in `onSettled` below.
-   *
-   * It was a branch in this raw `window` listener, which is the pattern the
-   * registry exists to replace: a raw listener has no notion of depth, so a key
-   * another layer has already consumed still reaches it. This handler does check
-   * `event.defaultPrevented`, which is what kept it honest in the meantime, and
-   * the registry sets exactly that — but "honest by luck of listener order" is
-   * not a contract. The rest of the keys below are editor-local (arrows, Tab
-   * cycling, undo/redo) and have no stack to arbitrate.
+   * Escape is a registered layer (`createEscapeLayer` in `onSettled` below),
+   * not handled here — a raw listener has no notion of depth, so a key
+   * another layer already consumed would still reach it.
    */
   function keyDown(event: KeyboardEvent) {
     if (session() === null || event.defaultPrevented) return;
     if (event.key === "Tab" && surface) {
-      // While the discard question is up, the cycle is the question's own two
-      // answers. Its shade is opaque and covers the panel, but Tab does not care
-      // about paint: focus walked straight through to Save, Cancel and the reset
-      // buttons behind it, and Enter then pressed one.
+      // While the discard question is up, Tab cycles its own two answers —
+      // its shade only covers paint, not focus, so without this scope it
+      // walked through to Save/Cancel/reset behind it.
       const scope =
         (discarding() && surface.querySelector<HTMLElement>(".tlib-nui-confirm")) || surface;
       const controls = [...scope.querySelectorAll<HTMLElement>("button:not(:disabled)")].filter(
@@ -693,13 +602,10 @@ export default function LayoutEditor() {
     }
     if (busy()) return;
     /*
-     * Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y are NOT handled here any more. They are a
-     * registered scope — see the `createUndoScope` call in `onSettled` below —
-     * for the same reason Escape is a registered layer: a raw window listener
-     * has no notion of depth, so a press another editor has already consumed
-     * still reaches this one. That is not hypothetical for the estate this
-     * primitive is for; tRadio's settings app hosts tLib's shared PropEditor
-     * inside itself, and two raw listeners means one press undoes in both.
+     * Ctrl+Z/Shift+Z/Y are a registered scope (`createUndoScope` in
+     * `onSettled` below), for the same depth reason as Escape — tRadio hosts
+     * tLib's shared PropEditor inside itself, and two raw listeners would
+     * undo both at once.
      */
     const direction = arrows[event.key];
     const component = active();
@@ -760,10 +666,9 @@ export default function LayoutEditor() {
     untrackAll();
     setSession(null);
     setFinishing(false);
-    // The question is about a session that no longer exists. Left standing, it
-    // was still standing over the NEXT session: the watchdog closing the editor
-    // (focus loss, a dialog, a dead renderer) with the prompt up meant the next
-    // `/tlibhud` opened straight into "Discard layout changes".
+    // The question is about a session that no longer exists; left standing
+    // it carried into the next one — a watchdog close (focus loss, a dialog,
+    // a dead renderer) with the prompt up opened the next session into it.
     setDiscarding(false);
     setComponents([]);
     placed = {};
@@ -781,12 +686,11 @@ export default function LayoutEditor() {
     setFinishing(true);
     setNotice("");
     if (save) {
-      // The mirror, not the store: `settle()` above can have applied a frame in
-      // this very tick, and a retry that re-sends the pre-settle placement is a
-      // retry of the wrong thing.
+      // The mirror, not the store: `settle()` can apply a frame this same
+      // tick, and retrying the pre-settle placement would retry the wrong thing.
       preview.retryFailed((key) => placed[key]);
       preview.flush();
-      // Commit waits for every preview; cancellation does not need their results.
+      // Commit waits for every preview; cancellation doesn't need their results.
       await preview.settle();
     } else preview.cancel();
     if (session() !== token) return;
@@ -796,14 +700,9 @@ export default function LayoutEditor() {
       return;
     }
     const response = await fetchNui<{ ok: boolean }>("layoutFinish", { session: token, save });
-    // The backend owns close/rollback. Do not silently hide a failed callback.
-    //
-    // Reached at all only when the reply beats the `layoutClose` event it is
-    // racing — two different channels, so either order is legal — and the
-    // SUCCESS half used to say "You can retry Save or Cancel", which reads as a
-    // failure for the half-second before the editor closes on its own. It says
-    // what happened instead; the buttons stay live either way, which is the
-    // valve for the game never closing us at all.
+    // The backend owns close/rollback; don't hide a failed callback. Reached
+    // only if this reply beats the racing `layoutClose` event — either order
+    // is legal — so the buttons stay live either way rather than implying failure.
     if (session() === token) {
       setFinishing(false);
       setNotice(
@@ -814,21 +713,11 @@ export default function LayoutEditor() {
     }
   }
   /**
-   * What Cancel and Escape both go through, so neither can discard silently.
-   *
-   * `canUndo()` is the dirty flag: the history is cleared on every `layoutOpen`
-   * and records an entry for every move, resize, visibility toggle and nudge, so
-   * "there is something in it" and "this session changed something" are the same
-   * statement. Using it rather than a second `dirty` signal is deliberate — a
-   * parallel flag is a thing to forget to set, and there are five call sites that
-   * mutate a layout.
-   *
-   * It settles first, so the flag is read about a FINISHED edit. An open batch
-   * counts as dirty whether or not it changed anything, and one can be open
-   * here: hold an arrow key against a widget already clamped at the screen edge
-   * and press Escape, and the question appeared about a nudge that moved
-   * nothing. Settling closes that batch, `sameLayout` discards it as the no-op
-   * it was, and the session closes in one keypress like any other clean one.
+   * What Cancel and Escape both go through, so neither discards silently.
+   * `canUndo()` is the dirty flag — history is cleared on `layoutOpen` and
+   * records every edit, so a separate `dirty` signal would be one more thing
+   * to forget to set. Settles first so an open no-op batch (an arrow key
+   * held against an already-clamped edge) doesn't trigger the question.
    */
   function requestCancel() {
     if (session() === null || finishing()) return;
@@ -858,8 +747,7 @@ export default function LayoutEditor() {
           string,
           Layout
         >;
-      // Seeded together, from the same source, so the first `capture()` of the
-      // session compares against what the host actually announced.
+      // Seeded from the same source so the first `capture()` compares against what the host announced.
       placed = opening();
       setLayouts(opening);
       setSelected(data.components[0]?.key ?? "");
@@ -886,9 +774,8 @@ export default function LayoutEditor() {
         wheel = undefined;
       }
       preview.drop(data.key);
-      // The HOST withdrew this component, so every entry about it is about
-      // something that no longer exists. This is the one `remove(key)` caller in
-      // the estate, and the reason that capability is in the shared primitive.
+      // The host withdrew this component; every entry about it is now about
+      // something that no longer exists — the one `remove(key)` caller.
       history.remove(data.key);
       untrackComponent(data.key);
       setComponents((all) => all.filter((c) => c.key !== data.key));
@@ -911,10 +798,9 @@ export default function LayoutEditor() {
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
     /*
-     * `onInternal` first: while the discard question is up, Escape answers THAT
-     * and nothing else. Dismissing the question is the conservative answer —
-     * Escape can then never throw a positioning session away, however many times
-     * it is pressed, which is the whole point of the question existing.
+     * `onInternal` first: while the discard question is up, Escape answers
+     * only that, so it can never throw the session away however many times
+     * it's pressed.
      */
     const disposeEscape = createEscapeLayer({
       label: "hud-layout-editor",
@@ -928,15 +814,10 @@ export default function LayoutEditor() {
       onEscape: requestCancel,
     });
     /*
-     * Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, through the shared registry rather than
-     * this component's own keydown listener. `onUndo`/`onRedo` are given because
-     * travelling here has to settle any in-flight gesture first, and the button
-     * pair and the keyboard must go through the SAME function or the two
-     * disagree about what one step is.
-     *
-     * `ignoreWhenTyping` is left at its default (true). This surface has no text
-     * entry today, so it changes nothing here, and if one is ever added the field
-     * keeps its own native undo for free.
+     * `onUndo`/`onRedo` settle any in-flight gesture before travelling, and
+     * the button pair must go through the same function as the keyboard or
+     * the two disagree about what one step is. `ignoreWhenTyping` stays at
+     * its default — no text entry on this surface yet.
      */
     const disposeUndoKeys = createUndoScope({
       label: "hud-layout-editor",
@@ -1066,21 +947,13 @@ export default function LayoutEditor() {
               }}
               onToggleVisible={toggleVisible}
             />
-            {/* The arrow keys are a real gesture here — one nudge per press, 10px
-                with Shift, one undo entry for a held burst — and this line was
-                the only place in the UI that could say so. */}
+            {/* Arrow-key nudge (10px with Shift, one undo entry per held burst) has no other home in the UI. */}
             <p class="tlib-layout__help">
               Drag to move · Scroll to resize · Arrow keys nudge · Alt disables snapping
             </p>
             <div class="tlib-layout__actions">
               <div class="tlib-layout__history">
-                {/*
-                 * The label comes off the history now, so these say what they
-                 * will take back — "Undo move Speedometer" — rather than just
-                 * "Undo". `internal/shared-ts/ui/undo-redo.tsx` is the same pair for
-                 * adopters; this surface keeps NuiButton because that is the
-                 * control the rest of this panel is built from.
-                 */}
+                {/* Label comes off the history, so these read "Undo move Speedometer", not just "Undo". `internal/shared-ts/ui/undo-redo.tsx` is the adopter equivalent. */}
                 <NuiButton
                   aria-label={undoTitle()}
                   title={undoTitle()}
@@ -1124,24 +997,8 @@ export default function LayoutEditor() {
             </p>
           </Show>
           {/*
-           * AFFIRMATIVE LEFT, and all four of tLib's affirmative/cancel pairs
-           * were moved together to get there.
-           *
-           * Counted rather than assumed. Before: this editor, the dialog footer
-           * and the menu's confirmation all put Cancel left / affirmative right;
-           * the shared prop editor put Save left. So tLib was 3–1 the other way,
-           * and the audit that raised this counted five surfaces when there are
-           * six — it missed the dialog footer and the menu confirmation. Reversing
-           * only this one would have left tLib 2–2, which is worse than either
-           * convention.
-           *
-           * Affirmative-left is the side the rest of the stack is already on — the
-           * prop editor (tLib's own, mounted by three consumers), tLS and tAFK —
-           * and it is the native order on Windows, which is the only OS a FiveM
-           * client runs on. A player who confirms in the prop editor and then
-           * meets a tLib dialog must not have to re-read the buttons; that
-           * inversion is the same class of defect as the accent repainting
-           * between two surfaces.
+           * Affirmative-left, matching the prop editor, tLS and tAFK, and the
+           * native Windows order — the only OS a FiveM client runs on.
            */}
           <footer>
             <NuiButton
@@ -1161,14 +1018,10 @@ export default function LayoutEditor() {
           </footer>
           {/*
            * The discard question, drawn with nui-kit's `.tlib-nui-confirm*`
-           * recipe — the same one the dialog's `confirm` field uses and the same
-           * shape the menu has always had. One confirmation design in the
-           * product, three surfaces that reach for it.
-           *
-           * `tlib-nui-surface` on the shade rather than relying on an ancestor:
-           * this panel is themed from `--tlib-layout-*`, so the `--nui-*` tokens
-           * the recipe reads are not otherwise in scope here and every colour in
-           * it would resolve to nothing.
+           * recipe (shared with Dialog's `confirm` field and the menu).
+           * `tlib-nui-surface` on the shade because this panel is themed
+           * from `--tlib-layout-*`, so the recipe's `--nui-*` tokens aren't
+           * otherwise in scope here.
            */}
           <Show when={discarding()}>
             <div class="tlib-nui-surface tlib-nui-confirm-shade">
@@ -1191,34 +1044,14 @@ export default function LayoutEditor() {
                   undone.
                 </p>
                 {/*
-                 * THE LOSSY ANSWER IS ON THE RIGHT, and this is NOT the same
-                 * rule as the Save/Cancel footer above it. Both are correct and
-                 * they point opposite ways on purpose.
-                 *
-                 * That footer is a primary action beside its escape hatch:
-                 * affirmative-left, the convention all four of tLib's
-                 * affirmative/cancel pairs were moved to, and the native order
-                 * on Windows — the only OS a FiveM client runs on.
-                 *
-                 * This is a DESTRUCTIVE CONFIRMATION, which is a different
-                 * widget answering a different question. The estate rule there
-                 * is that the lossy button goes right and the safe one takes the
-                 * affirmative slot, because "Keep editing" IS the affirmative
-                 * answer to "discard?" — the primary action of this dialog is to
-                 * NOT lose the work. tLS's discard guard, tUnit's
-                 * `CharacterEditor` footer and tLib's own shared `PropEditor`
-                 * prompt are all spelled this way.
-                 *
-                 * This editor was the odd one out: it put Discard left, with the
-                 * primary tone AND the autofocus, under an affirmative-left
-                 * reading of a dialog whose affirmative answer is the other
-                 * button. So one Enter on the keyboard threw the layout away.
-                 * Converged here; the footer above is untouched.
-                 *
-                 * `data-discard-answer` is the semantic handle, the same role
-                 * `data-prop-editor-keep` / `-discard` play in the shared editor:
-                 * the captions are prose and an order assertion must not key on
-                 * glyphs or on DOM position alone.
+                 * Destructive confirmation: the lossy button goes right and
+                 * "Keep editing" takes the affirmative/primary slot —
+                 * opposite of the Save/Cancel footer above, which pairs a
+                 * primary action with its escape hatch. Matches tLS's
+                 * discard guard, tUnit's `CharacterEditor` footer and tLib's
+                 * shared `PropEditor` prompt. `data-discard-answer` is the
+                 * semantic handle (same role as `data-prop-editor-keep`/
+                 * `-discard`) since the captions are prose.
                  */}
                 <div class="tlib-nui-confirm-actions">
                   <NuiButton
@@ -1227,14 +1060,11 @@ export default function LayoutEditor() {
                     autofocus
                     onClick={() => {
                       setDiscarding(false);
-                      // This button is about to be removed from the document,
-                      // which leaves focus on `<body>` — outside the editor's
-                      // own dialog. Hand it back where a grab would put it.
+                      // This button is removed from the document on click, leaving focus on body; hand it back to the editor.
                       surface?.focus({ preventScroll: true });
                     }}
                   >
-                    {/* The glyphs follow the tone, not the DOM order: the tick
-                        belongs on the affirmative answer, which is now this one. */}
+                    {/* Glyph follows the tone, not DOM order — tick on the affirmative answer. */}
                     <Check aria-hidden="true" />
                     Keep editing
                   </NuiButton>

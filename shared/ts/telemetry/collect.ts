@@ -9,10 +9,10 @@
  *
  * Everything else in this directory is a primitive; this is the wiring.
  *
- * CAPTURE IS LOCAL AND UNCONDITIONAL; TRANSMISSION IS GATED. The gate lives on
- * the game server and `enabled` here is only a cache of its answer, so the
- * invariant when editing this file is that **the only path that leaves the page
- * is `flush()`** — nothing else may call `fetchNui`.
+ * Capture is local and unconditional; transmission is gated. The gate lives on
+ * the game server and `enabled` here is only a cache of its answer — the
+ * invariant is that `flush()` is the only path that leaves the page; nothing
+ * else may call `fetchNui`.
  *
  * `console.warn` is deliberately NOT hooked, and neither is `tlib.logger`: a log
  * line has no stable identifier, so it cannot be grouped. A warning is reported

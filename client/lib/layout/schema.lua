@@ -6,8 +6,8 @@ local anchors = { ['top-left'] = true, ['top-right'] = true, ['bottom-left'] = t
 
 -- Offsets are a ratio of a 1080px-tall reference screen -- the same unit the
 -- widget's own size scales by -- so a corner inset stays visually constant from
--- 16:9 to 32:9. Centre-anchored X stays proportional to width. Mirrored by
--- shared/ts/hud-geometry.ts; the two must agree or the editor and the game disagree.
+-- 16:9 to 32:9. Centre-anchored X stays proportional to width. Mirrored by its
+-- TypeScript counterpart; the two must agree or the editor and the game disagree.
 S.REFERENCE_HEIGHT = 1080
 S.MAX_OFFSET = 4
 S.MIN_VISIBLE_PIXELS = 96
@@ -32,9 +32,10 @@ function S.layout(value, component)
     if not component.canScale and value.scale ~= component.defaults.scale then return nil end
     return S.copy(value)
 end
--- Recoverability constraint, shared with shared/ts/hud-geometry.ts. Applies to EVERY
--- component: a widget must always be grabbable again, whatever put it where it
--- is -- a drag, a resolution change, or a record written by an older version.
+-- Recoverability constraint, shared with the TypeScript mirror. Applies to
+-- every component: a widget must always be grabbable again, whatever put it
+-- where it is -- a drag, a resolution change, or a record written by an
+-- older version.
 -- Pixels are CSS pixels at the given viewport; fraction uses the rendered extent.
 function S.constrain(layout, component, viewport)
     if type(viewport) ~= 'table' or not S.finite(viewport.width, 1, 16384)
@@ -92,7 +93,7 @@ function S.component(owner, id, options)
         { x = 0.02, y = 0.02, scale = 1, visible = true, anchor = 'top-left' }
     component.defaults = S.layout(component.defaults, component)
     if not component.defaults then return nil end
-    -- `defaults` is the FACTORY placement -- the thing Reset goes back to -- and
+    -- `defaults` is the factory placement -- the thing Reset goes back to -- and
     -- `layout` is where the widget is right now. They are only the same object for
     -- a consumer that has nowhere else to keep its placement. A consumer that owns
     -- its own storage (persist = false) used to have to pass its saved position as

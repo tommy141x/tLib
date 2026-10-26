@@ -1,35 +1,17 @@
 /**
- * `createRuntimeAssetCache` — and above everything else, the assertion that
- * **after a resource restart tWeb is not consulted**.
+ * `createRuntimeAssetCache`, centered on one assertion: after a resource
+ * restart, tWeb is not consulted. A cache that kept preferring the remote
+ * copy would pass every manual test and only surface the day tWeb went down.
  *
- * That is the half of the one-click-install contract that protects the
- * architecture, and it is the half that fails silently: a cache that kept
- * preferring the remote copy would work perfectly in every manual test and
- * would only be discovered the day tWeb went down, by which time every
- * installed item on every server had become a remote dependency.
+ * A restart does two things: tears down the NUI document (a fresh cache here)
+ * and rebuilds the client file manifest (the fake file server answering 200).
+ * So each test builds a fresh cache, makes the local server answer, drives the
+ * same install path the pre-restart case uses, and asserts the request log —
+ * not a flag — never points at the marketplace host.
  *
- * What "after a restart" is, in a test
- *
- * A resource restart does two things and only two: it tears down the NUI
- * document (so every map in the module is gone — the cache is constructed
- * fresh here, which IS that) and it rebuilds the client file manifest (so the
- * newly-installed file is now served locally — the fake file server here
- * answers 200 for it, which IS that).
- *
- * So the measurement is: build a fresh cache, make the local server answer for
- * the asset, drive the SAME install path the pre-restart case uses, and assert
- * that **nothing in the recorded request log points at the marketplace host**.
- * It is the request log that is asserted, not a flag or a return value — a flag
- * is a claim about intent, and the request log is the behaviour the rule is
- * actually about.
- *
- * The negative controls, and what they prove
- *
- * A passing assertion proves nothing on its own. Each local-first check below
- * is paired with a run of the same check against a server that 404s the local
- * path — the pre-restart state. If the assertion still passed there, it would
- * not be observing requests at all. Stated plainly: these controls prove the
- * assertions *fire*; they do not prove the rule set is complete.
+ * Each local-first check is paired with a NEGATIVE CONTROL run against a
+ * server that 404s the local path (the pre-restart state): these prove the
+ * assertion fires, not that the rule set is complete.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -64,16 +46,11 @@ function zipOf(entries: Record<string, Uint8Array | string>): Uint8Array {
   return new Uint8Array(zip.toBuffer());
 }
 
-/**
- * A zip built byte by byte, because a HOSTILE entry name cannot be produced by
- * a library.
- *
- * adm-zip sanitises on write: `addFile("../../../escape.lua", …)` lands in the
- * archive as `escape.lua`, so a zip-slip fixture built with it tests nothing.
- * The traversal guard is only reachable with a zip no well-behaved writer would
- * make — which is exactly the input it exists for. Stored (method 0) entries,
- * with real CRCs so fflate has nothing to object to beyond the name.
- */
+// A zip built byte by byte: adm-zip sanitises `addFile("../../../escape.lua")`
+// to `escape.lua` on write, so a zip-slip fixture built with it would test
+// nothing. The traversal guard is only reachable with a zip no well-behaved
+// writer makes. Stored (method 0) entries with real CRCs, so fflate objects
+// to nothing but the name.
 function rawZip(entries: Record<string, string>): Uint8Array {
   const crcTable = (() => {
     const t = new Uint32Array(256);
@@ -235,8 +212,6 @@ function harness(opts: HarnessOptions = {}): Harness {
   };
 }
 
-// THE CONTRACT: after a restart, tWeb is not consulted.
-
 describe("after a resource restart, tWeb is not consulted", () => {
   test("a bundle the resource now serves is never downloaded", async () => {
     // A fresh cache IS the torn-down NUI document; a local 200 IS the rebuilt
@@ -287,10 +262,9 @@ describe("after a resource restart, tWeb is not consulted", () => {
   });
 
   test("a bundle with no entry document is still recognised by its module.json", async () => {
-    // tRadio has a JSON layout shape with no `ui.html` at all. With a single
-    // `ui.html` probe this layout would 404 locally on EVERY boot and send the
-    // client to tWeb for files sitting on the server's own disk — a permanent
-    // remote dependency, which is the one outcome this module exists to prevent.
+    // tRadio has a JSON layout with no `ui.html`. A single `ui.html` probe
+    // would 404 locally on every boot and send the client to tWeb for files
+    // already on the server's own disk — a permanent remote dependency.
     const h = harness({
       local: { "../../layouts/tradio-json/module.json": '{"kind":"layout"}' },
     });
@@ -299,8 +273,8 @@ describe("after a resource restart, tWeb is not consulted", () => {
 
     expect(h.remote()).toEqual([]);
     expect(h.cache.hasBundle("tradio-json")).toBe(false);
-    // Two HEADs, not one: `ui.html` is tried first because it is the document
-    // consumers load, and only its absence reaches the second marker.
+    // Two HEADs, not one: `ui.html` is tried first since it's the document
+    // consumers load; only its absence reaches the second marker.
     expect(h.requests.map((r) => r.url)).toEqual([
       "../../layouts/tradio-json/ui.html",
       "../../layouts/tradio-json/module.json",
@@ -308,9 +282,8 @@ describe("after a resource restart, tWeb is not consulted", () => {
   });
 
   test("NEGATIVE CONTROL: a single-probe cache does reach tWeb for that layout", async () => {
-    // The same bundle against a cache configured the way this module USED to
-    // behave. If this did not download, the test above would be asserting
-    // nothing about the probe list.
+    // The same bundle against a cache configured the way this module used to
+    // behave — if this did not download, the test above would assert nothing.
     const requests: string[] = [];
     const cache = createRuntimeAssetCache({
       tag: "test",
@@ -404,8 +377,6 @@ describe("after a resource restart, tWeb is not consulted", () => {
     expect(h.requests).toEqual([]);
   });
 });
-
-// The pre-restart window: the install has to render without a restart.
 
 describe("the pre-restart window", () => {
   async function installed(opts: HarnessOptions = {}): Promise<Harness> {
@@ -501,7 +472,7 @@ describe("the pre-restart window", () => {
 
   test("a download that fails is retried once, then gives up without throwing", async () => {
     const h = harness({ local: null, remoteZip: 503 });
-    // Must RESOLVE: callers await this to proceed to their local fallback, and
+    // Must resolve: callers await this to proceed to their local fallback;
     // an export that throws here would surface later as a JSON parse error.
     await h.cache.acquireBundle("tradio-fancy", REMOTE_ZIP);
     expect(h.remote()).toEqual([REMOTE_ZIP, REMOTE_ZIP]);
@@ -530,12 +501,9 @@ describe("the pre-restart window", () => {
   });
 
   test("a 404 says there is no such item, not that the fetch broke", async () => {
-    // The support cost this carries: one customer pasted 34 of these at once --
-    // every built-in tone, registered as an installed marketplace item by the
-    // consumer -- and the whole thread went on their VPS's ports and CORS. The
-    // catalogue was answering correctly. So the 404 line has to name the cause
-    // and rule the network out, and a REAL transport failure must not claim the
-    // item is missing.
+    // Every built-in tone registered as an installed marketplace item 404s
+    // here; a transport failure (503 below) must not read the same way, or
+    // support chases a VPS network problem that doesn't exist.
     const missing = harness({ local: null, remoteFile: 404 });
     await missing.cache.acquireFile("echo.wav", `${MARKETPLACE}/api/v1/items/echo/download`);
     const line = missing.warnings.join("\n");
@@ -559,8 +527,6 @@ describe("the pre-restart window", () => {
     expect(h.remote()).toEqual([url, url]);
   });
 });
-
-// Eviction and the generation fence.
 
 describe("eviction", () => {
   test("evictBundle revokes every blob and forgets the bundle", async () => {
@@ -675,18 +641,13 @@ describe("the expanded-size ceiling", () => {
 });
 
 describe("the data-URL mode, for a sandboxed iframe", () => {
-  /**
-   * tLS hosts a layout pack in a `sandbox`ed iframe with no
-   * `allow-same-origin`, so the frame's origin is OPAQUE. The blob URL store is
-   * keyed by origin, so a blob: URL minted by the parent cannot be loaded in
-   * there at all — it is not a permissions warning, the fetch simply fails. A
-   * data: URL carries its bytes and has no origin to check.
-   *
-   * This is reasoned from the HTML/File-API specs and Chromium's enforcement
-   * of them, NOT measured in CEF: there is no way to drive FiveM's browser from
-   * a suite. What IS measured here is that the mode produces loadable data:
-   * URLs, revokes nothing, and leaves everything else about the cache identical.
-   */
+  // tLS hosts a layout pack in a `sandbox`ed iframe with no
+  // `allow-same-origin`, so its origin is opaque: a blob: URL minted by the
+  // parent cannot load there (the fetch just fails), but a data: URL carries
+  // its own bytes and has no origin to check. Reasoned from the HTML/File-API
+  // specs, not measured in CEF — there's no way to drive FiveM's browser from
+  // a suite. What's measured here is that the mode produces loadable data:
+  // URLs, revokes nothing, and leaves the rest of the cache identical.
   function dataHarness(): { cache: RuntimeAssetCache; revoked: string[] } {
     const revoked: string[] = [];
     const cache = createRuntimeAssetCache({

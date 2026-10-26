@@ -85,18 +85,13 @@ must(#warns == 0, 'a successful registration warned anyway')
 -- A `false` and a throw are the same operator-visible condition and must get the
 -- same message.
 --
--- WARNING: THIS ASSERTION USED TO REQUIRE THE WORD `tlib_module`, AND THAT WAS WRONG.
--- The warning told the reader to add `tlib_module { 'marketplace' }` to their
--- fxmanifest, which cannot fix this: imports.lua lazy-loads on first access of
--- `tlib.<name>`, and its own comment says the eager declaration is "not
--- load-bearing any more except for realtime". A resource reaching that line has
--- already loaded the module -- calling this function is how.
---
--- The test was right that the message must name something to do, and wrong about
--- what. Measured 2026-10-21: a session chasing why no sound installs server-side
--- found tRadio declares no modules, matched it to this advice, and had to flag it
--- as unverified rather than act on it. So it still asserts actionability -- now
--- against the causes RegisterMarketplaceType actually checks.
+-- This assertion used to require the word `tlib_module`, which was wrong: the
+-- warning told the reader to add `tlib_module { 'marketplace' }` to their
+-- fxmanifest, but imports.lua lazy-loads on first access of `tlib.<name>`, and
+-- a resource reaching this line has already loaded the module by calling it.
+-- The message still has to name something actionable -- now against the
+-- causes RegisterMarketplaceType actually checks, not a declaration that
+-- cannot fix anything.
 reset()
 registerFails.sound = 'false'
 must(marketplace.registerType('sound', 'layouts/sounds', warn) == false,
@@ -186,12 +181,11 @@ must(#layoutInstalls + #soundInstalls == before,
 
 reset()
 
--- THE CONTROL'S DEFECT, planted in the path under test rather than beside it.
---
--- The module reads `TriggerClientEvent` as a global at call time, so replacing
--- it here puts the shipped bug back inside `soundConflict`: the send still
--- happens, with the same payload, at `-1`. Everything below then runs against a
--- module that is behaving the way all four resources behaved, and the broadcast
+-- The control's defect, planted in the path under test rather than beside it:
+-- the module reads `TriggerClientEvent` as a global at call time, so replacing
+-- it here puts the shipped bug back inside `soundConflict` -- the send still
+-- happens, with the same payload, at `-1`. Everything below then runs against
+-- a module behaving the way all four resources did, and the broadcast
 -- assertion has to be the thing that notices.
 if CONTROL then
     local realTrigger = TriggerClientEvent
@@ -215,10 +209,10 @@ must(sent.payload.filename == 'ka-band.wav', 'the payload did not carry the file
 must(sent.payload.newSlug == 'ka-band' and sent.payload.oldSlug == 'old-tone',
     'the payload did not carry both slugs')
 
--- THE BUG, asserted directly. `-1` is every player on the server, for a
+-- The bug, asserted directly. `-1` is every player on the server, for a
 -- message about an admin action that, in three of the four resources, nothing
--- could even receive. Under the control these two are the assertions that have
--- to fail, and the verdict refuses the run if they do not.
+-- could even receive. Under the control these two assertions have to fail,
+-- and the verdict refuses the run if they do not.
 local caught = 0
 local function mustTarget(condition, message)
     if condition then return end
@@ -285,7 +279,7 @@ must(marketplace.upsertSound(sounds, 'ka') == nil, 'upsertSound invented a confl
 must(#sounds == 1 and sounds[1].filename == 'ka.wav', 'upsertSound did not add the entry')
 must(marketplace.removeSound(sounds, {}, 'ka') == 'ka.wav', 'removeSound did not report the file')
 
--- -- The extension comes from the install, not from a guess ------------------
+-- The extension comes from the install, not from a guess.
 --
 -- upsertSound hardcoded `slug .. '.wav'`. The installer writes `.wav`, `.ogg` or
 -- `.mp3` from the payload's magic bytes, so a non-WAV tone was recorded under a

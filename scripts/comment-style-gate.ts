@@ -41,10 +41,10 @@ const EXCLUDED_DIRS = [
 ];
 
 /**
- * A licence or copyright notice in the first 2 KB means a third-party file whose
- * header is not ours to edit. Deliberately not the word "vendored": tLib's own
- * `deck/` modules describe which of their files get vendored into the Stream
- * Deck plugins, and matching that prose exempted four of our own files.
+ * A licence/copyright notice in the first 2 KB means a third-party file not
+ * ours to edit. Not the word "vendored": tLib's own `deck/` modules describe
+ * which files get vendored into the Stream Deck plugins, and matching that
+ * prose exempted four of our own files.
  */
 const VENDOR_MARKERS = [
   "@license",
@@ -55,33 +55,15 @@ const VENDOR_MARKERS = [
 ];
 
 /**
- * Pictographs, dingbats and the shape glyphs used as severity markers. Plain
- * typographic arrows (U+2190-U+21FF) and dashes are prose, not decoration, and
- * are deliberately not matched.
- */
-/*
- * ⚠️ THE TWO COMBINING MARKS ARE AN ALTERNATION, NOT CLASS MEMBERS, AND THAT IS
- * A CORRECTNESS FIX RATHER THAN A LINT APPEASEMENT.
+ * Pictographs, dingbats and severity-marker glyphs. Plain typographic arrows
+ * (U+2190-U+21FF) and dashes are prose, not decoration, and are not matched.
  *
- * `U+FE0F` (variation selector-16) and `U+20E3` (combining enclosing keycap) are
- * COMBINING characters: they have no standalone meaning and exist to modify the
- * code point before them. Listing them inside a character class alongside base
- * pictographs says "match one of these characters", which is not what a
- * combining mark does — biome's `lint/suspicious/noMisleadingCharacterClass`
- * flags exactly that, and its advice is the alternation used here.
- *
- * ⚠️ SEMANTICALLY IDENTICAL FOR THIS GATE. A class `[a b c]` and an alternation
- * `a|b|c` match the same single code points; the difference only matters for
- * grapheme handling, which this gate does not do. Verified rather than argued:
- * `scripts/comment-style-control.ts` asserts in BOTH directions — that EMOJI
- * matches the severity glyphs (⚠ ⛔ ⭐ ✅ ❌ 🔴) and does NOT match typographic
- * arrows, dashes or ellipsis — and both arms still pass.
- *
- * ⛔ WRAPPED IN `(?:…)` DELIBERATELY. Every consumer today uses `.test()` or
- * `.match()` on the pattern whole, where bare alternation is safe — but an
- * unguarded `a|b|c` composed into a larger pattern via `.source` would bind
- * looser than intended and silently match the wrong thing. The group costs
- * nothing and removes that trap in advance.
+ * `U+FE0F` and `U+20E3` are COMBINING marks, not standalone characters, so
+ * listing them inside the character class triggers biome's
+ * `lint/suspicious/noMisleadingCharacterClass` -- its advised fix is the
+ * alternation used here, which `comment-style-control.ts` asserts matches
+ * the same set in both directions. Wrapped in `(?:…)` so composing this
+ * pattern into a larger one via `.source` can't bind looser than intended.
  */
 export const EMOJI =
   /(?:[\u{1F000}-\u{1FAFF}\u{2460}-\u{24FF}\u{25A0}-\u{25FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{E0020}-\u{E007F}]|\u{FE0F}|\u{20E3})/u;

@@ -8,8 +8,6 @@
 
 local Telemetry = {}
 
--- Names
-
 Telemetry.CONVAR = 'tlib_telemetry'
 
 --- Client -> server. One name for every consumer: net events are global by name
@@ -39,8 +37,6 @@ Telemetry.CAP_RESOURCE = 32
 Telemetry.CAP_VERSION = 32
 Telemetry.CAP_CODE = 64
 Telemetry.CAP_LOCATION = 160
-
--- The charset
 
 --- Player and machine identifier shapes, blanked before ANY value becomes a
 --- dimension. The ingest charset admits a FiveM identifier verbatim, so the
@@ -126,8 +122,6 @@ function Telemetry.pathSlug(value, maxLength)
     return Telemetry.slug((value:gsub([=[[\/]+]=], '.')), maxLength or Telemetry.CAP_LOCATION)
 end
 
--- The fingerprint
-
 --- FNV-1a, 32-bit, as 8 LOWERCASE hex characters. The alphabet is contract:
 --- tWeb's scrubber refuses a mixed-case 32-character token as a credential
 --- shape. The shift-and-add arithmetic is contract too -- it stays exact in both
@@ -154,8 +148,6 @@ end
 function Telemetry.fingerprint(name, site)
     return Telemetry.fnv1a(('%s|%s'):format(tostring(name), tostring(site or '')))
 end
-
--- Scrubbing
 
 local SECRET_WORDS = {
     'token', 'access_token', 'refresh_token', 'api_key', 'apikey', 'key',
@@ -220,8 +212,6 @@ function Telemetry.scrub(text)
 
     return out
 end
-
--- timed()
 
 Telemetry.SAMPLE_WINDOW = 64
 Telemetry.THRESHOLD_COOLDOWN_MS = 60000
@@ -342,8 +332,6 @@ function Telemetry.createTimers(opts)
     return timers
 end
 
--- The side-specific half.
-
 local isServer = type(IsDuplicityVersion) == 'function' and IsDuplicityVersion()
 
 --- The consent answer, cached. A cache, not an authority -- the server decides
@@ -410,8 +398,6 @@ local function admit(fp)
     return true
 end
 
--- Sending
-
 local pendingEvents = {}
 local MAX_PENDING = 32
 
@@ -438,8 +424,6 @@ local function queue(event)
 end
 
 function Telemetry.flush() send() end
-
--- The reporting API
 
 --- A fault in OUR code that we caught. `site` becomes the `location` dimension
 --- through `pathSlug`.
@@ -522,8 +506,6 @@ end
 function Telemetry.record(operation, thresholdMs, durationMs)
     _timers.record(operation, thresholdMs, durationMs)
 end
-
--- Wiring
 
 if not isServer and type(RegisterNetEvent) == 'function' then
     RegisterNetEvent(Telemetry.CONSENT_EVENT, function(payload)

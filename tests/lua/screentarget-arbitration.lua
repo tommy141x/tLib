@@ -7,7 +7,7 @@
 -- that in a game session without three people and two cars.
 --
 -- So every native the module would call is an injected provider here and the
--- real client.lua is driven directly. The last block is a MUTATION PROOF: the
+-- real client.lua is driven directly. The last block is a mutation proof: the
 -- same input sequence is replayed through an arbiter whose margin and dwell are
 -- zeroed, and it is asserted to flap. Without that, a suite that only shows the
 -- tuned arbiter holding still would pass just as happily against an arbiter that
@@ -272,12 +272,11 @@ assert(tuned == 0,
 -- never anything to switch away from".
 assert(arb.current() == 10, 'the incumbent it started with is the one still drawn')
 
--- MUTATION PROOF
+-- Mutation proof
 --
 -- Remove the hysteresis -- margin 0, dwell 0, which reduces the module to
 -- "nearest always wins" -- and replay the identical sequence. It must flap. If
--- this ever stops flapping, the assertion above has stopped proving anything and
--- is passing for some other reason.
+-- this ever stops flapping, the assertion above has stopped proving anything.
 
 freshWorld()
 put(10, 3.0)
@@ -305,15 +304,15 @@ assert(arb.update() == 10, 'and the next pass re-adopts from scratch')
 
 -- The DEFAULT providers, against a native that answers the way the game does
 --
--- EVERY test above this line injects `exists`, which is exactly why the suite was
--- green while the feature was dead in game. The default provider was
--- `DoesEntityExist(entity) == true`, and MEASURED in FiveM Enhanced on 2026-09-26
--- every BOOL native reaches Lua as the NUMBER 1 -- checked with `type()` on
--- DoesEntityExist, NetworkDoesNetworkIdExist, IsPedInAnyVehicle, IsEntityAVehicle
--- and HasModelLoaded, all of which answered "number". So the comparison was always
--- false, no vehicle ever qualified, and tRadar, tDetector and tRadio all showed a
--- dead prop: no browser, no backlight, no lamps, and nothing logged, because the
--- arbiter returning nil is a legitimate answer.
+-- Every test above this line injects `exists`, which is exactly why the suite
+-- was green while the feature was dead in game. The default provider was
+-- `DoesEntityExist(entity) == true`, but in FiveM Enhanced every BOOL native
+-- reaches Lua as the NUMBER 1 -- confirmed with `type()` on DoesEntityExist,
+-- NetworkDoesNetworkIdExist, IsPedInAnyVehicle, IsEntityAVehicle and
+-- HasModelLoaded, all answering "number". So the comparison was always false,
+-- no vehicle ever qualified, and tRadar, tDetector and tRadio all showed a
+-- dead prop with nothing logged, because the arbiter returning nil is a
+-- legitimate answer.
 --
 -- So this block deliberately does NOT inject `exists`. It stubs the native itself,
 -- in both shapes a BOOL can arrive in, which is the only way the default gets

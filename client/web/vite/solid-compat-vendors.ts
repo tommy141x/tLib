@@ -1,68 +1,38 @@
 /**
  * Packages whose Solid 1 specifiers must be rewritten for the in-game NUI bundle.
+ * Not "this app's dependencies" — a package already Solid 2 native doesn't belong;
+ * a TRANSITIVE one still naming the Solid 1 surface does (e.g. @solid-primitives/props,
+ * reached only through @ark-ui/solid). Derived by measuring this app's installed tree
+ * AFTER the Solid 2 pins were installed (2026-10-04) — measuring before gives false
+ * positives. A spurious entry never matches (the plugin gates on a `/node_modules/<pkg>/`
+ * substring) and reads as supported with nothing to tell you; a missing one fails as
+ * `"./web" is not exported … from package …/solid-js`, naming no importer —
+ * `SOLID1_SHIM_DEBUG=1` finds the real asker. Do not copy this list to another app or
+ * add to it by guessing.
  *
- * NOT "packages this app depends on". A dependency that is already Solid 2
- * native does not belong here, and a TRANSITIVE one that still names the Solid 1
- * surface does — `@solid-primitives/props` is reached only through
- * `@ark-ui/solid`, and `@solid-primitives/refs` and
- * `@solid-primitives/transition-group` only through `solid-motionone`; nothing
- * in `src/` imports any of the three.
+ *   @ark-ui/solid            solid-js/web, solid-js/store, Index, createUniqueId,
+ *                            mergeProps, on, onMount, splitProps      (66 files)
+ *   @solid-primitives/props  mergeProps
+ *   @tanstack/solid-form     solid-js/web, createComputed, createUniqueId,
+ *                            mergeProps, onMount, splitProps          (10 files)
+ *   @tanstack/solid-store    solid-js/web
+ *   @zag-js/solid            mergeProps, onMount
+ *   lucide-solid             solid-js/web, splitProps                (3700 files)
  *
- * DO NOT COPY THIS LIST TO ANOTHER APP, AND DO NOT ADD TO IT BY GUESSING.
- * A spurious entry never matches — the plugin gates on a `/node_modules/<pkg>/`
- * substring — so it is dead weight that READS as a supported case, and nothing
- * ever tells you. A missing entry fails as `"./web" is not exported … from
- * package …/solid-js`, naming no importer at all; `SOLID1_SHIM_DEBUG=1` is the
- * only thing that finds the real asker.
+ * 2026-10-23: removed solid-motionone (zero importers, no longer declared) and the two
+ * packages reachable only through it, @solid-primitives/refs and
+ * @solid-primitives/transition-group.
  *
- * DERIVED BY MEASUREMENT against this app's own installed tree, 2026-10-04,
- * AFTER the Solid 2 pins were installed — measuring before the install is what
- * makes the difference, see the note on `@solid-primitives/*` below. A package
- * is kept only when a file that can RUN imports a specifier Solid 2 deleted
- * (`solid-js/web`, `solid-js/store`) or a NAME bare `solid-js` no longer
- * exports. Bare `solid-js` on its own is not a reason: the shim leaves that
- * specifier alone.
+ * Deliberately excluded: @solid-primitives/keyed and @solid-primitives/utils, both hit
+ * before the upgrade, both moved to Solid-2-native pins (3.0.0-next.2 / 7.0.0-next.4).
+ * `utils` matters beyond tidiness — keyed@3 imports INTERNAL_OPTIONS from it, and
+ * shimming it produces `"equalFn" is not exported by … solid-1-compat.ts`, an error
+ * naming the shim three packages from its cause. Also excluded: babel-preset-solid,
+ * solid-refresh, vite-plugin-solid — build tooling reachable only through
+ * vite-plugin-solid, which this app no longer uses.
  *
- *   @ark-ui/solid                       solid-js/web, solid-js/store, Index,
- *                                       createUniqueId, mergeProps, on,
- *                                       onMount, splitProps        (66 files)
- *   @solid-primitives/props             mergeProps
- *   @tanstack/solid-form                solid-js/web, createComputed,
- *                                       createUniqueId, mergeProps, onMount,
- *                                       splitProps                 (10 files)
- *   @tanstack/solid-store               solid-js/web
- *   @zag-js/solid                       mergeProps, onMount
- *   lucide-solid                        solid-js/web, splitProps  (3700 files)
- *
- * A THIRD EXCLUSION, 2026-10-23
- *
- * `solid-motionone` measured as a hit and is gone, because nothing imports it:
- * zero references in any source file in the tree, and the package is no longer
- * declared. `@solid-primitives/refs` and `@solid-primitives/transition-group`
- * went with it -- both were reachable ONLY through it, neither was ever declared
- * here, so with it removed there is no file left that can run their code. Three
- * of the nine entries were the "dead weight that reads as a supported case" this
- * header warns about, which is the whole reason they are removed rather than
- * left harmlessly in place.
- *
- * TWO EXCLUSIONS THAT ARE DELIBERATE
- *
- * `@solid-primitives/keyed` and `@solid-primitives/utils` BOTH measured as hits
- * before the upgrade and neither is here, because the pins in `package.json`
- * move them to `3.0.0-next.2` / `7.0.0-next.4`, which are Solid 2 native. The
- * `utils` one matters beyond tidiness: `keyed@3` imports `INTERNAL_OPTIONS`
- * from it, and putting it behind the shim is what produces `"equalFn" is not
- * exported by … solid-1-compat.ts` — an error naming the shim, three packages
- * from its cause. Measure AFTER installing, never before.
- *
- * `babel-preset-solid`, `solid-refresh` and `vite-plugin-solid` all measured as
- * hits too and are all BUILD tooling, reachable only through
- * `vite-plugin-solid`, which this app no longer uses. Nothing they contain can
- * reach the bundle, so shimming them would be the "dead weight that reads as a
- * supported case" above.
- *
- * Keep it in its own module rather than inline: `optimizeDeps.exclude` has to
- * hold the same set by construction.
+ * Kept in its own module because `optimizeDeps.exclude` (vite.config.ts) needs the
+ * same set.
  */
 export const VENDOR_PACKAGES = [
   "@ark-ui/solid",

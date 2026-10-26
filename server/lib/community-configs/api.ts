@@ -1,26 +1,13 @@
 // HTTP client for the community-configs API (`/api/v1/community-configs`).
 //
-// `server/sv_community_configs.lua` used to do this with PerformHttpRequest,
-// and it did not authenticate. The publish endpoint now requires
-// `X-Resource-Secret` — whose value is `TLIB_PUBLIC_KEY`, defined once in
-// `shared/ts/marketplace/catalogue.ts`. The HEADER name is unchanged and must
-// stay that way: every already-shipped copy sends it and tWeb authenticates on
-// it. Only the constant was renamed, because the key was never
-// marketplace-specific -- it authenticates every tWeb API, this one included.
-//
-// It is NOT read from a convar and must never become one; see the note on
-// `TLIB_PUBLIC_KEY` for why it is public by design. Handing it to the Lua VM
-// through an export would let any third-party script on a customer's server read
-// it without console or file access, so the request moves to the secret rather
-// than the other way round.
-//
-// Only `publishConfig` sends it. The reads are unauthenticated because publishing
-// is the only act that needs attributing -- but UNAUTHENTICATED IS NOT
-// UNIDENTIFIED (`studioHeaders` still carries `x-install-id`), and it is NOT
-// reachable from an in-game browse panel either: the Worker sends no
-// `Access-Control-Allow-Origin` on any /api/v1 route, so a fetch from CEF gets its
-// 200 and then has the body withheld. Every read here runs server-side.
-//
+// The publish endpoint requires `X-Resource-Secret: TLIB_PUBLIC_KEY` — the same
+// constant that authenticates every tWeb API, not marketplace-specific despite
+// the name. It is never read from a convar and must not become one: handing it
+// to the Lua VM via an export would let any third-party script read it. Only
+// `publishConfig` sends it; reads are unauthenticated but still identified via
+// `studioHeaders`'s `x-install-id`. Reads are also unreachable from an in-game
+// browse panel — the Worker sends no CORS header on /api/v1, so a CEF fetch gets
+// its body withheld.
 
 import { studioHeaders, TLIB_PUBLIC_KEY } from "../../../shared/ts/marketplace/catalogue";
 import { MarketplaceError } from "../marketplace/api";
@@ -55,14 +42,12 @@ export interface PublishPayload {
  * `editToken` is `HMAC-SHA256(TLS_CONFIG_EDIT_SECRET, id)`, minted by the
  * Worker at publish and required by `updateConfig` and `withdrawConfig`.
  *
- * Optional, and every caller must treat it as such: a host running a build
- * from before the endpoint existed answers `{ id }` with no token, which is a
- * listing that cannot be edited from in game rather than an error. Demanding
- * one breaks publishing against every such host.
+ * Optional: a host running a build from before the endpoint existed answers
+ * `{ id }` with no token — a listing that can't be edited in game, not an
+ * error. Demanding one would break publishing against such hosts.
  *
- * It is a capability — whoever holds it can overwrite or withdraw the listing
- * — so it stays in server-side storage, never anywhere a game client can read.
- * tLS keeps it out of the broadcast `serverDefaults` for that reason.
+ * A capability — whoever holds it can overwrite or withdraw the listing — so
+ * it stays server-side only. tLS keeps it out of the broadcast `serverDefaults`.
  */
 export interface PublishResult {
   id: string;
@@ -92,13 +77,11 @@ export async function publishConfig(payload: PublishPayload): Promise<PublishRes
 
 // Edits
 //
-// Both of these send the resource secret AND the per-listing edit token. The
-// secret alone proves "somebody running tLib", which is every deployment and
-// therefore nobody; the token is what proves "the publisher of THIS listing".
-//
-// Neither takes the publisher identity. `(server_hash, publisher_license)` was
-// considered and rejected as the credential: a license is known to every server
-// the player has ever joined, and the server hash is a header the caller sets.
+// Both send the resource secret AND the per-listing edit token: the secret
+// alone proves "somebody running tLib" (every deployment, so nobody); the
+// token proves "the publisher of THIS listing". `(server_hash,
+// publisher_license)` was rejected as a credential — a license is known to
+// every server the player has joined, and the server hash is caller-set.
 
 /** The editable half of a listing. Same validation as publish, on the Worker. */
 export interface UpdatePayload {
@@ -111,12 +94,10 @@ export interface UpdatePayload {
 }
 
 /**
- * Replace a listing's payload in place.
- *
- * The Worker re-derives `led_names_json` and the fingerprint columns from
- * `configJson` in the same write, so the listing and the data it is matched by
- * cannot drift apart. It does not touch the publisher, the server, the import
- * count or the status.
+ * Replace a listing's payload in place. The Worker re-derives `led_names_json`
+ * and the fingerprint columns from `configJson` in the same write, so the
+ * listing can't drift from what it's matched by. Does not touch publisher,
+ * server, import count, or status.
  */
 export async function updateConfig(
   id: string,
@@ -138,15 +119,11 @@ export async function updateConfig(
 }
 
 /**
- * Take a listing out of the catalogue.
- *
- * `POST .../withdraw`, not `DELETE`, because it is not a delete: the Worker
- * sets `status = 'unlisted'`. Rows in `tls_community_config_imports` point at
- * it and `import_count` is derived from them, and a server that already
- * imported it has done nothing wrong. Every public read gates on
- * `status = 'published'`, so the withdrawal is immediate.
- *
- * There is no un-withdraw. Publishing again mints a new id and a new token.
+ * Take a listing out of the catalogue. `POST .../withdraw`, not `DELETE`: the
+ * Worker sets `status = 'unlisted'` rather than deleting, since
+ * `tls_community_config_imports` rows still point at it. Every public read
+ * gates on `status = 'published'`, so withdrawal is immediate. No un-withdraw —
+ * publishing again mints a new id and token.
  */
 export async function withdrawConfig(id: string, editToken: string): Promise<string> {
   const resp = await request(

@@ -15,54 +15,27 @@
         -- and, for a feature that had to close the dialog to use the game view:
         panel:reopen()
 
-     What this replaces
-
-    tRadar/client/cl_settings.lua:733-783 and
-    tDetector/client/cl_settings.lua:371-415 — the same three reply handlers
-    either side of one `TriggerServerEvent`. tAFK has the server half and
-    nothing on the client, so `tafk:openSettings` is a dead event and /tafk
+    Replaces three near-identical reply handlers in tRadar and tDetector;
+    tAFK had only the server half, so its client event is dead and /tafk
     still reads a cached admin flag.
 
-     `reopen()` exists because of a rate-limit trap, and it is the whole
-     reason this is a handle and not a free function
+    `reopen()` exists because the server rate-limits `:request` to one call
+    per second and drops the extra SILENTLY — an admin who opens then cancels
+    a panel fast would otherwise get nothing back. It replays the last
+    `onOpen` payload locally with no round trip. Safe only because access was
+    granted moments ago and everything the panel can DO is re-checked
+    server-side; it is NOT a way to open the panel from nothing, and the
+    `isAdmin`-style fields in the remembered payload are draw hints, never an
+    authority.
 
-    tRadar/client/cl_settings.lua:718-728 documents it: the request path is
-    rate-limited to one call per second on the server and drops the extra
-    SILENTLY, so an admin who opened the 3D prop editor and cancelled straight
-    away would get nothing back. Both tRadar and tDetector therefore expose a
-    global that reopens the dialog LOCALLY, bypassing the handshake.
+    All three replies go through `tlib.net.fromServer`, so a local
+    `TriggerEvent` cannot open the panel or fake a denial.
 
-    `reopen()` is that, named, with the knowledge attached instead of left in a
-    comment two files away from the call. It re-runs `onOpen` with the payload
-    the server last sent and makes no round trip.
-
-    It is safe for the reason tRadar gives and for no other: access was granted
-    to open this panel a moment ago, and everything the editor can actually DO
-    is re-checked on the server when it is done. It is NOT a way to open the
-    panel — there was never a grant to re-use. With no remembered answer it does
-    nothing and says so once.
-
-    And the remembered payload is deliberately a remembered one. `isAdmin` in
-    it is a draw hint seconds old; it is not, and must never become, the
-    authority for anything.
-
-     Every reply is server-only
-
-    All three handlers go through `tlib.net.fromServer`, so a local
-    `TriggerEvent` cannot open the panel or fake a denial. That closes a real
-    gap: tRadar guards `tradar:openSettings` and `tradar:configBroken` and does
-    NOT guard `tradar:accessDenied`, three lines further down the same file.
-
-     `onBroken` is optional, and a missing one is never routed to onDenied
-
-    A resource whose server half passes no `configOk` can never receive the
-    broken reply, so requiring a handler for it would be requiring dead code.
-    But if the reply does arrive with no handler, this prints a console line
-    naming the resource and the missing option rather than falling back to
-    `onDenied` — because that fallback is precisely the mistake the two states
-    exist to avoid, and it would send the player to the wrong person while
-    looking like it worked. §3.9 of the audit wants `configBroken` in four more
-    resources; a loud line is what makes its absence findable.
+    `onBroken` is optional — a resource whose server never passes `configOk`
+    can never receive it. If a `:broken` reply arrives with no handler, this
+    prints a console line instead of silently falling back to `onDenied`:
+    "not allowed" and "the config is broken" send the player to different
+    people, which is the whole reason the two states exist.
 ]]
 
 local OpenGate = {}
@@ -113,9 +86,8 @@ function OpenGate.panel(opts)
         'tlib.opengate.panel: key must be a non-empty string')
     assert(type(opts.onOpen) == 'function',
         'tlib.opengate.panel: onOpen must be a function taking (payload)')
-    -- Required, unlike onBroken. Every panel can be denied, and a denial the
-    -- player is never told about is §2.13's defect: they press the key, nothing
-    -- happens, and they report it as broken.
+    -- Required, unlike onBroken: a silent denial reads as a bug, not nothing
+    -- happening.
     assert(type(opts.onDenied) == 'function',
         'tlib.opengate.panel: onDenied must be a function — a silent denial reads as a bug')
     assert(opts.onBroken == nil or type(opts.onBroken) == 'function',

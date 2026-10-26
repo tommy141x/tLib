@@ -14,46 +14,41 @@ import { installTelemetry } from "./lib/telemetry/index";
 
 declare function GetResourcePath(resourceName: string): string | null;
 declare function exports(name: string, fn: (...args: never[]) => unknown): void;
-// FIRST, and before any module that can build a request: the per-install id
-// rides every tWeb-bound call, and the header builders ask through this seam
-// rather than importing the reader -- a static import would have each consumer
-// resolve a DIFFERENT id from its own directory. Nothing is read or written here;
-// `installId` resolves lazily, so an install that never talks to tWeb mints none.
+// Must run before any module that can build a request: the per-install id rides
+// every tWeb-bound call, resolved lazily so an install that never talks to tWeb
+// mints none. Header builders ask through this seam rather than importing the
+// reader, since a static import would have each consumer resolve a different id.
 setInstallIdResolver(installId);
 
-// tLib's one external port; every web surface any resource exposes is a mount on
-// it. Eager, because a consumer's Lua can call RegisterWebApp before tLib's own
-// onResourceStart runs -- which is also why everything below is eager.
+// tLib's one external port; every web surface any resource exposes mounts on it.
+// Eager, since a consumer's Lua can call RegisterWebApp before tLib's own
+// onResourceStart runs — which is also why everything below is eager.
 installHttp();
 
-// Realtime is a mount on that router at /rt rather than its own socket.
+// Mounted on that router at /rt rather than its own socket.
 installRealtime();
 
 // Opt-in: only a resource declaring `tlib_module { 'marketplace' }` wakes it.
 installMarketplace();
 
-// The `cc*` exports behind sv_community_configs.lua. Registered separately from
-// the marketplace because only the PUBLISH path shares its credential -- the
-// reads are open, and one module that is half authenticated is a module whose
-// reader assumes the wrong half.
+// The `cc*` exports behind sv_community_configs.lua, registered separately from
+// the marketplace because only the publish path shares its credential — reads
+// stay open.
 installCommunityConfigs();
 
-// A table of which resource is already serving which model, so two resources that
-// each ship local inference load one copy between them.
+// Tracks which resource already serves which model, so two resources shipping
+// local inference load one copy between them.
 installInference();
 
-// The gated child-process broker, so `add_unsafe_child_process_permission tLib`
-// is the only line an operator writes -- and what sits behind it is narrower than
-// the four unrestricted grants it replaced. See server/lib/spawn/catalog.ts.
+// Gated child-process broker: `add_unsafe_child_process_permission tLib` is the
+// only line an operator writes, narrower than the four unrestricted grants it replaced.
 installSpawn();
 
-// Opt-in diagnostics. Nothing is collected or sent while opted out and consent
-// defaults to OFF, but the install id is NOT part of that promise: it belongs to
-// every tWeb-bound request. server/lib/telemetry/consent.ts decides consent.
+// Opt-in diagnostics, off by default; nothing collected or sent while opted out.
+// The install id is not part of that promise — it rides every tWeb-bound request.
 installTelemetry();
 
-// The "Send feedback" dialog in every t* menu. Deliberately NOT gated on
-// telemetry consent -- the reasoning is at the top of server/lib/feedback/index.ts.
+// The "Send feedback" dialog in every t* menu, deliberately not gated on telemetry consent.
 installFeedback();
 
 const siblings: string[] = [];
@@ -77,11 +72,10 @@ type ScanFailure =
 type ScanResult = { ok: true; entries: string[] } | { ok: false; reason: ScanFailure };
 
 // The one enumeration path. `subdir` is relative to the resource root and must
-// not contain `..`. It REPORTS failure rather than flattening it, because the
-// difference matters to a caller reconciling a stored registry against disk:
-// "the folder is empty" means prune everything, "could not be read" means keep
-// what you have. Collapsing the two is what let a scan failure look like a
-// deliberate deletion.
+// not contain `..`. Reports failure rather than flattening it: a caller
+// reconciling a stored registry against disk needs "empty" (prune everything)
+// distinct from "could not be read" (keep what you have), or a scan failure
+// reads as a deliberate deletion.
 function scanResource(resourceName: unknown, subdir: unknown, want: "file" | "dir"): ScanResult {
   if (typeof resourceName !== "string" || resourceName.length === 0)
     return { ok: false, reason: "bad-resource" };
@@ -109,7 +103,7 @@ function scanResource(resourceName: unknown, subdir: unknown, want: "file" | "di
 //
 //   local names = json.decode(exports.tLib:ListResourceFiles('tAFK', 'audio') or '[]')
 //
-// Returns JSON-encoded filenames, or '[]' on any error, so callers never branch.
+// Returns JSON-encoded filenames, or '[]' on any error — callers never branch.
 // Prefer ScanResourceFiles where unreadable and empty must not be alike.
 exports("ListResourceFiles", (resourceName: unknown, subdir: unknown): string => {
   const result = scanResource(resourceName, subdir, "file");
@@ -133,15 +127,15 @@ exports("ScanResourceDirs", (resourceName: unknown, subdir: unknown): string =>
 /** Hard ceiling on a bridged read. A `module.json` is ~1 KB; 256 KB is slack, not a budget. */
 const MAX_READ_BYTES = 256 * 1024;
 
-// The read counterpart of the scans above, and the other half of what makes a
-// drop-in install work: LoadResourceFile answers from the index FiveM builds at
-// resource start, so a folder copied in afterwards is on disk but not in it.
+// The read counterpart of the scans above. FiveM's own LoadResourceFile answers
+// from the index built at resource start, so a folder copied in afterwards is on
+// disk but not in it — this reads straight from disk instead.
 //
 //   local raw = exports.tLib:ReadResourceFile('tRadio', 'layouts/QRX-720/module.json')
 //
-// Returns the file as a UTF-8 string, or '' on any failure, so callers never
-// branch. Bounded, and refuses anything that is not a regular file -- a manifest
-// read must not become a way to stream an arbitrary asset through a Lua string.
+// Returns the file as UTF-8, or '' on any failure. Bounded at MAX_READ_BYTES and
+// refuses anything that is not a regular file, so a manifest read can't stream an
+// arbitrary asset through a Lua string.
 exports("ReadResourceFile", (resourceName: unknown, relPath: unknown): string => {
   if (typeof resourceName !== "string" || !resourceName) return "";
   if (typeof relPath !== "string" || !relPath || relPath.includes("..")) return "";
@@ -159,18 +153,15 @@ exports("ReadResourceFile", (resourceName: unknown, relPath: unknown): string =>
   }
 });
 
-// The write counterpart. tLib registers this for its OWN files; it is NOT the
-// bridge other resources call, and cannot be -- FiveM's Node runtime sandboxes
-// each resource to its own directory, so a write tLib issued into another
-// resource's folder was refused before reaching the disk. Each consumer registers
-// the same shared implementation from its own `server/main.ts`. This registration
-// stays because tLib legitimately writes its own files.
+// The write counterpart, registered here for tLib's OWN files only. FiveM's Node
+// runtime sandboxes each resource to its own directory, so a write into another
+// resource's folder is refused before reaching disk — cross-resource writes work
+// only by calling the TARGET resource's own registered copy of this function.
 registerWriteResourceFile();
 
-// The directory counterpart. Every consumer that ships "packs" needs the folder
-// names, and Lua cannot get them: io.popen is nil in the server sandbox and
-// io.readdir returns an empty list for every path, including the resource's own
-// root. Same flattened-failure contract as ListResourceFiles.
+// The directory counterpart. Lua cannot list folders server-side: io.popen is nil
+// in the sandbox and io.readdir returns empty for every path, including the
+// resource's own root. Same flattened-failure contract as ListResourceFiles.
 //
 //   local dirs = json.decode(exports.tLib:ListResourceDirs('tLS', 'layouts') or '[]')
 //

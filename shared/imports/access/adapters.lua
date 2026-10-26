@@ -19,12 +19,10 @@ local frameworks = {
     {
         name = 'qbx_core',
         jobs = function(src)
-            -- GetGroups returns `{ [name] = gradeLevel }` -- ALL held jobs and gangs,
-            -- not the primary pair. THE GetPlayer PROBE MUST STAY FIRST: GetGroups
-            -- indexes `QBX.Players[source].PlayerData` unguarded (functions.lua:526)
-            -- in the CALLEE's VM, so an unloaded source throws inside qbx before
-            -- access.jobs's pcall (which guards us, not qbx) sees it. 2 customers,
-            -- 2026-10-22/23.
+            -- GetGroups returns `{ [name] = gradeLevel }` -- every held job and
+            -- gang, not just the primary. The GetPlayer probe must stay first:
+            -- GetGroups indexes PlayerData unguarded inside qbx_core's own VM,
+            -- so an unloaded source throws there before our pcall can catch it.
             if not exports.qbx_core:GetPlayer(src) then return {} end
             return exports.qbx_core:GetGroups(src)
         end,
@@ -87,12 +85,11 @@ local frameworks = {
             -- no hasGroup; getGroups returning the name->grade record is the
             -- idiom, and it is the one that matches our shape.
             --
-            -- A GetPlayer probe like qbx's was tried 2026-10-26 and DECLINED:
-            -- CallPlayer does not throw for an unloaded src (it prints ox_core's
-            -- "invalid id"), so a probe buys a quieter console, not a crash fix.
-            -- Both shapes -- gating and pcall-advisory -- resolved every job-based
-            -- grant to nothing when GetPlayer was uncallable: a fail-closed outage
-            -- for a log line, caught by tRadio's config/sv_functions.test.ts.
+            -- A GetPlayer probe like qbx's was tried and declined: CallPlayer
+            -- doesn't throw for an unloaded src (it prints ox_core's own
+            -- "invalid id"), so a probe would only quiet the console. Gating on
+            -- it instead resolved every job-based grant to nothing when
+            -- GetPlayer was uncallable -- a fail-closed outage for a log line.
             local groups = exports.ox_core:CallPlayer(src, 'getGroups')
             if type(groups) ~= 'table' then return {} end
             local out = {}

@@ -294,10 +294,8 @@ assert(loggedAt(tlib.logger.INFO), 'the clearing is logged, since the admin did 
 -- FiveM for GTAV Enhanced refuses SaveResourceFile outright for some resources
 -- while Node's fs writes the identical path, so a refusal is not the end of the
 -- story: tlib.fs retries through the resource's own bridge and the settings
--- still land. That
--- is the case this suite has to hold, because the symptom it replaces --
--- "data.json never changes and nothing says why" -- is invisible until a
--- restart.
+-- still land. The symptom this replaces -- "data.json never changes and
+-- nothing says why" -- is invisible until a restart.
 
 reset()
 seed({ soundWavMap = {}, installedSounds = {} })

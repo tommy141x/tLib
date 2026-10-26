@@ -1,13 +1,10 @@
 /**
- * The shared card contract, and the three defects it was written to end.
- *
- * Every assertion here corresponds to something an owner reported seeing in game
- * on 2026-10-07, and every one of those had the same cause: a surface that drew
- * its own card instead of the shared one, and therefore answered one of these
- * questions differently. The point of testing the HEADLESS answers is that they
- * are the half that is portable across presetWind3 and presetWind4 — the styling
- * is not shared, by decision, so these functions are the entire shared contract
- * and nothing else guards them.
+ * The shared card contract. Every assertion here corresponds to a symptom an
+ * owner reported in game, and every one had the same cause: a surface drawing
+ * its own card instead of the shared one, answering one of these questions
+ * differently. These headless answers are the half that's portable across
+ * presetWind3 and presetWind4 — styling is not shared, by decision, so these
+ * functions are the entire shared contract and nothing else guards them.
  */
 
 import { describe, expect, it } from "bun:test";
@@ -69,13 +66,9 @@ function item(over: Partial<MarketplaceItem> = {}): MarketplaceItem {
   };
 }
 
-// The install-state match
-
 describe("local install-name matching", () => {
-  /**
-   * The reported symptom, as a test: eleven shipped radio heads all offered an
-   * Install button because `"QRX-720" !== "tradio-qrx-720"`.
-   */
+  // The reported symptom, as a test: eleven shipped radio heads all offered
+  // an Install button because `"QRX-720" !== "tradio-qrx-720"`.
   it("matches a product-namespaced slug against the un-namespaced directory on disk", () => {
     const onDisk = ["DRX-330", "HLX-120", "QRX-720", "SWX-250"];
     expect(isItemInstalledLocally(item({ slug: "tradio-qrx-720" }), onDisk)).toBe(true);
@@ -83,9 +76,9 @@ describe("local install-name matching", () => {
   });
 
   it("ALSO matches the raw slug, because that is what the install route writes", () => {
-    // Anything installed through the panel today really does sit in a directory
-    // named by the raw slug. Matching only the stripped form would trade eleven
-    // false negatives for a different set of them.
+    // Anything installed through the panel sits in a directory named by the
+    // raw slug; matching only the stripped form trades eleven false negatives
+    // for a different set.
     expect(isItemInstalledLocally(item({ slug: "tradio-newhead" }), ["tradio-newhead"])).toBe(true);
     expect(installedNameCandidates(item({ slug: "tradio-newhead" }))).toEqual([
       "tradio-newhead",
@@ -123,16 +116,12 @@ describe("local install-name matching", () => {
   });
 });
 
-// Which KIND of install, which is the difference between two wrong buttons
-
 describe("localInstallKind", () => {
-  /**
-   * The second half of the reported defect. Detection alone flips a shipped
-   * layout to its installed state, which offers DELETE — and the uninstaller
-   * addresses `<installPath>/<raw slug>`, so a Delete on `QRX-720` forms
-   * `layouts/tradio-qrx-720` and comes back `"tradio-qrx-720" is not installed`.
-   * The kind is what lets the card offer neither control.
-   */
+  // The second half of the reported defect: detection alone flips a shipped
+  // layout to installed, offering Delete — and the uninstaller addresses
+  // `<installPath>/<raw slug>`, so deleting `QRX-720` forms
+  // `layouts/tradio-qrx-720` and comes back "not installed". The kind is
+  // what lets the card offer neither control.
   it("calls the prefix-stripped spelling a BUILT-IN, because the installer never writes it", () => {
     expect(localInstallKind(item({ slug: "tradio-qrx-720" }), ["QRX-720"])).toBe("builtin");
   });
@@ -145,12 +134,10 @@ describe("localInstallKind", () => {
     expect(localInstallKind(item({ slug: "tradio-ztr-540" }), ["QRX-720"])).toBeNull();
   });
 
-  /**
-   * A state a user can really be in: installing through the panel before this
-   * fix existed wrote `layouts/tradio-qrx-720/` beside the shipped
-   * `layouts/QRX-720/`. Nothing here deletes or migrates that duplicate, so the
-   * `"managed"` answer is what leaves them a Delete that can actually succeed.
-   */
+  // A real state: installing through the panel before this fix wrote
+  // `layouts/tradio-qrx-720/` beside the shipped `layouts/QRX-720/`. Nothing
+  // here deletes or migrates that duplicate, so "managed" is what leaves a
+  // Delete that can actually succeed.
   it("prefers MANAGED when both spellings are on disk, in either list order", () => {
     expect(localInstallKind(item(), ["QRX-720", "tradio-qrx-720"])).toBe("managed");
     expect(localInstallKind(item(), ["tradio-qrx-720", "QRX-720"])).toBe("managed");
@@ -164,15 +151,12 @@ describe("localInstallKind", () => {
     }
   });
 
-  /**
-   * The one case a string compare cannot separate, asserted so it is a known
-   * limit rather than a surprise. An un-namespaced slug has `raw === stripped`,
-   * so a shipped directory of that name is indistinguishable from an install at
-   * the target. Not reachable on this estate — every shipped layout is
-   * model-named and every catalogue slug is product-namespaced — and not
-   * destructive in game either, since `owned()` still refuses a directory with
-   * no ownership receipt.
-   */
+  // The one case a string compare cannot separate, asserted as a known limit:
+  // an un-namespaced slug has `raw === stripped`, so a shipped directory of
+  // that name is indistinguishable from an install at the target. Not
+  // reachable here (every shipped layout is model-named, every catalogue slug
+  // product-namespaced) and not destructive either, since `owned()` still
+  // refuses a directory with no ownership receipt.
   it("cannot distinguish a built-in when the slug was never namespaced", () => {
     expect(localInstallKind({ slug: "qrx-720", resource: "tRadio" }, ["QRX-720"])).toBe("managed");
   });
@@ -181,12 +165,10 @@ describe("localInstallKind", () => {
 describe("matchLocalName", () => {
   const catalogue = [item({ slug: "tradio-qrx-720" }), item({ slug: "tradio-swx-250" })];
 
-  /**
-   * The Installed tab walks `readdir(layouts/)`, so it needs the lookup
-   * inverted. It previously decided "may this be deleted" from `name in
-   * installStates` — true for every discovered layout, because the seed put
-   * them all there.
-   */
+  // The Installed tab walks `readdir(layouts/)`, so it needs the lookup
+  // inverted. It previously decided "may this be deleted" from `name in
+  // installStates` — true for every discovered layout, since the seed put
+  // them all there.
   it("resolves a shipped folder name to its catalogue entry as a built-in", () => {
     expect(matchLocalName("QRX-720", catalogue)).toEqual({ item: catalogue[0], kind: "builtin" });
   });
@@ -203,16 +185,12 @@ describe("matchLocalName", () => {
   });
 });
 
-// Which controls a state may draw
-
 describe("the builtin install state", () => {
   const builtin: InstallState = { state: "builtin" };
 
-  /**
-   * BOTH directions, because offering either one is a wrong button: Install
-   * writes `layouts/tradio-qrx-720/` beside the shipped `layouts/QRX-720/`
-   * rather than over it, and Delete cannot address the shipped name at all.
-   */
+  // Both directions, because offering either is a wrong button: Install
+  // writes `layouts/tradio-qrx-720/` beside the shipped `layouts/QRX-720/`
+  // rather than over it, and Delete cannot address the shipped name at all.
   it("draws neither Install nor Delete", () => {
     expect(canInstall(builtin)).toBe(false);
     expect(canUninstall(builtin)).toBe(false);
@@ -224,11 +202,9 @@ describe("the builtin install state", () => {
     expect(BUILTIN_EXPLANATION).toContain("cannot remove");
   });
 
-  /**
-   * NOT `installed`. Every caller of `isInstalled` reads it to decide whether
-   * to draw a management control, so widening it is how the Delete button would
-   * come back.
-   */
+  // Not `installed` — every caller of `isInstalled` reads it to decide
+  // whether to draw a management control, so widening it brings the Delete
+  // button back.
   it("is not reported as a marketplace install, and is not busy", () => {
     expect(isInstalled(builtin)).toBe(false);
     expect(isBuiltin(builtin)).toBe(true);
@@ -248,14 +224,10 @@ describe("the builtin install state", () => {
   });
 });
 
-// The stats row
-
 describe("cardStats", () => {
-  /**
-   * The reported "I also don't see download counts and stuff". tRadio's own card
-   * gated the count behind `> 0`, and a freshly imported catalogue is
-   * `downloads: 0` for every item, so the gate hid it everywhere.
-   */
+  // The reported "I also don't see download counts and stuff": tRadio's own
+  // card gated the count behind `> 0`, and a freshly imported catalogue is
+  // `downloads: 0` for every item, so the gate hid it everywhere.
   it("reports downloads AT ZERO, because zero is known and not unknown", () => {
     expect(cardStats(item({ downloads: 0 }))).toContainEqual({ key: "downloads", value: 0 });
   });
@@ -280,14 +252,11 @@ describe("cardStats", () => {
 });
 
 describe("cardStatsOf — the same contract for a host with its own item type", () => {
-  /**
-   * These assertions are the reason `cardStatsOf` exists at all. tLS's
-   * marketplace tab merges two catalogues into one `CardView` and so will never
-   * hold a `MarketplaceItem`; without a narrowed contract its only options were
-   * to fake the fields it does not have, or to word and order the stats itself —
-   * which is what it did, printing "12 downloads" where every other surface
-   * printed "12 installs".
-   */
+  // The reason `cardStatsOf` exists: tLS's marketplace tab merges two
+  // catalogues into one `CardView` and never holds a `MarketplaceItem`.
+  // Without this contract its only options were faking missing fields or
+  // wording stats itself, which is how it ended up printing "12 downloads"
+  // where every other surface printed "12 installs".
   it("is what `cardStats` delegates to, so there is only one implementation", () => {
     expect(cardStatsOf(item({ likes: 3, size_bytes: 10 }))).toEqual(
       cardStats(item({ likes: 3, size_bytes: 10 })) as CardStat[]
@@ -320,14 +289,10 @@ describe("cardStatsOf — the same contract for a host with its own item type", 
   });
 });
 
-// The like affordance
-
 describe("likeAffordance", () => {
-  /**
-   * This asserts that "no like button" is CORRECT against the deployed
-   * backend, which sends neither field. It is the one symptom on the owner's
-   * list that is not a bug, and a future pass must not "fix" it by guessing.
-   */
+  // Asserts "no like button" is correct against the deployed backend, which
+  // sends neither field — the one reported symptom that is not a bug, and a
+  // future pass must not "fix" it by guessing.
   it("is none when the host has no likes at all", () => {
     expect(likeAffordance(item(), true)).toBe("none");
   });
@@ -360,8 +325,6 @@ describe("cardIdentity", () => {
   });
 });
 
-// The preview geometry
-
 describe("fitScale", () => {
   it("fits the constraining axis", () => {
     // 209.5x426.5 into a 300x200 box: height is the binding constraint.
@@ -385,16 +348,13 @@ describe("fitScale", () => {
 });
 
 describe("the preview frame contract", () => {
-  /**
-   * The reported scrollbars. `PreviewOverlay.tsx` set `overflow: hidden` on its
-   * scaled wrapper and tRadio's panel did not, which is the whole of why one
-   * surface showed scrollbars and the other never did.
-   */
+  // The reported scrollbars: one preview surface set `overflow: hidden` on
+  // its scaled wrapper and tRadio's panel did not — the whole difference.
   it("clips the scaled wrapper, which is what stops a scrollbar inside the preview", () => {
     const style = previewBoxStyle({ w: 209.5, h: 426.5 }, 0.5);
     expect(style.overflow).toBe("hidden");
-    // Without flex-shrink the browser shrinks the box BEFORE the transform runs,
-    // so the scale was computed against a width the element no longer has.
+    // Without flex-shrink the browser shrinks the box before the transform
+    // runs, so the scale was computed against a width the element no longer has.
     expect(style["flex-shrink"]).toBe("0");
     expect(style.width).toBe("209.5px");
     expect(style.transform).toBe("scale(0.5)");
@@ -436,11 +396,9 @@ describe("previewKind", () => {
     expect(previewKind(item({ type: "theme", preview_colors: [] }))).toBe("none");
   });
 
-  /**
-   * The reported complaint, in the owner's words: "there should be no
-   * 'thumbnail' for dispatch panel previews". A theme IS the dispatch panel, so
-   * the creator's screenshot is a picture of the thing we can now render.
-   */
+  // The reported complaint: "there should be no 'thumbnail' for dispatch
+  // panel previews". A theme is the dispatch panel, so the creator's
+  // screenshot is a picture of the thing we can now render.
   it("shows a dispatch panel rather than the screenshot a theme shipped", () => {
     expect(
       previewKind(item({ type: "theme", thumbnail: "t", preview_colors: ["#000"] }), {
@@ -449,11 +407,8 @@ describe("previewKind", () => {
     ).toBe("panel");
   });
 
-  /**
-   * The ordering is scoped to themes and to hosts that can mount the panel —
-   * deleting the `thumbnail` kind outright was tried and broke tRadio's
-   * `server/web` typecheck at HEAD.
-   */
+  // Scoped to themes and hosts that can mount the panel — deleting the
+  // `thumbnail` kind outright was tried and broke tRadio's server/web typecheck.
   it("leaves every other type's thumbnail alone, and the thumb-failed fallthrough with it", () => {
     expect(previewKind(item({ type: "ui", thumbnail: "t" }), { panelPreview: true })).toBe(
       "thumbnail"
@@ -479,10 +434,8 @@ describe("the dispatch-panel preview contract", () => {
     });
   });
 
-  /**
-   * A CSS-only theme carries `jsText: ""` by the definition's own default, and
-   * an empty body handed to `new Function` is a script where there is none.
-   */
+  // A CSS-only theme carries `jsText: ""` by default, and an empty body
+  // handed to `new Function` would be a script where there is none.
   it("drops an empty script instead of compiling it", () => {
     expect(toPanelPreviewTheme("x", { jsText: "   " }).jsText).toBeUndefined();
     expect(toPanelPreviewTheme("x", { jsText: "console.log(1)" }).jsText).toBe("console.log(1)");
@@ -514,11 +467,10 @@ describe("the dispatch-panel preview contract", () => {
     expect(parsePanelThemeDefinition({ cssVars: { "--a": 1 }, cssText: 5 })).toEqual({});
   });
 
-  /**
-   * An opaque-origin frame posts from origin `"null"`, which every other preview
-   * on the page also posts from — so this guard is about the message SHAPE and
-   * the caller still has to compare `event.source` to its own `contentWindow`.
-   */
+  // An opaque-origin frame posts from origin `"null"`, which every other
+  // preview on the page also posts from, so this guard is about message
+  // shape — the caller still has to compare `event.source` to its own
+  // `contentWindow`.
   it("recognises only the frame's own ready handshake", () => {
     expect(isPanelPreviewReady({ source: PANEL_PREVIEW_CHANNEL, type: "ready" })).toBe(true);
     expect(isPanelPreviewReady({ source: PANEL_PREVIEW_CHANNEL, type: "warnings" })).toBe(false);
@@ -528,11 +480,9 @@ describe("the dispatch-panel preview contract", () => {
 });
 
 describe("resolvePreviewState", () => {
-  /**
-   * The reported blank previews with no mock state. `previewState` is optional
-   * all the way down and the binder was only injected `if (state)`, so a surface
-   * with no preset — tLS has none — rendered every layout unbound.
-   */
+  // The reported blank previews with no mock state: `previewState` is
+  // optional all the way down and the binder was only injected `if (state)`,
+  // so a surface with no preset — tLS has none — rendered every layout unbound.
   it("falls back to a populated default instead of rendering a dead device", () => {
     expect(resolvePreviewState(null)).toBe(DEFAULT_HUD_PREVIEW_STATE);
     expect(resolvePreviewState(undefined)).toBe(DEFAULT_HUD_PREVIEW_STATE);
@@ -545,8 +495,7 @@ describe("resolvePreviewState", () => {
   });
 
   it("nests leds as dot paths, because the preview binder resolves dot paths", () => {
-    // A flat `leds_power` silently matches nothing — the documented history of
-    // hud-preview-script.ts itself.
+    // A flat `leds_power` silently matches nothing.
     expect((DEFAULT_HUD_PREVIEW_STATE.leds as Record<string, unknown>).power).toBe(true);
   });
 

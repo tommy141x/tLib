@@ -561,10 +561,9 @@ and nobody else, which reads as "the switch does nothing". It refuses with
 `reason = 'locked'` while the convar has decided.
 </Callout>
 
-- There is **no `provisioned` field**; never render a "cannot transmit" state.
-- It is **not permission-gated**. Gate it at your own call site.
-- **Never put it on an unauthenticated surface.** tLib's hub binds `0.0.0.0` with no auth on
-  its index, so it calls neither export.
+Neither export is permission-gated, so gate it at your own call site, and **never put it on
+an unauthenticated surface** — tLib's hub binds `0.0.0.0` with no auth on its index, which
+is why the hub itself calls neither.
 
 `tlib_telemetry_status` in the server console prints the same answer plus the queue depth
 and whether the transport has given up.
@@ -623,7 +622,8 @@ caller never says which it wants and nothing shells out to PowerShell.
 This narrows what a **compromised first-party resource** can do; it is not a defence against
 a hostile one *pretending* to be one. A folder named `tDB` holding someone else's code
 passes `GetInvokingResource()`. The caller's manifest `author` is logged on a mismatch, and
-nothing branches on it.
+nothing branches on it. The gate covers containment and argument shape, not integrity —
+these binaries are verified where they are fetched, not where they are run.
 </Callout>
 
 ### Lifecycle
@@ -637,11 +637,6 @@ and when tLib stops. A caller restarting is **kill-and-respawn, not reuse**.
 directory, and the next start fails as a bind error that reads like misconfiguration. Keep
 your own PID file: `kill -9` and txAdmin run no handler.
 </Callout>
-
-### Binary integrity
-
-These binaries are verified where they are fetched, not where they are run. This gate adds
-containment and argument shape, not integrity.
 
 ---
 

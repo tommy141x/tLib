@@ -1,23 +1,23 @@
 -- shared/imports/config: `tlib.config.generation`, the "your copy of a file we
 -- ship is older than this build" check.
 --
--- WHY IT EXISTS. Every t* resource ships files the operator is expected to merge
--- forward by hand. tRadio has had this on its SERVER config since v6.3.1 and
--- nothing on its client config, where the same drift has cost two runs of
--- tickets: `MakeAnimHandler` -> `RadioMakeAnimHandler`, then
+-- Why it exists: every t* resource ships files the operator is expected to
+-- merge forward by hand. tRadio has had this on its server config since
+-- v6.3.1 and nothing on its client config, where the same drift has cost two
+-- runs of tickets: `MakeAnimHandler` -> `RadioMakeAnimHandler`, then
 -- `resolveSirenSystem` -> `RadioResolveSirenMode` / `_k9Hashes` ->
--- `RadioIsK9Ped`. The operator's hook calls a global that no longer exists, the
--- caller pcalls it, and the audio is silent with nothing in any console.
+-- `RadioIsK9Ped`. The operator's hook calls a global that no longer exists,
+-- the caller pcalls it, and the audio is silent with nothing in any console.
 --
--- What is asserted here is the two-sided behaviour, not "it printed something":
--- a check that always warns is as useless as one that never does, and both pass
--- a one-sided suite.
+-- What is asserted here is the two-sided behaviour, not "it printed
+-- something": a check that always warns is as useless as one that never
+-- does, and both pass a one-sided suite.
 --
--- NEGATIVE CONTROL: run with CONFIG_GEN_CONTROL=1 and the subject is replaced by
--- one that always reports ok and never prints -- the shape this would silently
--- degrade into if the comparison were dropped. Every assertion below that
--- depends on a stale copy being REPORTED then has to fail, and the suite exits
--- non-zero naming which.
+-- Negative control: run with CONFIG_GEN_CONTROL=1 and the subject is replaced
+-- by one that always reports ok and never prints -- the shape this would
+-- silently degrade into if the comparison were dropped. Every assertion below
+-- that depends on a stale copy being reported then has to fail, and the suite
+-- exits non-zero naming which.
 --
 --   bun run test:lua                                         # gate
 --   CONFIG_GEN_CONTROL=1 bunx --bun --package fengari-node-cli fengari \

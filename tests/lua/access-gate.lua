@@ -30,14 +30,11 @@ AddEventHandler = function(name, fn)
 end
 SetTimeout = function(ms, fn) timers[#timers + 1] = { ms = ms, fn = fn } end
 
--- This suite has to capture what the module prints, because "the console told
--- the owner what was wrong" IS the behaviour under test. Capturing it means
--- reassigning the global `print` -- and scripts/run-lua-suite.lua reports a
--- failed suite by calling `print(err)`, so a naive hijack eats the failure
--- message and a broken suite exits 1 with no output at all. (It did. That is why
--- this is here.)
---
--- So: the local `assert` below restores the real print before failing, and
+-- This suite captures what the module prints, since the console message IS the
+-- behaviour under test. That means reassigning global `print` -- and
+-- scripts/run-lua-suite.lua reports a failed suite via `print(err)`, so a naive
+-- hijack eats the failure message and a broken suite exits 1 with no output.
+-- The local `assert` below restores the real print before failing;
 -- TLIB_TEST_VERBOSE=1 echoes everything through for debugging.
 local realPrint = print
 local rawassert = assert
@@ -147,8 +144,7 @@ local access = dofile('shared/imports/access/server.lua')
 
 -- Detection is cached until a resource starts, which is correct in production
 -- and a trap in a suite: without firing the start handlers, every case after the
--- first would silently reuse the first case's framework and assert nothing.
--- (It did. Three cases here passed vacuously before this line existed.)
+-- first silently reuses the first case's framework and asserts nothing.
 local function reset()
     resourceStates, printed, clientEvents, timers = {}, {}, {}, {}
     aceGrants = {}
@@ -196,14 +192,12 @@ qbxGroups = function() return { police = 1 } end
 jobGate:invalidate()
 assert(jobGate:allowed(7) == false, 'grade 1 does not meet a minimum of 2')
 
--- THE CUSTOMER-FACING REGRESSION: a source that is connected but not yet
--- character-loaded. qbx's GetGroups indexes QBX.Players[src] with no nil-guard, so
--- calling it in that window throws INSIDE qbx_core's VM — access.jobs's pcall catches
--- the failure for us, but qbx has already printed `SCRIPT ERROR: attempt to index a
--- nil value` to the console. Two customers reported floods of it on 2026-10-22 and
--- 2026-10-23: a clean diag, a working radio, and an unreadable console, roughly three
--- per joining player. The stub above throws exactly as the real one does, so if the
--- adapter ever drops its GetPlayer probe this assert fails instead of a customer.
+-- Regression: a source connected but not yet character-loaded. qbx's GetGroups
+-- indexes QBX.Players[src] with no nil-guard, so calling it in that window
+-- throws inside qbx_core's VM -- access.jobs's pcall catches it, but qbx has
+-- already printed `SCRIPT ERROR: attempt to index a nil value` to the console.
+-- The stub throws exactly as the real one does, so dropping the adapter's
+-- GetPlayer probe fails this assert instead of flooding a customer's console.
 reset()
 resourceStates.qbx_core = 'started'
 qbxLoaded = false
@@ -257,17 +251,14 @@ resourceStates.ox_core = 'started'
 oxGroups = function() return { police = 2 } end
 assert(access.jobs(7).police == 2, 'ox_core groups come back through CallPlayer(getGroups)')
 
--- The ox_core half of the qbx regression above. Re-verified 2026-10-26 against
--- ox_core's own ClassInterface: CallPlayer for an unloaded source does not throw,
--- so this was never the crash qbx was -- it only prints `cannot call method
--- getGroups on OxPlayer<N> (invalid id)` from inside ox_core.
---
--- A GetPlayer probe to suppress that print was tried the same day and DECLINED
--- (see the adapter), because it resolved every job-based grant to nothing
--- wherever GetPlayer could not be called. So an unloaded source still yields no
--- jobs -- which is the property that matters -- and ox_core still prints while
--- doing it. Asserting oxInvalidIdCalls == 0 here is what made the declined probe
--- look correct, so it is deliberately NOT asserted.
+-- The ox_core half of the qbx regression above: CallPlayer for an unloaded
+-- source does not throw, it only prints `cannot call method getGroups on
+-- OxPlayer<N> (invalid id)` from inside ox_core, so this was never the crash qbx
+-- was. A GetPlayer probe to suppress that print was declined (see the adapter)
+-- -- it resolved every job-based grant to nothing wherever GetPlayer could not
+-- be called. An unloaded source still yields no jobs, which is the property
+-- that matters; oxInvalidIdCalls is deliberately not asserted here, since
+-- asserting it == 0 is exactly what made the declined probe look correct.
 reset()
 resourceStates.ox_core = 'started'
 oxLoaded = false
@@ -576,11 +567,9 @@ qbxGroups = function() error('framework exploded') end
 local exploded = access.gate({ mode = 'job', job = { police = 0 } }, { key = 'y', label = 'the radar' })
 assert(exploded:allowed(7) == false, 'a framework that throws denies, it does not fail open')
 
--- Demo mode
---
--- The one override in this module that grants rather than denies. Each case
--- below pins a way the override could be applied by halves and silently leave a
--- demo visitor locked out of the thing the demo exists to show.
+-- Demo mode: the one override that grants rather than denies. Each case below
+-- pins a way it could be applied by halves and silently leave a demo visitor
+-- locked out of the thing the demo exists to show.
 
 reset()
 local shut = access.gate({ mode = 'ace', ace = 'tradio.use' }, { key = 'd1', label = 'the radio' })
@@ -619,20 +608,14 @@ local nilSrc = access.gate({ mode = 'everyone' }, { key = 'd3', label = 'the rad
 demoOn = true
 assert(nilSrc:allowed(nil) == false, 'demo mode still refuses a nil source')
 
--- A GATE SWEEPS ITSELF ON DISCONNECT
---
--- Gate:allowed memoises one answer per player it has ever been asked about, and
--- the TTL makes an entry stale rather than making it go away. Nothing in the
--- gate ever removed one, so every gate in the tree was a slow leak: one table
--- entry per unique player per gate, held for the life of the process.
---
--- It was found because exactly two resources happened to notice and swept their
--- own gates by hand from their own playerDropped handlers. A consumer cannot
--- reasonably be expected to know a gate needs sweeping, so the gate does it.
---
--- Asserted through the OBSERVABLE consequence -- the memo is private -- by
--- flipping what the gate reads underneath it. Inside the TTL a memoised answer
--- survives that flip; after a disconnect it must not.
+-- Gate:allowed memoises one answer per player it has ever asked about, and the
+-- TTL makes an entry stale rather than making it go away -- nothing removed
+-- one, so every gate was a slow leak of one table entry per unique player for
+-- the life of the process. A consumer cannot be expected to know a gate needs
+-- sweeping, so the gate does it itself. Asserted through the observable
+-- consequence, since the memo is private: flip what the gate reads underneath
+-- it -- inside the TTL a memoised answer survives that flip, after a disconnect
+-- it must not.
 
 reset()
 local sweepGate = access.gate({ mode = 'ace', ace = 'tprobe.admin' },
@@ -681,13 +664,11 @@ dropPlayer(nil)
 assert(sweepGate:allowed(13),
     'a sourceless playerDropped invalidated everyone')
 
--- The instrumentation is reachable, and ONLY on the miss path
---
--- Two assertions, and the second is the one worth having. A memo HIT returns
--- before `evaluate` and is not a measurement of anything, so recording it would
--- bury every real framework round trip under thousands of near-zero samples and
--- make the p95 meaningless. Deleting the record call entirely leaves every case
--- above green, which is why this is asserted at all.
+-- A memo hit returns before `evaluate` and is not a measurement of anything, so
+-- recording it would bury every real framework round trip under thousands of
+-- near-zero samples and make the p95 meaningless. Deleting the record call
+-- entirely leaves every case above green, which is why the second assertion
+-- below exists at all.
 local evaluations = 0
 for _, t in ipairs(recordedTimings) do
     if t.op == 'access:evaluate' then

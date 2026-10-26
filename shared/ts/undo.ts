@@ -1,23 +1,17 @@
 /**
- * The one undo/redo primitive for the whole estate.
+ * The one undo/redo primitive for the whole estate. A history is an object you
+ * construct, one per editor; the module-level singleton it replaced broke the
+ * moment a second editor nested on a page, which tRadio's settings app does by
+ * hosting tLib's `PropEditor` inside itself — Ctrl+Z walked the outer app's
+ * history and restored state the player couldn't see.
  *
- * A history is an OBJECT you construct, one per editor, and nesting is expressed
- * by nesting the objects. The module-level singleton it replaced was a live bug
- * the moment a second editor exists on a page, and one already does: tRadio's
- * settings app hosts tLib's shared `PropEditor` inside itself, so one Ctrl+Z
- * walked the outer app's history and restored state the player cannot see. There
- * is deliberately no default instance exported.
+ * Snapshot, not per-key diff: a diff can't express a removal (a deleted id has
+ * no "before" to restore to, it has to restore existence), and tUnit's element
+ * editor changes the element set. `key` just labels an entry for `remove()`.
  *
- * SNAPSHOT, NOT PER-KEY DIFF. A per-key diff cannot express a removal -- a
- * deleted id has no "before" to restore to, it has to restore EXISTENCE -- and
- * tUnit's element editor changes the element SET. So there is exactly one entry
- * mechanism, and `key` is a label on an entry used by `remove()`, never a second
- * parallel kind of entry.
- *
- * It is `.ts` deliberately: UnoCSS never scans plain `.ts`, so no class-shaped
- * string in this prose can leak into a consumer's stylesheet as a dead rule. The
- * UI affordance is `internal/shared-ts/ui/undo-redo.tsx` and the keyboard binding is
- * `shared/ts/undo-keys.ts`.
+ * `.ts` deliberately: UnoCSS never scans plain `.ts`, so no class-shaped string
+ * in this prose leaks into a consumer's stylesheet as a dead rule. UI affordance
+ * is `internal/shared-ts/ui/undo-redo.tsx`, keyboard binding is `shared/ts/undo-keys.ts`.
  */
 
 /** What one registered store contributes to an entry. */
@@ -27,14 +21,11 @@ export interface UndoableOptions<T> {
   /** Put a snapshot back. Called with a value this tag's own `capture` produced. */
   restore: (snapshot: T) => void;
   /**
-   * The no-op guard for this tag. Return true when the two snapshots mean the
-   * same thing, so a commit that changed nothing is discarded instead of
-   * pushing an entry that does nothing.
-   *
-   * Default `Object.is`, which for a freshly-built snapshot is always false: the
-   * default never silently discards anything, and a registrant opts INTO the
-   * guard by describing its own equality. A commit is discarded only when EVERY
-   * tag in the batch compares equal.
+   * No-op guard for this tag: return true when two snapshots mean the same
+   * thing, so a no-change commit is discarded. Defaults to `Object.is`, which is
+   * always false for a freshly-built snapshot — the default never silently
+   * discards, a registrant opts in by describing its own equality. A commit is
+   * discarded only when every tag in the batch compares equal.
    */
   equal?: (a: T, b: T) => boolean;
 }
@@ -96,19 +87,15 @@ export interface UndoHistoryOptions {
   /** Shown in `diagnostics()` and by the keyboard registry. Not behavioural. */
   label?: string;
   /**
-   * Drain the host framework's pending writes, so a snapshot taken right after a
-   * mutation observes the mutation.
-   *
-   * WITHOUT THIS, REDO SILENTLY RESTORES THE PRE-EDIT STATE. A Solid 2 store
-   * write is not readable through the proxy in the tick it was made, and `with()`
-   * is push -> mutate -> commit in ONE tick — so every entry it recorded had an
-   * `after` equal to its `before`. Undo (which applies `before`) and the dirty
-   * flag were unaffected, which is why it survived: only redo was wrong, and it
-   * was wrong everywhere at once. Batches spanning ticks — push on pointerdown,
-   * commit on pointerup — were always correct; the flush had already happened.
-   *
-   * Injected rather than imported so this module stays framework-agnostic.
-   * Pinned by tLS's `tests/undo-redo-roundtrip.test.ts`, control included.
+   * Drain the host framework's pending writes so a snapshot taken right after a
+   * mutation observes it. Without this, redo silently restores the pre-edit
+   * state: a Solid 2 store write isn't readable through the proxy in the tick it
+   * was made, and `with()` is push->mutate->commit in one tick, so `after`
+   * always equalled `before`. Undo and the dirty flag were unaffected (only
+   * redo reads `after`), and batches spanning ticks were always correct — which
+   * is why this went unnoticed everywhere at once. Injected, not imported, to
+   * keep this module framework-agnostic. Pinned by tLS's
+   * `tests/undo-redo-roundtrip.test.ts`, control included.
    */
   settle?: () => void;
 }
@@ -177,9 +164,8 @@ export class UndoHistory {
    * label or key closes the open batch first.
    */
   push(label: string, tags: string[], key?: string): void {
-    // Before `before` is captured, for the same reason `commit()` settles before
-    // `after`: an unflushed write made outside this history would otherwise be
-    // read as part of the batch about to open.
+    // Settle before capturing `before`, same reason commit() settles before
+    // `after`: an unflushed outside write would otherwise leak into this batch.
     this.settle();
     const open = this.pending;
     if (open && open.label === label && open.key === key) {
@@ -199,17 +185,15 @@ export class UndoHistory {
   /** Close the open batch, pushing one entry — unless nothing changed. */
   commit(): void {
     if (!this.pending) return;
-    // BEFORE `after` IS CAPTURED, AND THIS IS THE WHOLE POINT OF `settle`.
-    // See UndoHistoryOptions.settle: without it every `with()` entry records an
-    // `after` identical to its `before`, and redo restores the pre-edit state.
+    // Settle before `after` is captured — see UndoHistoryOptions.settle.
     this.settle();
     const open = this.pending;
     if (!open) return;
     this.pending = null;
     const after = this.captureAll(open.tags);
     if (this.unchanged(open.before, after)) {
-      // Discarded, and the redo stack is deliberately NOT cleared: a gesture
-      // that ended where it started is not a new branch of history.
+      // Redo stack stays intact: a gesture that ended where it started is not
+      // a new branch of history.
       this.emit();
       return;
     }
@@ -268,10 +252,9 @@ export class UndoHistory {
   // Eviction
 
   /**
-   * Drop every entry about `key`, from BOTH stacks -- for a key the HOST
-   * withdrew, so the entries are about something that no longer exists. NOT for a
-   * user-initiated delete, which is an ordinary edit and must stay undoable. An
-   * open batch for that key is aborted for the same reason.
+   * Drop every entry about `key` from both stacks — for a key the host
+   * withdrew, not a user-initiated delete (which is an ordinary, undoable edit).
+   * An open batch for that key is aborted for the same reason.
    */
   remove(key: string): void {
     const before = this.past.length + this.future.length;
@@ -292,8 +275,6 @@ export class UndoHistory {
 
   // State
 
-  /**
-   */
   canUndo(): boolean {
     return this.past.length > 0 || this.pending !== null;
   }

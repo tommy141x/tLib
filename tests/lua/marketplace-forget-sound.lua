@@ -21,7 +21,7 @@
 -- The module is pure -- no natives, no resource files -- so this suite needs no
 -- host stubs at all. Everything below is the function's own contract.
 --
--- NEGATIVE CONTROL
+-- Negative control
 --
 -- FORGET_CONTROL=1 plants the OLD call shape back: every call drops its
 -- `scopedMaps` argument, which is exactly what `removeSound` did before this

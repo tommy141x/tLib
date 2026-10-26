@@ -1,21 +1,12 @@
 --[[
-    tLib/server/sv_demo.lua — the authority for demo mode.
-
-    The rule itself, and the reasoning behind it, live in
-    shared/imports/demo/shared.lua, which every consumer loads as `tlib.demo`.
-    This file is the half that can only exist in tLib's own VM:
-
-      * the console banner, because somebody has to say it once per boot;
-      * the `tlib_demo` command, so a running server can be flipped;
-      * the push to clients and to other resources' server VMs, so a flip is
-        seen everywhere without each resource polling a convar.
-
-    Loaded before sv_permission.lua and sv_marketplace.lua: both consult `Demo`.
+    The authority for demo mode: the console banner, the `tlib_demo` command, and
+    the push to clients and other resources' server VMs on a flip. The rule itself
+    lives in shared/imports/demo/shared.lua, loaded by every consumer as `tlib.demo`.
+    Loaded before sv_permission.lua and sv_marketplace.lua, which both consult `Demo`.
 ]]
 
--- The same file consumers get as `tlib.demo`. Loaded rather than reimplemented so
--- the truthy-convar rule has exactly one definition -- an owner who writes
--- `setr tlib_demo true` must not get a live server here and a demo server there.
+-- Loaded, not reimplemented, so the truthy-convar rule has one definition -- an
+-- owner writing `setr tlib_demo true` can't get a live server here and demo there.
 -- Same pattern as sv_main.lua's versioncheck load.
 Demo = load(
     LoadResourceFile(GetCurrentResourceName(), 'shared/imports/demo/shared.lua'),
@@ -44,13 +35,9 @@ local function announce()
     for _, line in ipairs(BANNER) do print(line) end
 end
 
--- Said ONCE, at boot, and again only when an operator turns demo mode on by
--- command. It used to repeat every 30 minutes, on the argument that a banner
--- lost in a noisy start is a banner nobody read. Measured 2026-10-16 on a
--- 15-hour-old server: 31 banners, 310 lines of console, all of them correct and
--- none of them read. On a showroom box demo mode is deliberate and permanent,
--- so the repeat only buys noise; `tlib_demo` with no argument still answers at
--- any time, which is the question an operator who missed the banner would ask.
+-- Said once at boot, and again only on a manual toggle. A 30-minute repeat was
+-- tried and dropped: a 15-hour server logged 31 banners / 310 lines, none read.
+-- `tlib_demo` with no argument still answers at any time.
 
 -- Broadcasting
 
@@ -94,9 +81,8 @@ end)
 
 -- The runtime toggle
 
--- Restricted: console and `tlib.admin` only. Note that in demo mode everyone
--- holds `tlib.admin`, so an in-game player on a demo server can turn demo mode
--- OFF but never on -- which is the safe direction for the accident to run in.
+-- Restricted to console and `tlib.admin`. In demo mode everyone holds `tlib.admin`,
+-- so an in-game player can turn demo mode off but never on -- the safe direction.
 RegisterCommand('tlib_demo', function(src, args)
     local reply = function(msg)
         if src == 0 then print(msg) else TriggerClientEvent('chat:addMessage', src, { args = { 'tLib', msg } }) end
@@ -129,18 +115,11 @@ end, true)
 -- The marketplace sweep
 
 --- Ask a consumer's bundled marketplace agent to uninstall everything it owns.
----
---- Dispatched rather than done here for the same reason installs are: FiveM's
---- Node runtime sandboxes each resource to its own directory, so tLib deleting
---- files inside tRadio's folder is refused outright. The sweep runs in the
---- consumer's own bundle, using the receipts written at install time.
----
---- Preinstalled content is safe by construction and needs no special case: this
---- only ever deletes what a receipt claims, items that ship with a resource have
---- no receipt, and installer/core.lua's `owned()` THROWS for any on-disk path no
---- receipt claims rather than touching it. The receipt model is the whole of it.
---- NOT the ProtectedBuiltinInventory, which the note here used to credit: that
---- gates legacy adoption only, and nothing passes one today.
+--- Dispatched because FiveM sandboxes each resource to its own directory; tLib
+--- cannot delete files inside tRadio's folder itself. Uses install-time receipts --
+--- preinstalled content has none, and installer/core.lua's `owned()` throws on an
+--- unclaimed path rather than touching it. Not gated by ProtectedBuiltinInventory
+--- (legacy-adoption only; nothing passes one today).
 --- @param resource string
 function Demo.sweepMarketplace(resource)
     if not Demo.active() then return end

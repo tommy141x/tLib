@@ -43,10 +43,10 @@ dofile('client/cl_layout.lua')
 HudLayout.init({})
 local checks = 0
 local function check(value, message) checks = checks + 1; assert(value, message) end
--- There is deliberately no GetHudLayoutCapabilities export to probe. It was
--- eight hardcoded `true` flags naming tLib releases; only 0.6 ever shipped and it
--- has none of them, so the probe could not distinguish anything reachable. The
--- capabilities it advertised are asserted directly below instead, as behaviour.
+-- GetHudLayoutCapabilities is gone: it was eight hardcoded `true` flags naming
+-- tLib releases, and only 0.6 ever shipped -- with none of them -- so the
+-- probe could not distinguish anything reachable. Its capabilities are
+-- asserted below instead, as behaviour.
 check(exports.GetHudLayoutCapabilities == nil,
     'the tLib-version capability probe is gone, not relocated')
 local messages = {}
@@ -319,11 +319,11 @@ constrainedOptions.minVisiblePixels = -1
 check(not exports.RegisterHudComponent('invalidBounds', constrainedOptions, function() end))
 constrainedOptions.minVisiblePixels, constrainedOptions.minVisibleFraction = 100, 1.1
 check(not exports.RegisterHudComponent('invalidBounds', constrainedOptions, function() end))
--- Recovery: reset must work from ANY stored state
+-- Recovery: reset must work from any stored state.
 --
 -- The unrecoverable-HUD bug. A consumer that owns its own storage (persist =
 -- false) used to have only one slot to put a placement in, so it passed its
--- SAVED position as `defaults` -- and "Reset this" then restored the very
+-- saved position as `defaults` -- and "Reset this" then restored the very
 -- placement the player was trying to escape. `layout` is now where the widget
 -- is and `defaults` is where Reset puts it back, and they are validated
 -- independently so garbage in either falls through instead of being trusted.

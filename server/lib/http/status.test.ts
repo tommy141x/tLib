@@ -150,14 +150,10 @@ describe("HTTP publication readiness", () => {
 });
 
 /**
- * Whether the published address was CONFIGURED or GUESSED.
- *
- * Not cosmetic, and not a log-string test. The banner row is the only place an
- * operator sees the address at a moment they can still act on it, and a guessed
- * address that is wrong does not announce itself — it surfaces later as a CORS
- * refusal or an OAuth redirect nobody can reach, far from the cause. Three
- * tickets on 2026-10-19 were that shape. `publicUrlDetected` is what lets the
- * row name `tlib_http_public_url` exactly when there is something to act on.
+ * Whether the published address was configured or guessed. Not cosmetic: a
+ * wrong guess doesn't announce itself, it surfaces later as a CORS refusal or
+ * an unreachable OAuth redirect. `publicUrlDetected` is what lets the banner
+ * row name `tlib_http_public_url` exactly when there's something to act on.
  */
 describe("the published address knows whether it was configured", () => {
   test("an override is not detected, at construction", () => {

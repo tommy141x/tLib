@@ -1,78 +1,36 @@
 #!/usr/bin/env bun
 /**
- * boolean-attr-selector-scan — finds CSS/UnoCSS selectors that Solid 2's
- * attribute serialisation turned into dead rules.
+ * Finds CSS/UnoCSS selectors that Solid 2's attribute serialisation turned
+ * into dead rules. `bun run check:boolattr [--list] [--strict] [--root <dir>]`
  *
- * Run from the repo root: `bun run check:boolattr`.
+ * `@solidjs/web`'s `setAttribute` writes a boolean `true` as the EMPTY
+ * STRING and REMOVES the attribute on `false` (Solid 1 stringified both).
+ * So `[data-x="true"]` or `[data-x="false"]` beside a JSX boolean binding
+ * goes dead with no error, no warning, no build failure.
  *
- *   bun run check:boolattr                  # report + assert
- *   bun run check:boolattr --list           # every site, with its verdict
- *   bun run check:boolattr --strict         # also fail on `unknown` / `never-emitted`
- *   bun run check:boolattr --root <dir>     # scan a consumer instead
+ * The scanner resolves how the attribute is actually produced before calling
+ * a selector dead: bound to a boolean (`data-x={a && b}`) is the finding;
+ * bound to a string (`open() ? "true" : undefined`, `String(x)`), set via
+ * `dataset`/`setAttribute`, or static markup is correct and left alone;
+ * `unknown` (unprovable, e.g. `props["data-x"]`) and `never-emitted` are
+ * reported but only fail under `--strict` — turning "cannot prove this" into
+ * a hard failure is how a gate gets routed around. `aria-*` gets the same
+ * treatment but is rarely a finding since `aria-expanded="true"` is a
+ * legitimate string per the ARIA spec; it's only dead when JSX hands it a
+ * raw boolean, producing invalid `aria-x=""`.
  *
- * THE DEFECT
+ * Under Solid 1 the same site is correct, so a Solid 1 root (version read
+ * from its own package.json files) reports findings as `latent` rather than
+ * failing — the list of what breaks on migration, not bugs today. Do not
+ * pre-fix them: `[data-x]` presence is only exact once `false` removes the
+ * attribute, and Solid 1 still writes `data-x="false"` (present), so
+ * converting early inverts the rule.
  *
- * `@solidjs/web/dist/web.js`:
- *
- *     function setAttribute(node, name, value) {
- *       if (value == null || value === false) node.removeAttribute(name);
- *       else node.setAttribute(name, value === true ? "" : value);
- *     }
- *
- * Solid 2 writes a boolean `true` as the EMPTY STRING and REMOVES the attribute
- * on `false`. Solid 1 stringified both ("true" / "false"). So every selector
- * written as `[data-x="true"]`, where `data-x` is bound in JSX to a boolean,
- * went dead in the migration — and `[data-x="false"]` went dead too, because
- * there is no longer any "false" value to match. No error, no warning, no build
- * failure: the base rule simply wins.
- *
- * WHY THE CONTROL IS THE POINT
- *
- * Every rule below is also run against `boolean-attr-selector-control.fixture.tsx`,
- * a file written to be wrong on purpose. If a rule stops matching there the whole
- * run exits 2 — even when the real tree reports clean.
- *
- * The control is always read from THIS repo, so `--root` cannot weaken it, and
- * BOTH readers (CSS selector, UnoCSS variant) must still find its attribute —
- * deleting the variant reader left an earlier control fully green.
- *
- * WHAT IS AND IS NOT A FINDING
- *
- * The scanner does not flag a selector for its shape. It resolves how the
- * attribute is actually PRODUCED in the same project first:
- *
- *   boolean   `data-x={a && b}`                       -> DEAD. Finding, fails.
- *   string    `data-x={open() ? "true" : undefined}`  -> correct. Not a finding.
- *             `data-x={String(moving())}`                Do not "normalise" it.
- *   dataset   `el.dataset.x = "true"`                 -> correct, a real string.
- *   static    `<div data-x="true">` in .html          -> correct, a real string.
- *   unknown   `data-x={props["data-x"]}`              -> cannot be proven here.
- *   absent    nothing emits the attribute at all      -> the rule is dead for an
- *                                                        unrelated reason.
- *
- * `unknown` and `never-emitted` are REPORTED but do not fail without `--strict`,
- * because turning an "I cannot prove this" into a hard failure is how a gate
- * gets routed around. A selector nobody emits is a finding to read, not a
- * selector to quietly rewrite until it matches something that was never there.
- *
- * aria is deliberately treated the same way but is almost never a finding:
- * `aria-expanded="true"` is a real string value in the ARIA spec and is normally
- * passed as one. It is only flagged when the JSX hands it a RAW boolean, which
- * writes `aria-x=""` — invalid ARIA, and dead against any `="true"` selector.
- *
- * SOLID 1 ROOTS
- *
- * Under Solid 1 the same site is CORRECT: `data-x={bool}` stringified. Scanning
- * a Solid 1 root therefore reports its findings as `latent` and does not fail.
- * They are not bugs today; they are the list of what breaks the day that project
- * is migrated. This project's own version is read from the package.json files
- * under the root, so nothing has to be passed in.
- *
- * AND DO NOT PRE-EMPTIVELY APPLY THE FIX THERE. Presence is exact under Solid
- * 2 only because `false` REMOVES the attribute. Solid 1 writes `data-x="false"`,
- * which IS present — so `[data-x]` in a Solid 1 project matches the false state
- * too, and converting early inverts the rule instead of future-proofing it. The
- * `latent` list is to be worked through as part of each migration, not before.
+ * Every rule also runs against `boolean-attr-selector-control.fixture.tsx`,
+ * deliberately wrong, read from this repo regardless of `--root` so it can't
+ * be weakened; if either reader (CSS selector, UnoCSS variant) stops finding
+ * its dead pair, the whole run exits 2 even when the real tree is clean —
+ * deleting the variant reader once left an earlier control fully green.
  *
  * Exit codes: 0 pass, 1 a dead selector exists, 2 the control broke, 3 bad usage.
  */
@@ -95,32 +53,18 @@ if (!statSync(SCAN_ROOT, { throwIfNoEntry: false })?.isDirectory()) {
 }
 const STRICT = process.argv.includes("--strict");
 
-/**
- * `backups/` and the built `assets/` hold frozen copies of the pre-migration
- * tree and minified CSS; both are full of exactly this pattern and neither is
- * editable source. `solid-compat/` documents the Solid 1 surface on purpose.
- */
+/** `backups/`, `assets/` hold frozen pre-migration/minified copies, not editable source; `solid-compat/` documents the Solid 1 surface on purpose. */
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "backups", "assets", "solid-compat"]);
-/**
- * Every dot-directory, which is ripgrep's default and the right call here:
- * build output, and the pre-migration trees a consumer keeps in one.
- */
 const skipDir = (name: string) => SKIP_DIRS.has(name) || name.startsWith(".");
 const SCAN_EXT = /\.(css|scss|html|tsx?|jsx?|mdx)$/;
-/** This scanner's own source quotes the defect verbatim, in prose and in regex
- *  literals that comment-blanking cannot reach. It is not a selector site. */
+/** This file's own regex literals quote the defect verbatim; exclude self from the scan. */
 const SELF = resolve(import.meta.path);
 
 /**
- * Blanks comment bodies, preserving every byte position and newline.
- *
- * Needed because the FIX for this defect is a comment explaining why the
- * selector is now presence-based — and that comment quotes `[data-x="true"]`.
- * Without this, nui.css's own write-up of the bug reports as the bug, and the
- * only way to a green run is to delete the explanation, which is backwards.
- *
- * Handles `//`, `/* *\/` and `<!-- -->`, and skips string literals so the `//`
- * in a URL inside a string does not eat the rest of the line.
+ * Blanks comment bodies, preserving every byte position and newline, so a
+ * comment explaining the fix (which quotes `[data-x="true"]`) doesn't itself
+ * report as the bug. Handles `//`, `/* *\/` and `<!-- -->`; skips string
+ * literals so a `//` in a URL doesn't eat the rest of the line.
  */
 function stripComments(src: string): string {
   const out = src.split("");
@@ -161,7 +105,6 @@ function stripComments(src: string): string {
   return out.join("");
 }
 
-// ----------------------------------------------------------------- selectors
 
 /** `[data-x="true"]`, `[data-x=true]`, `[aria-x='false']`. */
 const SELECTOR_RE =
@@ -209,7 +152,6 @@ function selectorSites(file: string, src: string, original: string): Site[] {
   return out;
 }
 
-// ------------------------------------------------------------------ producers
 
 type Binding = {
   file: string;
@@ -221,11 +163,10 @@ type Binding = {
 };
 
 /**
- * REACT IS NOT AFFECTED. React stringifies a boolean `data-*`/`aria-*` value
- * to "true"/"false", so `[data-x="true"]` beside `data-x={bool}` is CORRECT in a
- * React file and must not be touched. shark-ui ships a `registry/react` and a
- * `registry/solid` side by side, with the same component in both — without this,
- * the React copies report as the defect and the "fix" breaks working code.
+ * React is not affected: it stringifies a boolean `data-*`/`aria-*` to
+ * "true"/"false", so the same selector beside the same binding is correct
+ * there. shark-ui ships `registry/react` and `registry/solid` side by side
+ * with the same component in both, so renderer matters per-file.
  */
 function rendererOf(file: string, src: string): "solid" | "react" {
   if (/from\s*["']react(?:["']|\/)/.test(src)) return "react";
@@ -235,11 +176,10 @@ function rendererOf(file: string, src: string): "solid" | "react" {
 }
 
 /**
- * A test or a fixture renders shapes the app never renders. `solid-2-aria-attributes.test.tsx`
- * deliberately passes `asBool(false)` to `aria-invalid` to PROVE the Solid 2
- * behaviour — and that one line made tWeb's entirely-correct `aria-[invalid=true]:`
- * variant report dead. Tests are still scanned for SELECTORS (tLib's own browser
- * test was the one real finding in this sweep); they are only disregarded as
+ * A test/fixture renders shapes the app never renders:
+ * `solid-2-aria-attributes.test.tsx` deliberately passes `asBool(false)` to
+ * `aria-invalid`, which made tWeb's correct `aria-[invalid=true]:` variant
+ * report dead. Tests are still scanned for selectors, just not trusted as
  * evidence of what the app emits.
  */
 const isTestFile = (file: string) =>
@@ -277,37 +217,22 @@ function propSlice(src: string, colon: number): string {
 }
 
 /**
- * Classifies the bound expression.
- *
- * STRING is checked FIRST and wins, because the correct forms all mention a
- * boolean somewhere: `open() ? "true" : "false"` reads as boolean to any
- * operator test, and `props.error ? ("true" as const) : ("false" as const)` has
- * the ternary too. What makes a site correct is that the VALUE reaching the DOM
- * is a string, not that the condition is not a boolean.
+ * Classifies the bound expression. String is checked first and wins: what
+ * makes a site correct is that the VALUE reaching the DOM is a string, not
+ * that the condition isn't a boolean (e.g. `open() ? "true" : "false"`).
  */
 function classify(expr: string): Binding["verdict"] {
-  // `?.` and `??` are masked out first. Both start with the character a ternary
-  // starts with, and Dialog.tsx's
-  // `hasLabelledSibling() && LABELLESS.has(field()?.type ?? "")` was read as a
-  // string ternary — the `??` plus its `""` default — so the exact site this
-  // scanner exists for came back `correct`. Measured against the real tree,
-  // twice: masking only `?.` was not enough.
+  // `?.`/`??` masked first: both start like a ternary, and Dialog.tsx's
+  // `a() && LABELLESS.has(field()?.type ?? "")` was misread as a string
+  // ternary via the `??`/`""` default without this.
   const e = expr.trim().replace(/\?\?/g, "@@").replace(/\?\./g, "@.");
   if (e === "") return "unknown";
-  // A string literal anywhere in the value position, a template, or an explicit
-  // stringify: whatever the condition is, the DOM gets a string.
   if (/^\s*["'`]/.test(e)) return "string";
   if (/\bString\s*\(/.test(e)) return "string";
   if (/["'](?:true|false)["']/.test(e)) return "string";
-  // `cond ? "a" : "b"` with non-boolean strings, e.g. `data-state`. A real
-  // ternary has a `:`, which is what separates it from the masked operators.
-  //
-  // A template literal counts only HERE and in the leading-quote test above —
-  // i.e. only in a value position. A bare "contains a backtick" rule read
-  // shark-ui's `item.url === `#${activeHeading}`` as string-valued, which is a
-  // COMPARISON against a template and produces a boolean. It reached the right
-  // verdict by luck, via a different route than the one that is true, and the
-  // next expression of that shape would not have been so lucky.
+  // Real ternary (has `:`) with a quote/backtick in the value position only —
+  // a bare "contains a backtick" rule misread shark-ui's
+  // `item.url === `#${activeHeading}`` (a boolean comparison) as string-valued.
   if (/\?[\s\S]*:[\s\S]*["'`]/.test(e)) return "string";
   // Provably boolean: an operator or literal that can only produce one.
   if (/(?:^|[^=!<>])!(?!=)/.test(e)) return "boolean";
@@ -385,7 +310,6 @@ function emittedLiterally(attr: string, p: Producers): boolean {
   return p.literal.has(`data-${camel(attr)}`);
 }
 
-// ----------------------------------------------------------------- the engine
 
 type Verdict = "dead" | "correct" | "unknown" | "never-emitted" | "latent";
 type Finding = Site & { verdict: Verdict; why: string };
@@ -393,19 +317,13 @@ type Finding = Site & { verdict: Verdict; why: string };
 function evaluate(sites: Site[], producers: Producers, solidMajor: number): Finding[] {
   return sites.map((s) => {
     const all = producers.bound.get(s.attr) ?? [];
-    // App code is the evidence; a test fixture is only the fallback, and only so
-    // that a tree whose ONLY binding is in a fixture still gets a verdict
-    // instead of silently becoming `never-emitted`.
+    // App code is evidence; a test-only binding is the fallback, so a tree
+    // whose only binding is in a fixture still gets a verdict.
     const app = all.filter((b) => !b.fromTest);
     let bindings = app.length > 0 ? app : all;
-    // Same-renderer bindings win when there are any.
-    //
-    // shark-ui ships `registry/react` and `registry/solid` side by side with the
-    // same component in both, and `data-active` is bound to a boolean in each.
-    // Project-global attribution blamed the React selectors on the Solid
-    // binding and vice versa, which is the one judgement that must not be
-    // guessed: React stringifies a boolean, so a React selector beside a React
-    // binding is CORRECT and "fixing" it breaks working code.
+    // Same-renderer bindings win: shark-ui ships registry/react and
+    // registry/solid with the same `data-active` boolean binding in both, and
+    // a React selector beside the React binding is correct (React stringifies).
     const sameRenderer = bindings.filter((b) => b.renderer === s.renderer);
     if (sameRenderer.length > 0) bindings = sameRenderer;
     const bools = bindings.filter((b) => b.verdict === "boolean" && b.renderer === "solid");
@@ -487,8 +405,6 @@ function solidMajorOf(root: string): number {
   return max;
 }
 
-// ---------------------------------------------------------------- the control
-
 const controlSrc = readFileSync(CONTROL, "utf8");
 const controlStripped = stripComments(controlSrc);
 const controlFiles = [{ file: CONTROL, src: controlStripped }];
@@ -498,15 +414,10 @@ const controlFindings = evaluate(
   2
 );
 /**
- * An EXACT per-attribute map, not a set of verdicts that appeared somewhere.
- *
- * "all four verdicts were seen" is satisfiable by accident — one rule can cover
- * for another and the count still looks right. Naming which attribute must come
- * out as what means a rule can only drift by turning a specific, named line red.
- *
- * `data-ctl-gone` is the `="false"` half of the defect and is listed separately
- * on purpose: it is the quieter half, because the selector reads as a deliberate
- * negative state rather than as a mistake.
+ * An exact per-attribute map, not a set of verdicts seen somewhere -- "all
+ * four verdicts appeared" is satisfiable by one rule covering for another.
+ * `data-ctl-gone` (the `="false"` half) is listed separately since it reads
+ * as a deliberate negative state rather than a mistake.
  */
 const EXPECTED_IN_CONTROL: Record<string, Verdict> = {
   "data-ctl-dead": "dead",
@@ -541,14 +452,10 @@ if (controlWrong.length > 0) {
 }
 
 /**
- * Both READERS must still fire, not just the verdicts.
- *
- * Found by a drift drill: deleting the UnoCSS-variant reader outright left the
- * control at 7/7 and the run green, because every fixture attribute also appears
- * in a plain CSS-shaped selector and the per-attribute map could not tell which
- * reader had produced it. The variant form is the one that matters most in this
- * codebase — `data-[active=true]:` in a class string, where there is no
- * stylesheet to read and nothing else looks at it.
+ * Both readers must still fire, not just the verdicts: deleting the
+ * UnoCSS-variant reader once left the control at 7/7 and the run green,
+ * because every fixture attribute also appears in a plain CSS-shaped
+ * selector, so the per-attribute map alone couldn't tell which reader fired.
  */
 for (const kind of ["selector", "variant"] as const) {
   const attrs = controlFindings.filter((f) => f.kind === kind).map((f) => f.attr);
@@ -562,7 +469,6 @@ for (const kind of ["selector", "variant"] as const) {
   }
 }
 
-// ------------------------------------------------------------------- the scan
 
 const paths = walk(SCAN_ROOT).filter((p) => p !== CONTROL && resolve(p) !== SELF);
 const files = paths.map((file) => {
@@ -606,7 +512,6 @@ if (process.argv.includes("--list") && counts.get("correct")) {
   show("correct");
 }
 
-// ------------------------------------------------------------- the assertions
 
 const dead = counts.get("dead") ?? 0;
 if (dead > 0) {

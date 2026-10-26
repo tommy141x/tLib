@@ -25,26 +25,11 @@ local function safeScope(value, limit)
     return type(value) == 'string' and #value <= limit and value or ''
 end
 
--- The one admin rule, for every marketplace gate.
---
--- This used to be `IsPlayerAceAllowed(src, 'tlib.admin')`, inlined at three
--- call sites (install/uninstall/inspect, the browse read gate, and the
--- inspection re-check on the way back out). That spelling is NOT tLib's admin
--- rule: sv_permission.lua answers `tlib.superadmin` first and treats it as
--- level 2, so `exports.tLib:IsPlayerAdmin` grants a superadmin and the
--- marketplace denied one. A server owner who granted only `tlib.superadmin`
--- had an admin everywhere in tLib except here.
---
--- `shared/imports/permission/` is the consumer-side mirror of this same rule
--- (see its header: it exists because four resources hand-rolled it three ways
--- and drifted). It cannot be used from inside tLib's own VM — fxmanifest ships
--- it in `files{}`, not `server_scripts{}`, because it is loaded by a consumer.
--- So the convergence here is onto the rule it mirrors, which is loaded above
--- this file (fxmanifest server_scripts: sv_permission.lua precedes this one).
---
--- Error text deliberately still names `tlib.admin` — it is the permission an
--- operator is expected to grant, and naming the superadmin alternative in a
--- denial message would only ever be read as advice to escalate.
+-- The one admin rule, for every marketplace gate. A bare `IsPlayerAceAllowed(src,
+-- 'tlib.admin')` denies a `tlib.superadmin`-only grant, since sv_permission.lua
+-- answers that first at level 2; `Permission.isPlayerAdmin` is the rule that
+-- agrees with the rest of tLib. Error text still names `tlib.admin` -- it's the
+-- permission an operator is expected to grant.
 local function isAdmin(src)
     if src == nil then return false end
     return Permission.isPlayerAdmin(src)
@@ -70,19 +55,10 @@ local function sanitizeInspection(p, result)
         status = data.status, lock = data.lock, policyAvailable = data.policyAvailable,
     } }
 end
--- NO `installedAt`, AND THAT IS THE POINT.
---
--- `installFromData` answers with an absolute filesystem path
--- (`<resourceRoot>/<installPath>/<slug>`), and this used to forward it to the
--- game client, where its only reader was a tLib log line printing the server's
--- directory layout into an admin's own console. `installer/inspection.ts` states
--- the rule for the read path — "emits no absolute paths" — and
--- `tests/lua/marketplace-coordinator.lua` already asserted an inspect reply
--- carries none; the write path simply never got the same treatment.
---
--- It is still on the SERVER-side lifecycle event below, where a consumer has a
--- legitimate use for it and the value never leaves the host. The counts stay:
--- `fileCount` and `bytesWritten` say how much landed without saying where.
+-- No `installedAt` (absolute filesystem path) sent to the client -- it would
+-- print the server's directory layout into an admin's console for no reader.
+-- Still passed on the server-side lifecycle event below, where it never leaves
+-- the host. `fileCount`/`bytesWritten` say how much landed, not where.
 local function reply(p, result)
     if not p.src then return end
     -- Never trust scope supplied by an agent; bind every response to its request.
@@ -103,19 +79,11 @@ local function fail(p, message)
     reply(p, { ok = false, error = message })
 end
 
--- Demo mode's start-time sweep
---
--- A demo server hands every visitor admin, so anyone can install anything. The
--- promise is that restarting the resource undoes it, and this is where that is
--- kept: on the first type a resource registers after starting, its own agent is
--- asked to uninstall everything it owns.
---
--- Hooked to registration rather than to `onResourceStart` because registration
--- is the point at which the consumer is demonstrably ready -- its Node bundle
--- has loaded and built the agent that receives this, which `onResourceStart`
--- does not guarantee. Once per resource, not once per type: the agent sweeps all
--- of its types in one pass, and a resource registering four types must not
--- trigger four overlapping sweeps of the same directories.
+-- Demo's start-time sweep: a demo server hands every visitor admin, so the
+-- promise that restarting undoes any install is kept here, on the first type a
+-- resource registers after starting. Hooked to registration rather than
+-- onResourceStart because registration is when the consumer's Node bundle has
+-- actually loaded the agent. Once per resource, not once per type.
 local _demoSwept = {}
 
 AddEventHandler('onResourceStop', function(resource) _demoSwept[resource] = nil end)
@@ -216,25 +184,12 @@ local function request(action, resource, kind, slug, version, requestId)
         end
     end
 
-    -- Cross-product install enforcement
-    --
-    -- Everything above proves the CALLER is allowed to install into this
-    -- resource. Nothing above proves the ITEM belongs to it. The registry keys
-    -- on `resource:type` and writes into that resource's own registered
-    -- installPath, so a tLS item could never land in tRadar's directory — but
+    -- Cross-product install enforcement: everything above proves the caller may
+    -- install into this resource, not that the item belongs to it --
     -- `tlib:marketplace:install('tRadar', 'ui', '<a-tLS-slug>')` passed every
-    -- check and tLib fetched and installed it anyway.
-    --
-    -- Only install needs this. UNINSTALL AND INSPECT ARE DELIBERATELY NOT
-    -- GATED: they act on files already on this server's disk, addressed by the
-    -- same `resource:type:slug` tuple that put them there. Gating them would
-    -- make a cross-product item installed BEFORE this check existed impossible
-    -- to remove, and would put an outbound HTTP call in the way of a local
-    -- delete that must keep working when the marketplace is down.
-    --
-    -- FAILS CLOSED. An unreachable marketplace refuses the install rather
-    -- than falling through to it, matching what the bundle-digest check already
-    -- does with a missing hash header.
+    -- other check. Only install needs this; uninstall/inspect act on files
+    -- already on disk and must keep working when the marketplace is down.
+    -- Fails closed: an unreachable marketplace refuses the install.
     if action ~= 'install' then
         dispatch()
         return
@@ -272,28 +227,15 @@ RegisterNetEvent('tlib:marketplace:inspect', function(resource, kind, slug, requ
     request('inspect', resource, kind, slug, nil, requestId)
 end)
 
--- Panel reads: browse and preview
---
--- The panel used to make both of these itself, straight out of CEF, and
--- neither could ever have worked: the marketplace host sends no
--- Access-Control-Allow-Origin, so the browser made each request and then
--- refused to hand a `cfx-nui-tLib` origin the body. Every browse failed, which
--- is why tDetector and tRadar — whose only marketplace UI is that panel —
--- looked like they had no marketplace at all.
---
--- Routing them through here is not only a way around that. It is what lets a
--- request carry the resource secret (see `lib/marketplace/browse.ts`), which is
--- what makes the v2 contract reachable, which is what makes `resource`
--- filtering and `theme` items possible.
---
--- The SOUND preview is deliberately not here. It stays an `<audio>` element
--- pointed at the absolute `preview_url` the listing already carries: an element
--- load is exempt from CORS and needs no credential, and pulling audio bytes
--- through this VM would mean shipping binary across the Lua/JS boundary.
---
--- Read-only, but gated on the same ACE as install: this is an admin panel, and
--- an ungated net event is an outbound request the server pays for on any
--- player's say-so.
+-- Panel reads: browse and preview. A direct NUI fetch of these from CEF is
+-- CORS-blocked -- the marketplace host sends no Access-Control-Allow-Origin, so
+-- the browser refuses `cfx-nui-tLib` the body. That's why tDetector/tRadar, whose
+-- only marketplace UI is this panel, looked like they had no marketplace at all.
+-- Routing through here also lets the request carry the resource secret (see
+-- `lib/marketplace/browse.ts`), which is what makes `resource` filtering and
+-- `theme` items reachable. Sound preview stays an `<audio>` element pointed at
+-- the listing's `preview_url` instead -- element loads are CORS-exempt. Gated on
+-- the same ACE as install: an ungated net event is an outbound request paid for on any player's say-so.
 local READ_MAX_IN_FLIGHT = 3
 local _reads = {}
 
@@ -346,45 +288,26 @@ local function readBackstop(settle)
     end)
 end
 
--- The player's own FiveM identity, for likes
+-- The marketplace's like endpoint de-duplicates on (item, license); that only
+-- works if the license is resolved here, server-side, from `source`, via the
+-- native -- never from the NUI payload, a convar, or an export argument.
+-- `GetPlayerIdentifierByType` is used over walking `GetNumPlayerIdentifiers`
+-- because the loop form string-matches prefixes and could return `license2:`/`ip:`.
 --
--- THIS FUNCTION IS THE ENTIRE REASON A LIKE COUNT MEANS ANYTHING.
---
--- The marketplace's like endpoint de-duplicates on `(item, license)`. That rule
--- stops one person boosting a count ONLY IF the license is something they cannot
--- choose — so it is resolved here, server-side, from the `source` of the net
--- event, by the native. It is never taken from the NUI payload, never from a
--- convar, and never from an export argument.
---
--- `GetPlayerIdentifierByType` is used rather than walking
--- `GetNumPlayerIdentifiers`: the typed accessor asks for exactly the identifier
--- wanted, where the loop form has to string-match prefixes and would happily
--- return `license2:` or `ip:` to a careless comparison.
---
--- WHAT THIS DOES NOT DO, STATED SO NOBODY ASSUMES IT: it does not make the
--- claim verifiable BY THE MARKETPLACE. The outbound request's only credential is
--- the shared resource secret, which is public by design and identifies a server
--- rather than a person — so whoever runs this server can bypass this function
--- entirely and POST any license they invent. The count is resistant to a PLAYER
--- and not to an OPERATOR. tWeb's src/lib/marketplace/like-identity.ts carries
--- the full argument and the design that would close it (the Cfx.re account-link
--- flow, which produces an identity proven at the website's own origin).
---
--- AND NOTE WHO CAN REACH THIS AT ALL: every marketplace read in this file
--- goes through `beginRead`, which requires the `tlib.admin` ACE. So the in-game
--- like path is reachable only by server administrators. That is a mitigation
--- (an ordinary player on somebody's server cannot spam likes through the panel)
--- and simultaneously the sharpest form of the limitation above, because the
--- population that CAN like in game is the same population that could forge.
+-- This does NOT make the claim verifiable by the marketplace: the outbound
+-- request's only credential is the shared resource secret (public by design,
+-- identifies a server not a person), so whoever runs the server can bypass this
+-- and POST any license. Resistant to a player, not to an operator -- and every
+-- reader here goes through `beginRead` (`tlib.admin` ACE), so the population
+-- that CAN like in game is the same population that could forge. tWeb's
+-- src/lib/marketplace/like-identity.ts carries the design that would close
+-- this (Cfx.re account-link, an identity proven at the website's own origin).
 local function playerLicense(src)
     if src == nil then return nil end
     local ok, identifier = pcall(GetPlayerIdentifierByType, src, 'license')
     if not ok or type(identifier) ~= 'string' then return nil end
-    -- The native answers `license:<40 hex>`. The prefix is stripped here so the
-    -- stored subject is namespaced once, by the backend, as `fivem:<hex>`. The
-    -- backend also tolerates the raw form — but relying on that would mean two
-    -- spellings of one player if either side ever changed its mind, and two
-    -- spellings defeat the uniqueness rule entirely.
+    -- Native answers `license:<40 hex>`; prefix stripped so the backend namespaces
+    -- it once as `fivem:<hex>` rather than tolerating two spellings of one player.
     local license = identifier:match('^license:(%x+)$')
     if not license then return nil end
     return license:lower()
@@ -419,16 +342,9 @@ RegisterNetEvent('tlib:marketplace:browse', function(opts)
         sort = opts.sort == 'created_at' and 'created_at' or 'downloads',
         limit = limit,
         cursor = cursor,
-        -- Resolved from `src`, NEVER read off `opts`. `opts` is the NUI's
-        -- payload and a value the client sent is a value the client chose; see
-        -- `playerLicense` above for why that distinction is the whole feature.
-        --
-        -- Sending it is what makes each item's `liked` flag this player's own,
-        -- which is what lets the card draw a heart that is already filled
-        -- instead of inviting a like the backend then refuses. A nil here is
-        -- normal and harmless — the catalogue and the like COUNTS come back
-        -- either way, only `liked` is absent, and the card then shows a count
-        -- with no button.
+        -- Resolved from `src`, never from `opts` (the NUI payload) -- see `playerLicense`.
+        -- Lets each item's `liked` flag be this player's own. nil here is
+        -- harmless: catalogue and like counts still come back, only `liked` is absent.
         identity = playerLicense(src),
     }
 
@@ -460,21 +376,13 @@ RegisterNetEvent('tlib:marketplace:browse', function(opts)
     readBackstop(settle)
 end)
 
--- Like, or un-like, one catalogue item as the requesting PLAYER.
+-- Like/un-like one item, as the requesting player. Goes through `beginRead`
+-- despite being a write, deliberately: it supplies the `tlib.admin` ACE (a
+-- weaker gate here would be the one way into an admin-only panel), the
+-- requestId binding, and the in-flight cap.
 --
--- IT GOES THROUGH `beginRead` LIKE THE TWO READS, DESPITE BEING A WRITE, and
--- that is deliberate rather than a copy-paste. `beginRead` is the shared gate
--- for this panel, and it supplies three things a like needs for exactly the same
--- reasons a read does: the `tlib.admin` ACE (the panel is admin-only in its
--- entirety, so a separate weaker gate here would be the one way in), the
--- requestId binding that stops a stale reply overwriting a newer one, and the
--- in-flight cap that stops the panel being used to make this server issue
--- unbounded outbound requests.
---
--- `next` IS THE STATE BEING ASKED FOR, NOT A TOGGLE. The NUI sends the state
--- it wants, so a retry after the 20s backstop cannot invert anything — which it
--- could if this flipped a value it read. The marketplace is idempotent in both
--- directions for the same reason.
+-- `next` is the state being asked for, not a toggle -- a retry after the 20s
+-- backstop can't invert anything, since the NUI always sends the state it wants.
 RegisterNetEvent('tlib:marketplace:like', function(opts)
     local src = source
     local settle = beginRead(src, 'like', opts)
@@ -486,17 +394,11 @@ RegisterNetEvent('tlib:marketplace:like', function(opts)
         return
     end
 
-    -- FROM `src`, not from `opts`. Read `playerLicense`'s header before
-    -- changing this line: a license taken from the payload would let any player
-    -- like as a thousand different people, which is precisely the thing the
-    -- backend's unique index exists to prevent.
+    -- From `src`, not `opts` -- see `playerLicense` for why a payload license defeats de-duplication.
     local license = playerLicense(src)
     if not license then
-        -- A player with no `license:` identifier cannot be de-duplicated, so
-        -- they are refused rather than counted under a fallback. A synthetic id
-        -- — the server id, a hash of the name — would be a NEW identity on every
-        -- reconnect, which turns "one like per person" into "one like per
-        -- session" and silently makes the count meaningless.
+        -- No fallback id: a synthetic one (server id, name hash) would be new on every
+        -- reconnect, turning "one like per person" into "one like per session".
         settle({ ok = false, error = 'no FiveM identity for this player' })
         return
     end
@@ -515,11 +417,8 @@ RegisterNetEvent('tlib:marketplace:like', function(opts)
             settle({
                 ok = true,
                 slug = slug,
-                -- The SERVER'S numbers, carried through untouched. The panel
-                -- renders these rather than its own ±1, so a count cannot drift
-                -- away from the truth over a session — and the count may include
-                -- somebody else's like that landed in between, which is a more
-                -- current number rather than a wrong one.
+                -- The server's numbers, untouched -- the panel renders these rather
+                -- than its own ±1, so the count can't drift from the truth.
                 likes = parsed.likes,
                 liked = parsed.liked == true,
             })
@@ -533,10 +432,9 @@ RegisterNetEvent('tlib:marketplace:like', function(opts)
     readBackstop(settle)
 end)
 
--- The preview DOCUMENT, as text. The panel reads it rather than just rendering
--- it — it injects the data-hud-* preview script and derives the canvas size
--- from a comment inside the markup — so a cross-origin `<iframe src>` would not
--- do: a frame from another origin cannot be read or scripted by its parent.
+-- The preview document, as text: the panel injects the data-hud-* preview
+-- script and derives canvas size from markup, so a cross-origin `<iframe src>`
+-- won't do -- a frame from another origin can't be read or scripted by its parent.
 RegisterNetEvent('tlib:marketplace:preview', function(opts)
     local src = source
     local settle = beginRead(src, 'preview', opts)
@@ -565,13 +463,10 @@ RegisterNetEvent('tlib:marketplace:preview', function(opts)
     readBackstop(settle)
 end)
 
--- The published definition of a `theme` item, as JSON text.
---
--- A separate read from the preview document above rather than a mode of it: the
--- two answer different endpoints, and the panel does opposite things with them —
--- a UI document is parsed and rewritten here, a theme definition is handed
--- verbatim to tRadio's offline panel, which applies it through the same code an
--- install does.
+-- The published definition of a `theme` item, as JSON text. A separate read
+-- from the preview document above, not a mode of it: a UI document is parsed
+-- and rewritten, a theme definition is handed verbatim to tRadio's offline
+-- panel, applied through the same code an install does.
 RegisterNetEvent('tlib:marketplace:themeJson', function(opts)
     local src = source
     local settle = beginRead(src, 'themeJson', opts)
@@ -625,26 +520,13 @@ AddEventHandler('tlib:marketplace:agentResult', function(result)
             local ok, err = pcall(cb, p.slug, meta)
             if not ok then log('marketplace callback errored: ' .. tostring(err), 3) end
         end
-        -- `src` is the admin who asked for the install, and it is on the payload so
-        -- a consumer can TELL them something.
-        --
-        -- Without it a consumer that needs to report a consequence of the install
-        -- -- a sound file being overwritten, say -- has only two options, and all
-        -- four consumers picked a different one:
-        --
-        --   tDetector  TriggerClientEvent(..., -1, ...)  with NO handler anywhere
-        --   tRadar     TriggerClientEvent(..., -1, ...)  with NO handler anywhere
-        --   tRadio     broadcast to -1, every client filters on its own `isAdmin`
-        --   tLS       gave up and logged server-side, with a comment saying why
-        --
-        -- tLS's comment names the exact cause: retargeting at the installing admin
-        -- "is the honest alternative, but `p.src` is known only inside tLib's
-        -- sv_marketplace.lua and is not carried on the payload". So the fix belongs
-        -- here rather than four times over in the consumers.
-        --
-        -- May be nil: `:455` clears it when the requesting player disconnects
-        -- mid-install. A consumer must treat nil as "nobody to tell" and fall back
-        -- to a server log, not broadcast.
+        -- `src` (the installing admin) is on the payload so a consumer can tell them
+        -- something about a side effect, e.g. an overwritten sound file. Before this,
+        -- tDetector/tRadar broadcast to -1 with no handler, tRadio broadcast and
+        -- filtered client-side, and tLS gave up and logged server-side -- four
+        -- consumers, four workarounds, because `p.src` wasn't on the payload.
+        -- May be nil if the requesting player disconnects mid-install; a consumer
+        -- must treat nil as "nobody to tell" and fall back to a server log.
         if p.action == 'install' then
             TriggerEvent(p.resourceName .. ':marketplace:installed', p.itemType, p.slug, {
                 version = p.ver, installedAt = result.installedAt, src = p.src,

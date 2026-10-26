@@ -7,7 +7,7 @@
 -- fallback that differed from the shipped default, an error that named the
 -- wrong file.
 --
--- The messages are asserted on their CONTENT, not their exact wording — a
+-- The messages are asserted on their content, not their exact wording — a
 -- message that fails to name the key or the fix is the bug, not a reworded one.
 
 GetCurrentResourceName = function() return 'tExample' end
@@ -40,8 +40,6 @@ local function firstMatching(list, needle)
     return nil
 end
 
--- A valid config passes and reports nothing
-
 local good = {
     detectionRangeMeters = 500.0,
     speedUnit            = 'mph',
@@ -54,8 +52,6 @@ assert(r.ok, 'a valid config validates')
 assert(#r.errors == 0, 'a valid config produces no errors')
 assert(#r.warnings == 0, 'a valid config produces no warnings')
 assert(good.speedUnit == 'mph', 'a value the owner set is never overwritten')
-
--- Defaults fill in, and are applied to the table
 
 local sparse = { licenseKey = 'abc123' }
 r = config.validate(sparse, spec())
@@ -70,16 +66,12 @@ local falsey = { flag = false }
 config.validate(falsey, falseSpec)
 assert(falsey.flag == false, 'an explicit false is not replaced by a true default')
 
--- Required keys are fatal
-
 r = config.validate({}, spec())
 assert(not r.ok, 'a missing required key fails validation')
 local msg = firstMatching(r.errors, 'licenseKey')
 assert(msg, 'the error names the missing key')
 assert(contains(msg, 'shared/config.lua'), 'the error names the file')
 assert(contains(msg, 'required'), 'the error says it is required')
-
--- Every problem is reported, not just the first
 
 r = config.validate({
     detectionRangeMeters = 'far',
@@ -94,8 +86,6 @@ assert(firstMatching(r.errors, 'speedUnit'), 'the bad enum is reported')
 assert(firstMatching(r.errors, 'enableSiren'), 'the bad boolean is reported')
 assert(firstMatching(r.errors, 'licenseKey'), 'the missing required key is still reported')
 
--- A message names expected, found and a fix
-
 r = config.validate({ detectionRangeMeters = 'far', licenseKey = 'k' }, spec())
 msg = firstMatching(r.errors, 'detectionRangeMeters')
 assert(contains(msg, 'number'), 'the message says what was expected')
@@ -109,8 +99,6 @@ msg = firstMatching(r.errors, 'detectionRangeMeters')
 assert(msg, 'a quoted number is still an error, not silently coerced')
 assert(contains(msg, 'quote'), 'a numeric-looking string is told to drop the quotes')
 
--- Ranges and enums
-
 r = config.validate({ detectionRangeMeters = 9000, licenseKey = 'k' }, spec())
 msg = firstMatching(r.errors, 'detectionRangeMeters')
 assert(msg, 'an out-of-range number is an error')
@@ -122,13 +110,11 @@ msg = firstMatching(r.errors, 'speedUnit')
 assert(contains(msg, 'kmh') and contains(msg, 'mph'),
     'an enum error lists every valid value')
 
--- An out-of-range value must NOT be silently clamped to the default.
+-- An out-of-range value must not be silently clamped to the default.
 local ranged = { detectionRangeMeters = 9000, licenseKey = 'k' }
 config.validate(ranged, spec())
 assert(ranged.detectionRangeMeters == 9000,
     'a rejected value is left alone, never silently replaced by the default')
-
--- Unknown keys warn, and suggest the key that was meant
 
 r = config.validate({ licenseKey = 'k', detectionRangeMeters = 500, speedUnit = 'kmh',
     detectionRnge = 400 }, spec())
@@ -145,15 +131,11 @@ assert(msg, 'a wholly unknown key is still reported')
 assert(not contains(msg, 'did you mean'),
     'no suggestion is offered when nothing is close')
 
--- list type
-
 r = config.validate({ radarResources = 'tRadar', licenseKey = 'k' }, spec())
 msg = firstMatching(r.errors, 'radarResources')
 assert(msg, 'a scalar where a list belongs is an error')
 assert(contains(msg, 'list') or contains(msg, 'table'), 'the message says a list was expected')
 assert(contains(msg, '{'), 'the message shows the table syntax as the fix')
-
--- check() returns a boolean and never throws
 
 local ok = config.check({ licenseKey = 'k' }, spec())
 assert(ok == true, 'check() returns true for a valid config')
@@ -163,12 +145,12 @@ assert(ok == false, 'check() returns false for an invalid one')
 print('PASS: tlib.config reports every problem, names file/key/expected/found/fix, ' ..
     'suggests typos, honours deprecations, and never silently substitutes')
 
--- configured(): the owner's value survives runtime mutation
+-- configured(): the owner's value survives runtime mutation.
 --
--- The case this exists for, found by the tRadar session: `Config.speedUnit` is
--- deliberately the client's LIVE value, rewritten when a player picks a unit.
--- A diagnostic printing the live table reports the player's pick as the owner's
--- setting — a support tool confidently stating something the owner never wrote.
+-- tRadar's `Config.speedUnit` is deliberately the client's live value,
+-- rewritten when a player picks a unit. A diagnostic printing the live table
+-- reports the player's pick as the owner's setting — a support tool
+-- confidently stating something the owner never wrote.
 
 local live = { speedUnit = 'mph', licenseKey = 'k' }
 config.check(live, spec({ file = 'shared/radar-config.lua' }))
@@ -181,16 +163,13 @@ assert(asConfigured.speedUnit == 'mph',
     'configured() reports what the owner wrote, not the live mutated value')
 assert(live.speedUnit == 'kmh', 'the live table is left alone — it is not restored')
 
--- Defaults applied during validation are part of what was configured.
 assert(asConfigured.detectionRangeMeters == 500.0,
     'an applied default is included in the snapshot')
 
--- The snapshot is a copy: mutating it must not corrupt the stored one.
 asConfigured.speedUnit = 'tampered'
 assert(config.configured('shared/radar-config.lua').speedUnit == 'mph',
     'configured() hands back a copy, so a caller cannot corrupt the snapshot')
 
--- An unknown file is nil, not a wrong answer from some other config.
 assert(config.configured('shared/not-validated.lua') == nil,
     'an unvalidated file returns nil rather than another config\'s values')
 
@@ -201,7 +180,6 @@ local broken = config.configured('shared/broken.lua')
 assert(broken and broken.detectionRangeMeters == 'far',
     'a failed validation still records what the owner wrote')
 
--- With more than one config validated, a bare configured() must refuse to guess.
 assert(config.configured() == nil,
     'configured() with no file returns nil when several configs were validated')
 

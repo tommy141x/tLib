@@ -114,11 +114,10 @@ export function createStore(now: () => number = () => Date.now()): Store {
         if (!event || typeof event.event !== "string" || typeof event.at !== "number") continue;
         const dimensions = event.dimensions ?? {};
         const measures = event.measures ?? {};
-        // REFUSED HERE RATHER THAN SENT AND REFUSED THERE. tWeb's ingest
-        // answers a bad dimension with a counted `unsafe_dimension` and a
-        // dropped event — visible on its Overview and invisible to us. Checking
-        // locally turns a silent remote refusal into a number this side can
-        // report and a unit test can pin.
+        // Refused here rather than sent and refused there: tWeb's ingest would
+        // drop a bad-dimension event as a counted `unsafe_dimension`, visible on
+        // its Overview but invisible to us. Checking locally turns a silent
+        // remote refusal into a number this side can report.
         if (unsafeDimensions(dimensions).length > 0) {
           unsafe += 1;
           continue;

@@ -45,27 +45,18 @@ import {
 import { fmtTime, formatBytes, type InstallState, type MarketplaceItem } from "./types";
 
 /**
- * The name to show, through `card-model`'s empty-name fallback.
- *
- * Three places in this file render it — the header, the theme screenshot's `alt`
- * and the preview frame's `title` — and the last two are a11y strings, so a
- * listing published with no name gave a screen reader "` preview`" with nothing
- * in front of it. One read rather than three copies of the `||`.
+ * The name to show, through `card-model`'s empty-name fallback. Three places in this file
+ * render it, two as a11y strings (screenshot `alt`, frame `title`) — a no-name listing
+ * used to give a screen reader `" preview"` with nothing in front of it.
  */
 const displayName = (item: MarketplaceItem) => cardIdentity(item).name;
 
 /**
- * One waveform bar's height, as a fraction of the 0..1 viewBox.
- *
- * CLAMPED AT THE TOP, which it was not. `preview_waveform` is normalised peaks on
- * the backend but arrives through `numArray`, which keeps any finite number — so a
- * single out-of-range peak gave `y = (1 - h) / 2` a negative value and drew that
- * bar off the top and bottom of the SVG, over the time readouts. Nothing errors;
- * an SVG happily paints outside its own viewBox.
- *
- * The floor is so a silent sample is still a visible tick rather than nothing.
- * Both bar passes below — the unplayed greys and the clipped accent copy — go
- * through this, because two copies of the clamp is how one of them loses it.
+ * One waveform bar's height, as a fraction of the 0..1 viewBox. Clamped at the top: an
+ * out-of-range `preview_waveform` peak (it's server-normalised but arrives through
+ * `numArray`, which keeps any finite number) gave `y = (1 - h) / 2` a negative value and
+ * drew the bar outside the viewBox with no error. The floor keeps a silent sample a visible
+ * tick. Both bar passes (unplayed grey, clipped accent) share this call on purpose.
  */
 const barHeight = (peak: number) => Math.min(1, Math.max(0.04, peak * 0.9));
 
@@ -86,14 +77,10 @@ export function PreviewOverlay(props: {
   panelPreviewUrl?: string | null;
 }) {
   const s = () => props.installState;
-  // From `../install-machine`. This block was a VERBATIM copy of the one in
-  // `ItemCard.tsx` — the same union answered the same three questions twice,
-  // which is exactly the shape that drifts.
+  // These three read through `../install-machine` rather than reimplementing the union —
+  // this block was a verbatim copy of `ItemCard.tsx`'s, and that drift is what put a
+  // Delete button on a shipped layout in the first place.
   const busy = () => isInstallBusy(s());
-  // `canUninstall`/`canInstall` from `../install-machine` for the same reason the
-  // three booleans above moved there: this block was a VERBATIM copy of
-  // `ItemCard.tsx`'s, so a built-in excluded in one file and not the other is
-  // exactly the drift that put a Delete on a shipped layout in the first place.
   const removable = () => canUninstall(s());
   const builtin = () => isBuiltin(s());
   const installLabel = () => INSTALL_ACTION_LABEL[installAction(s())];
@@ -119,10 +106,8 @@ export function PreviewOverlay(props: {
               onConfirm={() => props.onUninstall?.()}
             />
           </Show>
-          {/* See the long note on the same button in `ItemCard.tsx`: a built-in
-              keeps a disabled "Built in" rather than disappearing, because the
-              preview of a shipped radio with no control and no sentence is the
-              same confusion one step quieter. */}
+          {/* See the note on the same button in `ItemCard.tsx`: built-in stays a disabled
+              "Built in" rather than disappearing. */}
           <NuiButton
             class="mp-action"
             tone={s().state === "installed" || builtin() ? "default" : "primary"}
@@ -148,18 +133,10 @@ export function PreviewOverlay(props: {
 
       <InstallError state={s()} />
 
-      {/*
-        One branch per KIND of thing the marketplace sells, because each is a
-        different sense: a sound is heard, a theme is seen as colour, a layout is a
-        rendered device.
-
-        This used to be a two-way `Show` — sound, else the HTML frame — which meant a
-        `theme` item was asked for a preview document it does not have and landed on
-        "Preview unavailable". The data was already here: `preview_colors` and
-        `thumbnail` ride on every theme listing (see `../item.ts`, where both are
-        documented as theme-only), and this overlay simply never read them. The buyer
-        was therefore installing a colour scheme sight-unseen.
-      */}
+      {/* One branch per kind: sound is heard, theme is seen as colour, else rendered HTML.
+          Used to be a two-way Show (sound, else HTML frame), so a theme item was asked for
+          a preview document it doesn't have and fell to "Preview unavailable" — the data
+          (`preview_colors`, `thumbnail`, theme-only per `../item.ts`) was already there. */}
       <div class="flex-1 min-h-0">
         <Switch
           fallback={
@@ -186,23 +163,11 @@ export function PreviewOverlay(props: {
 type AudioPlayerState = "idle" | "loading" | "ready" | "error";
 
 /**
- * The sound preview, as an `<audio>` element.
- *
- * It used to `fetch` the bytes and decode them through Web Audio, which could
- * not work from here: CEF's origin is `cfx-nui-tLib`, the marketplace host
- * sends no `Access-Control-Allow-Origin`, and so the browser refused to hand
- * this page the body. Being a public, read-only endpoint is not what makes a
- * response readable cross-origin — the header is.
- *
- * An element load is exempt from that rule entirely, which is why this one
- * fix is a deletion rather than a round trip through the game server. The
- * waveform never needed the decoded buffer anyway: it is drawn from the
- * `preview_waveform` peaks the listing already carries, and the only things
- * the AudioBuffer supplied were `duration` and a playback clock, both of which
- * the element exposes directly.
- *
- * Do NOT set `crossOrigin` on the element. That opts the load back in to
- * the CORS check this is deliberately outside of, and the preview breaks again.
+ * The sound preview, as an `<audio>` element. Used to `fetch` + decode via Web Audio, which
+ * CEF's `cfx-nui-tLib` origin can't do against a host sending no `Access-Control-Allow-Origin`
+ * — an element load is exempt from that CORS check. The waveform was already drawn from
+ * `preview_waveform` peaks, not the decoded buffer, so this needed no round trip through the
+ * game server. Do not set `crossOrigin` — it opts back into the CORS check and breaks this.
  */
 function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
   const [audioState, setAudioState] = createSignal<AudioPlayerState>("idle");
@@ -304,10 +269,8 @@ function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
         }}
       />
 
-      {/* The size half is dropped when the catalogue sent none. `size_bytes` is
-          `num()`-normalised, so 0 means "nobody measured this" as often as it
-          means zero bytes, and `0B` beside a real install count reads as a fact.
-          Same rule as `cardStatsOf`, which is what `ItemCard` now goes through. */}
+      {/* `size_bytes` is `num()`-normalised, so 0 means "unmeasured" as often as zero bytes —
+          dropped rather than shown as a false `0B`. Same rule as `cardStatsOf`. */}
       <div class="text-sm mp-muted">
         {props.item.downloads} installs
         <Show when={props.item.size_bytes > 0}> · {formatBytes(props.item.size_bytes)}</Show>
@@ -418,20 +381,11 @@ function AudioPreviewPlayer(props: { item: MarketplaceItem; baseUrl: string }) {
 }
 
 /**
- * A theme, shown on the dispatch panel it restyles.
- *
- * This used to be the creator's screenshot over a swatch row, with a comment
- * arguing that a faithful render "cannot happen inside a preview that is also the
- * panel". That was true of the surface it was written for and is not true here:
- * tRadio ships an OFFLINE panel built from the same graph as the shipped one, and
- * this frame is `cfx-nui-tLib` rather than the panel itself. So the argument held
- * only while nobody had built the thing it said was impossible.
- *
- * The creator's screenshot is no longer what a theme resolves to — `previewKind`
- * now takes `panel` ahead of `thumbnail` — but it is still the fallback for a
- * host with no panel to mount, which in practice is a consumer that is not
- * tRadio. Changing that case was never asked for and nothing here would be
- * better for it.
+ * A theme, shown on the dispatch panel it restyles. Used to be a screenshot over swatches
+ * on the theory that a faithful render can't happen inside a preview that is also the
+ * panel — false once tRadio shipped an offline panel from the same graph, since this frame
+ * is `cfx-nui-tLib`, not the panel itself. `previewKind` now prefers `panel` over
+ * `thumbnail`; the screenshot stays the fallback for a non-tRadio host with no panel to mount.
  */
 function ThemePreview(props: { item: MarketplaceItem; panelPreviewUrl?: string | null }) {
   const [definition, setDefinition] = createSignal<PanelThemeDefinition | null>(null);
@@ -439,9 +393,8 @@ function ThemePreview(props: { item: MarketplaceItem; panelPreviewUrl?: string |
   const [thumbFailed, setThumbFailed] = createSignal(false);
   const colors = () => props.item.preview_colors ?? [];
 
-  // `failed` drops a theme whose definition could not be fetched back down the
-  // same chain every other host walks, rather than leaving a frame that will
-  // never be posted a theme sitting there empty.
+  // `failed` drops a theme whose definition fetch failed back to the same chain every
+  // other host walks, rather than leaving an unpostable frame empty.
   const kind = createMemo(() =>
     previewKind(props.item, {
       panelPreview: !!props.panelPreviewUrl && !failed(),
@@ -449,9 +402,9 @@ function ThemePreview(props: { item: MarketplaceItem; panelPreviewUrl?: string |
     })
   );
 
-  // Only `compute` tracks, so the slug and the URL are read up there; the braces
-  // on `apply` are load-bearing — a returned setter result is taken for a cleanup
-  // function and takes the reactive graph down with it.
+  // Solid 2: only `compute` tracks, so slug/URL are read there. Braces on `apply` are
+  // load-bearing — a bare setter-call return is taken for a cleanup function and takes
+  // the reactive graph down with it.
   createEffect(
     () => (props.panelPreviewUrl ? props.item.slug : null),
     (slug) => {
@@ -461,9 +414,7 @@ function ThemePreview(props: { item: MarketplaceItem; panelPreviewUrl?: string |
         (value) => {
           if (!cancelled) setDefinition(value);
         },
-        // Dropping to the swatches rather than to an error: the reader came here
-        // to judge a theme, and its palette is still a smaller true answer than a
-        // sentence about a failed request.
+        // Drops to swatches rather than an error — the palette is still a true answer.
         () => {
           if (!cancelled) setFailed(true);
         }
@@ -509,8 +460,7 @@ function ThemePreview(props: { item: MarketplaceItem; panelPreviewUrl?: string |
             src={props.item.thumbnail!}
             alt={`${displayName(props.item)} preview`}
             class="max-w-full min-h-0 flex-1 object-contain rounded"
-            // A dead screenshot URL must not take the palette down with it: fall
-            // through to the swatches rather than leave a broken-image glyph.
+            // A dead screenshot URL falls through to swatches, not a broken-image glyph.
             onError={() => setThumbFailed(true)}
           />
         </Match>
@@ -539,43 +489,28 @@ function UiPreviewFrame(props: {
 }) {
   const [html, setHtml] = createSignal<string | null>(null);
   /**
-   * THE REASON, not a boolean, and a retry that re-asks for it.
-   *
-   * This was `createSignal(false)` rendering a bare "Preview unavailable", which
-   * threw away the one useful thing the failure carried. The broker words these
-   * for a person — `request_timed_out`, `preview_too_large`, `http_404` — and the
-   * first of those is the common one and the one a second press fixes. Without a
-   * control the only way to re-ask was Back, re-find the card and press Preview
-   * again, which also throws away the grid's scroll position.
+   * The reason (not a boolean) plus a retry. Was `createSignal(false)` + a bare
+   * "Preview unavailable", discarding the broker's person-worded reason
+   * (`request_timed_out`, `preview_too_large`, `http_404`) — the first of which a
+   * second press fixes, and without this the only retry path was Back + re-find + re-press,
+   * which also lost the grid's scroll position.
    */
   const [loadError, setLoadError] = createSignal<string | null>(null);
 
   /**
-   * Has the FRAME finished, as opposed to has the string arrived?
-   *
-   * These are not the same moment, and the gap between them is the lag players
-   * actually report. `html()` being set only means the document crossed the NUI
-   * boundary; the iframe then has to parse it and decode its images, which is
-   * measured at 44–97 ms for tRadio's heads and 440 ms for tls-wcc in the
-   * pinned Chromium 103 that CEF is — longer on a low-end machine, and that
-   * figure is 85–95% image decode. Gating the indicator on `html()` alone
-   * therefore swapped "Loading…" for an EMPTY BLACK BOX for the entire
-   * expensive part, which reads as a freeze rather than as progress.
-   *
-   * The `load` event is the right signal because it fires after subresource
-   * decode, not merely after parse.
+   * Whether the frame finished, not whether the string arrived — `html()` only means the
+   * document crossed the NUI boundary; the iframe still has to parse and decode images,
+   * measured at 44-97ms for tRadio's heads and 440ms for tls-wcc (Chromium 103, CEF's
+   * pinned version; 85-95% of that is image decode). Gating on `html()` alone swapped
+   * "Loading…" for an empty black box for that whole span. `load` fires after decode.
    */
   const [frameReady, setFrameReady] = createSignal(false);
 
   /**
-   * A new document means we are waiting again.
-   *
-   * The braces are load-bearing. `createEffect(compute, apply)` treats
-   * `apply`'s RETURN VALUE as a cleanup function, and a Solid setter returns
-   * the value it just set — so `() => setFrameReady(false)` hands the effect
-   * `false` and dies with `TypeError: r is not a function`, taking the whole
-   * reactive graph down with it. Only `compute` tracks, which is why the read
-   * of `html()` is up there and not in the body.
+   * A new document means waiting again. The braces are load-bearing: `createEffect(compute,
+   * apply)` treats `apply`'s return value as a cleanup function, and a Solid setter returns
+   * the value it just set — a bare `() => setFrameReady(false)` hands back `false` and dies
+   * with `TypeError: r is not a function`, taking the whole reactive graph down.
    */
   createEffect(html, () => {
     setFrameReady(false);
@@ -585,11 +520,9 @@ function UiPreviewFrame(props: {
   const [containerW, setContainerW] = createSignal(700);
   const [containerH, setContainerH] = createSignal(400);
 
-  // `onSettled` is Solid 2's `onMount`. The observer's teardown is RETURNED at
-  // the bottom rather than registered with a nested `onCleanup`, which
-  // `onSettled` refuses outright. `load()` is deliberately NOT awaited here —
-  // its `.then` resolves after this callback has returned, so it cannot
-  // contribute to the cleanup and never did.
+  // `onSettled` is Solid 2's `onMount`; it refuses a nested `onCleanup`, so the observer's
+  // teardown is returned instead. `load()` is not awaited — its `.then` resolves after
+  // this callback returns, so it never contributes to the cleanup.
   onSettled(() => {
     const ro = new ResizeObserver(() => {
       setContainerW(containerRef.clientWidth);
@@ -602,22 +535,16 @@ function UiPreviewFrame(props: {
     return () => ro.disconnect();
   });
 
-  // The document arrives as TEXT, brokered by the game server — see
-  // `./browse.ts`. It cannot simply be an `<iframe src>`: everything below this
-  // line reads the markup, and a cross-origin frame cannot be read or scripted
-  // by its parent.
-  //
-  // A named function rather than a call inlined in `onSettled`, so Retry has
-  // something to call. A rejected document is NOT cached (`./browse.ts` drops
-  // the entry on rejection), so a retry genuinely reaches the bridge again.
+  // The document arrives as text, brokered by `./browse.ts` — not an `<iframe src>`,
+  // since a cross-origin frame can't be read/scripted by its parent and the code below
+  // reads the markup. A named function so Retry has something to call; `./browse.ts`
+  // drops a rejected entry, so retry genuinely re-reaches the bridge.
   function load() {
     setLoadError(null);
     previewMarketplaceHtml(props.item.slug)
       .then((text) => {
-        // Relative assets inside the document still resolve against the v1
-        // preview directory, which is where they are actually served from and
-        // is addressed by item id, not slug. Those are element loads, so they
-        // need no header and no broker.
+        // Relative assets resolve against the v1 preview directory (addressed by item id,
+        // not slug) — element loads, so no CORS header or broker needed.
         const base = `${props.baseUrl}/api/v1/preview/${encodeURIComponent(props.item.id)}/`;
         let rewritten = text.replace(
           /(src|href)=(['"])(?!https?:|\/\/|data:|#|\/)([^'"]+)\2/gi,
@@ -628,41 +555,20 @@ function UiPreviewFrame(props: {
         rewritten = rewritten.replace(/(<head[^>]*>)/i, `$1${centerCss}`);
         if (!/(<head)/i.test(rewritten)) rewritten = centerCss + rewritten;
 
-        // Dummy state, so the layout renders non-empty.
+        // Two layout shapes: one with its own update function (tLS's WCC2, pre-binder
+        // builds) called by name via the retry loop, and purely declarative markup
+        // (every tDetector/tRadar skin — the marketplace HTML validator rejects script
+        // tags) which `hud-preview-script` drives through the `data-hud-*` grammar so the
+        // preview shows one working state, not every state stacked on top of itself.
         //
-        // Two shapes of layout have to be covered. A layout that ships its own
-        // update function (tLS's WCC2, and anything built before the binder)
-        // gets that function called by name — the retry loop is for one that
-        // registers asynchronously. A purely declarative layout has no script
-        // at all, by design: every tDetector and tRadar skin is markup only,
-        // because the marketplace's HTML validator rejects script tags outright.
-        // For those, `hud-preview-script` applies the full `data-hud-*` grammar
-        // inside the frame, so the preview shows a working device rather than
-        // every state stacked on top of each other.
-        /**
-         * `resolvePreviewState` and NOT `if (state)`, which is the fix for the
-         * reported blank previews.
-         *
-         * `previewState` is optional all the way down and the binder used to be
-         * injected only when a host supplied one — so "this host has no preset"
-         * and "render this layout unbound" were the same code path. Surveyed
-         * 2026-10-07, exactly three resources supply a preset, each as a
-         * hand-written Lua table: tRadio (`cl_bridge.lua`'s
-         * `MARKETPLACE_PREVIEW_STATE`), tRadar and tDetector. **tLS supplies
-         * none**, so every tLS layout previewed here rendered with every
-         * `data-hud-show` element visible at once and every readout left at
-         * whatever placeholder its author typed.
-         *
-         * A resource's own preset still wins, and should — tRadio derives one
-         * through `deriveBinderState` + `RADIO_PREVIEW_SCENARIOS`, which can only
-         * express states the engine can actually produce. This is what a surface
-         * gets when it has nothing, instead of a dead device.
-         */
+        // `resolvePreviewState`, not `if (state)`: `previewState` is optional end to end,
+        // and only tRadio/tRadar/tDetector supply a preset — tLS supplies none, so an
+        // `if (state)` check rendered every tLS layout with every `data-hud-show` element
+        // visible and every readout at its placeholder text. A host preset still wins.
         const state = resolvePreviewState(props.previewState);
         const previewScript = buildHudPreviewScript(props.previewFn, state);
-        // Through the shared injector: a marketplace layout is a FRAGMENT, so the
-        // only `</body>` in it is usually one inside a script or a comment, and
-        // splicing there ends that script early. See injectBeforeBodyEnd.
+        // A marketplace layout is a fragment, so a naive `</body>` match usually hits
+        // one inside a script or comment and ends it early — injectBeforeBodyEnd avoids that.
         rewritten = injectBeforeBodyEnd(rewritten, previewScript);
 
         setHtml(rewritten);
@@ -672,21 +578,16 @@ function UiPreviewFrame(props: {
       );
   }
 
-  // Canvas size, in descending order of trust: studio-design metadata, tRadio's
-  // data attributes, then the largest explicit pixel dimensions in the CSS. The
-  // tiers live in `./preview-canvas` so the admin panels can share them instead of
-  // re-deriving a weaker version — see that file for why each tier is where it is.
+  // Trust order: studio-design metadata, tRadio's data attributes, largest explicit CSS
+  // pixel dimensions. Tiers live in `./preview-canvas`, shared with the admin panels.
   const canvasSize = createMemo(() => {
     const h = html();
     return h ? parsePreviewCanvasSize(h) : { w: 400, h: 400 };
   });
 
-  // The same `fitScale` tRadio's admin grid uses, so the two surfaces cannot
-  // drift on the geometry again. `allowUpscale` is left at its default `false`
-  // here: this is a full-size overlay, and blowing a 200px skin up to fill a
-  // 1080p dialog shows nothing but interpolation artefacts. The grid passes
-  // `true`, because its box is smaller than most canvases — the two call sites
-  // genuinely want different answers, which is why it is a parameter.
+  // Same `fitScale` as tRadio's admin grid, so the two surfaces can't drift on geometry.
+  // `allowUpscale` stays `false` here (a full-size overlay would just show interpolation
+  // artefacts blowing up a 200px skin); the grid passes `true` since its box is smaller.
   const scale = createMemo(() => fitScale(canvasSize(), { w: containerW(), h: containerH() }));
 
   return (
@@ -694,9 +595,8 @@ function UiPreviewFrame(props: {
       ref={containerRef!}
       class="relative w-full h-full flex items-center justify-center bg-black rounded overflow-hidden"
     >
-      {/* Shown until the FRAME is ready, not until the string arrives — see
-          `frameReady`. It sits as a sibling of the frame rather than replacing
-          it, because the frame has to be in the document to load at all. */}
+      {/* Gated on `frameReady`, not the string arriving. Sits as a sibling of the frame,
+          not a replacement — the frame has to be in the document to load. */}
       <Show when={!frameReady() && !loadError()}>
         <span class="absolute inline-flex items-center gap-2 text-sm mp-muted">
           <IconLoaderCircle class="w-4 h-4 animate-spin" />
@@ -715,10 +615,8 @@ function UiPreviewFrame(props: {
         )}
       </Show>
       <Show when={html()}>
-        {/* The `overflow: hidden` + `flex-shrink: 0` pair this file already had
-            is now `previewBoxStyle`, because tRadio's grid was missing both and
-            therefore grew scrollbars inside its previews where this surface
-            never did. Shared so that cannot recur. */}
+        {/* `overflow: hidden` + `flex-shrink: 0` is now `previewBoxStyle`, shared because
+            tRadio's grid was missing both and grew scrollbars inside its previews. */}
         <div style={previewBoxStyle(canvasSize(), scale())}>
           <iframe
             title={`${displayName(props.item)} preview`}

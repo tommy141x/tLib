@@ -2,53 +2,42 @@ fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'
 
--- The technical name, not a retail title: tLib is a public developer library.
 -- Set explicitly so StudioBranding.displayName is not reading a fallback.
 name 'tLib'
 author 'Tommy Johnston'
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM)'
 
--- 0.6 and 1.0 are the only tLib releases, so a pin below `1.0` is meaningless
--- and every consumer pins `tlib_min_version '1.0'`. Nothing between them was
--- tagged: 0.6.0 and 0.12.0 through 0.17.0 exist only as values on this line,
--- which is why a consumer installed against the public v0.6 zip fails the gate
--- in imports.lua rather than running degraded.
+-- 0.6 and 1.0 are the only releases, so every consumer pins `tlib_min_version
+-- '1.0'`. 0.6.0 and 0.12.0-0.17.0 were never tagged and exist only as values on
+-- this line; a consumer installed against the public v0.6 zip therefore fails the
+-- gate in imports.lua rather than running degraded.
 --
 -- `BindMenuKey` and the five `tlib_menu_*` open-key convars were removed WITHIN
--- 1.0: the v1.0 download is republished rather than superseded, because tLib
--- binding F1 on every server was a defect and not a feature anyone built on.
--- Nothing a customer ships called either, so no pin moves. tMenu must be updated
--- in step -- it registers its own F1 now, and an older tLib also bound one, so
+-- 1.0 -- the download is republished, not superseded, and no pin moves. Update
+-- tMenu in step: it registers its own F1 now and an older tLib also bound one, so
 -- both would fire.
 --
--- Release notes live in the GitHub release and the tWeb changelog feed. The
--- retired CHANGELOG.md held the per-module rationale for 0.7-0.17; recover it
--- for the 1.0.0 notes with `git show 858f933:CHANGELOG.md`.
+-- The retired CHANGELOG.md holds the per-module rationale for 0.7-0.17:
+-- `git show 858f933:CHANGELOG.md`.
 version '1.0.0'
 
--- A RELEASED tLib also carries `tlib_build '<yyyymmdd>-<hash8>'`, written into the
--- STAGED manifest by `bun run prod` from a hash of the bytes it is about to zip
--- (shared/ts/build/core.ts, `stampBuildId`). It is deliberately absent here: this
--- tree is a source checkout, not a release, and reporting no build id is the truth
--- about it.
+-- A released tLib also carries `tlib_build '<yyyymmdd>-<hash8>'`, written into the
+-- staged manifest by `bun run prod` (`stampBuildId`) from a hash of the bytes it is
+-- about to zip. Absent here because this tree is a checkout, not a release.
 --
--- It exists because the republish above is invisible from `version '1.0.0'`. Both
--- 1.0 trees -- the one with c9a8f8f's qbx fix and the one without -- reported
--- `tLib 1.0.0` to `tradio_diag`, and support had to tell a customer to re-download
--- the zip with no way for either side to confirm it landed. Bumping the version
--- instead would only move that to the next republish, because a number is
--- remembered by a human and a content hash is not.
+-- It exists because the republish above is invisible from `version '1.0.0'`: both
+-- 1.0 trees reported `tLib 1.0.0` to `tradio_diag`, and support could not confirm a
+-- customer's re-download had landed. A version bump only moves that to the next
+-- republish.
 --
 -- NEVER fold it into `version`: imports.lua gates `tlib_min_version` by pulling
 -- digits out of that string, and every consumer pins `'1.0'`.
 
--- The top-level folder is the VM a file is loaded into. A module spanning VMs
--- keeps its own name under each tree's lib/, so the blocks below stay the single
--- authority on what runs where.
---
--- imports.lua stays at the root: consumers name it as '@tLib/imports.lua' in
--- their own manifests, so that path is a contract, not a convention.
+-- The top-level folder is the VM a file loads into, so the blocks below are the
+-- single authority on what runs where. imports.lua stays at the root because
+-- consumers name '@tLib/imports.lua' in their own manifests -- that path is a
+-- contract.
 
 shared_scripts {
     'shared/lib/adapter/init.lua',
@@ -62,9 +51,8 @@ shared_scripts {
     -- because a consumer VM loads this exact file via shared/imports/versioncheck.
     'shared/sh_branding.lua',
     -- The one definition of the studio API host and of tlib_api_base_url's
-    -- normalisation. Shared because client/cl_marketplace.lua, server/
-    -- sv_marketplace.lua and a consumer VM (via shared/imports/versioncheck)
-    -- all need the same answer.
+    -- normalisation. Shared so cl_marketplace, sv_marketplace and a consumer VM
+    -- all get the same answer.
     'shared/sh_api.lua',
     'shared/lib/adapter/lifecycle.lua',
     'shared/sh_utils.lua',
@@ -119,8 +107,6 @@ server_scripts {
     -- Before sv_permission.lua and sv_marketplace.lua: both consult `Demo`, and
     -- in demo mode its answer replaces theirs rather than being consulted late.
     'server/sv_demo.lua',
-    -- sv_probe_fsperm.lua is gone on purpose: a temporary measurement probe that
-    -- shipped ProbeFsPerm/ProbeNodeFs/ProbeExport as public exports.
     'server/sv_discovery.lua',
     'server/sv_permission.lua',
     -- Server-only: holds the authority state and the action handlers, neither of
@@ -136,10 +122,8 @@ server_scripts {
     'server/sv_marketplace.lua',
     'server/sv_community_configs.lua',
     -- The diagnostics door: the net events a consumer's client posts to, and the
-    -- consent broadcast. After sv_demo.lua (which the bundle's consent read does
-    -- not consult, but which an operator reading the status command will expect
-    -- to have had its say) and before sv_main.lua, which is where exports are
-    -- registered for the boot handshake.
+    -- consent broadcast. After sv_demo.lua, and before sv_main.lua, which
+    -- registers the exports for the boot handshake.
     'server/sv_telemetry.lua',
     'server/sv_main.lua',
 }

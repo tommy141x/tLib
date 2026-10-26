@@ -48,17 +48,13 @@ export function resourcePath(resourceName: string): string {
 }
 
 /**
- * Every `author` a resource's own fxmanifest declares.
+ * Every `author` a resource's own fxmanifest declares, not just index 0: tDB
+ * and tRadio open with `Tommy Johnston`, tAI with `TIMMYG Studios`, and
+ * reading only the first warns on every boot for two of the three.
  *
- * All of them, not index 0. These manifests carry two lines — a person and a
- * studio — and which one lands at index 0 differs between them: tDB and tRadio
- * open with `Tommy Johnston`, tAI with `TIMMYG Studios`. Reading only the first
- * would have made two of the three warn on every boot, which trains an operator
- * to ignore the warning.
- *
- * Worth reading and worth logging; not worth trusting. A resource writes its own
- * manifest, so this identifies an honest copy, never an attacker. Nothing
- * branches on the result — see `gate.ts`.
+ * Worth logging, never worth trusting — a resource writes its own manifest,
+ * so this identifies an honest copy, not an attacker. Nothing branches on it;
+ * see `gate.ts`.
  */
 export function resourceAuthors(resourceName: string): string[] {
   const found: string[] = [];

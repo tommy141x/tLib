@@ -1,5 +1,3 @@
--- client entry point
-
 Permission_registerClientExports()
 
 local ui = Platform.createUI('tLib', 'tLib/client/ui/index.html')
@@ -22,8 +20,8 @@ Logger.registerExports()
 -- theme first, everything else depends on it
 Theme.init(ui)
 
--- Default neutral dark theme with restrained blue accents is baked into the UI CSS.
--- Consumers can override with AddTheme + SetTheme.
+-- Default theme (neutral dark, blue accents) is baked into the UI CSS; override
+-- with AddTheme + SetTheme.
 
 Toast.init(ui)
 
@@ -53,10 +51,9 @@ local _hasLoaded = false
 
 Platform.onNUIReady(function()
     _hasLoaded = true
-    -- The menu engine is deliberately NOT started from here. It gates on its own
-    -- readiness signal -- the browser's `menu_ready` callback, which carries the
-    -- first snapshot request -- because the page being loaded is not the same as the
-    -- menu component inside it being mounted and able to accept a catalog.
+    -- The menu engine does not start here: it waits for the browser's own
+    -- `menu_ready` callback (carrying the first snapshot request), since a loaded
+    -- page is not the same as a mounted menu component ready for a catalog.
 end)
 
 Platform.wrapExport('tLib', 'HasLoaded', function() return _hasLoaded end)

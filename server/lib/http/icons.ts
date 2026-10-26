@@ -20,26 +20,12 @@ let cache: Record<string, string> | null = null;
 export const ICONS_RESOURCE_PATH = "server/lib/http/icons.json";
 
 /**
- * Read the icon set under FXServer.
- *
- * `LoadResourceFile` and NOT a filesystem path, measured 2026-10-15 on the
- * Linux test server:
- *
- *   Filesystem permission check from 'tLib' for permission fs.read on resource
- *   'C:\\Users\\Tommy\\...\\tLib\\server\\lib\\http/icons.json' - no device found
- *
- * `__dirname` is resolved by the bundler at BUILD time, so the server bundle
- * carried the build machine's absolute Windows path and asked a Linux host for
- * it. It only ever worked because that path happened to exist on the machine
- * that built it -- the dev box, where the source tree IS the runtime.
- *
- * The FXServer branch that was supposed to prevent that asked for
- * `<root>/server/http/icons.json`, missing the `lib` segment, so it never
- * matched and silently fell through to `__dirname` on every platform.
- *
- * `LoadResourceFile` takes a resource-RELATIVE path and lets the runtime
- * resolve it, so there is no absolute path to bake, no separator to get wrong
- * and nothing to keep in step with where the bundle happens to sit.
+ * Read the icon set under FXServer via `LoadResourceFile`, not a filesystem
+ * path: `__dirname` is resolved by the bundler at build time, so a bundle
+ * built on Windows and run on Linux would ask the Linux host for the build
+ * machine's absolute Windows path and get an `fs.read` permission error.
+ * `LoadResourceFile` takes a resource-relative path the runtime resolves
+ * itself, so there is no absolute path to bake or separator to get wrong.
  */
 function loadViaFivem(): string | null {
   try {

@@ -102,27 +102,15 @@ function headers(): Record<string, string> {
 }
 
 /**
- * THE POST IS DONE IN LUA, AND THAT IS NOT WHERE IT STARTED.
- *
- * This module used to call `PerformHttpRequest` itself. MEASURED on a live
- * server 2026-10-16: `globalThis.PerformHttpRequest` is **undefined** in
- * FXServer's server JS runtime. `Citizen`, `setTick`, `onNet`, `emitNet`,
- * `exports` and `GetConvar` are all there -- 626 globals -- and that one is
- * not. So the captured handle was `undefined`, calling it threw, the catch
- * mapped it to status `0`, and `classify(0)` answered `unreachable` in **zero
- * milliseconds**. Every feedback message this server ever sent failed that way,
- * from the menu as well as from a dialog, and the 8s timeout that used to be
- * documented here never once had anything to time out.
- *
- * The same native from the Lua VM returns 201. So the split moves: Lua performs
- * the request, and this module keeps the two pure halves that have tests --
- * what to send (`buildBody`, `endpointFor`, `headers`) and what the answer
- * means (`classify`).
- *
- * `server/lib/telemetry/fivem.ts` and `server/lib/marketplace/fivem.ts`
- * reach for the same global. Telemetry already tolerates its absence with an
- * explicit fallback; marketplace captures it the way this module did. Neither
- * is verified end to end and neither is changed here.
+ * The POST is done in Lua, not here. `globalThis.PerformHttpRequest` is
+ * undefined in FXServer's server JS runtime, so this module's own attempt at
+ * the request always threw, was caught as status `0`, and `classify(0)`
+ * answered `unreachable` with nothing ever actually sent. The same native
+ * from the Lua VM works, so the split moved: Lua performs the request, this
+ * module keeps the two pure halves that have tests — what to send
+ * (`buildBody`, `endpointFor`, `headers`) and what the answer means
+ * (`classify`). `telemetry/fivem.ts` and `marketplace/fivem.ts` reach for the
+ * same global; neither is changed here.
  */
 
 let installed = false;

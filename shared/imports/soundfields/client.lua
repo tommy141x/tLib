@@ -14,16 +14,11 @@
         -- when the server pushes a new sound config:
         tlib.soundfields.refresh('tdet_settings', data)
 
-     The remembered key list is the whole reason this is a module
-
-      * The live refresh keys off what was DRAWN, not off the current config, so
-        a sound key added server-side after the dialog opened has no control to
-        patch and simply appears the next time the dialog is opened. Refreshing
-        from the config instead would address a field that does not exist.
-      * The list must be CLEARED on submit, on cancel, and when the viewer turns
-        out not to be an admin (in which case `append` never ran at all). Left
-        set, a refresh patches a dialog that is not open.
-
+    The remembered key list is the whole reason this is a module: refresh keys
+    off what was DRAWN, not off the current config, so a key added server-side
+    after the dialog opened just appears next time rather than patching a field
+    that doesn't exist. The list must be cleared on submit, cancel, and when the
+    viewer turns out not to be an admin, or a later refresh patches a closed dialog.
 ]]
 
 local SoundFields = {}
@@ -124,11 +119,6 @@ function SoundFields.append(fields, opts)
     if #keys == 0 then
         -- Something rather than no tab: an empty panel under a tab the player
         -- just clicked reads as a broken menu, not as "nothing to map".
-        --
-        -- It used to be a `disabled` TEXT INPUT, which drew an empty greyed-out
-        -- box with the whole message relegated to helper text beneath it. That
-        -- was the only shape available before `display` existed, and this is the
-        -- case the new type's docblock cites by name.
         fields[#fields + 1] = {
             id          = 'soundsEmpty',
             type        = 'display',

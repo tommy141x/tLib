@@ -7,13 +7,10 @@ consumer's `uno.config.ts` and Vite config are assembled from.
 Sub-packages with their own notes: [`rage/`](./rage/README.md),
 [`solid-compat/`](./solid-compat/README.md), [`css/`](./css/README.md).
 
-A note on notation below: utilities are written as namespace-plus-placeholder
-(`<text-colour-token>`) rather than as complete class names, because UnoCSS's
-extractor reads raw file text and cannot tell prose from code. A plain `.ts` is
-not scanned today and a repo README is not either, but the convention is kept in
-both so that neither becomes a source of dead CSS if that ever changes.
-`tests/unit/cn-contract.test.ts` asserts every case below with real class
-strings; read it when you need the exact spelling.
+Utilities below are written as namespace-plus-placeholder (`<text-colour-token>`)
+rather than as real class names: UnoCSS's extractor reads raw file text and cannot
+tell prose from code, so naming one in a sentence is enough to emit the rule.
+`tests/unit/cn-contract.test.ts` asserts every case below with the real strings.
 
 ## `cn.ts` — the class-name joiner, and the shield
 
@@ -28,13 +25,12 @@ It is `unocss-merge`, not `tailwind-merge`, because it reads UnoCSS's own
 conflict groups. tailwind-merge hard-codes Tailwind's, which are close enough to
 look correct and wrong on anything from a custom preset or shortcut.
 
-`clsx` and `unocss-merge` are real `dependencies` of this package and
-deliberately not `peerDependencies`. Bun auto-installs peers, which is how
-`shared/ts/node_modules` acquired its own `solid-js` and gave every consumer two
-copies of the Solid runtime. Duplicating these two is harmless — both are pure
-string functions with no shared state or identity checks — but do not add a
-*stateful* package here without making it a peer and deduping it in every
-consumer's Vite config.
+`clsx` and `unocss-merge` are real `dependencies`, not `peerDependencies`: bun
+auto-installs peers, which is how `shared/ts/node_modules` acquired its own
+`solid-js` and gave every consumer two copies of the Solid runtime. Duplicating
+these two is harmless — both are pure string functions with no shared state or
+identity checks — but a *stateful* package added here must be a peer and deduped
+in every consumer's Vite config.
 
 ### Why `SHIELDED` exists
 
@@ -51,25 +47,23 @@ namespaces are held back from the merge rather than cleaned up behind it.
 | 3 | The **ring-offset** namespace has no colour group of its own, so the offset's colour is filed with the ring's colour. | The ring silently loses its own colour. No variant and no custom tokens needed; it reaches every focusable element whose focus is assembled through `cn`. |
 | 4 | The **same shape one namespace over**, in `outline-*`, which is the one that matters now that this estate's focus indicator is an outline. A positive offset, the explicit width aliases and a bracketed arbitrary length all land in the outline *colour*'s group. | Whichever of the two came first is annihilated — the offset, the colour, the width or the length depending on order. |
 
-Gap 4 has a second half, which is a *missed* conflict rather than an invented
-one: the **negative** offset spelling escapes every table in the chain, so it is
-never deduplicated at all and two values of one property ship side by side. That
-escape is why the negative spelling reads as a workaround for the first defect.
-It is not a fix, it is a different bug — and it is why the `outline-offset` entry
-groups both signs together.
+Gap 4 has a second half, a *missed* conflict rather than an invented one: the
+**negative** offset spelling escapes every table in the chain, so it is never
+deduplicated and two values of one property ship side by side. The negative
+spelling therefore looks like a workaround for the first defect and is a second
+bug — hence the `outline-offset` entry grouping both signs together.
 
-Gap 1 is not a custom-token problem and not an arbitrary-vs-named problem: an
-arbitrary *colour* — a bracketed CSS variable, the dominant spelling in tRadio's
-admin UI — collides with an arbitrary pixel size exactly the same way, because
-both land in `color`. Most named sizes escape because the font-size regex lists
-them, but the base size's name is absent from that regex and collides too.
+Gap 1 is not about custom tokens or named-vs-arbitrary values: an arbitrary
+*colour* — a bracketed CSS variable, the dominant spelling in tRadio's admin UI —
+collides with an arbitrary pixel size the same way, because both land in `color`.
+Most named sizes escape via the font-size regex, but the base size's name is
+absent from it and collides too.
 
-Gaps 3 and 4 were both live in shipped code: two tUnit surfaces silently lost
-their focus colour and painted focus in `currentColor`. The pairs that look like
-they ought to break but do **not** — a bare numeric width, a style keyword and
-the bare namespace word each survive beside a colour — are exactly why this
-hides. None of it is catchable by any other check here, because every class
-involved is real and resolves to CSS; only the merged *output* is wrong.
+Gaps 3 and 4 were both live in shipped code: two tUnit surfaces lost their focus
+colour and painted focus in `currentColor`. A bare numeric width, a style keyword
+and the bare namespace word each survive beside a colour, which is what makes the
+rest hide. No other check here can catch it — every class involved is real and
+resolves to CSS, and only the merged *output* is wrong.
 
 ### Reading the `SHIELDED` table
 
@@ -96,15 +90,13 @@ ring-offset needs two. And **the bare namespace word is a *style* in `outline-*`
 not a width**, which is where that namespace parts company with border and ring;
 the reset spelling is filed with the styles, as `border`'s is.
 
-**Deliberate omissions**, each a boolean or an unrelated property with nothing in
-these groups to conflict with, where sweeping it in would break a merge that
-already works: the ring inset flag; the three table utilities in the border
-namespace; the rounded-corner aliases that may be written with a border prefix;
-and in the text namespace the alignment, text-wrap and text-overflow keywords
-plus the shadow, stroke and opacity sub-namespaces. Those last three sit in the
-same `color` group as a text colour today and so damage it — leaving them *out*
-of the shield is what separates them from it, since the colour is held back and
-they are not.
+Left out of the shield, each a boolean or an unrelated property with nothing in
+these groups to conflict with, where sweeping it in would break a working merge:
+the ring inset flag; the three table utilities in the border namespace; the
+rounded-corner aliases that may carry a border prefix; and in the text namespace
+the alignment, text-wrap and text-overflow keywords plus the shadow, stroke and
+opacity sub-namespaces. Those last three share the `color` group with a text
+colour, so holding the colour back and not them is what keeps them apart.
 
 ### `LENGTH`, and why it guesses colour
 
@@ -125,21 +117,18 @@ worse than having no shield.
 
 ### The ring-offset groups stay
 
-A live-call-site test says they are dead weight: every consumer that imports this
-`cn` has migrated to the outline spelling. They stay anyway, because the failure
-mode is still **reachable**.
+A live-call-site test calls them dead weight — every consumer importing this `cn`
+has migrated to the outline spelling — but the failure mode is still reachable.
 
-tRadio's dispatch panel passes `nuiElevationException`, which exempts it from the
-nui blocklist, so it is the one bundle on that target where `ring-*` still
-compiles — and it is a caller of this function. Retiring the groups re-opens
-Gap 3 there: the offset's colour gets filed under the ring's colour group and the
-ring silently loses its own, on every focusable element. Every class involved
-resolves to CSS, so the defect is invisible in review. Retiring them would also
-make this copy and tWeb's vendored one disagree about a correctness rule, in the
-direction of the weaker of the two.
+tRadio's dispatch panel passes `nuiElevationException`, exempting it from the nui
+blocklist, so it is the one bundle on that target where `ring-*` still compiles,
+and it calls this function. Retiring the groups re-opens Gap 3 there: the offset's
+colour is filed under the ring's colour group and the ring loses its own on every
+focusable element, invisibly, since every class involved resolves to CSS. It would
+also leave this copy and tWeb's vendored one disagreeing about a correctness rule.
 
-What would make them retirable: `nuiElevationException` ceasing to exist, or the
-preset blocklisting `ring-*` with no exemption. Count then; do not assume.
+Retirable once `nuiElevationException` is gone, or once the preset blocklists
+`ring-*` with no exemption. Count then.
 
 ### `mergeShielded` and `splitVariants`
 
@@ -256,19 +245,17 @@ Each entry allows an arbitrary variant prefix, because a variant is part of the
 raw candidate the blocklist is matched against and a prefixed spelling is
 otherwise waved straight through.
 
-`ring-*` is blocklisted, and the delay before adding it was the point rather than
-an oversight. UnoCSS composes `box-shadow` out of three variables and only one of
-them is the blurred one, so a ring is not elevation — but under presetWind3 it is
-still a `box-shadow`, and a box-shadow painted outward from an element that fills
+`ring-*` is blocklisted. UnoCSS composes `box-shadow` out of three variables and
+only one is the blurred one, so a ring is not elevation — but under presetWind3 it
+is still a `box-shadow`, and a box-shadow painted outward from an element filling
 an `overflow: hidden` ancestor is clipped to nothing. Measured in Chromium 103 by
 `scripts/probe-focus-paint.ts`: in that geometry the outward box-shadow a ring
-compiles to paints **0** accent pixels, as does the same outline pushed to a
-positive offset, while the outline at a negative offset paints 404. The fix is to
-make focus an outline, which `internal/shared-ts/ui/` already was. Blocking the family
-before the consumers that still spelt focus with a ring had followed would have
-*deleted* their focus indication rather than corrected it, so it waited for them;
-the condition was a count, not a date. `bun run probe:focus` re-measures every
-consumer on demand.
+compiles to paints **0** accent pixels, as does the same outline at a positive
+offset, while the outline at a negative offset paints **404**. The fix is to make
+focus an outline, which `internal/shared-ts/ui/` already was. The family was
+blocked only once the consumers still spelling focus with a ring had migrated —
+blocking first would have deleted their focus indication rather than corrected it.
+`bun run probe:focus` re-measures every consumer on demand.
 
 The anchored pattern also matches the **bare** namespace word, which is what the
 extractor emits for the English word in a comment — one consumer's built sheet
@@ -276,29 +263,23 @@ carried that rule from the phrase "a managed focus ring" alone. The anchoring is
 what keeps the `ring` *colour* token resolving, since there the word is not at
 the start.
 
-`nuiElevationException` is one documented exception, not a switch. Nine bundles
-build with `target: "nui"` and eight must keep the ban non-negotiable. The one
-caller is tRadio's dispatch panel, the only dual-home app here: served to a real
-browser *and* embedded in a CEF iframe, on `target: "nui"` for the Wind3 reason
-rather than because NUI is its only home. In the browser half these families
-composite properly and the design uses them. Accepted cost: in the CEF half they
-still will not paint, and the game renders the flat surface underneath — the same
-recipe every other bundle ships. Do not reach for this flag to make a gate go
-green.
+`nuiElevationException` has exactly one caller: tRadio's dispatch panel, the only
+dual-home app here. It is served to a real browser *and* embedded in a CEF iframe,
+and sits on `target: "nui"` for the Wind3 reason rather than because NUI is its
+only home. In the browser half these families composite properly and the design
+uses them; in the CEF half they still do not paint and the game renders the flat
+surface underneath, which is the recipe every other bundle ships. The other eight
+`target: "nui"` bundles keep the ban.
 
-### What is deliberately not in the preset
+### Left to the consumer
 
-- **`presetWebFonts`.** It is the only thing that emits `@font-face`, and every
-  face it emitted was a `fonts.gstatic.com` URL. Not a request a game client
-  *cannot* make — CEF has a network — but one it must not depend on: a customer's
-  server or a player's network may not reach gstatic, an offline headless preview
-  render has no network at all, a NUI bundle makes no third-party requests as
-  policy, and a CORS-mode `@font-face` fetch needs an explicit ACAO from whoever
-  hosts it. Faces are self-hosted through `selfHostWebFonts` in the same
-  directory.
-- **`theme.fontFamily`**, because no two consumers ship the same stack.
-- **`safelist`**, because it is a statement about what one bundle renders
-  dynamically and a shared one would only ever grow.
+- **`presetWebFonts`.** The only thing that emits `@font-face`, and every face it
+  emitted was a `fonts.gstatic.com` URL — which a customer's server or a player's
+  network may not reach, and an offline headless preview render cannot reach at
+  all. Faces are self-hosted through `selfHostWebFonts` in the same directory.
+- **`theme.fontFamily`** — no two consumers ship the same stack.
+- **`safelist`** — a statement about what one bundle renders dynamically, so a
+  shared one would only ever grow.
 
 ### `sharedTokens` and `PROSE_SHADCN_TOKENS`
 

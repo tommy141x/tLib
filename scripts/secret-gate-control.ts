@@ -1,43 +1,25 @@
 #!/usr/bin/env bun
 /**
- * Negative control for the secret gate — end to end, in a real git repository.
+ * Negative control for the secret gate, end to end in a real git repository.
+ * `bun run scripts/secret-gate-control.ts`
  *
- * ## Why this exists in this shape
+ * Uses a real `git init`, `.githooks/pre-commit`, `git commit` and
+ * `git show HEAD:` -- no stubs -- asserts coverage as a SET of key names
+ * (never a count), and runs a broken-gate drill (the same planted credential
+ * with the pattern list narrowed so it can't match) that must go green;
+ * without that last part a red verdict isn't evidence the rule caused it.
  *
- * The precedents in this tree are specific and they are all the same mistake in
- * different clothes:
+ * Proves, in both directions: PLANTED (a credential-shaped key with a value)
+ * is caught by the pre-commit hook (exit 1, names the key, leaves the
+ * working tree intact) and by both the staged and HEAD gates; CLEAN (same
+ * repo, value in a gitignored sidecar, or a non-credential key with a value)
+ * passes; DRILL (pattern list narrowed) makes the PLANTED case pass, pinning
+ * the red verdict on the rule.
  *
- *   • a control that passed by accident, because the thing it planted would
- *     have been caught by something other than the rule under test;
- *   • a control with a stale expected COUNT, which refused its own run;
- *   • a control that asserted what a stub had been told to record.
- *
- * So this one: (1) uses a real `git init` repo, a real `.githooks/pre-commit`, a
- * real `git commit` and a real `git show HEAD:`, with no stubs anywhere;
- * (2) asserts coverage as a SET OF KEY NAMES, never as a count; and (3) runs a
- * BROKEN-GATE DRILL — the same planted credential with the pattern list
- * narrowed so it cannot match — and requires the gate to go GREEN. Without that
- * last part, a red verdict is not evidence the rule caused it.
- *
- * ## What it proves, in both directions
- *
- *   PLANTED      a credential-shaped key with a value is caught:
- *                  — the pre-commit hook refuses the commit (exit 1, names the key)
- *                  — the working tree still holds the value afterwards
- *                  — the staged gate and the HEAD gate both fail
- *   CLEAN        the same repo with the value in a gitignored sidecar passes,
- *                and a non-credential key with a value passes
- *   DRILL        with the pattern list narrowed so the key cannot match, the
- *                PLANTED case passes — so the red above is caused by the rule
- *
- * Every value planted here is obviously synthetic. Nothing in this file is a
- * credential for anything.
- *
- * This is only half of `secrets:control`. The other half is the Lua overlay
- * suite under `SECRETS_CONTROL=1`, which deletes the gitignored sidecar and
- * requires every apply-assertion in `tests/lua/secrets-overlay.lua` to flip.
- *
- * Usage:  bun run scripts/secret-gate-control.ts
+ * Every planted value here is obviously synthetic. This is only half of
+ * `secrets:control` -- the other half is the Lua overlay suite under
+ * `SECRETS_CONTROL=1`, which requires every apply-assertion in
+ * `tests/lua/secrets-overlay.lua` to flip.
  */
 
 import * as fs from "node:fs";
@@ -76,11 +58,8 @@ function run(cwd: string, cmd: string[], env?: Record<string, string>): Run {
   };
 }
 
-// The fixture
-//
-// Synthetic, and shaped like the real thing: aligned assignments, a nested
-// block, and `dispatchNacId` present because it is the key that must NOT be
-// treated as a credential — it ships as the public demo's code on purpose.
+// The fixture: synthetic but shaped like the real thing, with `dispatchNacId`
+// present because it is a key that must NOT be treated as a credential.
 
 const BLANK_CONFIG = `Config = {
     authToken          = "",
@@ -100,16 +79,13 @@ const BLANK_CONFIG = `Config = {
 const PLANTED = "SYNTHETIC-NOT-A-REAL-CREDENTIAL-0000";
 
 /**
- * A fixture repo in a parent directory that also holds a `tLib` junction to the
- * real tLib, so the hook's `../tLib/scripts/secret-gate.ts` branch — the one
- * every consumer resource actually takes — is what gets exercised.
- *
- * MEASURED: an earlier version dropped a one-line `scripts/secret-gate.ts`
- * re-export into the fixture instead. That took the hook's "we are tLib" branch,
- * `bun run` loaded the gate as an imported module, `import.meta.main` was false,
- * `main()` never ran and the hook exited 0 — a hook that looked installed and
- * checked nothing. Four assertions in this control caught it. A symlink of type
- * `junction` needs no administrator on Windows.
+ * A fixture repo beside a `tLib` junction to the real tLib, so the hook's
+ * `../tLib/scripts/secret-gate.ts` branch -- the one every consumer resource
+ * actually takes -- is what gets exercised. An earlier version instead
+ * dropped a re-export into the fixture, which took the hook's "we are tLib"
+ * branch; `import.meta.main` was then false, `main()` never ran, and the
+ * hook exited 0 looking installed while checking nothing. A `junction`
+ * symlink needs no administrator on Windows.
  */
 function makeRepo(label: string): string {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), `tlib-secretgate-${label}-`));
@@ -131,9 +107,6 @@ function makeRepo(label: string): string {
   );
   fs.writeFileSync(path.join(dir, ".gitignore"), "config.local.lua\n", "utf8");
 
-  // The real hook bytes, verbatim from tLib's hook.ts. The fixture's parent
-  // holds a `tLib` junction, so the hook takes its `../tLib/...` branch — the
-  // one every consumer resource actually takes.
   fs.mkdirSync(path.join(dir, ".githooks"), { recursive: true });
   fs.writeFileSync(path.join(dir, ".githooks", "pre-commit"), PRE_COMMIT, "utf8");
   fs.chmodSync(path.join(dir, ".githooks", "pre-commit"), 0o755);
@@ -151,14 +124,10 @@ function makeRepo(label: string): string {
 const cleanup: string[] = [];
 
 /**
- * The junction is UNLINKED FIRST, explicitly, and tLib is re-checked
- * afterwards.
- *
- * A recursive delete over a directory containing a junction to tLib is one
- * typo away from deleting tLib. `fs.rmSync` unlinks a junction rather than
- * descending into it, but "should" is not the standard for a line that could
- * delete the library, so the link is removed by name before anything recursive
- * runs and the result is verified.
+ * The junction is unlinked first, explicitly, and tLib is re-checked
+ * afterwards: a recursive delete over a directory containing a junction to
+ * tLib is one typo away from deleting tLib, and "`fs.rmSync` should unlink
+ * rather than descend" is not the standard for a line that could delete it.
  */
 function dispose(): void {
   for (const dir of cleanup) {
@@ -292,13 +261,11 @@ let plantedRepo = "";
   check(head.out.includes("at HEAD") && head.out.includes("authToken"), "…naming HEAD and the key");
 }
 
-// 2b. A config file that is not at HEAD yet is read from the INDEX
-//
-// MEASURED 2026-10-06 on tDB, which has `config.example.lua` staged as an add
-// and `config.lua` staged as a delete — so neither exists at HEAD. The first
-// version of the gate refused with exit 2 there, permanently, which is a gate
-// that gets deleted from `verify`. It now falls back to the staged blob, and
-// that fallback must not be a hole: the credential has to still be caught.
+// 2b. A config file not yet at HEAD is read from the INDEX instead: tDB had
+// `config.example.lua` staged as an add and `config.lua` staged as a delete,
+// so neither existed at HEAD, and the gate used to refuse permanently with
+// exit 2 there. It now falls back to the staged blob, and that fallback must
+// not be a hole.
 
 console.log("\n2b. STAGED-ADD — a brand-new config file, never yet committed");
 {
@@ -332,14 +299,9 @@ console.log("\n2b. STAGED-ADD — a brand-new config file, never yet committed")
   check(blanked.code === 0, "and the same staged-add file passes once the value is blank");
 }
 
-// 3. The DRILL: break the rule and the planted case must pass
-//
-// A red verdict above is only evidence if the rule is what produced it. The gate
-// derives its patterns from the Lua file, so the drill narrows that file in a
-// COPY of tLib and re-runs the same planted repo against it. If the planted
-// credential is still caught with `token` and `accesskey` removed, something
-// other than the pattern list is doing the catching and the control above
-// proves nothing.
+// 3. The drill: break the rule and the planted case must pass. The gate
+// derives its patterns from the Lua file, so this narrows that file in a
+// COPY of tLib and re-runs the same planted repo against it.
 
 console.log("\n3. DRILL — pattern list narrowed; the planted case must go GREEN");
 {

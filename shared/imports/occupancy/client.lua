@@ -75,7 +75,8 @@ local function copy(s)
     return out
 end
 
---- The transitions worth announcing. `cabinSeat` and `cabinNetId` are in here so
+--- The transitions worth announcing; cabinSeat/cabinNetId are included so a
+--- rear-seat move fires onChange too.
 local function differs(a, b)
     return a.seat ~= b.seat or a.netId ~= b.netId or a.vehicle ~= b.vehicle
         or a.driver ~= b.driver or a.passenger ~= b.passenger
@@ -97,7 +98,8 @@ function occupancy.poll()
         next_.cabinNetId   = netId
     end
 
-    -- Everything below is the FRONT-seat half, and a rear passenger must fall
+    -- Below is the FRONT-seat half only; a rear passenger falls through with
+    -- these fields left nil.
     if vehicle ~= nil and (tier == occupancy.TIER_DRIVER or tier == occupancy.TIER_PASSENGER) then
         local driver, passenger = p.getFrontSeatServerIds(vehicle)
         local me = p.getMyId()
@@ -107,12 +109,14 @@ function occupancy.poll()
         next_.driver    = driver
         next_.passenger = passenger
         -- Spelled out rather than `cond and passenger or driver`: that idiom
+        -- breaks when `passenger` is nil/false, silently picking driver instead.
         if seat == occupancy.SEAT_DRIVER then
             next_.partner = passenger
         else
             next_.partner = driver
         end
-        -- The election, applied to ourselves. A passenger is the controller only
+        -- The election, applied to ourselves: a passenger is the controller
+        -- only when there is no driver.
         local controller = driver or passenger
         next_.isController = (controller ~= nil and controller == me)
     end
@@ -148,7 +152,7 @@ function occupancy.tier()
     return state.tier
 end
 
---- In ANY seat of any vehicle — the perception question, and the client mirror
+--- True in ANY seat of any vehicle — the perception question, not the control one.
 function occupancy.isAboard()
     return state.tier ~= nil
 end
@@ -174,7 +178,8 @@ function occupancy.isController()
 end
 
 --- The vehicle whose controls this player may be operating.
---- @return vehicleHandle, netId — or nil when not in a front seat. Still nil for
+--- @return vehicleHandle, netId — or nil when not in a front seat; still nil
+--- for a rear passenger, who uses `cabin()` instead.
 function occupancy.myVehicle()
     if state.vehicle == nil then return nil end
     return state.vehicle, state.netId
@@ -200,11 +205,8 @@ function occupancy.onChange(fn)
 end
 
 --- Tell the server when this player's seat changes, so its cache knows about
---- them before they have done anything.
----
---- Needed by anything the server sends TO an occupant rather than gates them on:
----
----
+--- them before they have done anything. Needed by anything the server sends
+--- TO an occupant rather than gates them on.
 function occupancy.startReporting()
     if occupancy._reporting then return end
     occupancy._reporting = true

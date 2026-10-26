@@ -1,29 +1,17 @@
 /**
  * The process table: what tLib started, for whom, and how it gets reaped.
  *
- * This is the half of the consolidation that is an engineering risk rather than
- * a security one. Before it, a child died with its owner's VM for free — stop
- * tDB and PocketBase went with it, because PocketBase was tDB's child. Started
- * from tLib's VM it is tLib's child, and stopping tDB does nothing to it unless
- * something here does it deliberately. An orphaned PocketBase holds its HTTP
- * port and its SQLite data directory, and the next start fails as a bind error
- * or a locked database — a failure that reads like configuration and is not.
+ * Before this, a child died with its owner's VM for free — stopping tDB took
+ * PocketBase with it; started from tLib's VM instead, an orphan would hold its
+ * port/data dir and the next start fails looking like a config error. Every
+ * child is now filed under its owning resource and ends exactly three ways:
+ * `killAll(owner)` from `onResourceStop`, an explicit `unserve`, or
+ * `killEverything()` when tLib itself stops/restarts.
  *
- * So every child is filed under the resource that asked for it, and there are
- * exactly three ways one ends:
- *
- *  - the owner stops or restarts → `killAll(owner)` from `onResourceStop`;
- *  - the owner asks → `unserve`;
- *  - tLib stops or restarts → `killEverything()`, because a restart that left
- *    them running would find its own ports held by its own children.
- *
- * A caller restarting is **kill-and-respawn**, not reuse. `onResourceStop` fires
- * before the restarted copy's `onResourceStart`, so the old engine is signalled
- * and waited for before the new copy asks for one. Reuse was the alternative and
- * was rejected: the new copy may have different configuration — a different
- * model, a different context size, a different port — and adopting a process
- * started under the old one is how you get a server that is silently running
- * yesterday's settings.
+ * A restart is kill-and-respawn, never reuse: `onResourceStop` runs before the
+ * restarted copy's `onResourceStart`, so the old process is signalled and
+ * awaited first. Reusing it risks silently running yesterday's model/context
+ * size/port.
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
@@ -51,12 +39,10 @@ const JOB_OUTPUT_LIMIT = 64 * 1024;
 /**
  * Unread bytes a duplex child may have queued before it is killed.
  *
- * Not a discard, deliberately. The one duplex consumer reads a length-prefixed
- * frame stream, where dropping bytes in the middle does not lose a chunk — it
- * desynchronises the stream, and every frame after that is garbage that decodes
- * as audio. Killing the child and saying why is recoverable; a silent gap is
- * not. 32 MB is roughly a minute of the widest thing the sidecar sends, so
- * reaching it means the reader has stopped, not that it is behind.
+ * The one duplex consumer reads length-prefixed frames, so dropping bytes
+ * mid-stream desyncs everything after — killing the child with a reason beats
+ * a silent gap. 32 MB is roughly a minute of the sidecar's widest output, so
+ * hitting it means the reader has stopped, not fallen behind.
  */
 const DUPLEX_BACKLOG_LIMIT = 32 * 1024 * 1024;
 
@@ -67,14 +53,9 @@ const KILL_GRACE_MS = 5_000;
  * A plain-English tail for the exit codes an operator is likely to paste.
  *
  * Windows reports a fatal exception as the NTSTATUS value reinterpreted as a
- * signed-ish exit code, so a crash arrives as `3221225477` — ten digits that
- * look like a tLib error number and are not. A customer pasted exactly that
- * (2026-10-19, ticket `ja-tradio`): llama-server taking an access violation,
- * reported as if tLib had produced a code of its own.
- *
- * Only the handful worth naming are here, and anything unrecognised adds
- * nothing rather than guessing. The raw code is still printed first and
- * unchanged — it is what gets searched for, and this only follows it.
+ * signed exit code, so a crash shows up as a 10-digit number that looks like a
+ * tLib error and isn't. Only common codes are named; the raw code is always
+ * printed first, unchanged, since that's what gets searched for.
  */
 const EXIT_MEANINGS: Record<number, string> = {
   3221225477: "0xC0000005 ACCESS_VIOLATION — the program crashed, not a tLib error",
@@ -180,12 +161,11 @@ export class SpawnHost {
     const running = this.served.get(id);
     if (running?.exit === null) return JSON.stringify({ pid: running.pid });
 
-    // Piped rather than ignored because the caller cannot see this process at
-    // all otherwise, and a model server says why it failed on stderr and
-    // nowhere else. Both pipes are drained below; an undrained one deadlocks
-    // the child on its first write past the buffer. stdin is piped only in
-    // duplex mode — an open stdin nothing writes to keeps a handle alive across
-    // shutdown.
+    // Piped, not ignored: the caller has no other way to see this process, and
+    // a model server's failure reason is on stderr only. Both pipes are drained
+    // below — an undrained one deadlocks the child on its first write past the
+    // buffer. stdin is piped only in duplex mode; otherwise an open stdin with
+    // nothing writing keeps a handle alive across shutdown.
     const started = this.launch(
       plan,
       mode === "bytes" ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"]
@@ -258,13 +238,11 @@ export class SpawnHost {
     if (mode === "bytes") collectBytes(started.child.stdout);
     else collectLines("stdout", started.child.stdout);
     collectLines("stderr", started.child.stderr);
-    // stdin needs one too, and it is the easiest to forget because nothing reads
-    // it. Killing a child makes the next write EPIPE, and an `error` event with
-    // no listener is not a rejected promise — it is an uncaught exception thrown
-    // from a native callback, which in fxserver takes the runtime with it.
+    // stdin needs a handler too: killing a child makes the next write EPIPE, and
+    // an unlistened `error` event is an uncaught exception from a native
+    // callback — in fxserver that takes the whole runtime with it.
     started.child.stdin?.on("error", () => {
-      // The child has gone. `exit` reports that, and the caller learns it from
-      // the next `output`.
+      // Child gone; `exit` reports it, caller learns via the next `output`.
     });
 
     // The entry outlives the process deliberately: the lines explaining a bad
@@ -491,14 +469,10 @@ export class SpawnHost {
   /**
    * tLib itself stopping: nothing it started may outlive it.
    *
-   * No SIGKILL escalation here, unlike every other path. The escalation is a
-   * five-second timer, and this runs from tLib's own `onResourceStop` — so the
-   * timer would be scheduled inside a runtime that is about to be destroyed and
-   * would fire, if it fired at all, into a dead one. Nothing catches that. The
-   * signal already sent is what these children get; on Windows it is a
-   * `TerminateProcess` and is unconditional anyway, and on Linux a survivor is
-   * caught by each product's own PID guard on the next start, which is the case
-   * those guards exist for.
+   * Skips the SIGKILL escalation timer other paths use — it would be scheduled
+   * in a runtime about to be destroyed and never fire. SIGTERM alone is enough:
+   * Windows' `TerminateProcess` is unconditional, and a Linux survivor is caught
+   * by each product's own PID guard on next start.
    */
   killEverything(): number {
     let killed = 0;

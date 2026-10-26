@@ -12,7 +12,7 @@ parity complaint traced to that — tRadio's card rendered no likes and hid
 download counts behind `> 0`, which on a freshly imported catalogue hides every
 item.
 
-Styling is deliberately **not** shared. tWeb is presetWind4 + `lucide-solid`; the
+Styling is **not** shared. tWeb is presetWind4 + `lucide-solid`; the
 NUI surfaces are presetWind3 + `~icons/*` + `--nui-*` under CEF 103, which has
 neither `oklch()` nor `color-mix()`. Importing one styled component into both
 would break a working surface. So these modules describe a card and never return
@@ -89,9 +89,9 @@ The **wire** type lives in `item.ts` and not in `catalogue.ts` because `item.ts`
 must stay free of Node imports: it is reached from the NUI type graph via
 `ui/types.ts`, and `catalogue.ts` pulls in `node:crypto` and holds the marketplace
 credential. Importing the type from there made the browser typecheck follow the
-edge and fail on `Cannot find module 'node:crypto'`. The dependency is inverted
-deliberately — the pure shape module owns both shapes and the transport imports
-from it.
+edge and fail on `Cannot find module 'node:crypto'`. So the dependency is
+inverted: the pure shape module owns both shapes and the transport imports from
+it.
 
 `thumbnail` and `preview_url` are **absolute**. A consumer may be an in-game NUI
 frame, where a site-relative `/api/storage/…` resolves against the game's origin

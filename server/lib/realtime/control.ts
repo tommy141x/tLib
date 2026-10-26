@@ -114,17 +114,12 @@ export class ControlClient {
       if (!tokenResp.ok || !tokenResp.token || !tokenResp.wsUrl) {
         throw new Error(tokenResp.error ?? "token fetch failed");
       }
-      // No proactive refresh from `tokenResp.expiresAt`: expiry is handled
-      // reactively and already is. An expired token stops the stream, which
-      // trips either the ping timeout (`PING_TIMEOUT_MS`) or `onclose`, and both
-      // land in `scheduleReconnect` -> `connect()` -> a fresh `fetchToken()`.
-      //
-      // There used to be a `this.tokenExpiresAt = ...` here. It assigned to a
-      // field that was never declared and never read, so the value was computed
-      // and dropped — the timer it implies has never existed. JS creates the
-      // property silently on assignment, so nothing failed at runtime -- and at
-      // the time nothing typechecked `server/`, so nothing failed at build either.
-      // `bun run typecheck:server` exists now; see server/tsconfig.json's header.
+      // No proactive refresh from `tokenResp.expiresAt`: an expired token stops
+      // the stream, tripping PING_TIMEOUT_MS or `onclose`, both landing in
+      // scheduleReconnect -> connect() -> a fresh fetchToken(). A prior
+      // `this.tokenExpiresAt = ...` assigned an undeclared, unread field —
+      // JS creates it silently, so the implied refresh timer never existed and
+      // nothing failed until `bun run typecheck:server` started checking server/.
       this.currentWsUrl = tokenResp.wsUrl;
 
       this.state = "connecting";

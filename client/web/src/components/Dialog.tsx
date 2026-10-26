@@ -51,8 +51,7 @@ export default function Dialog() {
   const [open, setOpen] = createSignal(false);
   onCleanup(
     onNuiEvent<DialogData>("showDialog", (data) => {
-      // Before the session mounts: DialogSession reads the remembered view in
-      // its initialisers, so a reset has to have happened by now.
+      // Must run before DialogSession mounts — it reads the remembered view in its initialisers.
       if (data.resetState) forgetDialogView(data.id);
       setSession({ data });
       setOpen(true);
@@ -88,27 +87,19 @@ function DialogSession(props: {
   onExit: () => void;
 }) {
   const [dialog, setDialog] = createSignal(props.initial);
-  /*
-    Authoring problems in the SPEC go to the console of whoever shipped it, once per
-    opened dialog. Warn, never throw: a badly authored dialog must still open, because
-    refusing to draw it turns a content nit into a player-facing outage. See
-    `dialogSpecWarnings` for why this check lives against the data rather than in CSS.
-  */
+  // Warn, never throw: a badly authored dialog must still open, or a content nit
+  // becomes a player-facing outage. See `dialogSpecWarnings` for why this checks
+  // the data rather than CSS.
   for (const warning of dialogSpecWarnings(props.initial)) {
     console.warn(`[tLib] dialog "${props.initial.id}": ${warning}`);
   }
   const [attempted, setAttempted] = createSignal(false);
   const [touched, setTouched] = createSignal<Set<string>>(new Set());
   const [notice, setNotice] = createSignal("");
-  /**
-   * The button field awaiting confirmation, if any. See `confirm` in
-   * `dialog-model.ts` for why a dialog button needed this at all.
-   *
-   * Held as the field ID plus the question, not as the field object: the schema
-   * can be replaced under us by `updateDialogFields` while the question is on
-   * screen, and confirming against a field that no longer exists has to be
-   * impossible rather than merely unlikely. `fire()` re-looks-up the ID.
-   */
+  // The button field awaiting confirmation, if any — see `confirm` in dialog-model.ts.
+  // Held as field ID + question, not the field object: `updateDialogFields` can replace
+  // the schema while the question is on screen, so `fire()` re-looks-up the ID rather
+  // than confirming against a field that may no longer exist.
   const [confirming, setConfirming] = createSignal<{ fieldId: string; question: string }>();
   // Where this dialog id was last left. Read once, here, because everything it
   // seeds is owned by the session from now on.
@@ -134,10 +125,9 @@ function DialogSession(props: {
   const activeTabDef = createMemo(() => tabs().find((tab) => tab.id === activeTab()));
   const errorsFor = (values: DialogValues) => validationErrors(dialog().fields, values);
 
-  // Payload for a `view: "marketplace"` tab. It arrives on its own NUI message
-  // rather than inside the dialog schema because it is the answer to a SERVER
-  // round trip (which layouts and sounds are on disk) that the consumer fires
-  // as it opens the dialog — so it lands after `showDialog`, not with it.
+  // Payload for a `view: "marketplace"` tab. Arrives on its own NUI message, after
+  // `showDialog`, because it answers a server round trip (which layouts/sounds are
+  // on disk) the consumer fires as it opens the dialog — not inside the schema.
   const [marketplaceData, setMarketplaceData] = createSignal<OpenData | null>(null);
   onCleanup(onNuiEvent<OpenData>("marketplaceData", (data) => setMarketplaceData(data)));
   const form = createForm(() => ({
@@ -163,11 +153,9 @@ function DialogSession(props: {
         values: initialValues(d.fields, value.values),
       });
       if (!alive || !props.open) return;
-      // `fetchNui` resolves to null on EVERY failure and never rejects (see its contract
-      // in shared/ts/nui.ts), so an unconditional success notice told the user "Submitted"
-      // when the callback had timed out or the handler had thrown. The form stays open
-      // either way — Lua alone closes it — so the honest failure is simply to say so and
-      // leave their values in the fields.
+      // `fetchNui` resolves to null on every failure and never rejects (contract in
+      // shared/ts/nui.ts) — an unconditional success notice would lie about a timeout
+      // or thrown handler. The form stays open either way; Lua alone closes it.
       setNotice(
         response?.ok === false || response === null
           ? "Not submitted — the game did not answer. Your values are still here; close this and try again."
@@ -237,17 +225,10 @@ function DialogSession(props: {
         });
     })
   );
-  /**
-   * The local half: the form value, the validation errors and whatever the field
-   * draws from them. No wire traffic.
-   *
-   * Split out of `updateField` for the slider, and only the slider calls it. Ark
-   * fires `onValueChange` on every pointer move of a drag, so wiring the two
-   * together meant one `dialogChange` round trip PER STEP of a drag — and
-   * `tRadar/client/cl_settings.lua` answers each one with an `UpdateDialogField`
-   * push back, so a single drag of a slider was a NUI→Lua→NUI round trip per
-   * pixel, in every resource that uses a tLib dialog.
-   */
+  // The local half: form value + validation, no wire traffic. Split out of `updateField`
+  // for the slider: Ark fires `onValueChange` on every pointer move, so wiring the two
+  // together made a drag one `dialogChange`/`UpdateDialogField` round trip per pixel
+  // (tRadar/client/cl_settings.lua answers each one).
   function previewField(id: string, value: DialogValue) {
     if (!alive || !props.open) return;
     form.setFieldValue("values", (previous) => ({ ...previous, [id]: value }));
@@ -275,24 +256,10 @@ function DialogSession(props: {
     }
     fire(fieldId);
   }
-  /**
-   * Enter inside a text field fires the button sharing its row, if there is one.
-   *
-   * WITHOUT THIS, ENTER SILENTLY THREW THE TYPED VALUE AWAY. A staged text field
-   * paired with its own commit button is an established shape in this estate —
-   * tRadio's Callsign is "type, then press Set", with empty + Set to clear — and
-   * `NuiButton` defaults to `type="button"` while the footer is `type="submit"`.
-   * So Enter took the implicit form submission, closed the dialog, and never
-   * reached the handler that would have saved anything.
-   *
-   * Keyed on the row rather than on "the next button": a row is the schema's own
-   * statement that these controls belong together, which is exactly the
-   * relationship being honoured. A text field with no button in its row still
-   * submits, which is the correct default for a single-field form.
-   *
-   * Routed through `action`, not `fire`, so a commit button carrying `confirm`
-   * asks its question on Enter exactly as it does on click.
-   */
+  // Enter in a text field fires the button sharing its row, if any. Without this it
+  // triggered the implicit submit (NuiButton defaults to type="button", footer is
+  // type="submit") and closed the dialog unsaved — tRadio's Callsign is "type, then
+  // press Set". Routed through `action`, not `fire`, so a confirm button still asks.
   function enterFiresRowButton(event: KeyboardEvent) {
     if (event.key !== "Enter" || event.defaultPrevented) return;
     const target = event.target as HTMLElement | null;
@@ -377,11 +344,9 @@ function DialogSession(props: {
     endDrag();
   });
 
-  // --- "reopen where I left it" -------------------------------------------
-  // Saved continuously rather than on close. A dialog can go away by submit,
-  // cancel, an authoritative closeDialog, or being replaced outright by a
-  // reentrant ShowDialog, and only some of those run through this component's
-  // own teardown — reading the state back out at unmount would miss the rest.
+  // View (tab/scroll/offset) is saved continuously, not on close: a dialog can go away
+  // by submit, cancel, an authoritative closeDialog, or a reentrant ShowDialog, and
+  // only some of those run through this component's own teardown.
   const scrollKey = () => activeTab() ?? DIALOG_NO_TAB;
   function persistView() {
     rememberDialogView(props.initial.id, {
@@ -390,10 +355,9 @@ function DialogSession(props: {
       offset: offset(),
     });
   }
-  // Solid 2's two-argument form is a PHASE CONTRACT: only the first function
-  // tracks. `persistView` reads `activeTab()` and `offset()`, so those reads
-  // have to happen in compute — passing it as the apply half would subscribe to
-  // nothing and persist exactly once.
+  // Solid 2's two-argument createEffect: only the first (compute) function tracks.
+  // The reads of activeTab()/offset() must happen there, or this subscribes to
+  // nothing and persists exactly once.
   createEffect(
     () => ({ tab: activeTab(), offset: offset() }),
     (view) =>
@@ -450,21 +414,11 @@ function DialogSession(props: {
       onOpenChange={(details) => {
         if (!details.open) cancel();
       }}
-      /*
-       * Escape answers the innermost thing on screen, which while a button's
-       * `confirm` question is up is the question — not the dialog.
-       *
-       * Ark's own hook rather than `createEscapeLayer`, and that is the correct
-       * seam here rather than a shortcut: zag's dismissable handler runs on
-       * `document` in the CAPTURE phase and only dismisses
-       * `if (!event.defaultPrevented)` (measured in
-       * `@zag-js/dismissable/dist/dismissable-layer.mjs:52-59`). So preventing
-       * it here both stops the dialog closing AND marks the event, which is
-       * exactly what the escape registry checks before standing down — the
-       * registry's own header says Ark's dismissables are handled "from the
-       * other direction" for this reason. A layer registered beside Ark's
-       * capture handler would be racing it on listener order.
-       */
+      /* Escape answers the confirm question, not the dialog, while one is up. Uses
+       * Ark's own hook, not `createEscapeLayer`: zag's dismissable handler runs on
+       * `document` in capture phase and only dismisses `if (!event.defaultPrevented)`,
+       * so preventDefault here both blocks the close and marks the event for the
+       * escape registry (which handles Ark dismissables "from the other direction"). */
       onEscapeKeyDown={(event) => {
         if (!confirming()) return;
         event.preventDefault();
@@ -536,11 +490,9 @@ function DialogSession(props: {
             novalidate
             onSubmit={submit}
             onKeyDown={enterFiresRowButton}
-            /* The question is modal WITHIN the dialog — no stacked dialogs, a
-               feature reached from an open UI renders inside it. `inert` is what
-               keeps the form behind it off the Tab ring and out of reach of a
-               click; it is the same attribute this content root already uses for
-               the closed state, so the support question is already settled. */
+            // No stacked dialogs: the confirm question renders inside this dialog, and
+            // `inert` (already used for the closed state) keeps the form behind it off
+            // the Tab ring and unclickable.
             inert={!!confirming()}
           >
             <Tabs.Root
@@ -586,12 +538,10 @@ function DialogSession(props: {
                   </Tabs.List>
                 </aside>
               </Show>
-              {/* A `view` tab owns its whole panel and is not a scroll box: the
-                  marketplace browser scrolls its own card grid and has to keep
-                  its toolbar and category tabs pinned, which an outer
-                  overflow-y-auto would defeat. It is deliberately inside the
-                  same Tabs.Root, the same dialog surface and the same close
-                  behaviour — no second backdrop, no second focus trap. */}
+              {/* A `view` tab owns its whole panel, not a scroll box — the marketplace
+                  browser scrolls its own card grid and pins its toolbar/category tabs,
+                  which an outer overflow-y-auto would defeat. Stays inside the same
+                  Tabs.Root/dialog surface/close behaviour: no second backdrop or focus trap. */}
               <Show
                 when={activeTabDef()?.view === "marketplace"}
                 fallback={
@@ -625,10 +575,9 @@ function DialogSession(props: {
                   id={`${tabIds}-${activeTab()}-panel`}
                   aria-labelledby={`${tabIds}-${activeTab()}-tab`}
                 >
-                  {/* No onEscape: Escape here should dismiss the DIALOG, which
-                      is exactly what happens when the browser leaves the key
-                      alone. It still swallows the first Escape while a preview
-                      is open, which is the layer the user means. */}
+                  {/* No onEscape here: Escape should dismiss the dialog, which is what
+                      happens by leaving the key alone — it still swallows the first
+                      Escape while a preview is open, which is the layer the user means. */}
                   <MarketplaceBrowser
                     class="mp-embed"
                     data={marketplaceData()}
@@ -658,16 +607,9 @@ function DialogSession(props: {
               <NuiButton onClick={cancel}>{dialog().cancelLabel ?? "Cancel"}</NuiButton>
             </footer>
           </form>
-          {/*
-           * The confirmation for a button field's `confirm` string.
-           *
-           * The SAME two buttons the menu has rendered from the same field name
-           * since the beginning (`menu/Menu.tsx`, `.dialog-cancel` /
-           * `.dialog-confirm`) — same eyebrow, same heading-then-question, same
-           * pair — restated in nui-kit's own classes because the menu's are
-           * scoped under `.tlib-menu` and resolve to nothing here. There is no
-           * second confirm design and there must not be one.
-           */}
+          {/* Confirmation for a button field's `confirm` string. Same design as the menu's
+              `.dialog-cancel`/`.dialog-confirm` pair, restated in nui-kit's own classes
+              because the menu's are scoped under `.tlib-menu` and resolve to nothing here. */}
           <Show when={confirming()}>
             {(pending) => (
               <div class="tlib-nui-confirm-shade">

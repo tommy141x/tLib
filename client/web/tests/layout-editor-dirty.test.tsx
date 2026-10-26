@@ -1,26 +1,20 @@
 /**
- * `LayoutEditor`: what counts as an edit, and what the discard question is
- * allowed to do while it is up.
+ * `LayoutEditor`: what counts as an edit, and what the discard question may
+ * do while it's up.
  *
- * Why this file exists
+ * A Solid 2 store write isn't readable in the tick it happened, and this
+ * editor's undo `capture()` read the store proxy — `UndoHistory.with()`
+ * captures, mutates and captures again inside one call, so the second
+ * capture saw the pre-write value, compared equal, and discarded the entry
+ * silently. Since `canUndo()` is this editor's dirty flag, hiding six
+ * components and pressing Cancel threw the session away without asking — the
+ * one thing the discard question exists to prevent. A drag flushed by its
+ * own `pointerup` hit the same bug.
  *
- * A Solid 2 store write is NOT readable in the tick it happened, and this
- * editor's undo `capture()` read the store proxy. Every one-shot edit goes
- * through `UndoHistory.with()`, which captures, mutates and captures AGAIN
- * inside one call — so the second capture returned the pre-write value, the
- * batch compared equal to itself, and the entry was discarded with nothing
- * logged anywhere.
- *
- * That is not merely a missing undo. `canUndo()` IS this editor's dirty flag, so
- * hiding six components and pressing Cancel threw the session away WITHOUT
- * ASKING — the one thing the discard question exists to prevent. A drag quick
- * enough that its only frame was flushed by its own `pointerup` went the same
- * way, and `settleKey` then re-anchored the pre-drag placement back over it.
- *
- * Every test here is driven through the editor's own surface — a click on the
- * eye, a real pointer sequence, a keypress — because a suite that drives
- * `UndoHistory` directly never sees any of this. See `layout-editor-discard.
- * test.tsx` for the answer ORDER of the same question.
+ * Driven through the editor's own surface (clicks, pointer sequences,
+ * keypresses) rather than `UndoHistory` directly, since a suite driving the
+ * history never sees any of this. `layout-editor-discard.test.tsx` covers
+ * the answer order of the same question.
  */
 
 import { afterEach, beforeEach, expect, test } from "bun:test";

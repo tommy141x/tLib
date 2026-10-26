@@ -11,44 +11,29 @@ import {
 
 /**
  * Drag a live HUD surface by its own background, while that surface is focused.
+ * Same gesture the layout editor performs on a `LayoutProxy`: one pointer down,
+ * a delta in client coordinates against the rect captured at pointerdown, one
+ * rAF-coalesced apply, `placeRect` → `constrainLayout` → `reanchor` as the one
+ * placement path — so a background-dragged position is exactly as recoverable
+ * as one set in the editor.
  *
- * This is the same gesture the layout editor performs on a `LayoutProxy`, moved
- * to where a device UI can use it on itself: one pointer down, a delta in CLIENT
- * coordinates against the rect captured at pointerdown, one rAF-coalesced apply,
- * and `placeRect` → `constrainLayout` → `reanchor` as the single placement path.
- * Nothing here re-derives geometry; the clamp is literally `constrainLayout`, so
- * a position produced by a background drag is exactly as recoverable as one set
- * in the editor.
- *
- * NOT `./camera-drag.ts`, its sibling here, and not a copy of it. A camera has nothing
- * under the cursor, so it must accumulate `movementX`. This is direct
- * manipulation: the widget has to stay under the pointer, and
- * `clientX - downX` against a fixed start rect IS the 1:1 guarantee.
- * Accumulating `movementX` would let the surface drift out from under the
- * cursor on every frame the clamp refused.
+ * Not `./camera-drag.ts`: a camera has nothing under the cursor so it
+ * accumulates `movementX`, but this is direct manipulation — `clientX - downX`
+ * against a fixed start rect keeps the widget under the pointer; accumulating
+ * `movementX` would let it drift on every frame the clamp refused.
  */
 
 /**
- * What may NOT begin a drag.
+ * What may not begin a drag, so a player pressing a key doesn't drag the
+ * remote instead: `[data-hud-btn]` (the attribute `HudBinder.scan()` binds a
+ * click to — the only thing that makes a skin element a control at all, so a
+ * new faceplate key excludes itself from dragging for free) and anything
+ * focusable/ARIA-interactive as a backstop (every faceplate key is also
+ * `tabindex="0"`). `[data-hud-nodrag]` is the explicit opt-out for a
+ * decorative region that is neither.
  *
- * Two independent conditions, deliberately overlapping, because getting this
- * wrong means a player presses a key and their remote jumps instead:
- *
- *  1. `[data-hud-btn]` — the attribute tLib's own `HudBinder` scans for. It is
- *     not "a convention that controls carry it": it is the ONLY thing that makes
- *     a skin element a control at all, because it is what `scan()` binds a click
- *     to. A new key added to a faceplate therefore excludes itself from dragging
- *     by the same attribute that makes it do anything.
- *  2. Anything focusable or natively/ARIA interactive. A control that somehow
- *     reaches the DOM without `data-hud-btn` is still caught if it is a button,
- *     an input, a `role=`, or merely tabbable — every faceplate key is
- *     `tabindex="0"` for keyboard operation, so this alone would catch them.
- *
- * `[data-hud-nodrag]` is the explicit opt-out for a decorative region that is
- * neither: mark it and it stops being grab surface, with no code change here.
- *
- * Kept as a plain string constant so a test can assert it against `HudBinder`'s
- * own selector rather than against a second list written from memory.
+ * Plain string constant so a test can assert it against `HudBinder`'s own
+ * selector, not a second list written from memory.
  */
 export const HUD_CONTROL_SELECTOR = [
   "[data-hud-btn]",
@@ -91,19 +76,13 @@ export function isHudControl(target: EventTarget | null): boolean {
 }
 
 /**
- * How far the pointer must travel before a press becomes a drag.
- *
- * Not cosmetic slop. A press and release on the background with no travel is a
- * CLICK, and committing one writes a placement: `onCommit` is a KVP write and a
- * `commit` notification in tLib, so a player tapping the chassis of their remote
- * re-saved its position every time. A zero-delta `pointermove` is routine —
- * pressure and tilt changes emit one, and CEF emits one on button-down — so
- * `moved` could not be "a pointermove arrived".
- *
- * Measured from the pointerdown, like everything else here, so crossing the
- * threshold hands the surface the WHOLE delta rather than rebasing: the widget
- * stays exactly under the cursor afterwards, which `movementX` accumulation and
- * a rebased origin both give up.
+ * How far the pointer must travel before a press becomes a drag. Not cosmetic:
+ * a press+release with no travel is a click, and `onCommit` is a KVP write —
+ * without this, tapping the chassis re-saves its position every time. A
+ * zero-delta `pointermove` is routine (pressure/tilt changes, CEF on
+ * button-down), so `moved` can't just mean "a pointermove arrived". Measured
+ * from pointerdown so crossing the threshold hands the whole delta rather than
+ * rebasing, keeping the widget exactly under the cursor.
  */
 const DRAG_THRESHOLD = 3;
 
@@ -116,11 +95,10 @@ export interface HudDragOptions {
   /** Size and current placement. Read ONCE per gesture, at pointerdown. */
   metrics: () => HudDragMetrics | undefined;
   /**
-   * Whether a background press may start a drag right now (open AND focused).
-   *
-   * Asked on every move and again on release, not only at pointerdown, so it
-   * has to stay cheap — and a gesture in flight when it goes false is abandoned
-   * rather than committed.
+   * Whether a background press may start a drag right now (open and focused).
+   * Asked on every move and again on release, not just pointerdown — must stay
+   * cheap — and a gesture in flight when it goes false is abandoned, not
+   * committed.
    */
   enabled: () => boolean;
   /** Clamped placement, at most once per animation frame. */
@@ -207,11 +185,10 @@ export function attachHudDrag(options: HudDragOptions): () => void {
 
   function down(event: PointerEvent) {
     if (event.button !== 0 || !options.enabled()) return;
-    // A gesture still open on THIS pointer id cannot be a live one: a pointer
-    // cannot go down twice without going up, so its `pointerup` was lost — the
-    // window was never focused for it, or the browser swallowed it outside the
-    // page. Abandoning it here is what stops one lost release from wedging the
-    // surface permanently; a DIFFERENT id is a second finger and is ignored.
+    // A gesture still open on this pointer id means its pointerup was lost
+    // (unfocused window, or swallowed outside the page) — abandon it rather
+    // than let a lost release wedge the surface permanently. A different id is
+    // a second finger and is ignored.
     if (gesture) {
       if (gesture.pointer !== event.pointerId) return;
       lost();
@@ -219,10 +196,9 @@ export function attachHudDrag(options: HudDragOptions): () => void {
     const element = options.surface();
     const metrics = options.metrics();
     if (!element || !metrics) return;
-    // Listening on the window in the CAPTURE phase is what lets a press be
-    // claimed before a skin's own handler sees it, but it also means every
-    // press on the page arrives here. Both of these are the filter: inside this
-    // surface, and not on one of its controls.
+    // Capture-phase listening lets a press be claimed before a skin's own
+    // handler sees it, but means every press on the page arrives here too —
+    // filtered to inside this surface and not on one of its controls.
     if (!element.contains(event.target as Node | null)) return;
     if (isHudControl(event.target)) return;
     // Stops the browser's own image/text drag and the selection it would leave.
@@ -245,12 +221,10 @@ export function attachHudDrag(options: HudDragOptions): () => void {
   function move(event: PointerEvent) {
     const held = gesture;
     if (!held || held.pointer !== event.pointerId) return;
-    // Re-checked every move, not only at pointerdown. The gate going false
-    // mid-gesture means the surface stopped being draggable while the button was
-    // held — its UI closed, it lost focus, or the shared layout editor took the
-    // component over — and committing after that writes a placement the player
-    // can no longer see. `onCancel` is exactly the "drop the preview, keep the
-    // old placement" answer that wants.
+    // Re-checked every move: the gate going false mid-gesture means the surface
+    // stopped being draggable while held (UI closed, lost focus, layout editor
+    // took over), and committing after that writes a placement the player can
+    // no longer see — `onCancel` drops the preview and keeps the old placement.
     if (!options.enabled()) return lost();
     if (!held.moved) {
       const dx = event.clientX - held.x;
@@ -269,10 +243,9 @@ export function attachHudDrag(options: HudDragOptions): () => void {
     release(held);
     const placed = latest;
     latest = undefined;
-    // A press that never moved is not a drag, and must not write a placement.
-    // Nor may a gesture whose surface stopped being draggable while the pointer
-    // was held STILL — the move handler cannot catch that one, because catching
-    // it there needs a move.
+    // A press that never moved is not a drag, and a surface that stopped being
+    // draggable while held still (no move to catch it in `move()`) must not
+    // write a placement either.
     if (!held.moved || !placed || !options.enabled()) return options.onCancel?.();
     options.onCommit(reanchor(held.extents, placed, held.viewport));
   }
@@ -301,11 +274,9 @@ export function attachHudDrag(options: HudDragOptions): () => void {
   window.addEventListener("pointerup", up);
   window.addEventListener("pointercancel", cancel);
   window.addEventListener("blur", lost);
-  // The rect, the extents and the viewport are all captured ONCE per gesture, so
-  // a viewport that changes under a held pointer makes every remaining frame of
-  // the drag a placement against a screen that no longer exists. Abandoning is
-  // the honest answer: the caller keeps the placement it had, which the resize
-  // itself re-clamps, instead of committing one measured in stale pixels.
+  // rect/extents/viewport are captured once per gesture, so a resize mid-drag
+  // would place against a screen that no longer exists. Abandon instead: the
+  // caller keeps its old placement, which the resize itself re-clamps.
   window.addEventListener("resize", lost);
   return () => {
     lost();

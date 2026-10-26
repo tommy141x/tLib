@@ -175,9 +175,7 @@ local constantName = txds.textureName('tdet_key_lit')
 expect('constant-name-carries-tag', constantName:find(txds.tag(), 1, true) ~= nil,
     'a serial-less texture name does not carry the per-load tag: ' .. constantName)
 
--- A RESTART
---
--- A new resource load in the SAME game client: GetGameTimer has moved on, so every
+-- A new resource load in the same game client: GetGameTimer has moved on, so every
 -- name this load takes must differ from every name the last one did. Modelled as a
 -- second instance, which is what a reloaded script produces.
 

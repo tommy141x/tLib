@@ -245,11 +245,11 @@ try {
       bounds.y + bounds.height <= 450
   );
 
-  // --- Skins -----------------------------------------------------------------
-  // The default skin is the shared look the dialogs and toasts already wear; the
-  // vMenu replica is a switchable test skin. Both are measured here, so promoting
-  // the default cannot quietly delete the replica's geometry -- every number in
-  // the vmenu block below is the number tMenu shipped before the split.
+  // The default skin is the shared look dialogs and toasts already wear; the
+  // vMenu replica is a switchable test skin. Both are measured here, so
+  // promoting the default cannot quietly delete the replica's geometry —
+  // every number in the vmenu block below is the number tMenu shipped before
+  // the split.
   await page.setViewportSize({ width: 1600, height: 900 });
   // The submenu row goes first so it is inside the nine-row window whatever the
   // cursor did above; the chevron marker is the thing being counted.

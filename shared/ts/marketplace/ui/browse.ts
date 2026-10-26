@@ -1,17 +1,11 @@
 /**
- * Request/reply wrapper around the server-side marketplace browse.
- *
- * NOT a `fetch`: CEF's origin here is `cfx-nui-tLib` and the marketplace host
- * sends no `Access-Control-Allow-Origin` on that route, so the browser made the
- * request and then refused to hand this page the body. Being public is not what
- * makes a response readable cross-origin -- the header is. The request goes
- * NUI -> Lua -> tLib's Node bundle, which is where the resource secret can
- * legitimately live.
- *
- * Correlated by request ID rather than by a `fetchNui` return value, because a
- * NUI callback must answer within a frame and a marketplace round trip is an
- * outbound HTTP request from the game server. So `fetchNui` is fire-and-forget
- * and the answer arrives as an event.
+ * Request/reply wrapper around the server-side marketplace browse. Not a `fetch`: CEF's
+ * origin here is `cfx-nui-tLib` and the marketplace sends no `Access-Control-Allow-Origin`,
+ * so the browser would refuse the body. The request goes NUI -> Lua -> tLib's Node bundle,
+ * where the resource secret can legitimately live. Correlated by request ID, not a
+ * `fetchNui` return value, since a NUI callback must answer within a frame while a
+ * marketplace round trip is an outbound HTTP request — `fetchNui` is fire-and-forget and the
+ * answer arrives as an event.
  */
 
 import { fetchNui, onNuiEvent } from "../../nui";
@@ -150,16 +144,10 @@ export function browseMarketplace(params: BrowseParams, signal?: AbortSignal): P
 }
 
 /**
- * Like, or un-like, one item — for the player at this NUI frame.
- *
- * NOTICE WHAT IS *NOT* IN THE PAYLOAD: ANY IDENTITY.
- *
- * This sends a slug and a desired state and nothing else. The player's FiveM
- * license is resolved SERVER-SIDE, from the `source` of the net event, by
- * `server/sv_marketplace.lua`. That is the single reason the like count is
- * resistant to an ordinary player at all: a value the NUI sent would be a value
- * the player chose, and any player could then like as a thousand different
- * people.
+ * Like, or un-like, one item for the player at this NUI frame. Notice what's not in the
+ * payload: any identity. Only a slug and a desired state — the license is resolved
+ * server-side from the net event's `source` in `server/sv_marketplace.lua`, since a value
+ * the NUI sent would be a value the player chose, letting anyone like as a thousand people.
  */
 export function likeMarketplaceItem(
   slug: string,
@@ -187,19 +175,12 @@ export interface LikeState {
 }
 
 /**
- * The published definition of a `theme` item — a dispatch panel's CSS variables,
- * raw CSS, slot fragments and script.
- *
- * Through the bridge rather than fetched, for the same reason browse is: CEF's
- * origin is `cfx-nui-tLib` and the catalogue sends no `Access-Control-Allow-Origin`,
- * so the frame would make the request and then be refused the body. The panel the
- * definition is pushed into IS loaded cross-origin — it is an application, not a
- * document this code reads — which is exactly why only the definition needs a
- * round trip.
- *
- * Deliberately NOT cached beside the preview documents: a definition is a few KB
- * against their megabytes, so it has no claim on that budget, and the LRU's
- * eviction arithmetic is in bytes of HTML.
+ * The published definition of a `theme` item — a dispatch panel's CSS variables, raw CSS,
+ * slot fragments and script. Through the bridge, not fetched, for the same CORS reason as
+ * browse. The panel it's pushed into IS loaded cross-origin (an application, not a document
+ * this code reads) — only the definition needs the round trip. Not cached beside the
+ * preview documents: a definition is a few KB against their megabytes, no claim on that
+ * budget.
  */
 export function marketplaceThemeDefinition(
   slug: string,
@@ -209,10 +190,8 @@ export function marketplaceThemeDefinition(
     "marketplaceThemeJson",
     "marketplaceThemeJsonResult",
     { slug },
-    // The wire carries the definition as TEXT and it is parsed here, so the Lua
-    // VM stays a relay: decoding a stranger's JSON there would put an unbounded
-    // table through a runtime with no structural check to apply to it, and the
-    // only check worth running is the frame-contract one next door.
+    // Parsed here, not in Lua, so the VM stays a relay — decoding a stranger's JSON there
+    // would put an unbounded table through a runtime with no structural check to apply.
     (reply: { json?: unknown }) => {
       if (typeof reply.json !== "string") throw new Error("Theme preview unavailable");
       let parsed: unknown;
@@ -279,13 +258,10 @@ interface PreviewCacheEntry {
 const previewCache = new Map<string, PreviewCacheEntry>();
 
 /**
- * 8 MB — four of the 1.0–1.8 MB documents this corpus actually contains.
- *
- * It is NOT a multiple of the server's own ceiling, and must not be read as one.
- * `MAX_PREVIEW_BYTES` in `server/lib/marketplace/browse.ts` is 10 MB (raised from
- * 2 MB on 2026-10-08, once two shipped tLS documents turned out to exceed the
- * old cap), so ONE admissible document can be larger than this whole budget. That
- * is what `evict` keeping the newest entry is for.
+ * 8 MB — four of the 1.0-1.8 MB documents this corpus contains. Not a multiple of the
+ * server's own ceiling: `MAX_PREVIEW_BYTES` in `server/lib/marketplace/browse.ts` is 10 MB
+ * (raised from 2 MB once two shipped tLS documents exceeded the old cap), so one admissible
+ * document can exceed this whole budget — which is what `evict` keeping the newest entry is for.
  */
 export const PREVIEW_CACHE_BUDGET_BYTES = 8 * 1024 * 1024;
 
@@ -296,13 +272,9 @@ function evict(): void {
   // the least recently used.
   for (const [slug, entry] of previewCache) {
     if (total <= PREVIEW_CACHE_BUDGET_BYTES) return;
-    // NEVER EVICT DOWN TO NOTHING.
-    //
-    // A single document may exceed the entire budget — the server admits 10 MB
-    // against the 8 MB above — and this loop used to delete the only entry
-    // there was, immediately after charging it. The effect was silent and
-    // exactly backwards: the biggest documents, the ones whose re-fetch costs
-    // the most across the NUI boundary, were the only ones never cached at all.
+    // Never evict down to nothing — a single document admitted up to 10 MB against the 8 MB
+    // budget used to get deleted right after being charged, so the biggest documents (the
+    // most expensive to re-fetch) were silently the only ones never cached.
     if (previewCache.size <= 1) return;
     // An in-flight entry is 0 bytes and evicting it would abandon a request
     // another surface may already be awaiting, for no memory back.
@@ -313,21 +285,12 @@ function evict(): void {
 }
 
 /**
- * Reset the cache. ITS CONSUMER IS THE TEST SUITE, not a surface.
- *
- * Stated plainly so this does not read as a production API waiting for a
- * caller. `previewCache` is module state, so `tests/unit/
- * marketplace-preview-cache.test.ts` has no other way to start each case from
- * empty, and a cache whose eviction order cannot be asserted is a cache nobody
- * can show is an LRU.
- *
- * NO SURFACE CALLS THIS AND NONE SHOULD, which is a decision rather than an
- * omission. The obvious caller is `MarketplaceBrowser.applyOpenData` — clear on
- * every open of the panel, in case an item was republished under the same slug —
- * and it is wrong: closing the panel and reopening it is the commonest thing a
- * player does, and clearing there would throw the cache away in exactly the
- * case it was built for. Restaging a document under one slug is rare; paying
- * 1.75 MB again on every reopen is not.
+ * Reset the cache. Its consumer is the test suite, not a surface — stated plainly so this
+ * doesn't read as a production API waiting for a caller. The obvious candidate caller,
+ * `MarketplaceBrowser.applyOpenData` clearing on every panel open in case a slug was
+ * republished, is wrong: closing/reopening the panel is the commonest thing a player does,
+ * and clearing there throws the cache away in exactly the case it exists for. Restaging
+ * under one slug is rare; paying 1.75 MB again on every reopen is not.
  */
 export function clearPreviewCache(): void {
   previewCache.clear();
