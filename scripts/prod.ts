@@ -16,6 +16,11 @@ runProd(
     // has no credentials of its own. Declared so `createZip`'s credential sanitizer
     // treats "no config file staged" as expected here and as a refusal everywhere else.
     expectConfig: false,
+    // v1.0 was republished in place with a crash fix in it and no version change,
+    // after which `tradio_diag` reported `tLib 1.0.0` for both trees. See
+    // stampBuildId: this is the id that tells them apart, and it is derived from
+    // the zipped bytes rather than remembered by whoever cuts the release.
+    buildStamp: true,
     root: join(import.meta.dir, ".."),
     uiBuilds: [
       {

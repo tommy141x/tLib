@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertProductionFiles, buildProductionUI, runProd } from "../../shared/ts/build/core";
+import {
+  assertProductionFiles,
+  buildProductionUI,
+  runProd,
+  stampBuildId,
+} from "../../shared/ts/build/core";
 
 describe("production UI build selection", () => {
   test("existing consumers retain the Vite build default", () => {
@@ -93,6 +98,50 @@ describe("production UI build selection", () => {
       );
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("the build stamp identifies the staged tree, and leaves the version gate alone", () => {
+    // The defect this exists for: v1.0 was republished with a crash fix in it and
+    // no version change, so a diagnostic could not tell the two trees apart. The
+    // properties that make the stamp able to are asserted here one by one --
+    // "prod printed a build id" proves none of them.
+    const stage = (files: Record<string, string>) => {
+      const dist = mkdtempSync(join(tmpdir(), "tlib-stamp-"));
+      for (const [path, body] of Object.entries(files)) {
+        mkdirSync(join(dist, path, ".."), { recursive: true });
+        writeFileSync(join(dist, path), body);
+      }
+      return dist;
+    };
+    const MANIFEST = "fx_version 'cerulean'\nversion '1.0.0'\nui_page 'client/ui/index.html'\n";
+    const day = new Date("2026-10-24T14:59:00Z");
+    const trees = [
+      stage({ "fxmanifest.lua": MANIFEST, "shared/imports/access/adapters.lua": "before\n" }),
+      stage({ "fxmanifest.lua": MANIFEST, "shared/imports/access/adapters.lua": "after\n" }),
+      stage({ "fxmanifest.lua": MANIFEST, "shared/imports/access/adapters.lua": "before\n" }),
+    ];
+    try {
+      const [a, b, again] = trees.map((dist) => stampBuildId(dist, day));
+
+      expect(a).toMatch(/^20261024-[0-9a-f]{8}$/);
+      // One changed byte in one shipped Lua file is the whole of c9a8f8f.
+      expect(b).not.toBe(a);
+      // An identical tree restamps identically, or the id is a timestamp wearing
+      // a hash and cannot answer "is this the same build as theirs?".
+      expect(again).toBe(a);
+      // Idempotent: a second pass hashes the manifest without the line the first
+      // pass wrote, so it cannot compound.
+      expect(stampBuildId(trees[0], day)).toBe(a);
+
+      const manifest = readFileSync(join(trees[0], "fxmanifest.lua"), "utf8");
+      expect(manifest).toContain(`tlib_build '${a}'`);
+      expect(manifest.match(/^tlib_build/gm)).toHaveLength(1);
+      // imports.lua's tlib_min_version gate reads `version` with this shape. A
+      // stamp that touched it would refuse every consumer pinning '1.0'.
+      expect(manifest).toMatch(/^version '1\.0\.0'$/m);
+    } finally {
+      for (const dist of trees) rmSync(dist, { recursive: true, force: true });
     }
   });
 

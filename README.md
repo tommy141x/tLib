@@ -451,12 +451,20 @@ Vehicle coordinate math helpers for transforming positions between local and wor
 
 ### kvp
 
-Typed KVP wrapper with automatic community-prefixing (reads `tlib_community_id` or `sv_projectName`) so each server gets isolated storage.
+Typed KVP wrapper with two independent, separately optional namespaces. **Neither is on by
+default.** The community prefix reads `tlib_community_id` or `sv_projectName` — neither is a
+standard FiveM convar, so a server that sets neither stores keys unprefixed — and it separates
+one owner's boxes from another's. Separating two servers is a different, per-key opt-in:
+`serverScoped = true`. A key without it follows the player to every server running the resource,
+which is right for a preference they own and wrong for anything describing where they are.
 
 - `kvp.getString/getFloat/getInt/getBool/getJson(key, default)` — Typed getters with fallback
 - `kvp.setString/setFloat/setInt/setBool/setJson(key, value)` — Typed setters
 - `kvp.get(key, default)` / `kvp.set(key, value)` — Auto-detect type
-- `kvp.has(key)`, `kvp.delete(key)`, `kvp.key(key)` — Utilities
+- `kvp.has(key)`, `kvp.delete(key)` — Utilities
+- `kvp.key(key, opts)` — The resolved key. `opts.serverScoped`, `opts.prefix`
+- `kvp.view(opts)` — The same accessors with `opts` baked into every key
+- `kvp.getPrefix()` / `kvp.serverTag()` — The two namespaces, for a diagnostic
 
 ### settings
 

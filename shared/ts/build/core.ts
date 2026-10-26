@@ -3,6 +3,7 @@
  * Zero npm dependencies — AdmZip is passed by the caller.
  */
 
+import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -11,6 +12,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { describeSanitize, sanitizeStagedSecrets } from "../secrets/release.ts";
@@ -76,6 +78,53 @@ export function stageFiles(root: string, dist: string, includes: string[]) {
     cpSync(src, dest, { recursive: true });
     console.log(`  +     ${item}`);
   }
+}
+
+export const BUILD_STAMP_KEY = "tlib_build";
+
+// Matches the blank lines ahead of the stamp too, so re-stamping is idempotent.
+const STAMP_LINE = new RegExp(`\\n*^${BUILD_STAMP_KEY}\\s+'[^']*'[ \\t]*$\\n?`, "m");
+
+function stagedPaths(dist: string, prefix = ""): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(join(dist, prefix)).sort()) {
+    const rel = prefix ? `${prefix}/${entry}` : entry;
+    if (statSync(join(dist, rel)).isDirectory()) out.push(...stagedPaths(dist, rel));
+    else out.push(rel);
+  }
+  return out;
+}
+
+/**
+ * Stamp the staged manifest with a build id hashed from the staged bytes.
+ *
+ * NOT a version bump: v1.0 was republished in place on 2026-10-24 with a crash
+ * fix (`c9a8f8f`) and no version change, so `tradio_diag` printed `tLib 1.0.0`
+ * for both trees and nobody could confirm a customer had the fix. A bump only
+ * moves that to the next republish — a number is remembered by a human, and this
+ * is derived from the bytes `prod` is about to zip. The hash is the identity.
+ *
+ * Its OWN key, NEVER `version`: imports.lua enforces `tlib_min_version` out of
+ * that string and every consumer pins `'1.0'`. An unstamped tree is a source
+ * checkout, and a bare version is the truth about it.
+ */
+export function stampBuildId(dist: string, now = new Date()): string {
+  const manifestPath = join(dist, "fxmanifest.lua");
+  // Trailing whitespace NORMALISED: stripping the stamp takes the blank line
+  // ahead of it, so without this a restamp reports a new id for an unchanged tree.
+  const bare = `${readFileSync(manifestPath, "utf8").replace(STAMP_LINE, "").trimEnd()}\n`;
+
+  const hash = createHash("sha256");
+  for (const rel of stagedPaths(dist)) {
+    hash.update(rel);
+    hash.update("\0");
+    // The manifest hashes WITHOUT its stamp, or the id depends on the last id.
+    hash.update(rel === "fxmanifest.lua" ? Buffer.from(bare, "utf8") : readFileSync(join(dist, rel)));
+  }
+
+  const id = `${now.toISOString().slice(0, 10).replace(/-/g, "")}-${hash.digest("hex").slice(0, 8)}`;
+  writeFileSync(manifestPath, `${bare}\n${BUILD_STAMP_KEY} '${id}'\n`, "utf8");
+  return id;
 }
 
 interface ZipLike {
@@ -166,6 +215,9 @@ export interface ProdConfig {
    * staged tree, because two copies of a licence is how they come to disagree.
    */
   licenceSources?: LicenceSource[];
+  /** `tlib_build` in the staged manifest (see `stampBuildId`). Opt-in: it changes
+   *  the manifest of every resource that releases through here. */
+  buildStamp?: boolean;
 }
 
 export function assertProductionFiles(root: string, files: string[]) {
@@ -266,6 +318,12 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
     step("Font licences");
     for (const line of licences.copied) console.log(`  + ${line}`);
     console.log(`  ${licences.copied.length} copied, ${licences.satisfied.length} already covered`);
+  }
+
+  // Last before the zip, so the id covers every staged byte.
+  if (config.buildStamp) {
+    step("Stamping the build id");
+    console.log(`  ${BUILD_STAMP_KEY} '${stampBuildId(dist)}'`);
   }
 
   createZip(new AdmZipClass(), dist, join(root, ".build", `${name}.zip`), name, {

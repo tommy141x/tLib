@@ -529,6 +529,27 @@ describe("the pre-restart window", () => {
     expect(h.remote()).toEqual([url]);
   });
 
+  test("a 404 says there is no such item, not that the fetch broke", async () => {
+    // The support cost this carries: one customer pasted 34 of these at once --
+    // every built-in tone, registered as an installed marketplace item by the
+    // consumer -- and the whole thread went on their VPS's ports and CORS. The
+    // catalogue was answering correctly. So the 404 line has to name the cause
+    // and rule the network out, and a REAL transport failure must not claim the
+    // item is missing.
+    const missing = harness({ local: null, remoteFile: 404 });
+    await missing.cache.acquireFile("echo.wav", `${MARKETPLACE}/api/v1/items/echo/download`);
+    const line = missing.warnings.join("\n");
+    expect(line).toContain("no item behind");
+    expect(line).toContain("localOnly");
+    expect(line).toContain("nothing is wrong with your network");
+
+    const broken = harness({ local: null, remoteFile: 503 });
+    await broken.cache.acquireFile("bought.wav", `${MARKETPLACE}/api/v1/items/bought/download`);
+    const transport = broken.warnings.join("\n");
+    expect(transport).toContain("runtime file cache failed");
+    expect(transport).not.toContain("localOnly");
+  });
+
   test("evictFile clears the recorded failure so a reinstall is picked up", async () => {
     const h = harness({ local: null, remoteFile: 404 });
     const url = `${MARKETPLACE}/api/v1/items/x/download`;

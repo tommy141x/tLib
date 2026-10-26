@@ -51,6 +51,11 @@ vc({
     -- refuses to draw because an optional subsystem is absent is worse than one
     -- with a missing row.
     info = {
+        -- Absent on a source checkout, and `buildOutput` skips an empty value, so
+        -- this row appears only on a released build. That is the point: a boot log
+        -- is the artefact support is pasted most often, and v1.0's republish-in-place
+        -- left it with nothing in it that could tell two 1.0.0 trees apart.
+        { key = 'Build',  value = GetResourceMetadata(GetCurrentResourceName(), 'tlib_build', 0) },
         { key = 'Hub',    event = 'tlib:vcInfo:hub' },
         { key = 'Spawns', event = 'tlib:vcInfo:spawns' },
     },

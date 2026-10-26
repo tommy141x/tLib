@@ -40,7 +40,13 @@ end
 
 local resourceMeta = {
     tProbe = { version = '2.1.0', tlib_min_version = '1.0' },
+    -- UNSTAMPED, like a source checkout and like every tLib 1.0 zip cut before
+    -- the stamp existed.
     tLib   = { version = '1.0.0' },
+    -- A released build. `tlib_build` is what makes two trees that both call
+    -- themselves 1.0.0 distinguishable in a report -- the republish-in-place of
+    -- v1.0 is why.
+    tStamped = { version = '1.0.0', tlib_build = '20261024-7f3a91c2' },
 }
 function GetResourceMetadata(resource, key)
     local entry = resourceMeta[resource]
@@ -123,6 +129,25 @@ local function redactsValue(condition, message)
 end
 
 local Diag = dofile('shared/imports/diag/shared.lua')
+
+-- meta: a version read carries the build id, so a report can tell two 1.0.0s apart
+--
+-- Composed inside Diag.meta rather than at the call sites, so tRadio's existing
+-- `ctx.meta('tLib')` line reports it with no change on its side. These four cases
+-- are what that composition must not break.
+must(Diag.meta('tStamped') == '1.0.0 (build 20261024-7f3a91c2)',
+    'a stamped build must report its build id: ' .. tostring(Diag.meta('tStamped')))
+must(Diag.meta('tStamped', 'version') == '1.0.0 (build 20261024-7f3a91c2)',
+    'naming the version key explicitly must behave the same as defaulting to it')
+must(Diag.meta('tLib') == '1.0.0',
+    'an unstamped build reports its bare version, not a fabricated build id')
+-- Any OTHER key is untouched. `tlib_min_version` goes through this same function
+-- in tRadio's diag line, and appending to it would make the report read as though
+-- the resource required a build id.
+must(Diag.meta('tProbe', 'tlib_min_version') == '1.0',
+    'a non-version key must come back exactly as declared')
+must(Diag.meta('oxmysql') == 'unknown',
+    'a resource that is not installed raises in the native and must answer unknown')
 
 -- isSecretName: the whole point is that it is keyed on the NAME
 

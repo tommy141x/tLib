@@ -178,7 +178,7 @@ not a reload. Out-of-range or non-numeric values fall back to the default rather
 | Convar | Command | Type / unit | Default | What it does |
 | --- | --- | --- | --- | --- |
 | `tlib_hud_profile` | `setr` | string | *(empty — the server endpoint)* | Namespaces each player's saved HUD placement. Set it when one community runs several endpoints that should share one layout. |
-| `tlib_community_id` | `setr` | string, `[A-Za-z0-9_-]` only | *(empty — falls back to `sv_projectName`)* | Prefix for tLib's KVP keys, so two servers on one machine do not share player storage. Disallowed characters are stripped; a value that strips to nothing falls through to `sv_projectName`. Read by client Lua **and** the server bundle. |
+| `tlib_community_id` | `setr` | string, `[A-Za-z0-9_-]` only | *(empty — falls back to `sv_projectName`)* | Prefix for tLib's KVP keys, separating **your** community's player storage from another community's. It does **not** separate two of your own servers: that is a per-key `serverScoped` opt-in inside the resource, not a convar — see [Import modules → kvp](/docs/tLib/import-modules). Left empty (the default, since neither this nor `sv_projectName` is a standard FiveM convar) keys are stored with no prefix. Disallowed characters are stripped; a value that strips to nothing falls through to `sv_projectName`. Read by client Lua **and** the server bundle. |
 
 ## Not convars
 
@@ -187,6 +187,7 @@ These look similar and are not convars. Do not put them in `server.cfg`:
 | Name | What it actually is |
 | --- | --- |
 | `tlib_min_version`, `tlib_module`, `tlib_modules` | `fxmanifest.lua` metadata keys on the **consuming** resource. |
+| `tlib_build` | A `fxmanifest.lua` metadata key **tLib's release writes into its own manifest**: a content hash of the download, so a `<resource>_diag` line can tell two builds with the same version number apart. Do not set, edit or remove it — an edited one is a lie about which files you have. Absent means the copy was not cut by a release. |
 | `tlib_menu_selftest`, `tlib_menu_refresh`, `tlib_menu_permissions` | Console commands. |
 | `tlib_demo` *(as a command)* | Also a console command, `tlib_demo [on\|off\|convar]`, toggling the convar above at runtime. The convar is the real setting. |
 | `tmarketplace_resource_secret` | Nothing reads it. An earlier version of this page listed it as required; delete the line if you have it. |

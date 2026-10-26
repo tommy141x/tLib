@@ -73,6 +73,11 @@ local qbxGroups, qbPlayer, esxPlayer, ndPlayer, oxGroups, natOnDuty
 -- before GetGroups because GetGroups indexes that table unguarded; see the note
 -- in shared/imports/access/adapters.lua.
 local qbxLoaded = true
+-- ox_core: whether this source is a loaded OxPlayer yet. Unlike qbx, its
+-- CallPlayer does not throw for an unloaded one -- it console.errors and returns
+-- undefined -- so the stub records the noise instead of raising.
+local oxLoaded = true
+local oxInvalidIdCalls = 0
 local oxCount, qsCount, qbHasItem
 
 exports = setmetatable({}, {
@@ -93,10 +98,19 @@ exports = setmetatable({}, {
                 return { GetPlayerFromId = function(src) return esxPlayer(src) end }
             end },
             ND_Core = { getPlayer = function(_, src) return ndPlayer(src) end },
-            ox_core = { CallPlayer = function(_, src, method)
-                assert(method == 'getGroups', 'ox_core adapter must call getGroups, got ' .. tostring(method))
-                return oxGroups(src)
-            end },
+            ox_core = {
+                GetPlayer = function(_, src) return oxLoaded and { source = src } or nil end,
+                CallPlayer = function(_, src, method)
+                    assert(method == 'getGroups', 'ox_core adapter must call getGroups, got ' .. tostring(method))
+                    -- Mirrors ClassInterface.isCallValid: an invalid id is a
+                    -- console line and an undefined return, never a throw.
+                    if not oxLoaded then
+                        oxInvalidIdCalls = oxInvalidIdCalls + 1
+                        return nil
+                    end
+                    return oxGroups(src)
+                end,
+            },
             nat2k15framework = { geteverything = function() return natOnDuty end },
             ox_inventory = { GetItemCount = function(_, src, item, meta, strict)
                 assert(strict == false, 'ox_inventory must be asked with strict = false')
@@ -139,6 +153,7 @@ local function reset()
     resourceStates, printed, clientEvents, timers = {}, {}, {}, {}
     aceGrants = {}
     qbxLoaded = true
+    oxLoaded, oxInvalidIdCalls = true, 0
     demoOn = false
     gameTime = gameTime + 10000
     access.use('auto', 'auto')
@@ -241,6 +256,23 @@ reset()
 resourceStates.ox_core = 'started'
 oxGroups = function() return { police = 2 } end
 assert(access.jobs(7).police == 2, 'ox_core groups come back through CallPlayer(getGroups)')
+
+-- The ox_core half of the qbx regression above. Re-verified 2026-10-26 against
+-- ox_core's own ClassInterface: CallPlayer for an unloaded source does not throw,
+-- so this was never the crash qbx was -- it only prints `cannot call method
+-- getGroups on OxPlayer<N> (invalid id)` from inside ox_core.
+--
+-- A GetPlayer probe to suppress that print was tried the same day and DECLINED
+-- (see the adapter), because it resolved every job-based grant to nothing
+-- wherever GetPlayer could not be called. So an unloaded source still yields no
+-- jobs -- which is the property that matters -- and ox_core still prints while
+-- doing it. Asserting oxInvalidIdCalls == 0 here is what made the declined probe
+-- look correct, so it is deliberately NOT asserted.
+reset()
+resourceStates.ox_core = 'started'
+oxLoaded = false
+oxGroups = function() return { police = 2 } end
+assert(next(access.jobs(7)) == nil, 'an unloaded ox_core source yields NO jobs')
 
 -- nat2k15 has no rank of any kind, and `getdept(id)` returns the WHOLE on_duty
 -- table rather than one player's dept -- so the adapter must use geteverything

@@ -494,7 +494,8 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
     } finally {
       deadline.release();
     }
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    // `status` on the error: the caller tells "no such item" from "unreachable".
+    if (!resp.ok) throw Object.assign(new Error(`HTTP ${resp.status}`), { status: resp.status });
     const buf = await resp.arrayBuffer();
     const old = fileBlobs.get(filename);
     if (old && urlMode === "blob") urls.revoke(old);
@@ -519,7 +520,23 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
         await fetchFile(key, downloadUrl);
       } catch (err) {
         fileFailures.add(key);
-        log.warn(`[${tag}] runtime file cache failed for "${filename}":`, err);
+        // A 404 HAS TO SAY WHAT A 404 MEANS. One customer pasted 34 of these --
+        // every built-in tone, registered by the consumer as an installed
+        // marketplace item -- and spent the thread being told it was a port or
+        // CORS problem on their VPS: `failed ... HTTP 404` read as transport.
+        if ((err as { status?: number }).status === 404) {
+          log.warn(
+            `[${tag}] runtime file cache: the marketplace has no item behind "${filename}" ` +
+              `(404 from ${downloadUrl}). If that file ships with this resource, or was ` +
+              `dropped into its folder by hand, the entry needs \`localOnly\` — nothing ` +
+              `is wrong with your network, your port or your proxy. Not retried this session.`
+          );
+        } else {
+          log.warn(
+            `[${tag}] runtime file cache failed for "${filename}" — not retried this session:`,
+            err
+          );
+        }
       }
     }
 

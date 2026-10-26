@@ -27,6 +27,22 @@ description 'tLib — shared UI and utility library (FiveM)'
 -- for the 1.0.0 notes with `git show 858f933:CHANGELOG.md`.
 version '1.0.0'
 
+-- A RELEASED tLib also carries `tlib_build '<yyyymmdd>-<hash8>'`, written into the
+-- STAGED manifest by `bun run prod` from a hash of the bytes it is about to zip
+-- (shared/ts/build/core.ts, `stampBuildId`). It is deliberately absent here: this
+-- tree is a source checkout, not a release, and reporting no build id is the truth
+-- about it.
+--
+-- It exists because the republish above is invisible from `version '1.0.0'`. Both
+-- 1.0 trees -- the one with c9a8f8f's qbx fix and the one without -- reported
+-- `tLib 1.0.0` to `tradio_diag`, and support had to tell a customer to re-download
+-- the zip with no way for either side to confirm it landed. Bumping the version
+-- instead would only move that to the next republish, because a number is
+-- remembered by a human and a content hash is not.
+--
+-- NEVER fold it into `version`: imports.lua gates `tlib_min_version` by pulling
+-- digits out of that string, and every consumer pins `'1.0'`.
+
 -- The top-level folder is the VM a file is loaded into. A module spanning VMs
 -- keeps its own name under each tree's lib/, so the blocks below stay the single
 -- authority on what runs where.

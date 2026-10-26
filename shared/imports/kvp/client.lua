@@ -1,11 +1,32 @@
--- Typed KVP storage, prefixed per community so one box's servers stay isolated.
--- The prefix is the tlib_community_id convar, else sv_projectName, else nothing.
+-- Typed KVP storage, with TWO independent and separately optional namespaces.
 --
 --   tlib.kvp.getString('tls_hud_layout', 'default')
 --   tlib.kvp.setFloat('tls_hud_scale', 1.5)
 --   tlib.kvp.delete('tls_hud_scale')
 --
 -- Every getter takes an optional default, returned when the key was never set.
+--
+-- NOTHING HERE IS ISOLATED BY DEFAULT. Read this before writing a comment
+-- claiming a key is "per server" -- at least two defects in the estate came from
+-- a developer believing one of these layers was automatic, and this file's own
+-- header used to say so.
+--
+--   * The COMMUNITY prefix (below) is the `tlib_community_id` convar, else
+--     `sv_projectName`, else NOTHING. Neither is a standard FiveM convar, so a
+--     server that has set neither -- which is most of them -- runs with no prefix
+--     at all. It separates one OWNER's boxes from another's. It does not separate
+--     two servers, and it is not applied unless somebody set it.
+--
+--   * The SERVER tag (`kvp.serverTag()`) is what separates two servers, and it is
+--     opt-in PER KEY: only a key passed `serverScoped = true` gets it. A key
+--     without it follows the player to every server running the resource.
+--
+-- That default is right for a preference the player owns (their radio model) and
+-- wrong for anything describing where they are (last channel, callsign) -- which
+-- is the "it reset itself" / "it kept my old server's settings" report. The
+-- default is NOT changeable: these strings are already persisted on players'
+-- machines, so flipping it abandons every stored key in the wild. Deciding per
+-- key is the whole contract; forgetting to decide silently means "global".
 
 local kvp = {}
 
@@ -50,11 +71,18 @@ function kvp.serverTag()
     return _serverTag
 end
 
---- Returns the prefixed KVP key.
+--- Returns the fully namespaced KVP key: `<community>_<opts.prefix><key>_<tag>`,
+--- with each of the three parts present only when it applies.
 ---
---- `opts.prefix` is an extra namespace applied inside the community prefix, and
+--- `opts.prefix` is an extra namespace applied INSIDE the community prefix, for a
+--- resource that wants its own keys grouped (`tafk:`). `opts.serverScoped` is what
+--- appends this server's tag; WITHOUT IT THE KEY IS SHARED ACROSS EVERY SERVER
+--- the player visits, which is the module's documented default and not an
+--- oversight. See the header.
 ---
---- An empty server tag leaves a scoped key unscoped rather than appending `_`.
+--- An empty server tag leaves a scoped key unscoped rather than appending `_`: a
+--- dev session that never resolved an endpoint then keeps what the player tuned
+--- instead of silently reverting them.
 function kvp.key(key, opts)
     if opts then
         if opts.prefix then key = opts.prefix .. key end
@@ -67,7 +95,9 @@ function kvp.key(key, opts)
     return key
 end
 
---- Get the current community prefix (or nil if none).
+--- The resolved community prefix, or nil when neither convar is set -- which is
+--- the usual case. Worth printing in a `<resource>_diag` beside `serverTag()`:
+--- together they are the whole of where this player's keys live.
 function kvp.getPrefix()
     return _prefix
 end
@@ -197,9 +227,11 @@ local function buildAccessors(into, opts)
     return into
 end
 
---- A view onto the same store with `opts` baked into every key.
+--- A view onto the same store with `opts` baked into every key. The way to apply
+--- `serverScoped` to a whole group of keys without repeating it at each call.
 ---
 --- `view.key(k)` is the fully resolved key, for the rare caller that has to hand
+--- the literal string to something else -- a NUI payload, a diagnostic line.
 function kvp.view(opts)
     local view = buildAccessors({}, opts)
     function view.key(key)
@@ -209,6 +241,9 @@ function kvp.view(opts)
 end
 
 -- The module's own accessors are a view with no options, so there is exactly one
+-- implementation of each getter and setter. `nil` opts is also what makes
+-- `tlib.kvp.setString(...)` a community-prefixed, NOT server-scoped key -- the
+-- bare module is the unscoped view, and a caller that wants isolation asks for it.
 buildAccessors(kvp, nil)
 
 return kvp

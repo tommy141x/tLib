@@ -1,38 +1,30 @@
 --[[
-    tLib/shared/imports/access/adapters.lua
-
-
-    Two ordered lists. Order IS the priority, and it is the whole detection
-    strategy: first adapter whose resource is `started` wins -- `started`, not
-    `~= 'missing'`, so a leftover folder the owner stopped months ago cannot
+    Two ordered lists, and order IS the priority: the first adapter whose resource
+    is `started` wins -- not `~= 'missing'`, so a stopped leftover folder cannot
     knock out the live one. Overridable with `tlib.access.use()`.
 
-    Every function here is called inside a pcall by server.lua, so an adapter may
-    index freely. It must return the right TYPE though: `jobs` a table, `count` a
-    number. A wrong type reads as "no jobs" / "none", not as an error.
-
-
+    Every function runs inside server.lua's pcall, so an adapter may index freely.
+    It must return the right TYPE: `jobs` a table, `count` a number. A wrong type
+    reads as "no jobs" / "none", not an error.
 ]]
 
 -- Frameworks: "what jobs does this player hold, at what grade"
 --
--- Every adapter normalises to the same shape: { [jobName] = gradeNumber }.
--- A framework with no notion of grade reports 0, which compares true against any
--- `job = { x = 0 }` and false against any stricter minimum -- so an owner who
--- writes a grade requirement on a gradeless framework gets a gate that denies,
--- not one that silently ignores the number they wrote.
+-- Every adapter normalises to { [jobName] = gradeNumber }. A gradeless framework
+-- reports 0, which compares true against `job = { x = 0 }` and false against any
+-- stricter minimum -- so a grade requirement on a gradeless framework denies
+-- rather than silently ignoring the number the owner wrote.
 
 local frameworks = {
     {
         name = 'qbx_core',
         jobs = function(src)
-            -- GetGroups returns `{ [name] = gradeLevel }`, covering ALL held jobs and
-            -- gangs rather than the primary pair.
-            -- THE GetPlayer PROBE MUST STAY FIRST: GetGroups indexes
-            -- `QBX.Players[source].PlayerData` unguarded (qbx functions.lua:526) and an
-            -- export runs in the CALLEE's VM, so for an unloaded source qbx prints
-            -- `SCRIPT ERROR: attempt to index a nil value` before access.jobs's pcall
-            -- (which guards us, not qbx) sees it. Two customers, 2026-10-22/23.
+            -- GetGroups returns `{ [name] = gradeLevel }` -- ALL held jobs and gangs,
+            -- not the primary pair. THE GetPlayer PROBE MUST STAY FIRST: GetGroups
+            -- indexes `QBX.Players[source].PlayerData` unguarded (functions.lua:526)
+            -- in the CALLEE's VM, so an unloaded source throws inside qbx before
+            -- access.jobs's pcall (which guards us, not qbx) sees it. 2 customers,
+            -- 2026-10-22/23.
             if not exports.qbx_core:GetPlayer(src) then return {} end
             return exports.qbx_core:GetGroups(src)
         end,
@@ -94,6 +86,13 @@ local frameworks = {
             -- object, so group queries have to go through CallPlayer. There is
             -- no hasGroup; getGroups returning the name->grade record is the
             -- idiom, and it is the one that matches our shape.
+            --
+            -- A GetPlayer probe like qbx's was tried 2026-10-26 and DECLINED:
+            -- CallPlayer does not throw for an unloaded src (it prints ox_core's
+            -- "invalid id"), so a probe buys a quieter console, not a crash fix.
+            -- Both shapes -- gating and pcall-advisory -- resolved every job-based
+            -- grant to nothing when GetPlayer was uncallable: a fail-closed outage
+            -- for a log line, caught by tRadio's config/sv_functions.test.ts.
             local groups = exports.ox_core:CallPlayer(src, 'getGroups')
             if type(groups) ~= 'table' then return {} end
             local out = {}
@@ -105,11 +104,10 @@ local frameworks = {
     {
         name = 'nat2k15framework',
         jobs = function(src)
-            -- `geteverything()`, NOT `getdept(src)`. getdept takes an id but uses
-            -- it only as a presence test and then returns the ENTIRE on_duty
-            -- table -- so it answers a different question than its name promises,
-            -- and reading its result as one player's department is wrong for
-            -- every player on the server.
+            -- `geteverything()`, NOT `getdept(src)`. getdept takes an id but uses it
+            -- only as a presence test and returns the ENTIRE on_duty table, so
+            -- reading its result as one player's department is wrong for every
+            -- player on the server.
             local onDuty = exports['nat2k15framework']:geteverything()
             local entry = type(onDuty) == 'table' and (onDuty[src] or onDuty[tonumber(src)])
             if not entry or not entry.dept then return {} end
@@ -128,22 +126,19 @@ local frameworks = {
 
 -- Inventories: "how many of this item does the player have"
 --
--- Ordered by how widely deployed each is, ox_inventory first. Each returns a
--- NUMBER, never a boolean -- a boolean cannot answer `count = 2`, and an adapter
--- that quietly answers a different question than the one asked is how
--- community_bridge's origen adapter ended up testing `>` instead of `>=` and
--- denying a player holding exactly the one item required.
+-- Ordered by deployment, ox_inventory first. Each returns a NUMBER, never a
+-- boolean: a boolean cannot answer `count = 2`. Answering a different question
+-- than the one asked is how community_bridge's origen adapter tested `>` instead
+-- of `>=`, denying a player holding exactly the one item required.
 
 local inventories = {
     {
         name = 'ox_inventory',
         count = function(src, item)
-            -- GetItemCount, not Search. ox_core itself uses GetItemCount, and
-            -- the only `Search(src, 'count', …)` call sites in the reference
-            -- corpus are qbx_core shims explicitly tagged ---@deprecated.
-            -- Fourth argument is `strict` metadata matching; false is what every
-            -- in-corpus caller passes, and is what an owner naming a bare item
-            -- means.
+            -- GetItemCount, not Search: ox_core itself uses it, and the only
+            -- `Search(src, 'count', …)` call sites in the corpus are qbx_core shims
+            -- tagged ---@deprecated. Fourth arg is `strict` metadata matching, and
+            -- false is what every in-corpus caller passes and what a bare item means.
             return exports.ox_inventory:GetItemCount(src, item, nil, false) or 0
         end,
     },

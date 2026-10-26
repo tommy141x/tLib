@@ -390,4 +390,90 @@ function configMod.check(tbl, spec)
     return report.ok
 end
 
+--[[
+    Is an operator-merged file older than this build expects?
+
+    `check` above answers "is what the operator wrote VALID". This answers what no
+    amount of validation can reach: is their copy of a file WE ship still the
+    generation this build is written against. A merged-forward file can be
+    perfectly valid Lua and still be the wrong file.
+
+    HERE AND NOT IN EACH RESOURCE because the wording is the part worth sharing,
+    and every t* resource ships files the operator merges forward. tRadio has had
+    this on its server config since v6.3.1 and nothing on its client config, where
+    the same drift has cost two runs of tickets: `MakeAnimHandler` ->
+    `RadioMakeAnimHandler`, then `resolveSirenSystem` -> `RadioResolveSirenMode`
+    and `_k9Hashes` -> `RadioIsK9Ped`. Their hook calls a global that no longer
+    exists, the caller pcalls it, and the audio is silent with nothing in any
+    console.
+
+    THE HONEST LIMIT: it compares two numbers, one of which is in a file a human
+    edits. It cannot detect a rename, and it does not say which call broke -- the
+    caller still has to report its own hook failures. `expected` is the resource's
+    to bump, and the gate asserting the two agree has to read that resource's file
+    shapes, so it cannot live here.
+
+    `declared` goes through tonumber() and never a type test: a copy predating the
+    constant has nil, a hand-edited one may have "3", and garbage must degrade to
+    "old" rather than throw inside a startup path.
+]]
+
+--- @param opts table
+---   file      string    the operator-facing path, e.g. 'config/cl_functions.lua'
+---   declared  any       the constant the operator's copy declares
+---   expected  number    the generation this build is written against
+---   detail    string|nil what changed in this bump, in the resource's own words
+---   resource  string|nil label; defaults to the current resource
+--- @return table verdict { ok, declared, expected, lines }
+function configMod.generation(opts)
+    assert(type(opts) == 'table', 'tlib.config.generation: an opts table is required')
+    local file = opts.file or 'config.lua'
+    local resource = opts.resource
+        or (GetCurrentResourceName and GetCurrentResourceName())
+        or 'resource'
+    local expected = tonumber(opts.expected)
+    assert(expected, 'tlib.config.generation: expected must be a number')
+    local declared = tonumber(opts.declared) or 0
+
+    local verdict = { ok = declared >= expected, declared = declared, expected = expected, lines = {} }
+    if verdict.ok and declared == expected then return verdict end
+
+    local function say(text)
+        verdict.lines[#verdict.lines + 1] = text
+    end
+
+    if declared > expected then
+        -- Not a warning about a stale file -- the opposite, and a different fix.
+        -- It happens when a resource is rolled back and config/ is not.
+        say(('%s is NEWER than this build of %s expects (yours: v%d, this build: v%d).')
+            :format(file, resource, declared, expected))
+        say('That file came from a later release than the one running. Either finish')
+        say('the upgrade or re-merge your edits onto this release\'s copy of it.')
+    else
+        say(('%s is older than this build of %s expects (yours: v%d, this build: v%d).')
+            :format(file, resource, declared, expected))
+        say('')
+        say('That file ships with every release and is merged forward BY HAND, so')
+        say('changes made inside it -- fixes included -- have not reached your copy.')
+        say('Re-apply your edits on top of the SHIPPED file rather than carrying')
+        say('yours forward.')
+    end
+
+    if type(opts.detail) == 'string' and opts.detail ~= '' then
+        say('')
+        for line in opts.detail:gmatch('[^\r\n]+') do say(line) end
+    end
+
+    -- Yellow and not red, for both directions: the resource still starts, and
+    -- the operator's copy is a working copy. Printed rather than returned-only,
+    -- because the shared wording is the point of this living in tLib.
+    print(('^3[%s] %s^7'):format(resource, string.rep('-', 60)))
+    for _, line in ipairs(verdict.lines) do
+        print(('^3[%s] %s^7'):format(resource, line == '' and ' ' or line))
+    end
+    print(('^3[%s] %s^7'):format(resource, string.rep('-', 60)))
+
+    return verdict
+end
+
 return configMod

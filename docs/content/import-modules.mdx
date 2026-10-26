@@ -132,6 +132,7 @@ Validates an owner-edited `config.lua` once at startup and refuses to run on a b
 | --- | --- |
 | `config.check(tbl, spec)` | Validates, prints every problem, returns `false` if any were fatal. |
 | `config.validate(tbl, spec)` | Same checks, returns `{ ok, errors, warnings }`, prints nothing. |
+| `config.generation(opts)` | Is the operator's copy of a file **you ship** older than this build expects? |
 
 ```lua
 local ok = tlib.config.check(Config, {
@@ -159,6 +160,44 @@ A key definition takes `type` (`number`, `string`, `boolean`, `list`, `table`), 
   alone, never silently replaced.
 - An unknown key warns with the key probably meant, including unit-less near-misses.
 - A missing `required` key is fatal.
+
+### Is their copy the right generation?
+
+`config.check` answers "is what they wrote valid". A file you ship and they merge forward can
+be perfectly valid and still be the wrong file — an operator carrying their own hook file
+across an upgrade calls a function your release renamed, and if the caller swallows that, the
+feature is silently dead. `config.generation` is the other half:
+
+```lua
+-- In the file YOU ship and they edit:
+CL_FUNCTIONS_VERSION = 4
+
+-- In a file you ship and they do not:
+tlib.config.generation({
+    file     = 'config/cl_functions.lua',
+    declared = CL_FUNCTIONS_VERSION,
+    expected = 4,
+    detail   = 'v4 renamed the siren hooks: RadioResolveSirenMode, RadioIsK9Ped.',
+})
+```
+
+| `opts` field | Description |
+| --- | --- |
+| `file` | The path the operator edits, named in the message. |
+| `declared` | The constant their copy declares. `nil`, `"4"` and garbage all read as "old". |
+| `expected` | The generation this build is written against. Required; a number. |
+| `detail` | What changed in this bump, in your words. The only part that says what they lost. |
+
+Returns `{ ok, declared, expected, lines }`, so a `<resource>_diag` can reprint it. It prints
+in yellow and nothing else: the resource still starts, and their copy is a working copy.
+A copy at the expected generation prints **nothing** — a check that speaks on a correct
+install is one operators learn to scroll past. A copy *newer* than the build is reported too,
+because that is a rollback and has the opposite fix.
+
+Two limits worth stating. It compares two numbers, so it cannot tell them **which** call in
+their file broke — report your own hook failures as well, since a `pcall` that returns
+silently is the defect. And `expected` is yours to bump when the shipped file changes; pin
+that with a test of your own, which has to read your file shapes and so cannot live in tLib.
 
 ---
 
@@ -272,8 +311,21 @@ files. The partial upload that breaks a config file takes the explanation with i
 
 ## kvp
 
-Typed KVP wrapper, prefixed per community server via `tlib_community_id` (needs `setr`) or
-`sv_projectName` — see [Convars](/docs/tLib/convars).
+Typed KVP wrapper. It has two namespaces, they are independent, and **neither applies unless
+you ask for it**:
+
+- A **community prefix**, from `tlib_community_id` (needs `setr`) or `sv_projectName` — see
+  [Convars](/docs/tLib/convars). Neither is a standard FiveM convar, so a server that has set
+  neither stores keys with no prefix. It separates one owner's boxes from another owner's.
+- A **server tag**, which is what separates two of your own servers, and it is opt-in **per
+  key** via `serverScoped = true`.
+
+<Callout type="warning">
+A key with no `serverScoped` follows the player to **every** server running the resource. That
+is correct for a preference the player owns — their chosen radio model — and wrong for anything
+describing where they are, such as a last channel or a callsign. Decide per key; forgetting to
+decide means "shared".
+</Callout>
 
 | Function | Description |
 | --- | --- |
@@ -281,7 +333,10 @@ Typed KVP wrapper, prefixed per community server via `tlib_community_id` (needs 
 | `kvp.setString/setFloat/setInt/setBool/setJson(key, value)` | Typed writes. |
 | `kvp.get(key, default)` / `kvp.set(key, value)` | Auto-detect the type. |
 | `kvp.has(key)` / `kvp.delete(key)` | Existence, removal. |
-| `kvp.key(key)` | The full prefixed key string. |
+| `kvp.key(key, opts)` | The resolved key string. `opts.serverScoped`, `opts.prefix`. |
+| `kvp.view(opts)` | The same accessors with `opts` baked into every key. |
+| `kvp.getPrefix()` | The community prefix, or `nil` — usually `nil`. |
+| `kvp.serverTag()` | This server's tag, or `""` when no endpoint has resolved. |
 
 ---
 

@@ -30,9 +30,19 @@ export function getKvpPrefix(): string | null {
   return resolvePrefix();
 }
 
-/** Where a key sits: whose community, and which server. */
+/**
+ * Where a key sits: whose community, and which server. Both parts are optional
+ * and neither is on by default — see `imports/kvp/client.lua`'s header, which is
+ * the one statement of this contract.
+ */
 export interface KvpScope {
-  /** The community prefix. Already sanitized; `null` means none. */
+  /**
+   * The community prefix. Already sanitized; `null` means none, which is the
+   * usual case: it comes from `tlib_community_id` or `sv_projectName` and
+   * NEITHER IS A STANDARD FiveM CONVAR, so most servers set no prefix at all.
+   * It separates one owner's boxes from another's — it does not separate two
+   * servers, and `serverScoped` below is what does.
+   */
   community?: string | null;
   /**
    * This server's tag, as `tlib.kvp.serverTag()` computes it. `null` or `""`
@@ -65,6 +75,13 @@ export function composeKvpKey(key: string, scope: KvpScope = {}, serverScoped = 
   return scope.community ? `${scope.community}_${composed}` : composed;
 }
 
+/**
+ * A community-prefixed key and nothing more: `serverScoped` is deliberately not
+ * reachable from here, because a server tag is a CLIENT fact
+ * (`GetCurrentServerEndpoint`) and this side has no way to resolve one. A caller
+ * that needs an isolated key has to compose it with `composeKvpKey` and a tag
+ * handed down from the client.
+ */
 export function kvpKey(key: string): string {
   return composeKvpKey(key, { community: resolvePrefix() });
 }
