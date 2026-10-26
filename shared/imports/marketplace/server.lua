@@ -157,7 +157,7 @@ end
 --- @return boolean told  true if a client was actually told
 function marketplace.soundConflict(conflict, slug, meta, warnEvent, warn)
     if not conflict then return false end
-    local filename = tostring(slug) .. '.wav'
+    local filename = soundFilename(slug, meta)
     if type(warn) == 'function' then
         warn(('marketplace sound overwrite: %s replaced by %s'):format(tostring(conflict), filename))
     end

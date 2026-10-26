@@ -225,6 +225,21 @@ mustTarget(sent.target ~= -1,
     .. 'admin action, and three of the four resources had no handler for it at all.')
 mustTarget(sent.target == 9, 'the warning did not go to the installing admin')
 
+-- The installer writes .wav, .ogg or .mp3 from the payload's magic bytes, so the
+-- warning has to read the real name out of `meta.installedAt`. It hardcoded
+-- `slug .. '.wav'`, which agrees with the guess for a WAV and names a file that
+-- is not on disk for every other format -- in the log AND in what the admin is
+-- shown.
+reset()
+must(marketplace.soundConflict('old-tone', 'ka-band',
+    { src = 9, installedAt = 'sounds/ka-band.ogg' },
+    'tprobe:soundOverwriteWarning', warn) == true,
+    'soundConflict did not tell the admin about an ogg overwrite')
+must(warns[1]:find('ka%-band%.ogg'),
+    'the server log named the wrong file for a non-WAV install')
+must(clientEvents[1].payload.filename == 'ka-band.ogg',
+    'the payload named the wrong file for a non-WAV install')
+
 -- No conflict: nothing is logged and nothing is sent.
 reset()
 must(marketplace.soundConflict(nil, 'ka-band', { src = 9 }, 'e', warn) == false,

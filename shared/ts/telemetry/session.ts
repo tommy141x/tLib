@@ -279,18 +279,17 @@ export function startSessionLog(opts: SessionLogOptions): SessionHandle {
       for (const s of trend) banner(`  ${formatSample(s)}`);
       if (allNotes.length > 0) banner(`^3verdict: ${verdict} — ${allNotes.join("; ")}^7`);
 
-      // Reported only when it was not orderly: a `restart tRadio` is not a crash.
-      if (!orderly) {
-        opts.onCrash?.({
-          session: prev.n,
-          uptimeMs: prev.lastUptimeMs ?? 0,
-          orderly,
-          verdict,
-          notes: allNotes,
-          lastState: prev.lastState,
-          trend,
-        });
-      }
+      // Unconditional: the `if (orderly) return` above is what keeps a
+      // `restart tRadio` from being reported as a crash.
+      opts.onCrash?.({
+        session: prev.n,
+        uptimeMs: prev.lastUptimeMs ?? 0,
+        orderly,
+        verdict,
+        notes: allNotes,
+        lastState: prev.lastState,
+        trend,
+      });
     };
 
     if (prev.clean) {
