@@ -97,13 +97,22 @@ community-config publish all work on a fresh install with nothing in your `serve
 
 ## HTTP router
 
-All server-read; none needs replicating. The listener starts on `7777` with no
-configuration. Opening that port on the host and in NAT is the step most often missed — see
-[Installation](/docs/tLib/installation#opening-the-port-if-you-want-browser-access).
+All server-read; none needs replicating. The hub and every mounted app are reachable two
+ways, and both work with no configuration:
+
+- **On the FiveM server port**, at `http://<your server>:30120/tLib/`. That port is already open —
+  it is how players connect — so nothing has to be opened or forwarded. tLib prints this address at
+  startup. It cannot carry WebSocket, so a mounted app that uses one (the tRadio dispatch panel)
+  falls back to long-polling here: it works, with higher latency, and uploads over 8 KB fail.
+- **On tLib's own listener**, default `7777`, which has to be opened on the host and in NAT — see
+  [Installation](/docs/tLib/installation#opening-the-port-if-you-want-browser-access). This is the
+  full-capability path: WebSocket, lower latency, no upload limit. Open it for a dispatch panel
+  that is worked all day; the server port is enough for the admin panel and the hub.
 
 | Convar | Command | Type / unit | Default | What it does |
 | --- | --- | --- | --- | --- |
-| `tlib_http_port` | `set` | integer, 1–65535 | `7777` | The one external listen port. |
+| `tlib_http_ingress` | `set` | `true` / `false` | `true` | Serve the hub on the FiveM server port at `/tLib/`. `false` leaves that port alone. |
+| `tlib_http_port` | `set` | integer, 1–65535 | `7777` | tLib's own listen port, for the full-capability path. |
 | `tlib_http_host` | `set` | bind address | `0.0.0.0` | Interface the listener binds. |
 | `tlib_http_public_url` | `set` | host, `host:port` or full URL | *(empty — auto-detect)* | The address clients are told to use. A bare IP or localhost implies HTTP and the listener port; a bare domain implies `https://`. Advertised, not bound. |
 | `tlib_realtime_public_url` | `set` | `ws://` / `wss://` URL | *(empty — derived)* | Overrides the realtime WebSocket URL handed to clients. Realtime is a mount on the router at `/rt`; the removed `tlib_realtime_port` and `tlib_realtime_host` do nothing. |
