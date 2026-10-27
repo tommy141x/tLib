@@ -10,6 +10,7 @@ import { resolvePublicIP } from "../realtime/public-ip";
 import { registerBridge } from "./bridge";
 import { resolveConfig } from "./config";
 import { fEmit, fGetConvar, fGetCurrentResourceName, fOn } from "./fivem";
+import { ingressUrlFrom } from "./ingress";
 import { registerInProcess } from "./mounts";
 import { clear, unregisterResource } from "./registry";
 import { Router } from "./router";
@@ -60,6 +61,18 @@ export function installHttp(): void {
           ? `${status.publicUrl} (detected — set tlib_http_public_url if players reach you another way)`
           : status.publicUrl
       );
+      // The second door, named only when it can be named correctly. `false` is
+      // the convar's "leave the FiveM port alone" setting, and the URL is null
+      // whenever the public address was configured rather than detected.
+      if (fGetConvar("tlib_http_ingress", "true") !== "false") {
+        const url = ingressUrlFrom(
+          status.publicUrl,
+          status.publicUrlDetected,
+          fGetConvar("netPort", ""),
+          fGetCurrentResourceName()
+        );
+        if (url) log("info", `also reachable without opening a port: ${url}`);
+      }
     } else if (status.publicUrlState === "failed") log("warn", status.error!);
     fEmit("tLib:http:status", status);
   });

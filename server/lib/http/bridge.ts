@@ -33,6 +33,7 @@
 
 import { fExports, fGetInvokingResource } from "./fivem";
 import type { Log } from "./proxy";
+import { resolveIngress } from "./ingress";
 import { list, type Mount, register, unregisterResource } from "./registry";
 import type { HttpStatus } from "./status";
 
@@ -46,6 +47,20 @@ export function registerBridge(
     return current.ready ? (current.publicUrl ?? "") : "";
   };
   runtime.exports("GetHttpStatus", () => status());
+
+  // The FXServer-port ingress asks what to do with a path; sv_http_ingress.lua
+  // performs it. It cannot ask by making an HTTP request to us — that crashes
+  // the server, see ingress.ts — so the answer is a value.
+  runtime.exports(
+    "ResolveHttpIngress",
+    (method: unknown, target: unknown, serverName: unknown, basePath: unknown) =>
+      resolveIngress(
+        String(method ?? "GET"),
+        String(target ?? "/"),
+        String(serverName ?? ""),
+        String(basePath ?? "")
+      )
+  );
 
   runtime.exports("RegisterWebApp", (raw: unknown) => {
     const caller = runtime.invokingResource() ?? "?";

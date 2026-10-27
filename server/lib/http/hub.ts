@@ -91,9 +91,20 @@ footer a:hover{color:#fff}
 </style></head>
 <body><main>${body}</main></body></html>`;
 
-/** Counts visible destinations, not proxy mounts. */
-export function renderIndex(mounts: Mount[], serverName: string): string {
-  const destinations = hubDestinations(mounts);
+/**
+ * Counts visible destinations, not proxy mounts.
+ *
+ * `basePath` is "" for the listener, which is served at its own root, and
+ * "/tLib" for the FiveM-server-port ingress, which is served one level down
+ * (`/<resource>/...`). Every destination path in the registry is absolute from
+ * the ROUTER's root, so without the prefix a card on the ingress would link
+ * straight out of this resource's namespace — `/radio/` instead of
+ * `/tLib/radio/`, a 404 from FXServer rather than the app.
+ */
+export function renderIndex(mounts: Mount[], serverName: string, basePath = ""): string {
+  const destinations = hubDestinations(mounts).map((d) =>
+    basePath ? { ...d, path: `${basePath}${d.path}` } : d
+  );
   const body =
     destinations.length === 0
       ? `<h1>${escapeHtml(serverName)}</h1>

@@ -70,6 +70,9 @@ server_scripts {
     -- Before sv_permission and sv_marketplace: in demo mode it overrides both.
     'server/sv_demo.lua',
     'server/sv_discovery.lua',
+    -- The hub on the FiveM server port. After bundle.js, whose bridge exports the
+    -- routing decision it asks for; a request before that is answered 503.
+    'server/sv_http_ingress.lua',
     'server/sv_permission.lua',
     -- Server-only authority state. Before sv_menu.lua, which instantiates it.
     'server/lib/menu/registry.lua',
