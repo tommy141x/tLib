@@ -80,6 +80,9 @@ runProd(
       "server/sv_demo.lua",
       "server/sv_discovery.lua",
       "server/sv_feedback.lua",
+      // Loaded BY CONSUMERS as `@tLib/server/sv_http_ingress.lua`, so it has to
+      // exist in tLib's shipped directory even though tLib never loads it itself.
+      "server/sv_http_ingress.lua",
       "server/sv_main.lua",
       "server/sv_marketplace.lua",
       "server/sv_menu.lua",
