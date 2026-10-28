@@ -94,17 +94,31 @@ footer a:hover{color:#fff}
 /**
  * Counts visible destinations, not proxy mounts.
  *
- * `basePath` is "" for the listener, which is served at its own root, and
- * "/tLib" for the FiveM-server-port ingress, which is served one level down
- * (`/<resource>/...`). Every destination path in the registry is absolute from
- * the ROUTER's root, so without the prefix a card on the ingress would link
- * straight out of this resource's namespace — `/radio/` instead of
- * `/tLib/radio/`, a 404 from FXServer rather than the app.
+ * Every destination path in the registry is absolute from the ROUTER's root,
+ * which is right only on tLib's own listener. The two prefixing modes are both
+ * for the FiveM server port, where a path's first segment is a resource name
+ * that FXServer resolves before any of this runs:
+ *
+ *  * `basePath` — one door for everything, so every card sits under it.
+ *  * `perResource` — each resource owns its own door, so a card links to the
+ *    destination's `ingressPath` and `basePath` does not apply. This is what the
+ *    hub at `/tLib/` emits: it is the only door that can see another resource's
+ *    mounts, and the only one that cannot serve them.
+ *
+ * Without either, a card links straight out of the serving resource's namespace
+ * — `/admin` rather than `/tRadio/admin` — and FXServer answers 404 with
+ * nothing in any log to say why.
  */
-export function renderIndex(mounts: Mount[], serverName: string, basePath = ""): string {
-  const destinations = hubDestinations(mounts).map((d) =>
-    basePath ? { ...d, path: `${basePath}${d.path}` } : d
-  );
+export function renderIndex(
+  mounts: Mount[],
+  serverName: string,
+  basePath = "",
+  perResource = false
+): string {
+  const destinations = hubDestinations(mounts).map((d) => {
+    if (perResource) return { ...d, path: d.ingressPath };
+    return basePath ? { ...d, path: `${basePath}${d.path}` } : d;
+  });
   const body =
     destinations.length === 0
       ? `<h1>${escapeHtml(serverName)}</h1>

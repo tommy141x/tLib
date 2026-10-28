@@ -85,6 +85,18 @@ export interface Program {
 export interface Caller {
   resource: string;
   /**
+   * The declaring product no longer ships the feature that runs these, so the
+   * startup banner omits it. STILL ALLOWED — this is disclosure, not
+   * permission, and a dev build that re-enables the feature keeps working
+   * without a catalog edit.
+   *
+   * Deliberately a flag rather than a check for the binaries on disk: they sit
+   * in a working tree whether or not the code that execs them is compiled in,
+   * so their presence answers a different question than the one the banner is
+   * asking. Remove the flag when the feature returns.
+   */
+  dormant?: boolean;
+  /**
    * The `author` its fxmanifest is expected to declare.
    *
    * Defence in depth only. See rung 3 in the header: this is logged on a
@@ -259,6 +271,12 @@ export const FAMILY: Caller[] = [
   },
   {
     resource: "tRadio",
+    // DORMANT since 2026-10-26. These three engines exist only for the AI
+    // dispatcher, which was withdrawn from releases after Tebex locked both
+    // tRadio packages over it — so a shipped tRadio execs none of them and the
+    // banner must not say it will. The declaration stays because the withdrawal
+    // is suspension, not deletion; drop this flag when the feature returns.
+    dormant: true,
     // tRadio ships three engines, each execed through its bundled loader when
     // the release carries one. Loader directory is per engine, not one shared
     // `server/bin/linux/lib`: llama.cpp and whisper.cpp each ship a `libggml`
@@ -334,7 +352,16 @@ export function findProgram(caller: Caller, id: string): Program | undefined {
   return caller.programs.find((p) => p.id === id);
 }
 
-/** One line per caller, for the startup banner. */
+/**
+ * One line per caller, for the startup banner.
+ *
+ * `dormant` entries are omitted. They remain in the allowlist above — this is
+ * disclosure, not permission — but the banner is read by operators as "what
+ * this server will run", and naming a program that the declaring product no
+ * longer ships is worse than saying nothing.
+ */
 export function describeFamily(): string[] {
-  return FAMILY.map((c) => `${c.resource} → ${c.programs.map((p) => p.id).join(", ")}`);
+  return FAMILY.filter((c) => !c.dormant).map(
+    (c) => `${c.resource} → ${c.programs.map((p) => p.id).join(", ")}`
+  );
 }

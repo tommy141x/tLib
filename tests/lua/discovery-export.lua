@@ -223,6 +223,70 @@ check(staged.car.siren.maxHz == 745, 'and it contains the exported config')
 check(staged.car._local == nil, 'with the internal _local marker stripped')
 check(info.stagedPath == 'export-staging/vehicle/demo.json', 'the staged path is reported back')
 
+-- 1a. A CONSUMER CAN TAKE DELIVERY OF ITS OWN STAGED EXPORTS.
+--
+-- tLib's directory is the default because a write from tLib's VM always lands
+-- there, but it is a shared library and a product's undelivered exports are
+-- not its business.
+--
+-- The consumer hands over a WRITER, not a resource name for tLib to write
+-- through. A Lua function passed across the export boundary runs in the VM
+-- that defined it, so the write originates in the consumer -- which is the
+-- only thing the sandbox cares about. tLib calling the consumer's own fs
+-- export instead would be refused by any consumer that guards it on the
+-- invoking resource, and tLS does exactly that.
+seedLocal()
+writable = { tLib = true }
+local selfWrites = 0
+local selfDisc = create({
+    stagingResource = 'consumer',
+    stagingDir = 'exports/',
+    stageWriter = function(relPath, content)
+        selfWrites = selfWrites + 1
+        files.consumer = files.consumer or {}
+        files.consumer[relPath] = content
+        return true
+    end,
+})
+local sOk, _, sInfo = selfDisc:exportConfig('car', 'vehicle')
+check(sOk == false, 'the cross-resource write is still refused')
+check(sInfo.status == 'staged', 'and the file is still staged')
+check(selfWrites == 1, "the consumer's own writer is what performed the write")
+local selfStaged = fileTable('consumer', 'exports/vehicle/demo.json')
+check(selfStaged ~= nil, 'the staged file lands in the CONSUMER, not in tLib')
+check(selfStaged.car.siren.maxHz == 745, 'and it contains the exported config')
+check(fileTable('tLib', 'exports/vehicle/demo.json') == nil, 'nothing was written into tLib')
+check(sInfo.stagedResource == 'consumer', 'the reported staging resource is the consumer')
+check(sInfo.steps[1]:find('consumer/exports/vehicle/demo.json', 1, true),
+    "and step 1 names the path the file is ACTUALLY at, not tLib's")
+
+-- 1a-ii. ...falling back to tLib when that writer cannot deliver. Losing a
+-- refused export because its staging was also refused would discard the only
+-- copy of it that exists.
+seedLocal()
+writable = { tLib = true }
+local noWriter = create({
+    stagingResource = 'consumer',
+    stagingDir = 'exports/',
+    stageWriter = function() return false, 'EROFS: read-only file system' end,
+})
+local nOk, _, nInfo = noWriter:exportConfig('car', 'vehicle')
+check(nOk == false, 'still a refused export')
+check(nInfo.status == 'staged', 'and still staged rather than lost')
+check(fileTable('tLib', 'exports/vehicle/demo.json') ~= nil, 'the file fell back into tLib')
+check(nInfo.stagedResource == 'tLib', 'and the fallback destination is what gets reported')
+
+-- 1a-iii. Naming a staging directory WITHOUT a writer changes nothing: tLib
+-- cannot write into another resource, so the default is the only safe answer.
+seedLocal()
+writable = { tLib = true }
+local dirOnly = create({ stagingResource = 'consumer', stagingDir = 'exports/' })
+local dOk, _, dInfo = dirOnly:exportConfig('car', 'vehicle')
+check(dOk == false, 'still a refused export')
+check(dInfo.stagedResource == 'tLib', 'staging stays in tLib without a writer to use')
+check(dInfo.stagedPath == 'export-staging/vehicle/demo.json',
+    'and keeps the default directory, so the printed path is where the file really is')
+
 -- 1b. A TARGET WITH ITS OWN BRIDGE IS WRITTEN INTO DIRECTLY -- no staging.
 --
 -- This is the half that makes "cross-resource writes are impossible" false.

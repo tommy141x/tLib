@@ -17,6 +17,24 @@ const EVT_CONNECT = "__tlib:rt:connect";
 const EVT_DISCONNECT = "__tlib:rt:disconnect";
 const EVT_EVENT = "__tlib:rt:event";
 
+/**
+ * Said once per server lifetime, not once per call: a consumer that polls for a
+ * connection would otherwise fill the console with the same line, and the fix is
+ * a convar nobody can apply without a restart anyway.
+ */
+let reportedNoDoor = false;
+function reportNoDoor(): { error: string } {
+  const message =
+    "realtime needs tLib's own listener: WebSocket cannot cross the FiveM server " +
+    "port. Set 'tlib_http_port' to bind one, or 'tlib_realtime_public_url' if you " +
+    "front realtime yourself.";
+  if (!reportedNoDoor) {
+    reportedNoDoor = true;
+    console.warn(`[tLib/realtime] ${message}`);
+  }
+  return { error: message };
+}
+
 export function registerBridge(getServer: () => RealtimeServer, cfg: RealtimeConfig): void {
   // The port is the router's now, not realtime's — see server/http/config.ts.
   const routerPort = () => resolveHttpConfig().port;
@@ -28,9 +46,14 @@ export function registerBridge(getServer: () => RealtimeServer, cfg: RealtimeCon
   fExports("rtIssueToken", (playerId: unknown, meta?: unknown) => {
     const pid = toPlayerId(playerId);
     if (pid == null) return null;
+    // No address means no session can ever arrive, so no token is minted: one
+    // that nothing can redeem is a session slot held for its whole TTL. The
+    // answer still has a shape a caller can test, rather than being nil.
+    const wsUrl = currentWsUrl();
+    if (!wsUrl) return reportNoDoor();
     const metaObj = parseMeta(meta);
     const { token, expiresAt } = getServer().issueToken(pid, metaObj);
-    return { token, expiresAt, wsUrl: currentWsUrl() };
+    return { token, expiresAt, wsUrl };
   });
 
   fExports("rtSetRooms", (playerId: unknown, roomIds: unknown) => {
@@ -78,7 +101,14 @@ export function registerBridge(getServer: () => RealtimeServer, cfg: RealtimeCon
 
   fExports("rtConnectionInfo", () => {
     const http = resolveHttpConfig();
-    return { wsUrl: currentWsUrl(), port: http.port, host: http.host, mount: REALTIME_MOUNT };
+    const wsUrl = currentWsUrl();
+    return {
+      wsUrl,
+      port: http.port,
+      host: http.host,
+      mount: REALTIME_MOUNT,
+      ...(wsUrl ? {} : reportNoDoor()),
+    };
   });
 
   fExports("rtStartControl", (licenseIn: unknown, tokenEndpointIn: unknown) => {

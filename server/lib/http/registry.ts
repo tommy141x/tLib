@@ -43,7 +43,15 @@ export interface HubLink {
 
 export interface HubDestination {
   id: string;
+  /** Where this answers on tLib's own listener. */
   path: string;
+  /**
+   * Where the same destination answers on the FiveM server port, which is a
+   * different string because each resource owns its own door there. Resolved
+   * when the destination is built, so the one place that knows the addressing
+   * rule is the one that holds the mount table.
+   */
+  ingressPath: string;
   title: string;
   icon?: string;
   description?: string;
@@ -67,6 +75,12 @@ export type Mount = {
    * a JSON 404 that reads like the router is broken.
    */
   index?: string;
+  /**
+   * Paths this app used to be mounted at, answered with a 301 to the current
+   * mount. For renaming a mount without breaking a bookmark or a link somebody
+   * already published — the only correct way to move a URL.
+   */
+  legacyMounts?: string[];
   /** Lucide icon name, e.g. "database". */
   icon?: string;
   description?: string;
@@ -132,6 +146,7 @@ export function register(input: Mount): RegisterResult {
     ...input,
     mount,
     index,
+    legacyMounts: normalizeLegacyMounts(input.legacyMounts, mount),
     hubLinks: normalizeHubLinks(input.hubLinks),
     icon: isKnownIcon(input.icon) ? input.icon : undefined,
     description: normalizeDescription(input.description),
@@ -139,6 +154,38 @@ export function register(input: Mount): RegisterResult {
   };
   mounts.set(mount, normalized);
   return { ok: true, mount: normalized };
+}
+
+/**
+ * A dropped value costs a redirect, not the mount — the app still works at its
+ * current path either way. A legacy path that is or contains the live mount is
+ * dropped too: `/tRadio` redirecting to `/tRadio` is a loop.
+ */
+function normalizeLegacyMounts(raw: unknown, mount: string): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: string[] = [];
+  for (const value of raw.slice(0, 8)) {
+    const old = normalizeMount(value);
+    if (old === null || old === mount) continue;
+    if (isUnder(old, mount) || isUnder(mount, old)) continue;
+    if (!out.includes(old)) out.push(old);
+  }
+  return out.length ? out : undefined;
+}
+
+/**
+ * The mount that has replaced an old path, for a 301. Checked only after a live
+ * mount fails to match, so a real mount always wins over a stale alias of it.
+ */
+export function matchLegacy(pathname: string): { from: string; to: Mount } | null {
+  let best: { from: string; to: Mount } | null = null;
+  for (const m of mounts.values()) {
+    for (const old of m.legacyMounts ?? []) {
+      if (!isUnder(pathname, old)) continue;
+      if (!best || old.length > best.from.length) best = { from: old, to: m };
+    }
+  }
+  return best;
 }
 
 /** Remove every mount owned by a resource — called on its stop. */
@@ -153,10 +200,40 @@ export function unregisterResource(resourceName: string): string[] {
   return removed;
 }
 
-/** Longest-prefix match. `pathname` must already be normalized. */
-export function match(pathname: string): Mount | null {
+/**
+ * Where a router path answers on the FiveM server port.
+ *
+ * On that port a path's first segment IS a resource name — FXServer resolves it
+ * before any resource code runs — so every app is reached under its owner and
+ * nowhere else. An app whose mount is already its resource name therefore needs
+ * no second segment: FXServer has consumed `/tRadio`, and tLib's door for
+ * tRadio puts exactly that back. The two doors then spell the app identically,
+ * `/tRadio/admin` either way, which is why mounts are named after their
+ * resource. An app mounted under some other name keeps its mount as a second
+ * segment — `/thatResource/thatMount/` — because its own links say so.
+ *
+ * `stripPrefix` is part of the test for the same reason: an upstream that is
+ * SENT its mount writes that mount into its links, so dropping the segment from
+ * the public path would break every one of them.
+ */
+export function ingressPath(m: Mount, routerPath: string): string {
+  const door = `/${m.resourceName}`;
+  if (m.mount === door && m.kind === "proxy" && m.stripPrefix) {
+    return `${door}${routerPath.slice(m.mount.length) || "/"}`;
+  }
+  return `${door}${routerPath}`;
+}
+
+/**
+ * Longest-prefix match. `pathname` must already be normalized.
+ *
+ * `entries` narrows the table — the FiveM-server-port ingress passes only the
+ * mounts owned by the resource whose door was knocked on, because there a mount
+ * is reachable at exactly one prefix and no other.
+ */
+export function match(pathname: string, entries: Iterable<Mount> = mounts.values()): Mount | null {
   let best: Mount | null = null;
-  for (const m of mounts.values()) {
+  for (const m of entries) {
     if (!isUnder(pathname, m.mount)) continue;
     if (!best || m.mount.length > best.mount.length) best = m;
   }
@@ -235,6 +312,7 @@ export function hubDestinations(entries: Mount[] = list()): HubDestination[] {
       destinations.set(path, {
         id: `${m.resourceName}:${m.mount}:${id}`,
         path,
+        ingressPath: ingressPath(m, path),
         title: presentation.title || id,
         icon: presentation.icon,
         description: presentation.description,

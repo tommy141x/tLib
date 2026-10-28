@@ -7,11 +7,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { WebSocketServer } from "ws";
-import type { HttpConfig } from "./config";
+import type { BoundHttpConfig } from "./config";
 import { clear, register } from "./registry";
 import { Router } from "./router";
 
-const cfg: HttpConfig = {
+const cfg: BoundHttpConfig = {
   host: "127.0.0.1",
   port: 0, // replaced below
   publicUrlOverride: null,

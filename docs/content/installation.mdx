@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "Install tLib, depend on it from your own resource, and optionally open its port for browser access."
+description: "Install tLib, reach the hub in a browser with no configuration, and depend on tLib from your own resource."
 order: 1
 group: "tLib"
 published: true
@@ -29,26 +29,106 @@ ensure tLib
 
 </Steps>
 
-## Opening the port, if you want browser access
+## Browser access, with nothing to configure
 
-**Optional.** Every tLib resource already works in game without it — tRadio runs over the
-connection players have, tDB serves its database.
+The **hub** — one page linking every tLib app that has a web surface — is served on the
+FiveM server port, the port your players already connect through:
 
-The port adds the **hub**: one page linking every tLib resource with a web surface, today
-tDB's admin panel and tRadio's dispatch panel (which a desktop app can also connect to).
-Leave it closed and those two are unreachable from a browser and otherwise unaffected.
+```txt
+http://<your server>:<server port>/tLib/
+```
 
-To open it: `7777/tcp` **on the machine** — the host firewall, plus NAT port-forwarding if
-the server is behind a router — then visit `http://<your-server-ip>:7777`.
+Your server port is whatever `endpoint_add_tcp` declares — 30120 on a default install.
+tLib prints the address when it starts, so you never have to work it out. Nothing to open,
+nothing to forward, no convar.
 
-### The whole thing, to paste
+Each app answers under its own resource name, because on the server port the first
+part of the path **is** the resource name:
 
-Both lines go **above** `ensure tLib`. They are read once, when the resource starts, so a
+| App | Path |
+| --- | --- |
+| The hub | `/tLib/` |
+| tRadio's dispatch panel | `/tRadio/` |
+| tRadio's admin panel | `/tRadio/admin` |
+| tDB's admin UI | `/tDB/` |
+
+Paths are case-insensitive, so `/tradio/admin` works too. Start at the hub and follow the
+links rather than typing these — it always lists what is actually running.
+
+### What this door cannot do
+
+- **No WebSocket.** tRadio's dispatch panel falls back to long-polling. It works, with
+  roughly five times the latency — measured at 58 ms against 11 ms, median.
+- **8 KB per message from the browser.** A larger one drops the connection, so a big upload
+  through an admin panel can fail.
+- **No PocketBase realtime.** tDB's SSE subscriptions do not work here. Its admin UI and
+  REST API do.
+- **No legacy paths.** `/dispatch` and `/db` redirect on the listener only; here, use the
+  addresses in the table.
+- **Adding a listener moves Discord login and the desktop app's automatic updates onto it.**
+  Both are absolute URLs tLib publishes, and those name one door — the listener's whenever one
+  is configured, this one otherwise.
+
+`set tlib_http_ingress false` turns this door off entirely, for tLib and for every app
+mounted on it.
+
+None of those limits apply to [tLib's own listener](#advanced-tlibs-own-listener), which is
+the route to take for a dispatch panel that is worked all day, or for a custom domain.
+
+## Depend on tLib
+
+```lua title="fxmanifest.lua"
+dependencies { 'tLib' }
+
+shared_scripts {
+    '@tLib/imports.lua',   -- only if you use the import modules
+}
+```
+
+Exports need the dependency line alone:
+
+```lua
+exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctly.')
+```
+
+The menu is declared, not built imperatively — pages on the server, handlers on the client.
+See [Exports](/docs/tLib/exports) and [Menu Consumers](/docs/tLib/menu-consumers).
+
+The import modules need `@tLib/imports.lua` and nothing else. Each one loads the first time
+you touch it:
+
+```lua
+local value = tlib.kvp.getString('my_key', 'default')
+```
+
+---
+
+## Advanced: tLib's own listener
+
+**Skip this unless you need it.** Everything above already works, in game and in a browser.
+tLib's own listener is a second door to exactly the same apps, and it is the full-capability
+one: WebSocket, lower latency, no 8 KB message limit, and an origin a reverse proxy can sit
+in front of.
+
+Take it if you are running a dispatch panel all day, hosting a tRadio federation, or putting
+the hub behind a custom domain or HTTPS. The cost is a port to open — on the machine and in
+NAT — and, for anything other than a bare IP, an address to declare.
+
+**Nothing binds until you ask.** With neither `tlib_http_port` nor `tlib_http_host` set, tLib
+opens no socket of its own at all; setting either one is what turns this door on. If your
+`server.cfg` already has them from an earlier version, nothing changes — the listener binds
+on the same port it always did.
+
+### Open the port
+
+`7777/tcp` on the host firewall, plus NAT port-forwarding if the server is behind a router.
+On a hosting panel it is an entry under **Network**, **Ports** or **Allocations**, and a new
+allocation needs the whole server restarted, not just the resource.
+
+Then the convars, **above** `ensure tLib`. They are read once, when the resource starts, so a
 `set` below it is read on the next restart and not before:
 
 ```txt title="server.cfg"
-# tLib's web listener. Optional — leave this block out and everything still
-# works in game; you just cannot reach the hub from a browser.
 set tlib_http_port 7777
 set tlib_http_public_url "http://123.45.67.89:7777"
 
@@ -58,6 +138,20 @@ ensure tRadio
 ```
 
 Use `set`, not `setr`. Only the server reads these.
+
+On this door the apps keep the router's flat paths, and the hub itself is at the root:
+
+| App | Address |
+| --- | --- |
+| The hub | `:7777/` |
+| tRadio's dispatch panel | `:7777/tRadio/` |
+| tRadio's admin panel | `:7777/tRadio/admin` |
+| tDB's admin UI | `:7777/tDB/` |
+
+The dispatch panel used to live at `/dispatch` and tDB's admin UI at `/db`. Both still answer
+**on this door**, with a permanent redirect to the addresses above, so an old bookmark keeps
+working. The server-port door is new, so it publishes no legacy path — use the current ones
+there.
 
 ### What to put in `tlib_http_public_url`
 
@@ -93,28 +187,11 @@ be wrong. A bare **IP** stays on the port, because no certificate fits a bare IP
   not used. Check that line before changing anything else.
 </Callout>
 
-## Depend on tLib
+### A custom domain or HTTPS
 
-```lua title="fxmanifest.lua"
-dependencies { 'tLib' }
+`tlib_http_public_url` is advertised, never bound, and tLib provisions no certificate.
+Terminate TLS at a reverse proxy or a tunnel, forward to the listener's plain HTTP, and set
+the convar to the public address you end up with. Forward WebSocket upgrades as well, or the
+dispatch panel loads and then fails every connection.
 
-shared_scripts {
-    '@tLib/imports.lua',   -- only if you use the import modules
-}
-```
-
-Exports need the dependency line alone:
-
-```lua
-exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctly.')
-```
-
-The menu is declared, not built imperatively — pages on the server, handlers on the client.
-See [Exports](/docs/tLib/exports) and [Menu Consumers](/docs/tLib/menu-consumers).
-
-The import modules need `@tLib/imports.lua` and nothing else. Each one loads the first time
-you touch it:
-
-```lua
-local value = tlib.kvp.getString('my_key', 'default')
-```
+[Convars](/docs/tLib/convars#http-router) is the full reference for all five HTTP settings.

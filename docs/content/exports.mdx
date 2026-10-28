@@ -695,17 +695,37 @@ The target decides which path you get:
   `registerWriteResourceFile()` from `tLib/shared/ts/fs/server.ts` accepts the export
   directly. tLib writes the JSON in and adds the metadata line to its `fxmanifest.lua`.
 - **It is a plain asset pack.** No scripts, no bundle, no runtime to write with. tLib writes
-  the **finished file** into its own directory and prints these steps to the player in chat
+  the **finished file** to a staging directory and prints these steps to the player in chat
   and to the server console:
 
 ```
-1. Copy tLib/export-staging/<target-resource>/<file>.json  ->  <target-resource>/<file>.json
+1. Copy <staging>/<target-resource>/<file>.json  ->  <target-resource>/<file>.json
 2. Add this line to <target-resource>/fxmanifest.lua:  tls_config 'tls.json'
 3. Restart <target-resource> (or the server).
 ```
 
 The staged file is the target's existing config with your model merged in. Until you copy
 it the config is still local and still served to clients.
+
+`<staging>` defaults to `tLib/export-staging/`, because a write issued from tLib's VM is
+always allowed into tLib's own directory.
+
+A consumer can take delivery itself instead, so its undelivered exports sit with the product
+that produced them. It passes a **`stageWriter(relPath, contents)`** to `CreateDiscovery`
+alongside `stagingResource` and `stagingDir`; tLS supplies one and its staged files land in
+`tLS/exports/`. The steps printed above always name the directory the file is really in, and
+tLib falls back to its own directory if the writer cannot deliver — a refused export whose
+staging also failed would leave no copy at all.
+
+<Callout type="info" title="Why a function and not a resource name">
+  A Lua function passed across the export boundary runs in the VM that **defined** it, so the
+  write originates inside the consumer — which is the only thing FiveM's sandbox cares about.
+  No `add_filesystem_permission` line is needed for a resource to write to itself.
+
+  tLib calling the consumer's own fs export instead would not work, and should not: a
+  resource that guards its bridge on the invoking resource — as tLS does — refuses a foreign
+  caller precisely so that nothing else can use it to write files wherever it likes.
+</Callout>
 
 The metadata key is whatever the consuming resource declares — `tls_config` for tLS,
 `tradio_config` for tRadio — and the value is the file name relative to the resource root.

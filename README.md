@@ -285,49 +285,81 @@ log('Something went wrong', 4)  -- ERROR
 
 ### Public HTTP hub and application mounts
 
-`tLib` owns one public HTTP listener and the hub at `/`. Apps own their routes and their own
-login — registering an app adds no shared authentication. The listener starts with tLib even
-when no consumer opts into web publication.
+`tLib` owns the hub and every application mount, and serves them through **two doors**. Apps
+own their routes and their own login — registering an app adds no shared authentication.
+
+**The FiveM server port, with no configuration.** The hub is at `/tLib/` and each app answers
+under its own resource name, because FXServer resolves the first path segment to a resource
+before any resource code runs. Nothing to open or forward; `tlib_http_ingress` (default
+`true`) is the only switch.
+
+**tLib's own listener, optional.** Binds nothing until `tlib_http_port` or `tlib_http_host` is
+set, and then needs that port opened on the host and in NAT. It keeps the router's flat paths
+with the hub at `/`. This is the full-capability door: WebSocket, lower latency, no
+message-size cap.
+
+The mount name is shared, so **the path is identical on both** and is matched
+case-insensitively:
+
+| App | Path |
+|---|---|
+| Hub | `/tLib/` on the server port, `/` on the listener |
+| tRadio dispatch panel | `/tRadio/` |
+| tRadio admin panel | `/tRadio/admin` |
+| tDB admin UI | `/tDB/` |
+
+The listener still answers the older `/dispatch` and `/db` with a 301 to the above.
+`/tLib/tRadio/` is a 404 by design: a mount is reachable under its owner's name only.
+
+The server-port door cannot carry WebSocket (Socket.IO falls back to long-polling — measured
+p50 58 ms against 11 ms), drops the connection on a browser-to-server message over 8 KB, and
+answers 501 for an in-process mount such as realtime, which lives inside tLib's own isolate
+and cannot be relayed.
 
 Exposure and hub visibility are separate. Zero visible destinations shows an empty state,
-exactly one redirects to it, several show sibling cards — so a single visible Radio Admin
-destination redirects `/` to `/dispatch/admin`. GET and HEAD share status and headers; HEAD
-has no body.
+exactly one redirects to it, several show sibling cards. GET and HEAD share status and
+headers; HEAD has no body.
 
-Configure networking once in `server.cfg`, before starting tLib:
+Nothing in `server.cfg` is required. Either of the first two lines below asks for the listener;
+with neither, nothing binds. All of them go before starting tLib:
 
 ```cfg
 set tlib_http_port 7777
 set tlib_http_host "0.0.0.0"
 # Optional: use your reachable address instead of automatic public-IP detection.
 set tlib_http_public_url "192.0.2.10"
+# Optional: stop serving on the FiveM server port.
+set tlib_http_ingress false
 ```
 
-Defaults are port `7777`, bind host `0.0.0.0`, and an empty public-URL override. Bare
-IP/localhost shorthand uses HTTP and the listener port; `example.com` becomes
+All three are empty by default. Setting only `tlib_http_host` binds on `7777`, and a
+`tlib_http_port` that is set but unusable binds on `7777` too — a typo is not a request to go
+without a listener. Bare IP/localhost shorthand uses HTTP and the published port;
+`example.com` becomes
 `https://example.com`; an explicit URL is honoured.
 
 `tlib_http_public_url` is **advertised, never bound** — it provisions no TLS. For HTTPS,
 terminate TLS at your proxy or tunnel and forward to tLib's HTTP listener. The built-in
-`/dispatch` and `/db` integrations need an origin with no extra path prefix. Setting it also
+`/tRadio` and `/tDB` integrations need an origin with no extra path prefix. Setting it also
 proves nothing about reachability; verify through the real public edge.
 
-Only the listener port needs opening or forwarding, and only for browser access —
+Only the listener port needs opening or forwarding, and only for the full-capability door —
 app-internal loopback ports are not firewall settings.
 
 Consumer exposure is a separate startup decision:
 
-- **tRadio:** `Config.exposeWeb = false` by default; `true` publishes `/dispatch`, including
+- **tRadio:** `Config.exposeWeb = false` by default; `true` publishes `/tRadio`, including
   admin, API, federation and desktop access. In-game radio and panels work without it.
   `Config.showDispatchInHub = true` and `Config.showAdminInHub = false` control its two
   cards independently — hub cards only, so neither enables exposure, changes authentication
   or removes a direct URL. `useLegacySocketTransport` is a separate deprecated transport
   choice.
 - **tDB:** `Config.ExposeAdmin = true` publishes the **PocketBase admin and API**, not just
-  a login page, and `/db` redirects to `/db/_/`. Set it to `false` to keep local PocketBase
-  private; internal database consumers keep working. Missing defaults to false, and remote
-  PocketBase mode is never published through tLib. `Config.ShowInHub` controls the Database
-  card alone — `false` hides the card without unpublishing `/db`.
+  a login page, and `/tDB` redirects to its `/_/` index. Set it to `false` to keep local
+  PocketBase private; internal database consumers keep working. Missing defaults to false,
+  and remote PocketBase mode is never published through tLib. `Config.ShowInHub` controls
+  the Database card alone — `false` hides the card without unpublishing `/tDB`. PocketBase
+  realtime is SSE, so it needs the listener; the admin UI and REST API work on both doors.
 
 Restart the relevant resource to apply its exposure setting. Neither app owns a public port,
 and disabling its mount leaves tLib's hub and the other apps running.
@@ -350,7 +382,7 @@ presentation `title`, `icon`, `description`, `accent`, `listed` (default true).
 sibling cards within the same mount, **not** nested proxy registrations:
 
 ```lua
--- Options within a single /dispatch RegisterWebApp registration:
+-- Options within a single /tRadio RegisterWebApp registration:
 listed = false, -- hide Dispatch while retaining direct access
 hubLinks = {
     { id = 'admin', path = '/admin', title = 'Radio Admin', listed = true },
@@ -379,16 +411,22 @@ snapshot (nullable fields may arrive as `nil` in Lua):
 
 | Field | Meaning |
 |---|---|
-| `ready` | Listener is accepting connections and the public URL is resolved. Does not prove WAN reachability or upstream app health. |
-| `listenerState` | `starting`, `listening`, `failed`, or `stopped`. |
+| `ready` | A door is serving and the public URL is resolved. Does not prove WAN reachability or upstream app health. |
+| `door` | `listener`, `ingress`, or null. Which door the published addresses are spelled for. A configured listener is always the one used, since `publicUrl` then carries its port. |
+| `listenerState` | `disabled`, `starting`, `listening`, `failed`, or `stopped`. `disabled` is a listener that was never asked for, which is the default — not a fault, and nothing to debug. |
 | `publicUrlState` | `resolving`, `ready`, or `failed`. |
-| `publicUrl` | Resolved advertised base, or null. May be known before the listener is ready; do not use it as proof of publication. |
-| `localUrl` | Actual HTTP listener endpoint, or null. Wildcard binds are represented by a loopback endpoint. Use this for local route health checks. |
+| `publicUrl` | Resolved advertised base, or null. May be known before a door is serving; do not use it as proof of publication, and do not append a mount to it — see `door`. |
+| `localUrl` | Actual HTTP listener endpoint, or null. Null whenever no listener binds, which is the default. Wildcard binds are represented by a loopback endpoint. Use it for local route health checks, and skip the probe when it is null rather than substituting an address. |
 | `error` | Failure description, or null. |
 
-For example, with public `https://example.com` and local listener 7777, probe
-`GetHttpStatus().localUrl + "/db/api/health"`, **not** localhost port 443 derived
+For example, with public `https://example.com` and a listener on 7777, probe
+`GetHttpStatus().localUrl + "/tDB/api/health"`, **not** localhost port 443 derived
 from `GetHubUrl()`.
+
+**Never compose a published URL yourself.** `RegisterWebApp`'s `url` is not always
+`publicUrl` plus the mount: on the FiveM server port an app answers under its *owning
+resource*, so a mount of `/db` in `tDB` is `/tDB/db` there. Advertise what the call
+returned, and compare against that value rather than against one you rebuilt.
 
 1. Start the app's private loopback listener and retain the port it actually got.
 2. Subscribe to `tLib:http:status`, **then query** `GetHttpStatus()` so readiness

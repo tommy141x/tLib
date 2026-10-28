@@ -19,11 +19,15 @@ local TLIB_RESOURCE = _TLIB_IS_FIVEM and GetCurrentResourceName() or 'tLib'
 -- export. Only a target with no server bundle at all (a plain vehicle asset
 -- pack) is genuinely unwritable -- STAGING covers that case (stagingPath/_stageFile).
 
--- Where a refused export leaves the file it could not deliver. Inside tLib,
--- because tLib's own directory is the one place a write from tLib's VM is always
--- allowed.
-local function stagingPath(targetResource, targetPath)
-    return 'export-staging/' .. tostring(targetResource) .. '/' .. tostring(targetPath)
+-- Where a refused export leaves the file it could not deliver.
+--
+-- tLib's own directory is the one place a write from tLib's VM is ALWAYS
+-- allowed, so it is the default and the fallback. A consumer that has its own
+-- Node fs bridge can take delivery itself instead -- see `stagingResource` /
+-- `stagingDir` on Discovery.create -- which keeps a product's exports inside
+-- that product rather than in the shared library's directory.
+local function stagingPath(dir, targetResource, targetPath)
+    return tostring(dir) .. tostring(targetResource) .. '/' .. tostring(targetPath)
 end
 
 local function manifestLineFor(metadataKey, targetPath)
@@ -116,21 +120,49 @@ local function _saveFile(resource, path, content)
         'denied'
 end
 
---- Write into tLib's OWN directory, which is never sandbox-refused.
+--- Write a staged file into `resource`, falling back to tLib.
 ---
---- Goes through tLib's Node export rather than SaveResourceFile because it
---- creates missing parent directories; the staging tree below is nested.
-local function _stageFile(relPath, content)
+--- Goes through the Node export rather than SaveResourceFile because it
+--- creates missing parent directories; the staging tree is nested.
+---
+--- The fallback is not belt-and-braces: a write from tLib's VM into another
+--- resource only lands if that resource registered its own bridge, and a
+--- consumer configured for self-staging that somehow has not is still owed the
+--- file. Losing a refused export because its STAGING was also refused would
+--- discard the one copy the customer has.
+local function _stageFile(writer, writerResource, relPath, content)
     if not _TLIB_IS_FIVEM then
         return false, 'host has no file-write API'
     end
+
+    -- The consumer's own writer, when it supplied one. A Lua function passed
+    -- through CreateDiscovery runs in the VM that DEFINED it, so this write
+    -- originates inside the consumer -- which is the only thing the sandbox
+    -- cares about, and the reason no `add_filesystem_permission` is involved.
+    --
+    -- Calling the consumer's fs export from here instead would not work and
+    -- should not: tLS guards its bridge on the invoking resource precisely so
+    -- that no other resource can use it to write arbitrary files.
+    if writer then
+        local called, res, werr = pcall(writer, relPath, content)
+        if called and res == true then return true, nil, writerResource end
+        local why = called and (werr or 'the consumer writer declined') or tostring(res)
+        -- Fall through to tLib rather than lose the file: a refused export whose
+        -- staging is also refused leaves the customer with no copy at all.
+        local fb, fbErr = pcall(function()
+            return exports[TLIB_RESOURCE]:WriteResourceFile(TLIB_RESOURCE, relPath, content)
+        end)
+        if fb and fbErr == true then return true, nil, TLIB_RESOURCE end
+        return false, tostring(why) .. '; tLib fallback also failed: ' .. tostring(fbErr)
+    end
+
     local called, res = pcall(function()
         return exports[TLIB_RESOURCE]:WriteResourceFile(TLIB_RESOURCE, relPath, content)
     end)
     if not called then return false, tostring(res) end
     -- WriteResourceFile answers `true`, or a string describing the failure.
     if res ~= true then return false, tostring(res) end
-    return true
+    return true, nil, TLIB_RESOURCE
 end
 
 local function _getResourceMeta(resource, key)
@@ -236,6 +268,14 @@ function Discovery.create(opts)
     local localFile     = opts.localFile or "data.json"
     local localSection  = opts.localSection   -- optional: read/write only this key within localFile
     local ownerResource = opts.resourceName or Platform.getPackageName()
+    -- Staging destination. Defaults to tLib's own directory, which every
+    -- consumer had before this was configurable and which is the only place
+    -- always writable from tLib's VM.
+    -- `stageWriter(relPath, content)` -> true | false, err. Supplied by a
+    -- consumer that wants its own undelivered exports, written by its own VM.
+    local stageWriter   = opts.stageWriter
+    local stagingRes    = (stageWriter and opts.stagingResource) or TLIB_RESOURCE
+    local stagingDir    = (stageWriter and opts.stagingDir) or 'export-staging/'
     local tag           = opts.logTag or metadataKey
     local chatTag       = opts.chatTag or ("[" .. ownerResource .. "]")
 
@@ -589,15 +629,19 @@ function Discovery.create(opts)
                 -- No server.cfg grant fixes this -- see _saveFile. _saveFile has already
                 -- tried the target's own fs bridge; reaching here means the target has
                 -- no server bundle to host one (a plain asset pack), which is structural.
-                -- Stage the finished file inside tLib instead, same as the export path below.
-                local staged = stagingPath(ext.resource, ext.filePath)
-                local stagedOk, stageErr = _stageFile(staged, encodedExt)
+                -- Stage the finished file instead, same as the export path below.
+                local staged = stagingPath(stagingDir, ext.resource, ext.filePath)
+                -- `stagedIn`, not TLIB_RESOURCE: staging is configurable now and
+                -- can fall back, so the only honest path to print is the one the
+                -- write actually landed in. Naming the wrong directory in a
+                -- recovery instruction is worse than printing none.
+                local stagedOk, stageErr, stagedIn = _stageFile(stageWriter, stagingRes, staged, encodedExt)
 
                 if stagedOk then
                     log("[" .. tag .. "] Could not write '" .. model .. "' into '" .. ext.resource
                         .. "' (" .. tostring(err) .. "), so the finished file was written to "
-                        .. TLIB_RESOURCE .. "/" .. staged .. " instead.", 3)
-                    log("[" .. tag .. "]   1. Copy " .. TLIB_RESOURCE .. "/" .. staged
+                        .. stagedIn .. "/" .. staged .. " instead.", 3)
+                    log("[" .. tag .. "]   1. Copy " .. stagedIn .. "/" .. staged
                         .. "  ->  " .. ext.resource .. "/" .. ext.filePath, 3)
                     log("[" .. tag .. "]   2. Restart " .. ext.resource .. " (or the server).", 3)
                     log("[" .. tag .. "]   Until then the calling resource's own copy is what is used,"
@@ -795,19 +839,19 @@ function Discovery.create(opts)
             info.error = err
             info.errorKind = kind
 
-            local staged = stagingPath(targetResource, targetPath)
-            local stagedOk, stageErr = _stageFile(staged, encoded)
+            local staged = stagingPath(stagingDir, targetResource, targetPath)
+            local stagedOk, stageErr, stagedIn = _stageFile(stageWriter, stagingRes, staged, encoded)
             if stagedOk then
-                info.stagedResource = TLIB_RESOURCE
+                info.stagedResource = stagedIn
                 info.stagedPath = staged
                 info.steps = {
-                    "1. Copy " .. TLIB_RESOURCE .. "/" .. staged
+                    "1. Copy " .. stagedIn .. "/" .. staged
                         .. "  ->  " .. targetResource .. "/" .. targetPath,
                     "2. Add this line to " .. targetResource .. "/fxmanifest.lua:  " .. info.manifestLine,
                     "3. Restart " .. targetResource .. " (or the server).",
                 }
                 info.message = "Could not write into '" .. targetResource .. "' (" .. tostring(err)
-                    .. "), so the finished file was written to " .. TLIB_RESOURCE .. "/" .. staged .. " instead."
+                    .. "), so the finished file was written to " .. stagedIn .. "/" .. staged .. " instead."
             else
                 info.status = 'failed'
                 info.stageError = stageErr

@@ -1,5 +1,6 @@
 // The single externally-bound listener: one port for the whole server, `/` is
-// the hub, every other path belongs to a registered mount.
+// the hub, every other path belongs to a registered mount. Only started when
+// `tlib_http_port` or `tlib_http_host` asks for it — see `config.ts`.
 //
 // Mount selection goes through the registry and nothing else. Neither the Host
 // header nor an absolute-form request target influences which upstream is
@@ -13,18 +14,18 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import * as http from "node:http";
 import type { Duplex } from "node:stream";
-import type { HttpConfig } from "./config";
+import type { BoundHttpConfig } from "./config";
 import { badGatewayPage, notFoundPage, renderIndex } from "./hub";
-import { forwardPath, normalizePath } from "./paths";
+import { forwardPath, normalizePath, samePath } from "./paths";
 import { type Log, proxyRequest, proxyUpgrade } from "./proxy";
-import { hubDestinations, list, match } from "./registry";
+import { hubDestinations, list, match, matchLegacy } from "./registry";
 import type { ListenerState } from "./status";
 
 export class Router {
   private server: http.Server | null = null;
 
   constructor(
-    private readonly cfg: HttpConfig,
+    private readonly cfg: BoundHttpConfig,
     private readonly serverName: () => string,
     private readonly log: Log,
     private readonly onState: (
@@ -125,6 +126,16 @@ export class Router {
 
     const mount = match(pathname);
     if (!mount) {
+      // A path an app used to be mounted at. 301 rather than 404 so a bookmark
+      // or a published link survives the app being renamed.
+      const moved = matchLegacy(pathname);
+      if (moved) {
+        res.writeHead(301, {
+          location: `${moved.to.mount}${pathname.slice(moved.from.length)}${search}`,
+        });
+        res.end();
+        return;
+      }
       this.sendHtml(res, 404, notFoundPage(pathname));
       return;
     }
@@ -134,7 +145,7 @@ export class Router {
     // otherwise answer with a JSON 404 that reads like a broken router. 302 and
     // not 301 — the entry point is the app's to change, and a cached permanent
     // redirect would outlive the decision.
-    if (mount.index && (pathname === mount.mount || pathname === `${mount.mount}/`)) {
+    if (mount.index && (samePath(pathname, mount.mount) || samePath(pathname, `${mount.mount}/`))) {
       res.writeHead(302, { location: `${mount.mount}${mount.index}${search}` });
       res.end();
       return;
@@ -143,7 +154,7 @@ export class Router {
     // `/db` and `/db/` are the same resource, but only the second lets a browser
     // resolve the app's relative URLs. Stripping mounts only: an un-stripped
     // upstream sees the path verbatim and makes this call itself.
-    if (pathname === mount.mount && mount.kind === "proxy" && mount.stripPrefix) {
+    if (samePath(pathname, mount.mount) && mount.kind === "proxy" && mount.stripPrefix) {
       res.writeHead(301, { location: `${mount.mount}/${search}` });
       res.end();
       return;

@@ -41,7 +41,12 @@ export function getOrStart(): RealtimeServer {
   } else {
     const port = resolveHttpConfig().port;
     resolvePublicIP().then((ip) => {
-      if (ip) log("info", `public url: ${composeWsUrl(null, ip, port)}`);
+      const url = composeWsUrl(null, ip, port);
+      // A null URL is the no-listener case, which `bridge.ts` reports when a
+      // consumer actually asks for an address. Saying it twice at boot would
+      // name the same convar in two voices.
+      if (!url) return;
+      if (ip) log("info", `public url: ${url}`);
       else log("warn", "could not resolve public IP; clients will receive ws://localhost");
     });
   }

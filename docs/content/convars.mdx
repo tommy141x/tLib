@@ -97,23 +97,52 @@ community-config publish all work on a fresh install with nothing in your `serve
 
 ## HTTP router
 
-All server-read; none needs replicating. The hub and every mounted app are reachable two
-ways, and both work with no configuration:
+All server-read; none needs replicating. **None of them has to be set.** The hub and every
+mounted app are reachable out of the box at `http://<your server>:<server port>/tLib/`, on
+your FiveM server port — whatever `endpoint_add_tcp` declares, 30120 on a default install.
+That port is already open — it is how players connect — so nothing is opened,
+forwarded or declared. tLib prints the address at startup and the page links every app that is
+running.
 
-- **On the FiveM server port**, at `http://<your server>:30120/tLib/`. That port is already open —
-  it is how players connect — so nothing has to be opened or forwarded. tLib prints this address at
-  startup. It cannot carry WebSocket, so a mounted app that uses one (the tRadio dispatch panel)
-  falls back to long-polling here: it works, with higher latency, and uploads over 8 KB fail.
-- **On tLib's own listener**, default `7777`, which has to be opened on the host and in NAT — see
-  [Installation](/docs/tLib/installation#opening-the-port-if-you-want-browser-access). This is the
-  full-capability path: WebSocket, lower latency, no upload limit. Open it for a dispatch panel
-  that is worked all day; the server port is enough for the admin panel and the hub.
+Each app answers under **its own resource name**, because that is how the FiveM server decides
+which resource a request belongs to: the first part of the path is the resource, and nothing else
+can claim it. The same name is used on tLib's own listener, so **the path is identical on both
+doors**, and both are case-insensitive:
+
+| App | Path, on either door |
+| --- | --- |
+| The hub | `/tLib/` on the server port, `/` on the listener |
+| tRadio's dispatch panel | `/tRadio/` |
+| tRadio's admin panel | `/tRadio/admin` |
+| tDB's admin UI | `/tDB/` |
+
+Start at the hub and follow the links rather than typing these: it always lists what is actually
+running. `/tLib/tRadio/` is deliberately a 404 — the hub's door serves the hub only.
+
+On the listener, the dispatch panel's old `/dispatch` and tDB's old `/db` still answer, with a
+permanent redirect to the paths above.
+
+The server-port door has four limits, and **tLib's own listener — which binds only if you ask for
+it, and then has to be opened by hand — has none of them**. It is the route for a dispatch panel
+worked all day, a federation host, or a custom domain; see
+[Installation](/docs/tLib/installation#advanced-tlibs-own-listener).
+
+- No WebSocket: tRadio's dispatch panel falls back to long-polling, which works at roughly five
+  times the latency (58 ms against 11 ms, median).
+- 8 KB per message from the browser; a larger one drops the connection, so a big upload through an
+  admin panel can fail.
+- No PocketBase realtime — tDB's SSE subscriptions do not work here, though its admin UI and REST
+  API do.
+- Every absolute URL tLib publishes names **one** door, and the listener wins whenever one is
+  configured. So if you add a listener, Discord OAuth redirects and the tRadio desktop app's
+  update download move to it and it has to be reachable from outside. With no listener they name
+  this door, which needs nothing.
 
 | Convar | Command | Type / unit | Default | What it does |
 | --- | --- | --- | --- | --- |
-| `tlib_http_ingress` | `set` | `true` / `false` | `true` | Serve the hub on the FiveM server port at `/tLib/`. `false` leaves that port alone. |
-| `tlib_http_port` | `set` | integer, 1–65535 | `7777` | tLib's own listen port, for the full-capability path. |
-| `tlib_http_host` | `set` | bind address | `0.0.0.0` | Interface the listener binds. |
+| `tlib_http_ingress` | `set` | `true` / `false` | `true` | Serve on the FiveM server port, as described above. `false` leaves that port alone, for tLib and for every app that mounts on it. |
+| `tlib_http_port` | `set` | integer, 1–65535 | *(empty — no listener)* | tLib's own listen port, for the optional full-capability door. **Unset, no listener binds at all** and the FiveM server port is the only door. Set it and the listener binds, exactly as it did on every earlier version. A value that is not a usable port still binds, on `7777`, since a typo is not a request to go without a listener. **Setting it to your FiveM server port behaves exactly as leaving it unset** — that port already serves everything, and a second listener on it is neither possible nor needed. |
+| `tlib_http_host` | `set` | bind address | *(empty — no listener)* | Interface the listener binds. Setting this and nothing else binds the listener on `7777`: naming an interface says where the listener goes, so tLib takes it as asking for one. |
 | `tlib_http_public_url` | `set` | host, `host:port` or full URL | *(empty — auto-detect)* | The address clients are told to use. A bare IP or localhost implies HTTP and the listener port; a bare domain implies `https://`. Advertised, not bound. |
 | `tlib_realtime_public_url` | `set` | `ws://` / `wss://` URL | *(empty — derived)* | Overrides the realtime WebSocket URL handed to clients. Realtime is a mount on the router at `/rt`; the removed `tlib_realtime_port` and `tlib_realtime_host` do nothing. |
 
