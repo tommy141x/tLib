@@ -7,7 +7,7 @@ author 'Tommy Johnston'
 author 'TIMMYG Studios'
 description 'tLib — shared UI and utility library (FiveM)'
 
-version '1.1.0'
+version '1.1'
 
 -- Don't move imports.lua: consumers name '@tLib/imports.lua' in their own
 -- manifests, so the path is a contract.

@@ -47,6 +47,12 @@ end
 --- `Host` is dropped because the router selects a mount from the path alone
 --- (router.ts: "what separates a router from an open relay"); the rest describe
 --- THIS connection, not the relayed one, and Content-Length is the relay's to set.
+---
+--- The forwarding block is a SECURITY boundary, not tidiness: forwardHeaders must be
+--- the only author of those values, or the caller picks the address every per-IP rate
+--- limit buckets them under. Dropped rather than overwritten, for two reasons that are
+--- not obvious. tests/lua/http-ingress-forwarded.lua is the whole argument and fails
+--- without this list. Same set as tRadio's panel-transport.ts.
 local DROP_REQUEST = {
     ['host'] = true,
     ['connection'] = true,
@@ -58,6 +64,12 @@ local DROP_REQUEST = {
     ['transfer-encoding'] = true,
     ['upgrade'] = true,
     ['content-length'] = true,
+    ['x-forwarded-for'] = true,
+    ['x-forwarded-proto'] = true,
+    ['x-forwarded-host'] = true,
+    ['x-forwarded-prefix'] = true,
+    ['x-real-ip'] = true,
+    ['forwarded'] = true,
 }
 
 --- FXServer derives Content-Length from the string handed to `send()`; a second,
