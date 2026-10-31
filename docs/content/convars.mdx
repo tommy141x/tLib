@@ -49,7 +49,7 @@ a red banner at boot for as long as it is on.
 Nothing is deleted — writes are dropped, not rolled back — so removing the convar and
 restarting brings the server back exactly as it was.
 
-`tlib_demo [on|off|convar]` (console, or `tlib.admin`) changes it live and reports the new
+`tlib_demo [on|off|convar]` (console, or a player holding `command.tlib_demo`) changes it live and reports the new
 state; `convar` stops overriding and follows `server.cfg` again. Access and permission
 changes take effect immediately; the **data reset and the marketplace sweep** happen when a
 resource starts.

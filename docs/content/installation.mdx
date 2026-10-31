@@ -29,6 +29,39 @@ ensure tLib
 
 </Steps>
 
+## Who counts as an admin
+
+tLib has two ACEs and reads nothing else. Grant them in `server.cfg`, or type the same lines
+into the live server console:
+
+```txt title="server.cfg"
+add_ace identifier.license:00000000000000000000000000000000000000ab tlib.admin allow
+add_ace group.admin tlib.superadmin allow
+```
+
+| ACE | Level | What it gets |
+| --- | --- | --- |
+| `tlib.admin` | 1 | Admin rows in the tLib menu, admin panels, marketplace install and uninstall. |
+| `tlib.superadmin` | 2 | Everything above, plus whatever a resource reserves for level 2. |
+
+A principal can be a licence identifier, a `group.*`, a Discord role your framework defines —
+anything FXServer accepts. `add_principal` is not needed.
+
+<Callout type="warning">
+  **A grant made while the player is connected does not take effect on its own.** `add_ace` and
+  `remove_ace` raise no event, so nothing tells tLib to look again: the player's level and their
+  menu rows are a photograph taken when they joined. Either have them **reconnect**, or run
+  `tlib_menu_refresh` in the server console, which re-evaluates both for everyone online.
+
+  A revoke is the case that matters — until one of those happens the row stays on screen, and
+  only the server-side check at dispatch time stops it doing anything.
+</Callout>
+
+`tlib_menu_refresh` and `tlib_menu_permissions` are **server-console only** and say so in chat if
+a player tries them. `tlib_demo` and every `<resource>_diag` command use FXServer's
+own per-command ACE instead, so a player who should have one needs
+`add_ace <principal> command.tlib_demo allow` — `tlib.admin` does not cover them.
+
 ## Browser access, with nothing to configure
 
 The **hub** — one page linking every tLib app that has a web surface — is served on the
@@ -41,6 +74,12 @@ http://<your server>:<server port>/tLib/
 Your server port is whatever `endpoint_add_tcp` declares — 30120 on a default install.
 tLib prints the address when it starts, so you never have to work it out. Nothing to open,
 nothing to forward, no convar.
+
+<Callout type="warning">
+  **Keep the `/tLib/` on the end.** On the server port, FXServer owns `/` and serves its own
+  join page there — so `http://<your server>:30120` with nothing after it opens the "join this
+  server?" prompt in FiveM instead of the hub. That is FXServer answering, not tLib failing.
+</Callout>
 
 Each app answers under its own resource name, because on the server port the first
 part of the path **is** the resource name:
