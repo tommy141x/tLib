@@ -92,6 +92,9 @@ describe("field totality", () => {
     previewColors: ["#000", "#fff"],
     thumbnail: "https://timmygstudios.com/api/storage/t/abc.png",
     previewUrl: "https://timmygstudios.com/api/storage/p/abc.ogg",
+    // The backend only ever sends this as `true` — it omits the key otherwise —
+    // so `true` is also the only value totality can assert on.
+    retired: true,
   };
 
   test("carries every v2 field through unchanged", () => {

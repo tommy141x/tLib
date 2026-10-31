@@ -1,5 +1,6 @@
 import * as http from "node:http";
 import * as https from "node:https";
+import { studioHeaders } from "./catalogue.ts";
 
 export interface DownloadResult {
   buf: Buffer;
@@ -57,7 +58,16 @@ export function downloadBundle(
     const req = (parsed.protocol === "https:" ? https : http).get(
       parsed,
       {
-        headers: { Accept: "application/octet-stream,application/zip" },
+        // The attribution set, not just Accept. tWeb's download counter only
+        // counts a fetch that carries `x-fivem-server` (it ignores the rest to
+        // stop one server's player count inflating an item), and the admin-panel
+        // route sends it while this one — the in-game install — did not, so every
+        // install through `tlib:marketplace:install` counted zero.
+        //
+        // `studioHeaders`, not `marketplaceHeaders`: identity is what the counter
+        // needs, and this endpoint does not authenticate, so there is no reason
+        // for the key to travel on it.
+        headers: studioHeaders({ Accept: "application/octet-stream,application/zip" }),
       },
       (res) => {
         response = res;

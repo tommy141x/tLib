@@ -61,6 +61,11 @@ const exhaustive: Required<CatalogueItem> = {
   // indistinguishable from an omitted key, which is the one distinction this
   // field exists to preserve.
   liked: true,
+  // Its value COLLIDES with `liked` above, so the value-set test below cannot
+  // see this field go missing — the key-COUNT test is what catches that, and the
+  // dedicated `retired` block further down is what pins the behaviour. A unique
+  // value is impossible for the second boolean on a shape with two of them.
+  retired: true,
 };
 
 describe("exhaustiveness: no wire field may be silently dropped", () => {
@@ -202,6 +207,27 @@ describe('liked: absence means "we did not ask", and false must survive', () => 
   test("a non-boolean is dropped rather than coerced", () => {
     const item = toCanonicalItem({ ...base, liked: "yes" as unknown as boolean });
     expect("liked" in item).toBe(false);
+  });
+});
+
+describe("retired: truthiness, because absence and false are one fact", () => {
+  /*
+   * The DELIBERATE DIFFERENCE from `liked` above, which is a presence check.
+   * `liked` has two zeros to keep apart; this has none — a host too old to know
+   * about retirement and an item nobody has retired both mean "draw no badge".
+   * So a `false` is dropped here on purpose, and that is not the `liked` defect
+   * repeated: nothing renders differently for an absent key.
+   */
+  test("absent when the wire omits it", () => {
+    expect("retired" in toCanonicalItem(base)).toBe(false);
+  });
+
+  test("a false is DROPPED, unlike liked's false", () => {
+    expect("retired" in toCanonicalItem({ ...base, retired: false })).toBe(false);
+  });
+
+  test("a true is carried", () => {
+    expect(toCanonicalItem({ ...base, retired: true }).retired).toBe(true);
   });
 });
 

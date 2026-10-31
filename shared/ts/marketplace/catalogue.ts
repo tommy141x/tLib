@@ -254,6 +254,10 @@ export function toCatalogueItem(raw: Record<string, unknown>): CatalogueItem {
     // Presence, not truthiness: a genuine `false` means "you have not liked this"
     // while absence means "no identity was asserted", and they render differently.
     ...(typeof raw.liked === "boolean" ? { liked: raw.liked } : {}),
+    // `=== true` and not a presence check: absence and `false` are one fact for
+    // this flag — see `CatalogueItem.retired` — so only a host that says "yes"
+    // puts the key on the item.
+    ...(raw.retired === true ? { retired: true } : {}),
     ...(waveform ? { previewWaveform: waveform } : {}),
     ...(colors ? { previewColors: colors } : {}),
     ...(typeof raw.thumbnail === "string" ? { thumbnail: raw.thumbnail } : {}),

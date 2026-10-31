@@ -43,6 +43,18 @@ export interface CatalogueItem {
    */
   liked?: boolean;
   createdAt: string;
+  /**
+   * Still on the marketplace and still installable, but no longer shipped in the
+   * box or updated. A LABEL and never a gate: a retired item installs in one
+   * click exactly as a current one does, and nothing may branch on this except
+   * what a card draws.
+   *
+   * Absent is NOT ambiguous the way `liked` is absent — a host that predates the
+   * field and a host saying "not retired" are the same fact, and both render no
+   * badge — so the backend omits it when false and `toCanonicalItem` carries it
+   * on truthiness rather than on presence.
+   */
+  retired?: boolean;
   /** Sound only. Peak data the card draws a waveform from. */
   previewWaveform?: number[];
   /** Theme only. Swatches for the card. */
@@ -81,6 +93,11 @@ export interface MarketplaceItem {
   /** Absent means "we did not ask" and is NOT `false`. See `CatalogueItem.liked`. */
   liked?: boolean;
   created_at: string;
+  /**
+   * No longer shipped or updated, still installable. A label only — see
+   * `CatalogueItem.retired`. Absent and `false` mean the same thing here.
+   */
+  retired?: boolean;
   /** Sound only. Peak data the card draws a waveform from. */
   preview_waveform?: number[];
   /** Theme only. Swatches for the card. */
@@ -121,6 +138,11 @@ export function toCanonicalItem(raw: CatalogueItem): MarketplaceItem {
     // A presence check and not `=== true`: a real `false` means "you have not
     // liked this" and absence means "we did not ask", and they render differently.
     ...(typeof raw.liked === "boolean" ? { liked: raw.liked } : {}),
+    // Truthiness and NOT the presence check `liked` gets, because the two zeros
+    // `liked` has to keep apart do not exist here: a host too old to know about
+    // retirement and an item that is not retired are one fact, and a card draws
+    // nothing for either.
+    ...(raw.retired ? { retired: true } : {}),
     ...(raw.previewWaveform ? { preview_waveform: raw.previewWaveform } : {}),
     ...(raw.previewColors ? { preview_colors: raw.previewColors } : {}),
     ...(raw.previewUrl ? { preview_url: raw.previewUrl } : {}),
