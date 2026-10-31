@@ -81,8 +81,10 @@ end)
 
 -- The runtime toggle
 
--- Restricted to console and `tlib.admin`. In demo mode everyone holds `tlib.admin`,
--- so an in-game player can turn demo mode off but never on -- the safe direction.
+-- Console always; an in-game player needs `command.tlib_demo`, which is FXServer's
+-- own per-command ACE and the only thing the `true` below checks. NOT `tlib.admin`:
+-- demo mode hands `tlib.admin` to everyone, so reading it here would let any visitor
+-- on a showroom server toggle demo mode back on for a server that had left it.
 RegisterCommand('tlib_demo', function(src, args)
     local reply = function(msg)
         if src == 0 then print(msg) else TriggerClientEvent('chat:addMessage', src, { args = { 'tLib', msg } }) end

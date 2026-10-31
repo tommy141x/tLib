@@ -221,9 +221,15 @@ if _TLIB_IS_FIVEM then
         if found then return groundZ end
 
         -- Nothing there yet: load the collision and retry.
-        RequestCollisionAtCoord(x, y)
+        --
+        -- All three coordinates, and re-requested every pass. The call used to be
+        -- `RequestCollisionAtCoord(x, y)` outside the loop: the missing Z became
+        -- 0.0, so the collision was requested at sea level while the probe looked
+        -- down from 1000.0, and the request expires after a frame anyway -- the
+        -- ten retries could poll a column that was never asked for.
         local tries = 0
         while tries < 10 do
+            RequestCollisionAtCoord(x, y, 1000.0)
             Citizen.Wait(100)
             found, groundZ = GetGroundZFor_3dCoord(x, y, 1000.0, false)
             if found then return groundZ end

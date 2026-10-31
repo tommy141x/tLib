@@ -24,8 +24,13 @@ export {
 export type { CefContractOptions, CefContractResult, CefFinding } from "./cef-output-contract.ts";
 export { checkCefOutput, formatCefResult } from "./cef-output-contract.ts";
 export type { ProdConfig } from "./core.ts";
+// `stampBuildId` and `BUILD_STAMP_KEY` are here for the consumers that hand-stage
+// instead of calling `runProd`: without them on the index the only way to stamp a
+// release was a deep import of `core.ts`, which pins eight release pipelines to a
+// file path rather than to this contract.
 export {
   addDirToZip,
+  BUILD_STAMP_KEY,
   buildViteUI,
   cleanDir,
   createZip,
@@ -33,6 +38,7 @@ export {
   run,
   runProd,
   stageFiles,
+  stampBuildId,
   step,
 } from "./core.ts";
 export type {

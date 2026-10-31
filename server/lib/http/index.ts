@@ -117,7 +117,12 @@ export function installHttp(): void {
       // boot: an operator who opened that port knows its number, and one who did
       // not must not be told to go there. Which door carries what belongs in the
       // docs, not in a status line.
-      fEmit("tlib:vcInfo:hub", `${ingressUrl ?? status.publicUrl}${detected}`);
+      // Before 1.1 a listener on 7777 always bound, so an operator's bookmark on
+      // that port stopped answering after the update with nothing said anywhere.
+      const moved = cfg.port
+        ? ""
+        : " — no listener of tLib's own; 'set tlib_http_port 7777' restores the pre-1.1 one";
+      fEmit("tlib:vcInfo:hub", `${ingressUrl ?? status.publicUrl}${detected}${moved}`);
     } else if (status.publicUrlState === "failed") log("warn", status.error!);
     fEmit("tLib:http:status", status);
   }, doors);
