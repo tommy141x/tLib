@@ -64,7 +64,14 @@ import { sliderValue, stepSlider } from "./navigation";
 import { normalizeSnapshot, sliderValueValid, snapshotError } from "./protocol";
 import { play } from "./sound";
 import { FormattedText, plainText } from "./text";
-import type { ActionRequest, MenuItem, NavigationCommand, NuiMessage, Snapshot } from "./types";
+import type {
+  ActionRequest,
+  Menu as MenuPage,
+  MenuItem,
+  NavigationCommand,
+  NuiMessage,
+  Snapshot,
+} from "./types";
 
 /*
  * The subtitle line is load-bearing, not decoration: it is the only text box
@@ -506,8 +513,10 @@ export default function Menu() {
     );
   }
 
-  function showMenu(id: string) {
-    if (!state.menus.some((entry) => entry.id === id)) return;
+  // `pages` is for a caller that has just written the store — see applySnapshot.
+  // Everyone else reads the store, which is the same list one tick later.
+  function showMenu(id: string, pages: readonly MenuPage[] = state.menus) {
+    if (!pages.some((entry) => entry.id === id)) return;
     setEpoch((value) => value + 1);
     setMenuId(id);
     setQuery("");
@@ -520,14 +529,16 @@ export default function Menu() {
   // A snapshot contextualizes one page; the rest arrive as empty placeholders.
   // Staying on a page the game no longer tracks draws a placeholder as real
   // and then rejects every navigation off it, Back included.
+  //
+  // The page list comes from `data`, never from the store: a store write is not
+  // readable in the tick that wrote it, so `state.menus` here held the PREVIOUS
+  // pages — empty on the first snapshot. Every direct page open
+  // (`OpenMenu('<resource>:page')`) therefore left menuId at its "main" initial
+  // value and drew main's placeholder, which is the itemless panel saying "No
+  // options available. Check your ACE permissions."
   function applySnapshot(data: Snapshot) {
     snapshot(data);
-    if (
-      data.menuId &&
-      data.menuId !== menuId() &&
-      state.menus.some((entry) => entry.id === data.menuId)
-    )
-      showMenu(data.menuId);
+    if (data.menuId && data.menuId !== menuId()) showMenu(data.menuId, data.menus);
   }
 
   let navigationSerial = 0;
