@@ -25,11 +25,15 @@
 
 import { describe, expect, test } from "bun:test";
 import { createStore } from "../../server/lib/telemetry/store";
+import { TLIB_PUBLIC_KEY } from "../../shared/ts/marketplace/catalogue";
 import {
   BREAKER_BASE_COOLDOWN_MS,
+  BREAKER_MAX_COOLDOWN_MS,
   createTransport,
   FAILURES_BEFORE_OPEN,
   type PostFn,
+  TLIB_ANALYTICS_KEY,
+  UNREACHABLE_FAILURES_BEFORE_STOP,
 } from "../../server/lib/telemetry/transport";
 
 interface Sent {
@@ -138,6 +142,20 @@ describe("the happy path", () => {
     expect(h.sent[0]?.headers.Authorization).toBe("Bearer k1");
   });
 
+  test("⚠️ the shipped credential is NEVER the marketplace secret", () => {
+    /**
+     * The defect this guards is not hypothetical and not cheap: the transport
+     * shipped `TLIB_PUBLIC_KEY` as its bearer token, which is the
+     * `x-resource-secret` the marketplace door compares against an env var and
+     * has never been a row in tWeb's `api_keys` table. Every batch any install
+     * ever sent was refused 401, measured against production on 2026-10-30, and
+     * the two credentials being adjacent string constants is exactly how it
+     * happened. Empty is allowed — a build with no key sends nothing and says so
+     * — but the marketplace secret must never come back.
+     */
+    expect(TLIB_ANALYTICS_KEY).not.toBe(TLIB_PUBLIC_KEY);
+  });
+
   test("⚠️ the ring's losses are SAID OUT LOUD, because there is no slot to send them in", () => {
     /**
      * An earlier draft added a `queueDropped` measure to the first event of a
@@ -174,6 +192,13 @@ describe("the gates", () => {
     const h = harness({ credential: "" });
     h.store.accept(0, [event(1)]);
     expect(h.transport.flush().events).toBe("no-credential");
+    expect(h.sent).toHaveLength(0);
+    // Once, however long the server runs: the flusher is a one-minute interval
+    // and the fact never changes within a session.
+    h.transport.flush();
+    h.transport.flush();
+    expect(h.logs).toHaveLength(1);
+    expect(h.logs[0]).toContain("no ingest credential");
   });
 
   test("a second flush while one is in flight is SKIPPED, not queued", () => {
@@ -278,6 +303,44 @@ describe("permanent refusals", () => {
       expect(h.store.size().events).toBe(0);
     });
   }
+
+  test(`${UNREACHABLE_FAILURES_BEFORE_STOP} answers that never arrive also stop, and say what to check`, () => {
+    // Property 3 above, for the case a status code cannot express. A sink that
+    // TIMES OUT reports status 0 forever, so without this the breaker just
+    // doubled to its hour cap and logged one line an hour for the life of the
+    // server — the shape a customer reported.
+    const h = harness();
+    for (let i = 0; i < UNREACHABLE_FAILURES_BEFORE_STOP; i += 1) {
+      h.store.accept(0, [event(i)]);
+      expect(h.transport.flush().events).toBe("sent");
+      h.answer(0);
+      h.advance(BREAKER_MAX_COOLDOWN_MS);
+    }
+    expect(h.transport.state().events.permanentlyStopped).toBeTruthy();
+    expect(h.transport.flush().events).toBe("permanent");
+    // Dropped, not requeued — the fourth property.
+    expect(h.store.size().events).toBe(0);
+    const said = h.logs.join("\n");
+    expect(said).toContain("https://example.invalid");
+    expect(said).toContain("tlib_telemetry false");
+  });
+
+  test("one 500 in the middle resets the unreachable count, because the sink answered", () => {
+    const h = harness();
+    for (let i = 0; i < UNREACHABLE_FAILURES_BEFORE_STOP - 1; i += 1) {
+      h.store.accept(0, [event(i)]);
+      h.transport.flush();
+      h.answer(0);
+      h.advance(BREAKER_MAX_COOLDOWN_MS);
+    }
+    h.store.accept(0, [event(99)]);
+    h.transport.flush();
+    h.answer(500);
+    h.advance(BREAKER_MAX_COOLDOWN_MS);
+    h.transport.flush();
+    h.answer(0);
+    expect(h.transport.state().events.permanentlyStopped).toBeNull();
+  });
 
   test("it says why, once, on the server console", () => {
     const h = harness();

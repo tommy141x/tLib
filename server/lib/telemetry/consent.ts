@@ -17,7 +17,8 @@ export const CONSENT_FILE = "telemetry-consent.json";
 /**
  * An override for the ingest credential, so a dev run can point at a local
  * worker. Not a customer-facing setting: the shipped build authenticates with
- * `TLIB_PUBLIC_KEY` like every other tWeb call.
+ * `TLIB_ANALYTICS_KEY` in `transport.ts`, and there is nothing for an operator
+ * to supply.
  */
 export const TELEMETRY_KEY_CONVAR = "tlib_telemetry_key";
 
