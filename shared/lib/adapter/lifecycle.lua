@@ -104,7 +104,19 @@ function Platform.registerCommand(name, handler, restricted)
     end
     if _TLIB_IS_FIVEM then
         RegisterCommand(name, function(source, args)
-            if restricted and tonumber(source) ~= 0 then return end
+            if restricted and tonumber(source) ~= 0 then
+                -- Said, not swallowed. This used to be a bare `return`, so the
+                -- player who most needed `tlib_menu_refresh` -- the one whose
+                -- fresh `tlib.admin` had not taken effect -- typed it and got
+                -- absolutely nothing back, which reads as the command not
+                -- existing rather than as being refused.
+                if _TLIB_SIDE == 'server' then
+                    TriggerClientEvent('chat:addMessage', tonumber(source), { args = { '^3[tLib]',
+                        ('^3%s is a server-console command; run it from the server console or txAdmin, '
+                            .. 'not in game.^7'):format(name) } })
+                end
+                return
+            end
             handler(tonumber(source) or 0, args or {})
         end, false)
         return true

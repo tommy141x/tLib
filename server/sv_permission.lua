@@ -29,6 +29,30 @@ Platform.AddNetEventHandler("tLib:requestAdminPermission", function()
     Platform.TriggerClientEvent("tLib:receiveAdminPermission", src, Permission.getPlayerLevel(src))
 end)
 
+--- Re-evaluate every connected player's level and push it. Returns how many.
+---
+--- `add_ace`/`remove_ace` raise no event and the client asks once, at its own
+--- resource start -- so before this existed an `add_ace` typed into a live console
+--- did nothing until the player reconnected, which is what customers reported as
+--- "tlib.admin not working". `tlib_menu_refresh` is what calls it; the menu tree
+--- and this cache are both photographs of the same ACEs and must be retaken
+--- together, or the rows appear and `tlib.permission.isAdmin()` still says no.
+---
+--- GetPlayers, not the menu registry: a player who has never opened a menu still
+--- holds a stale level.
+function Permission.pushAll()
+    if not _TLIB_IS_FIVEM then return 0 end
+    local count = 0
+    for _, id in ipairs(GetPlayers()) do
+        local src = tonumber(id)
+        if src then
+            Platform.TriggerClientEvent("tLib:receiveAdminPermission", src, Permission.getPlayerLevel(src))
+            count = count + 1
+        end
+    end
+    return count
+end
+
 --- Register a net event that only fires the handler if the source player
 --- has tlib.admin permission. Denied attempts are logged automatically.
 --- @param eventName string   The net event name to register

@@ -337,7 +337,9 @@ Platform.registerCommand('tlib_menu_refresh', function()
     local count = 0
     for _ in registry:eachPlayer() do count = count + 1 end
     E.refresh()
-    print(('[tLib] Re-sent permission-filtered menus to %d connected player(s).'):format(count))
+    local pushed = Permission.pushAll()
+    print(('[tLib] Re-sent permission-filtered menus to %d connected player(s) and a fresh '
+        .. 'permission level to %d.'):format(count, pushed))
 end, true)
 
 Platform.registerCommand('tlib_menu_permissions', function(_, args)
