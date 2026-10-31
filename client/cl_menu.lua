@@ -168,7 +168,21 @@ end
 local function runEntryHooks(menuId, reason, context)
     local spec = hooks[ownerOf(menuId) or '']
     if not spec or not S.callable(spec.enter) then return true end
-    local accepted, err = spec.enter(menuId, reason, context)
+    -- pcall for the same reason notify() does ten lines up: `enter` is a consumer's
+    -- code, and a native it calls can raise -- a page listing liveries on a vehicle
+    -- that has none threw "This vehicle does not have any liveries" straight through
+    -- here. Unprotected it aborted the navigation thread instead of rejecting the
+    -- entry, and the outer pcall reported it in its FIRST return slot, which that
+    -- call site logs as the success flag -- so the console said "failed: nil".
+    local ok, accepted, err = pcall(spec.enter, menuId, reason, context)
+    if not ok then
+        -- `accepted` is the raised value and is frequently nil: a failing native
+        -- prints its own SCRIPT ERROR and leaves nothing at the Lua level, so name
+        -- the owner rather than echo an empty message.
+        return false, ('Menu entry hook for %s errored: %s')
+            :format(ownerOf(menuId) or 'unknown owner',
+                accepted ~= nil and tostring(accepted) or 'see the SCRIPT ERROR above')
+    end
     if accepted == false then return false, err or 'Menu entry rejected' end
     return true
 end
@@ -602,7 +616,11 @@ end
 function MC.setLocale(tag)
     local clean = localeTag(tag)
     if not clean then return false, 'Invalid locale tag' end
-    if type(SetResourceKvpString) == 'function' then SetResourceKvpString(LOCALE_KEY, clean) end
+    -- `SetResourceKvp` IS the string setter. There is no `SetResourceKvpString`
+    -- despite `GetResourceKvpString` existing, and the `type(...) == 'function'`
+    -- guard this line used to carry meant the typo never wrote, never threw, and
+    -- the chosen locale silently did not survive a reconnect.
+    SetResourceKvp(LOCALE_KEY, clean)
     currentLocale = clean
     send(WIRE.locale, clean)
     return true
@@ -1179,15 +1197,23 @@ local function installSelftest()
                     local id = menu.id
                     local context = { isActive = function() return true end, fromMenuId = interface.root.id,
                         reason = 'enter', menu = S.copy(menu) }
-                    local entered, entryError = pcall(runEntryHooks, id, 'enter', context)
-                    if not entered then
+                    -- Three slots, like the sibling at the openMenu path. runEntryHooks
+                    -- pcalls the consumer's hook itself now, so it RETURNS (accepted, err)
+                    -- and no longer raises -- which meant a two-slot destructure put
+                    -- pcall's own status in `entered` (always true) and the accepted flag
+                    -- in `entryError`. The crash-vs-refusal branch below was dead, and a
+                    -- hook raising "vehiclemods.lua:1: boom" was filed as "entry refused"
+                    -- with 0 problems. A sweep that exists to catch crashes was excusing
+                    -- them.
+                    local ok, entered, entryError = pcall(runEntryHooks, id, 'enter', context)
+                    if not ok then
+                        problems[#problems + 1] = ('%s: entry crashed: %s'):format(id, tostring(entered))
+                    elseif not entered then
                         if selftestRefusal(entryError) then
                             skipped[#skipped + 1] = ('%s: %s'):format(id, tostring(entryError))
                         else
                             problems[#problems + 1] = ('%s: entry crashed: %s'):format(id, tostring(entryError))
                         end
-                    elseif entryError == false then
-                        skipped[#skipped + 1] = ('%s: %s'):format(id, 'entry refused')
                     else
                         C.invalidate()
                         local ok, presented = pcall(refreshContext, { id }, false)
