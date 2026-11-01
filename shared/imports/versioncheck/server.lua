@@ -704,6 +704,13 @@ local function studios(product, current)
             cb(release)
         end
         PerformHttpRequest(url, function(status, body)
+            -- A 404 is an ANSWER, not a failed call: tWeb serves this route for
+            -- every product in src/content/software, so an unmatched slug means
+            -- there is no published release to compare against -- the same fact
+            -- an empty `currentVersion` reports below, so it gets the same words.
+            -- Collapsing it into nil printed red "Could not check for updates"
+            -- on tChat, tBoost and tBlips, which read as the studio being down.
+            if status == 404 then return finish({ status = 'No published version available' }) end
             if status ~= 200 or not body then return finish(nil) end
             local ok, data = pcall(json.decode, body)
             if not ok or type(data) ~= 'table' or type(data.product) ~= 'table'

@@ -29,7 +29,7 @@ unavailable check must not return the installed version and claim it is current.
 | Provider | Use it for |
 | --- | --- |
 | `tlib.versioncheck.github(repo)` | A release published on GitHub. `github(nil)` makes no request and reports the repository as not configured. |
-| `tlib.versioncheck.studios(product, current)` | A TIMMYG Studios catalogue product, through the product changelog API. Eight-second timeout. |
+| `tlib.versioncheck.studios(product, current)` | A TIMMYG Studios catalogue product, through the product changelog API. Eight-second timeout. A product with no published release — including one not in the catalogue at all — reports that, not a failed check. |
 | your own function | Anything else — a private endpoint, a cached result you hold. |
 
 ## Branding
