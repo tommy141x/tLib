@@ -10,6 +10,7 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
+  onCleanup,
   For,
   Match,
   Switch as MatchType,
@@ -27,6 +28,53 @@ export { NuiButton };
 const inputClass = "tlib-nui-control tlib-nui-input";
 
 /** Schema-neutral control binding. State and the NUI wire live in the dialog adapter. */
+/** How often a slider drag is allowed to reach the host. */
+export const WIRE_PREVIEW_MS = 50;
+
+/**
+ * Rate-limits a slider drag's trip to the host, leading AND trailing.
+ *
+ * Leading so the first move is heard immediately rather than one interval
+ * late. Trailing because a drag that stops moving without releasing would
+ * otherwise leave its final position unsent until pointer-up — which is the
+ * exact stall this exists to remove.
+ *
+ * Separated from the component so the timing can be tested without a DOM.
+ */
+export function createWirePreview(send: (value: number) => void, intervalMs = WIRE_PREVIEW_MS) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let lastSent = Number.NEGATIVE_INFINITY;
+  let pending: number | undefined;
+
+  const flush = () => {
+    timer = undefined;
+    if (pending === undefined) return;
+    const value = pending;
+    pending = undefined;
+    lastSent = Date.now();
+    send(value);
+  };
+
+  return {
+    preview(value: number) {
+      pending = value;
+      const since = Date.now() - lastSent;
+      if (since >= intervalMs) flush();
+      else if (timer === undefined) timer = setTimeout(flush, intervalMs - since);
+    },
+    /** Drop anything queued — it carries an older value than the commit. */
+    cancel() {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+      pending = undefined;
+    },
+    /** Tell the throttle a send just happened by another route. */
+    markSent() {
+      lastSent = Date.now();
+    },
+  };
+}
+
 export function NuiField(props: {
   field: DialogField;
   value: DialogValue | undefined;
@@ -66,13 +114,41 @@ export function NuiField(props: {
   // path that skips the clear — a keypress against a boundary, where the value doesn't move —
   // is exactly the one meant to be deduped.
   let committedSlider: number | undefined;
+
+  // ── Live preview on the wire, rate-limited ───────────────────────────────
+  //
+  // A drag used to be local-only until the pointer came up, because committing
+  // on `onValueChange` meant one NUI -> Lua -> UpdateDialogField round trip PER
+  // PIXEL. That fixed the cost and lost the feature: settings a host applies as
+  // they arrive — tLS's bloom size, for one — stopped responding until release,
+  // so you could no longer see what you were setting while setting it.
+  //
+  // Throttling gets both. The host hears the value while the drag is happening,
+  // at a bounded rate rather than per pointer-move, and `commitSlider` still
+  // sends the exact final value on release so the committed number is never
+  // whatever the last tick happened to catch.
+  const wire = createWirePreview((value) => props.onChange(value));
+  onCleanup(wire.cancel);
+
   const previewSlider = (value: number | undefined) => {
     committedSlider = undefined;
-    if (value !== undefined) (props.onPreview ?? props.onChange)(value);
+    if (value === undefined) return;
+    // Local first and unthrottled, so the handle and the readout never lag the
+    // pointer regardless of what the wire is doing.
+    (props.onPreview ?? props.onChange)(value);
+    // Only when the host gave us a local-only channel. Without `onPreview` the
+    // line above already went to the wire, and throttling a second copy on top
+    // would double every move.
+    if (props.onPreview) wire.preview(value);
   };
   const commitSlider = (value: number | undefined) => {
+    // The throttled send is abandoned rather than allowed to land after this
+    // one: it carries an older value, and arriving late would overwrite the
+    // number the user actually let go on.
+    wire.cancel();
     if (value === undefined || value === committedSlider) return;
     committedSlider = value;
+    wire.markSent();
     props.onChange(value);
   };
   createEffect(
@@ -232,8 +308,10 @@ export function NuiField(props: {
             step={props.field.step ?? 1}
             value={[Number(props.value ?? props.field.min ?? 0)]}
             disabled={props.field.disabled}
-            /* Display value only. zag fires this per pointer-move of a drag; committing here
-               would make every drag a full NUI→Lua→UpdateDialogField round trip per pixel.
+            /* zag fires this per pointer-move of a drag. The handle and readout update
+               from it unthrottled; the host hears it at a bounded rate (see
+               WIRE_PREVIEW_MS), because committing every move really was a full
+               NUI→Lua→UpdateDialogField round trip per pixel.
                Slider is the only field type with this property. */
             onValueChange={(d) => previewSlider(d.value[0])}
             /* The commit. zag's `invokeOnChangeEnd` (slider.machine.mjs) fires on pointer-up
