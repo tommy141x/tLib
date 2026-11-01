@@ -13,6 +13,7 @@ const g = globalThis as unknown as {
   GetResourcePath?: (resourceName: string) => string | null;
   GetCurrentResourceName?: () => string;
   GetResourceMetadata?: (resourceName: string, key: string, index: number) => string | null;
+  GetResourceState?: (resourceName: string) => string | null;
 };
 
 export const fExports: ExportsFn = g.exports;
@@ -68,6 +69,25 @@ export function resourceAuthors(resourceName: string): string[] {
     // An engine that will not answer reads as "declares nothing", which warns.
   }
   return found;
+}
+
+/**
+ * Whether a resource exists on this server at all.
+ *
+ * `missing` is the engine's answer for a resource that is not on disk, and it
+ * is the only state that means "not installed" — `stopped` is an installed
+ * resource that may yet start, so the banner counts it. An engine that will
+ * not answer reads as installed, because the allowlist is disclosure and
+ * under-reporting it is worse than naming something dormant.
+ */
+export function resourceInstalled(resourceName: string): boolean {
+  try {
+    const state = g.GetResourceState?.(resourceName);
+    if (!state) return true;
+    return state !== "missing" && state !== "unknown";
+  } catch {
+    return true;
+  }
 }
 
 export function currentResource(): string {

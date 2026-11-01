@@ -359,9 +359,19 @@ export function findProgram(caller: Caller, id: string): Program | undefined {
  * disclosure, not permission — but the banner is read by operators as "what
  * this server will run", and naming a program that the declaring product no
  * longer ships is worse than saying nothing.
+ *
+ * `isInstalled` IS REQUIRED, and the banner was wrong without it. The
+ * allowlist is hardcoded and ships complete, so an unfiltered list told every
+ * server that tDB spawns pocketbase and tAI spawns llama-server — on servers
+ * that have neither resource. Reported 2026-11-01 from a boot log with both
+ * named and neither installed. A status line that describes a different
+ * server's software is worse than no line.
+ *
+ * Injected rather than read here so this module stays pure data with no
+ * runtime dependency; `installSpawn()` supplies the real check.
  */
-export function describeFamily(): string[] {
-  return FAMILY.filter((c) => !c.dormant).map(
+export function describeFamily(isInstalled: (resource: string) => boolean): string[] {
+  return FAMILY.filter((c) => !c.dormant && isInstalled(c.resource)).map(
     (c) => `${c.resource} → ${c.programs.map((p) => p.id).join(", ")}`
   );
 }

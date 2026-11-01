@@ -22,6 +22,7 @@ import {
   fOn,
   invokingResource,
   resourceAuthors,
+  resourceInstalled,
   resourcePath,
 } from "./fivem";
 import { type Platform, type Probes, type Refusal, type Resolved, resolveSpawn } from "./gate";
@@ -117,11 +118,19 @@ export function installSpawn(): void {
   // Deferred by a tick: `installSpawn()` runs while this bundle is loading,
   // before sv_main.lua subscribes to this event. Emitting inline fires into
   // nothing and the row never appears.
+  //
+  // EMPTY WHEN NOTHING THAT SPAWNS IS INSTALLED, and that drops the row.
+  // versioncheck skips an info row whose value is "" (`entry.value ~= ''`), so
+  // a server with no spawning resource gets no Spawns line at all rather than
+  // one naming other people's software.
+  //
+  // The convar that grants this used to be appended here — "(one
+  // add_unsafe_child_process_permission tLib covers all)". That is
+  // documentation, not status, and a banner row is not where it belongs; it
+  // lives in docs/content/exports.mdx. The row now reports only what is true
+  // of this server.
   setTimeout(() => {
-    fEmit(
-      "tlib:vcInfo:spawns",
-      `${describeFamily().join(" | ")} (one add_unsafe_child_process_permission tLib covers all)`
-    );
+    fEmit("tlib:vcInfo:spawns", describeFamily(resourceInstalled).join(" | "));
   }, 0);
 
   /** Start a long-lived process. Idempotent per key; returns `{ pid }` or `{ error }`. */
