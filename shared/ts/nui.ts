@@ -10,8 +10,25 @@ export function isNUI(): boolean {
   return typeof window.GetParentResourceName === "function";
 }
 
+/** Latches the one no-bridge warning in `fetchNui`, so it is said once per page. */
+let _noBridgeWarned = false;
+
+/** Test seam: re-arm the latch so a suite can observe the warning more than once. */
+export function __resetNuiBridgeWarning(): void {
+  _noBridgeWarned = false;
+}
+
+// ⚠ The fallback is another resource's name, so it is only ever correct for tLib's own
+// pages. A CONSUMER whose page reaches this fallback POSTs its callbacks to
+// `https://tLib/<event>`, which has no such handler, and every call hangs to the
+// timeout below. `??` alone did not cover that: `GetParentResourceName` can exist
+// (so `isNUI()` is true and the fetch path is NOT short-circuited) and still answer
+// `undefined` or `""`, and `?? ` passes an empty string straight through to the URL.
+// Checked for a usable string instead, so the fallback is reached deliberately rather
+// than by an empty host.
 export function getResourceName(fallback = "tLib"): string {
-  return window.GetParentResourceName?.() ?? fallback;
+  const name = window.GetParentResourceName?.();
+  return typeof name === "string" && name !== "" ? name : fallback;
 }
 
 // A NUI callback that returns without invoking its `cb` leaves the request open
@@ -156,6 +173,25 @@ export async function fetchNui<T = unknown>(
   options?: string | FetchNuiOptions
 ): Promise<T | null> {
   if (!isNUI()) {
+    // ONE warn, not a per-call debug, and this is the whole point of it.
+    //
+    // In a browser or the dev harness this branch is expected and silence is right.
+    // IN GAME it means the page has no NUI bridge, so every callback it makes resolves
+    // null WITHOUT BEING SENT and nothing it asks Lua will ever happen. That was
+    // reported only at `console.debug`, which FiveM's F8 filters out by default — so a
+    // client in this state looked like a slow or misconfigured SERVER, and a customer
+    // spent ten days checking ports, convars and Lua handlers while the requests were
+    // never leaving the page. The condition is now audible on the one channel that
+    // still works, and once rather than ~190 times.
+    if (!_noBridgeWarned) {
+      _noBridgeWarned = true;
+      console.warn(
+        `[tLib/nui] window.GetParentResourceName is absent: every fetchNui resolves ` +
+          `null without being sent (first was "${event}"). Expected in a browser or the ` +
+          `dev harness. In game this page has no NUI bridge — nothing it asks Lua will ` +
+          `happen, and this is not a server, address or token fault.`
+      );
+    }
     console.debug(`[NUI dev] fetchNui("${event}")`, data);
     return null;
   }

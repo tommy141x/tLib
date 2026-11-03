@@ -37,16 +37,91 @@
 // binds, which is the default, and then there is nothing to probe. publicUrl may name an HTTPS
 // proxy on another port. GetHubUrl is '' until a door and an address are both known.
 
-import { fExports, fGetInvokingResource } from "./fivem";
+import {
+  fExports,
+  fGetInvokingResource,
+  fGetNumResourceMetadata,
+  fGetResourceMetadata,
+} from "./fivem";
 import type { Log } from "./proxy";
 import { resolveIngress } from "./ingress";
 import { ingressPath, list, type Mount, register, unregisterResource } from "./registry";
 import type { HttpStatus } from "./status";
 
+/** The script a consumer must load to answer anything on the FiveM server port. */
+const INGRESS_DOOR_SUFFIX = "tlib/server/sv_http_ingress.lua";
+
+/**
+ * Does `resource` load tLib's ingress door?
+ *
+ * On the FiveM server port, `http://<host>:<port>/<resource>/<path>` is routed to THAT
+ * resource's own `SetHttpHandler` before any resource code runs, so only the owner can
+ * serve the owner's paths. A consumer that mounts but never loads
+ * `@tLib/server/sv_http_ingress.lua` therefore registers fine, appears on the hub with a
+ * working-looking card, and every link to it answers FXServer's own bare `Not found.` —
+ * which names nothing and cannot be traced back to the mount.
+ *
+ * Read from the engine's parsed metadata rather than by matching on fxmanifest.lua: a
+ * regex over a manifest also matches the same text inside a comment, and these are the
+ * entries FXServer actually loaded.
+ *
+ * ⚠ FAILS OPEN. Any error, or a runtime that cannot answer, returns true — a diagnostic
+ * that cries wolf on a healthy server is worse than one that stays quiet, and this one's
+ * whole job is to be believed when it fires.
+ *
+ * Exported for `bridge.test.ts`: the alternative is asserting on a log line through two
+ * layers of injected fakes, which tests the message rather than the decision.
+ */
+export function loadsIngressDoor(
+  resource: string,
+  countMetadata: (resource: string, key: string) => number,
+  readMetadata: (resource: string, key: string, index: number) => string | null
+): boolean {
+  let count: number;
+  try {
+    count = countMetadata(resource, "server_script");
+  } catch {
+    return true;
+  }
+  if (!Number.isFinite(count) || count <= 0) return true;
+  for (let i = 0; i < count; i++) {
+    let entry: string | null;
+    try {
+      entry = readMetadata(resource, "server_script", i);
+    } catch {
+      continue;
+    }
+    // `@tLib/...` as written, any separator, any casing of the resource name.
+    if (typeof entry === "string" && entry.replace(/\\/g, "/").toLowerCase().endsWith(INGRESS_DOOR_SUFFIX))
+      return true;
+  }
+  return false;
+}
+
+/**
+ * Injection seam for the FiveM globals this module touches.
+ *
+ * The two metadata readers are OPTIONAL deliberately: every existing caller builds this
+ * object by hand without them and keeps compiling, and when they are absent the
+ * ingress-door check is SKIPPED rather than guessed. Same rule as `loadsIngressDoor` —
+ * an unknown answer must never produce a diagnostic.
+ */
+export interface BridgeRuntime {
+  exports: typeof fExports;
+  invokingResource: typeof fGetInvokingResource;
+  countMetadata?: typeof fGetNumResourceMetadata;
+  readMetadata?: typeof fGetResourceMetadata;
+}
+
 export function registerBridge(
   status: () => HttpStatus,
   log: Log,
-  runtime = { exports: fExports, invokingResource: fGetInvokingResource }
+  runtime: BridgeRuntime = {
+    exports: fExports,
+    invokingResource: fGetInvokingResource,
+    countMetadata: fGetNumResourceMetadata,
+    readMetadata: fGetResourceMetadata,
+  }
 ): void {
   const baseUrl = () => {
     const current = status();
@@ -144,8 +219,38 @@ export function registerBridge(
       );
     }
 
+    const url = mountUrl(current.publicUrl, result.mount, current.door);
+
+    // ⛔ Mounted, hub-listed, and completely unreachable — the one failure this router
+    // could not previously name.
+    //
+    // Reported 2026-11-02 by a server running a current tLib against a tRadio from before
+    // tRadio shipped the door. The hub rendered two confident cards; both links answered
+    // FXServer's bare `Not found.`, which says nothing about tLib, the mount, or the
+    // resource. The server console had the mount line and the WebSocket warning and no
+    // hint that the app could not be reached at all.
+    //
+    // An error, not a warning: unlike the WebSocket fallback above, nothing works.
+    if (
+      current.door === "ingress" &&
+      runtime.countMetadata !== undefined &&
+      runtime.readMetadata !== undefined &&
+      !loadsIngressDoor(caller, runtime.countMetadata, runtime.readMetadata)
+    ) {
+      log(
+        "error",
+        `${caller} mounted '${result.mount.mount}' but does not load tLib's ingress door, ` +
+          `so ${url} will answer FXServer's own 404 and nothing will say why. On the FiveM ` +
+          `server port the first path segment IS the resource name and is routed before any ` +
+          `resource code runs, so only ${caller} can serve ${caller}'s paths. Fix: add ` +
+          `server_script '@tLib/server/sv_http_ingress.lua' to ${caller}'s fxmanifest — if ` +
+          `${caller} is a product, update it. Or set 'tlib_http_port' to bind tLib's own ` +
+          `listener, which serves every mount without this.`
+      );
+    }
+
     // No success line: the consumer prints this URL in its own startup banner one line later.
-    return { ok: true, url: mountUrl(current.publicUrl, result.mount, current.door) };
+    return { ok: true, url };
   });
 
   // Rarely needed: onResourceStop covers the normal case. For a resource that rebinds its listener.

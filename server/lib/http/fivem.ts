@@ -15,6 +15,15 @@ type GetCurrentResourceNameFn = () => string;
 type GetInvokingResourceFn = () => string | null;
 type GetResourcePathFn = (resourceName: string) => string | null;
 type LoadResourceFileFn = (resourceName: string, fileName: string) => string | null;
+// The engine's own parsed view of a manifest. Used rather than reading
+// fxmanifest.lua and matching on it: a regex over a manifest also matches the text
+// inside comments, and these entries are what FXServer actually loaded.
+type GetNumResourceMetadataFn = (resourceName: string, key: string) => number;
+type GetResourceMetadataFn = (
+  resourceName: string,
+  key: string,
+  index: number
+) => string | null;
 
 const g = globalThis as unknown as {
   exports: ExportsFn;
@@ -25,6 +34,8 @@ const g = globalThis as unknown as {
   GetInvokingResource: GetInvokingResourceFn;
   GetResourcePath: GetResourcePathFn;
   LoadResourceFile: LoadResourceFileFn;
+  GetNumResourceMetadata: GetNumResourceMetadataFn;
+  GetResourceMetadata: GetResourceMetadataFn;
 };
 
 export const fExports: ExportsFn = g.exports;
@@ -35,3 +46,5 @@ export const fGetCurrentResourceName: GetCurrentResourceNameFn = g.GetCurrentRes
 export const fGetInvokingResource: GetInvokingResourceFn = g.GetInvokingResource;
 export const fGetResourcePath: GetResourcePathFn = g.GetResourcePath;
 export const fLoadResourceFile: LoadResourceFileFn = g.LoadResourceFile;
+export const fGetNumResourceMetadata: GetNumResourceMetadataFn = g.GetNumResourceMetadata;
+export const fGetResourceMetadata: GetResourceMetadataFn = g.GetResourceMetadata;
