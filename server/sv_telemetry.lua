@@ -9,8 +9,6 @@
 local log = Logger.create('tLib/telemetry')
 
 -- Server-local only: clients must not be able to write to the console.
-AddEventHandler and not RegisterNetEvent, deliberately: nothing a client sends
--- may reach tLib's console.
 AddEventHandler('tlib:diag:log', function(line, level)
     if type(line) ~= 'string' or line == '' then return end
     log(line, type(level) == 'number' and level or 2)
