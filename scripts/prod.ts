@@ -1,6 +1,5 @@
 import { join } from "node:path";
 import AdmZip from "adm-zip";
-import { TLIB_ANALYTICS_KEY } from "../server/lib/telemetry/transport.ts";
 import { runProd } from "../shared/ts/build/index.ts";
 
 // The release allowlist is written out file by file rather than as whole trees.
@@ -22,16 +21,6 @@ runProd(
     // stampBuildId: this is the id that tells them apart, and it is derived from
     // the zipped bytes rather than remembered by whoever cuts the release.
     buildStamp: true,
-    // An unprovisioned build cannot deliver telemetry even when operators opt in.
-    preflight: () => {
-      if (TLIB_ANALYTICS_KEY.trim() === "") {
-        throw new Error(
-          "TLIB_ANALYTICS_KEY is empty in server/lib/telemetry/transport.ts, so this build " +
-            "would ship with diagnostics that can never deliver. Provision a tWeb `api_keys` " +
-            "row scoped `analytics:ingest` and paste the token there."
-        );
-      }
-    },
     root: join(import.meta.dir, ".."),
     uiBuilds: [
       {

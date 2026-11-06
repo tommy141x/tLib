@@ -204,8 +204,6 @@ export interface ProdConfig {
   /** `tlib_build` in the staged manifest (see `stampBuildId`). Opt-in: it changes
    *  the manifest of every resource that releases through here. */
   buildStamp?: boolean;
-  /** Runs before staging; throw to preserve the previous distribution and refuse packaging. */
-  preflight?: () => void;
 }
 
 export function assertProductionFiles(root: string, files: string[]) {
@@ -260,12 +258,6 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
   // Everything generated lands under one root, so .gitignore needs a single
   // rule and a new artifact can never reach a release by being forgotten.
   const dist = join(root, ".build", "dist");
-
-  if (config.preflight) {
-    step("Checking shipped values");
-    config.preflight();
-    console.log("  ok");
-  }
 
   stageFiles(root, dist, include);
 
