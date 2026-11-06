@@ -8,6 +8,14 @@
 
 local log = Logger.create('tLib/telemetry')
 
+-- Server-local only: clients must not be able to write to the console.
+AddEventHandler and not RegisterNetEvent, deliberately: nothing a client sends
+-- may reach tLib's console.
+AddEventHandler('tlib:diag:log', function(line, level)
+    if type(line) ~= 'string' or line == '' then return end
+    log(line, type(level) == 'number' and level or 2)
+end)
+
 local INGEST_EVENT = 'tlib:diag:ingest'
 local CONSENT_EVENT = 'tlib:diag:consent'
 local CONSENT_REQUEST_EVENT = 'tlib:diag:consentPlease'

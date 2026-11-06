@@ -13,6 +13,7 @@
 
 type ExportsFn = (name: string, fn: (...args: unknown[]) => unknown) => void;
 type OnFn = (event: string, handler: (...args: unknown[]) => void) => void;
+type EmitFn = (event: string, ...args: unknown[]) => void;
 type GetConvarFn = (name: string, defaultValue: string) => string;
 type GetCurrentResourceNameFn = () => string;
 type GetResourcePathFn = (resourceName: string) => string | null;
@@ -27,6 +28,7 @@ type PerformHttpRequestFn = (
 interface Host {
   exports?: ExportsFn;
   on?: OnFn;
+  emit?: EmitFn;
   GetConvar?: GetConvarFn;
   GetCurrentResourceName?: GetCurrentResourceNameFn;
   GetResourcePath?: GetResourcePathFn;
@@ -47,6 +49,11 @@ export const fExports = (name: string, fn: (...args: unknown[]) => unknown): voi
 
 export const fOn = (event: string, handler: (...args: unknown[]) => void): void => {
   host().on?.(event, handler);
+};
+
+/** Server-local only. Never `RegisterNetEvent`-ed, so no client can raise it. */
+export const fEmit = (event: string, ...args: unknown[]): void => {
+  host().emit?.(event, ...args);
 };
 
 export const fGetConvar = (name: string, defaultValue: string): string =>

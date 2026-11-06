@@ -1,3 +1,4 @@
+import { detectPublicIP } from "../realtime/public-ip";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { registerBridge } from "./bridge";
 import { clear, hubDestinations, list, unregisterResource } from "./registry";
@@ -346,4 +347,83 @@ describe("with no listener, the FiveM server port is the door", () => {
     expect(h.mount("/consumer")).toEqual({ ok: true, url: "https://example.com/consumer" });
     expect(h.mount("/dispatch")).toEqual({ ok: true, url: "https://example.com/dispatch" });
   });
+});
+
+
+describe("public-IP retry lifetime", () => {
+  function discovery() {
+    const h = harness(null, { listener: false, ingress: true });
+    const requests: Array<(ip: string | null) => void> = [];
+    const jobs = new Map<ReturnType<typeof setTimeout>, () => void>();
+    const delays: number[] = [];
+    let id = 0;
+    const stop = detectPublicIP((ip) => h.state.resolveAddress(ip), {
+      resolve: () => new Promise((resolve) => requests.push(resolve)),
+      schedule: (fn, ms) => {
+        const token = ++id as unknown as ReturnType<typeof setTimeout>;
+        delays.push(ms);
+        jobs.set(token, fn);
+        return token;
+      },
+      cancel: (token) => { jobs.delete(token); },
+    });
+    const answer = async (ip: string | null) => {
+      requests.shift()!(ip);
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+    const next = () => {
+      const [token, fn] = [...jobs][0]!;
+      jobs.delete(token);
+      fn();
+    };
+    return { ...h, requests, jobs, delays, stop, answer, next };
+  }
+
+  test("transient failure keeps resolving until a retry succeeds", async () => {
+    const h = discovery();
+    await h.answer(null);
+    expect(h.state.snapshot().publicUrlState).toBe("resolving");
+    expect(h.delays).toEqual([5000]);
+    h.next();
+    await h.answer("203.0.113.7");
+    expect(h.state.snapshot().ready).toBe(true);
+    expect(h.state.snapshot().publicUrl).toBe("http://203.0.113.7:30120");
+    expect(h.jobs.size).toBe(0);
+    h.stop();
+  });
+
+  test("six failures publish failure once with capped backoff", async () => {
+    const h = discovery();
+    for (let i = 0; i < 6; i++) {
+      await h.answer(null);
+      if (i < 5) h.next();
+    }
+    expect(h.delays).toEqual([5000, 10000, 20000, 40000, 60000]);
+    expect(h.state.snapshot().publicUrlState).toBe("failed");
+    expect(h.events).toHaveLength(1);
+    expect(h.jobs.size).toBe(0);
+    h.stop();
+  });
+
+  test("stop cancels a pending retry, including a callback already dequeued", async () => {
+    const h = discovery();
+    await h.answer(null);
+    const queued = [...h.jobs.values()][0]!;
+    h.stop();
+    expect(h.jobs.size).toBe(0);
+    queued();
+    expect(h.requests).toHaveLength(0);
+    expect(h.events).toHaveLength(0);
+  });
+
+  for (const ip of [null, "203.0.113.7"]) {
+    test(`stop ignores an inflight result (${ip})`, async () => {
+      const h = discovery();
+      h.stop();
+      await h.answer(ip);
+      expect(h.jobs.size).toBe(0);
+      expect(h.events).toHaveLength(0);
+    });
+  }
 });

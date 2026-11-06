@@ -11,7 +11,7 @@
 import { DIMENSION_CAPS, slug, versionSlug } from "../../../shared/ts/telemetry/payload";
 import { installId } from "../install-id";
 import { resolve, setStoredSwitch, TELEMETRY_CONVAR } from "./consent";
-import { fExports, fGetCurrentResourceName, fOn } from "./fivem";
+import { fEmit, fExports, fGetCurrentResourceName, fOn } from "./fivem";
 import { createStore } from "./store";
 import { createTransport } from "./transport";
 
@@ -57,6 +57,9 @@ export function stampContext(events: unknown, context: unknown): unknown[] {
  */
 let baseUrl = "https://timmygstudios.com";
 
+// Lua owns the level-aware Logger; this event stays server-local.
+const LOG_EVENT = "tlib:diag:log";
+
 export function installTelemetry(): void {
   if (installed) return;
   installed = true;
@@ -67,7 +70,7 @@ export function installTelemetry(): void {
     baseUrl: () => baseUrl,
     enabled: () => resolve().enabled,
     installId: () => installId(),
-    log: (line) => console.log(line),
+    log: (line, level) => fEmit(LOG_EVENT, line, level ?? 2),
   });
   transport.start();
 
@@ -114,12 +117,15 @@ export function installTelemetry(): void {
         return JSON.stringify({ ok: false, reason: "not-an-object" });
       }
       const batch = parsed as { events?: unknown; context?: unknown; dropped?: unknown };
-      // The SENDER's own ring losses, said out loud: the taxonomy has no
-      // measure slot for them, so the console is where a gap becomes visible.
+      // The SENDER's own ring losses. At DEBUG: the taxonomy has no measure slot
+      // for them so the console is the only place a gap becomes visible, but it
+      // is a gap in OUR data and there is nothing for an operator to do about it.
       if (typeof batch.dropped === "number" && batch.dropped > 0) {
-        console.log(
-          `[tLib] diagnostics: a client dropped ${batch.dropped} event(s) before sending — ` +
-            "its own buffer was full, which means it was producing faults faster than it could report them."
+        fEmit(
+          LOG_EVENT,
+          `a client dropped ${batch.dropped} event(s) before sending — its own buffer was ` +
+            "full, which means it was producing faults faster than it could report them.",
+          1
         );
       }
       const source = Number(src);

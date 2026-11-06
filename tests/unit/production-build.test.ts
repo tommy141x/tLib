@@ -158,3 +158,33 @@ describe("production UI build selection", () => {
     expect(pkg.scripts.build).toContain("--outfile ../../server/dist/bundle.js");
   });
 });
+
+
+test("preflight refusal preserves the existing stage and never creates a zip", () => {
+  const root = mkdtempSync(join(tmpdir(), "tlib-preflight-"));
+  let called = false;
+  let zipCreated = false;
+  try {
+    mkdirSync(join(root, "node_modules/alpha"), { recursive: true });
+    mkdirSync(join(root, ".build/dist"), { recursive: true });
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "fixture", dependencies: { alpha: "1.0.0" } }));
+    writeFileSync(join(root, "node_modules/alpha/package.json"), JSON.stringify({ name: "alpha", version: "1.0.0", license: "MIT" }));
+    writeFileSync(join(root, "fxmanifest.lua"), "fx_version 'cerulean'\nserver_scripts { 'main.lua' }\n");
+    writeFileSync(join(root, "main.lua"), "return true");
+    writeFileSync(join(root, ".build/dist/sentinel"), "previous release");
+    class Zip {
+      constructor() { zipCreated = true; }
+      addLocalFile() {}
+      writeZip() {}
+    }
+    expect(() => runProd({
+      name: "fixture", root, uiBuilds: [], include: ["fxmanifest.lua", "main.lua"],
+      preflight: () => { called = true; throw new Error("unprovisioned credential"); },
+    }, Zip)).toThrow("unprovisioned credential");
+    expect(called).toBe(true);
+    expect(zipCreated).toBe(false);
+    expect(readFileSync(join(root, ".build/dist/sentinel"), "utf8")).toBe("previous release");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

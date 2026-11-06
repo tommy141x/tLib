@@ -16,6 +16,9 @@ export type Log = (level: "info" | "warn" | "error", msg: string) => void;
 
 type ProxyTarget = Mount & ProxyMount;
 
+// Loopback requests use fresh sockets to avoid the idle keep-alive close/write race.
+const agent = new http.Agent({ keepAlive: false });
+
 function forwardContext(req: IncomingMessage, mount: ProxyTarget) {
   return {
     remoteAddress: req.socket.remoteAddress ?? "",
@@ -37,11 +40,25 @@ export function proxyRequest(
   const headers = buildForwardHeaders(req.headers, forwardContext(req, mount));
 
   const upstream = http.request({
+    agent,
     host: mount.upstream.host,
     port: mount.upstream.port,
     method: req.method,
     path: forwarded + search,
     headers,
+  });
+
+  // A client abort destroys the upstream too; its resulting error is not an upstream fault.
+  let weDestroyed = false;
+
+  // `pipe` does not forward stream errors.
+  res.on("error", () => {
+    weDestroyed = true;
+    upstream.destroy();
+  });
+  req.on("error", () => {
+    weDestroyed = true;
+    upstream.destroy();
   });
 
   // Guards the connect and response-header phase only, cleared once headers are
@@ -62,16 +79,8 @@ export function proxyRequest(
   });
 
   upstream.on("error", (err: NodeJS.ErrnoException) => {
-    // Say whether the client was still there: this line gets used to diagnose
-    // two things with opposite remedies — the caller hung up and the upstream
-    // noticed (nothing wrong, a reverse proxy in front of tLib drips these), or
-    // the upstream reset while someone was waiting (a real fault).
-    const clientGone = res.writableEnded || res.destroyed;
-    log(
-      "warn",
-      `${mount.mount} -> ${mount.upstream.port} failed: ${err.code ?? err.message}` +
-        (clientGone ? " (caller had already gone)" : " (caller was still waiting)")
-    );
+    if (weDestroyed || res.destroyed || res.writableEnded) return;
+    log("warn", `${mount.mount} -> ${mount.upstream.port} failed: ${err.code ?? err.message}`);
     if (res.headersSent) {
       res.destroy();
       return;
@@ -84,7 +93,10 @@ export function proxyRequest(
     res.end(body);
   });
 
-  res.on("close", () => upstream.destroy());
+  res.on("close", () => {
+    weDestroyed = true;
+    upstream.destroy();
+  });
 
   req.pipe(upstream);
 }

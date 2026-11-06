@@ -6,7 +6,7 @@
 // lose the mount silently. When `tlib_http_port`/`tlib_http_host` ask for a
 // listener it binds eagerly too, for the same reason.
 
-import { resolvePublicIP } from "../realtime/public-ip";
+import { detectPublicIP } from "../realtime/public-ip";
 import { registerBridge } from "./bridge";
 import { resolveConfig } from "./config";
 import { fEmit, fGetConvar, fGetCurrentResourceName, fOn } from "./fivem";
@@ -49,6 +49,7 @@ export function current(): Router | null {
 export function installHttp(): void {
   if (installed) return;
 
+  let cancelDetection: (() => void) | undefined;
   const cfg = resolveConfig();
   const ingressEnabled = fGetConvar("tlib_http_ingress", "true") !== "false";
 
@@ -72,6 +73,16 @@ export function installHttp(): void {
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
+  if (cfg.portImplied) {
+    log(
+      "warn",
+      `'tlib_http_host' is set with no 'tlib_http_port', so tLib will attempt to bind a listener on ` +
+        `${cfg.port} and resources mounted behind it will print that port, not the FiveM ` +
+        `server port. Remove 'tlib_http_host' to serve everything on the FiveM server port ` +
+        `instead, or set 'tlib_http_port' to say which port you meant.`
+    );
+  }
+
   if (cfg.port === null && !ingressEnabled) {
     log(
       "error",
@@ -90,19 +101,7 @@ export function installHttp(): void {
     // A detected address names itself and the convar (`tlib_http_public_url`) in
     // the same row — see `status.ts` on why a guess must not read as a fact.
     if (status.ready) {
-      // THE BANNER NAMES THE DOOR THAT IS ACTUALLY OPEN.
-      //
-      // A listener's port is reachable only on a server whose owner forwarded
-      // it. Printing it as *the* hub address told every install that had one to
-      // visit a port nothing can reach, while the address that works with no
-      // configuration at all sat on a secondary line below. The FiveM server
-      // port needs no firewall rule by construction — it is how the game
-      // connects — so when the ingress can be named, it IS the hub address and
-      // the listener is the footnote.
-      //
-      // `ingressUrlFrom` returns null when the public URL carries no explicit
-      // port, which is the reverse-proxy case: that proxy knows nothing about
-      // the FiveM port, so the configured address stays the headline there.
+      // Prefer the ingress for the banner, but preserve proxy URLs without an explicit port.
       const ingressUrl = ingressEnabled
         ? ingressUrlFrom(status.publicUrl, fGetConvar("netPort", ""), fGetCurrentResourceName())
         : null;
@@ -166,10 +165,7 @@ export function installHttp(): void {
     if (cfg.publicUrlOverride) {
       log("warn", "Invalid tlib_http_public_url; attempting public IP detection instead");
     }
-    resolvePublicIP().then(
-      (ip) => readiness.resolveAddress(ip),
-      () => readiness.resolveAddress(null)
-    );
+    cancelDetection = detectPublicIP((ip) => readiness.resolveAddress(ip));
   }
 
   const selfName = fGetCurrentResourceName();
@@ -183,6 +179,7 @@ export function installHttp(): void {
     if (typeof stopped !== "string" || !installed) return;
 
     if (stopped === selfName) {
+      cancelDetection?.();
       // `Router.stop()` reports "stopped" itself. With no listener nothing else
       // would, and an outstanding IP detection would then land on a dead
       // lifetime and publish into it.
@@ -196,4 +193,7 @@ export function installHttp(): void {
 
     unregisterResource(stopped);
   });
+
+  // Notify early subscribers even when construction required no readiness transition.
+  fEmit("tLib:http:status", readiness.snapshot());
 }

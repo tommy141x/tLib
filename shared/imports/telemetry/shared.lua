@@ -508,6 +508,11 @@ function Telemetry.record(operation, thresholdMs, durationMs)
 end
 
 if not isServer and type(RegisterNetEvent) == 'function' then
+    -- Frameless consumers also autoload telemetry; the native warns rather than throwing.
+    local hasUIFrame = type(GetNumResourceMetadata) == 'function'
+        and type(GetCurrentResourceName) == 'function'
+        and GetNumResourceMetadata(GetCurrentResourceName(), 'ui_page') > 0
+
     RegisterNetEvent(Telemetry.CONSENT_EVENT, function(payload)
         if type(payload) ~= 'table' then return end
         consentCache = {
@@ -515,7 +520,7 @@ if not isServer and type(RegisterNetEvent) == 'function' then
             source = payload.source or 'default',
             locked = payload.locked == true,
         }
-        if type(SendNUIMessage) == 'function' then
+        if hasUIFrame then
             pcall(SendNUIMessage, { action = 'tlib:diag:consent', data = consentCache })
         end
     end)

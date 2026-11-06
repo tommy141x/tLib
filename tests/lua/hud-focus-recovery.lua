@@ -27,9 +27,13 @@ function IsNuiFocused() return ownFocus or externalFocus end
 function GetGameTimer() return clock end
 function GetConvar() return '' end
 function GetSafeZoneSize() return 1 end
-local latest
+local latest, toastLayout
 function SendNUIMessage(message)
     if message.name == 'layoutOpen' then latest = message.args[1].session end
+    -- The toasts component's own callback (registered by HudLayout.init) forwards
+    -- its layout here, which is the only observation point for what a reopened
+    -- session's draft actually holds.
+    if message.name == 'toastLayout' then toastLayout = message.args[1] end
 end
 Platform = {
     _stub = function() return function() end end,
@@ -77,6 +81,11 @@ exports.CloseDialog('pending')
 check(not ownFocus and not move and not look, 'dialog releases focus and input locks')
 check(exports.OpenHudEditor(), 'HUD opens after dialog close')
 local first, takes = latest, acquisitions
+-- Drag the widget, so the involuntary close below has a draft it could lose.
+local DRAGGED_X = -100 / 1080
+check(nui('layoutPreview', { session = first, key = 'tLib:toasts', revision = 1,
+    layout = { x = DRAGGED_X, y = 24 / 1080, scale = 1, visible = true, anchor = 'top-right' },
+    viewport = { width = 1920, height = 1080 } }).ok == true, 'the editor accepts a drag')
 -- An idle native menu closing must NOT release the HUD editor's focus.
 MenuInput.setVisible(false)
 check(ownFocus and HudLayout.isEditing(), 'non-typing native menu cleanup preserves HUD focus')
@@ -89,6 +98,15 @@ check(not HudLayout.isEditing() and not ownFocus and not move and not look, 'foc
 check(acquisitions == takes, 'watchdog never automatically takes NUI focus')
 command()
 check(HudLayout.isEditing() and latest > first, 'player can reopen with a new generation')
+-- The watchdog closes on `IsNuiFocused() == false`, a GLOBAL signal any other
+-- resource's NUI trips, so an ambiguous reason must not delete the player's work.
+-- The commit that added the carry-over copied the draft MAP with `S.copy`, which
+-- copies one LAYOUT: `recovered.draft` was always `{}` and every edit was still
+-- lost. Its own message said "NO REGRESSION TEST YET"; this is it.
+check(
+    toastLayout and toastLayout.layout.x == DRAGGED_X,
+    'the interrupted draft comes back on reopen, got ' .. tostring(toastLayout and toastLayout.layout.x)
+)
 check(nui('layoutFinish', { session = first, save = true }).ok == false, 'late browser completion cannot affect reopened session')
 command('cancel')
 check(not HudLayout.isEditing(), 'emergency command closes even without browser completion')

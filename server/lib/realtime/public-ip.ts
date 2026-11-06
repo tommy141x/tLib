@@ -1,9 +1,4 @@
-// public-ip.ts — one-shot discovery of the server's public IP.
-//
-// Fired at tLib boot. Consumers reading the wsUrl via rtConnectionInfo or
-// rtIssueToken before the lookup completes get `ws://localhost:PORT` as a
-// fallback — fine for dev, insufficient for remote players. Production logs
-// a warning when the resolved IP lands so the operator sees the real URL.
+// Public-IP discovery; failed attempts must not permanently prevent HTTP readiness.
 
 import * as https from "node:https";
 
@@ -48,4 +43,30 @@ function isPlausibleIP(s: string): boolean {
   if (!s || s.length > 45) return false;
   // trivial shape check; ipify returns raw ip
   return /^[0-9a-fA-F:.]+$/.test(s);
+}
+
+/** Returns a cancellation function; late HTTP results cannot publish after stop. */
+export function detectPublicIP(
+  resolved: (ip: string | null) => void,
+  runtime = {
+    resolve: resolvePublicIP,
+    schedule: (fn: () => void, ms: number) => setTimeout(fn, ms),
+    cancel: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer),
+  }
+): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const detect = (attempt: number): void => {
+    if (stopped) return;
+    runtime.resolve().catch(() => null).then((ip) => {
+      if (stopped) return;
+      if (ip || attempt >= 5) return resolved(ip);
+      timer = runtime.schedule(() => detect(attempt + 1), Math.min(60_000, 5_000 * 2 ** attempt));
+    });
+  };
+  detect(0);
+  return () => {
+    stopped = true;
+    if (timer !== null) runtime.cancel(timer);
+  };
 }

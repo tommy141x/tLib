@@ -115,6 +115,16 @@ local function buildAccessors(into, opts)
 
     local nilWhenUnset = opts ~= nil and opts.nilWhenUnset == true
 
+    --- `GetResourceKvpString` RAISES `bad cast` on a key written with
+    --- `SetResourceKvpInt`/`Float` -- values are msgpack-encoded -- and at file scope
+    --- that kills the chunk. `set` no longer writes typed numbers, but keys already on
+    --- players' machines do, so degrading to the default is the only way to reach them.
+    local function rawString(key)
+        local ok, value = pcall(GetResourceKvpString, k(key))
+        if ok then return value end
+        return nil
+    end
+
     --- True only when the key has actually been written.
     function into.has(key)
         local resolved = k(key)
@@ -134,7 +144,7 @@ local function buildAccessors(into, opts)
     end
 
     function into.getString(key, default)
-        local v = GetResourceKvpString(k(key))
+        local v = rawString(key)
         if v and v ~= "" then return v end
         return unset(default, "")
     end
@@ -150,14 +160,14 @@ local function buildAccessors(into, opts)
     end
 
     function into.getBool(key, default)
-        local v = GetResourceKvpString(k(key))
+        local v = rawString(key)
         if v == "true" then return true end
         if v == "false" then return false end
         return unset(default, false)
     end
 
     function into.getJson(key, default)
-        local v = GetResourceKvpString(k(key))
+        local v = rawString(key)
         if v and v ~= "" then
             local decoded = json.decode(v)
             if decoded then return decoded end
@@ -185,17 +195,15 @@ local function buildAccessors(into, opts)
         SetResourceKvp(k(key), json.encode(value))
     end
 
-    --- Store by the value's own type.
+    --- Store by the value's own type. A number goes in as a STRING: `get` has only
+    --- `GetResourceKvpString`, which raises on a typed number, so `setInt` here made
+    --- the pair not inverse. `setInt`/`getInt` remain the typed pair.
     function into.set(key, value)
         local t = type(value)
         if t == "boolean" then
             into.setBool(key, value)
         elseif t == "number" then
-            if value == math.floor(value) then
-                into.setInt(key, value)
-            else
-                into.setFloat(key, value)
-            end
+            into.setString(key, tostring(value))
         elseif t == "table" then
             into.setJson(key, value)
         else
@@ -203,9 +211,9 @@ local function buildAccessors(into, opts)
         end
     end
 
-    --- Read back, inferring the type from what was stored.
+    --- Read back what `set` wrote, inferred from the stored TEXT -- no native reports the store's type tag.
     function into.get(key, default)
-        local v = GetResourceKvpString(k(key))
+        local v = rawString(key)
         if not v or v == "" then return default end
         if v == "true" then return true end
         if v == "false" then return false end

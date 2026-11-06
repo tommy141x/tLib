@@ -4,9 +4,9 @@
  * FiveM builds a client's file manifest at resource START, so a file written
  * afterward 404s over `nui://` until the next restart. The fill: pull the item
  * from tWeb, extract it in the browser, serve it from `blob:` URLs for the
- * session. `acquireBundle`/`acquireFile` HEAD-probe the resource's own NUI file
- * server first and only fall back to remote when the local file is genuinely
- * absent — structural, not left to the call site, so a cache preferring the
+ * session. `acquireBundle`/`acquireFile` GET-probe the resource's own NUI file
+ * server first and fall back to remote when no local probe yields bytes
+ * successfully — structural, not left to the call site, so a cache preferring the
  * remote copy can't quietly turn every install into a permanent tWeb
  * dependency. Never persisted, and can't write the file into place either:
  * `SaveResourceFile` is false cross-resource, so a session blob is all there is.
@@ -42,7 +42,7 @@ export interface RuntimeAssetCacheOptions {
    * The FIRST entry is also the bundle's entry document — the one
    * `bundleDocument` returns. Any later entry is a local-first marker ONLY.
    * Probes are tried IN ORDER and stop at the first that answers, so the
-   * common case still costs exactly one HEAD.
+   * common case still costs exactly one GET.
    */
   bundleProbe?: string | readonly string[];
   /** The local URL a single standalone file (a sound) is served from. */
@@ -89,9 +89,8 @@ export interface RuntimeAssetCache {
   /** The in-flight acquisition for this bundle, if one is running. */
   pendingBundle(key: string): Promise<void> | undefined;
   /**
-   * Local-first acquisition. Resolves when the bundle is usable — which for a
-   * bundle the resource already serves means immediately, with no request to
-   * `downloadUrl` at all.
+   * Local-first acquisition. Resolves after probing or attempting the download,
+   * including on failure so callers can still try their local fallback.
    */
   acquireBundle(key: string, downloadUrl: string): Promise<void>;
   /** Re-attempt a previously registered acquisition that failed. */
@@ -110,7 +109,7 @@ export interface RuntimeAssetCache {
   /** The `blob:` URL for a runtime-cached file, by the name it is played under. */
   fileUrl(filename: string): string | null;
   /**
-   * Local-first acquisition of one file. `probeAs` is the name HEAD-probed on
+   * Local-first acquisition of one file. `probeAs` is the name GET-probed on
    * the local file server when it differs from the cache key — a marketplace
    * sound is played under its catalogue filename but keyed by slug.
    */
@@ -261,7 +260,7 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
   /**
    * Keys the local file server answered for. The memo matters because
    * `ensureBundle` is called on every load of a bundle: without it a bundle
-   * served from disk costs one HEAD per load forever.
+   * served from disk costs one GET per load forever.
    */
   const bundleLocal = new Set<string>();
   /**
@@ -281,20 +280,16 @@ export function createRuntimeAssetCache(options: RuntimeAssetCacheOptions): Runt
    */
   const fileFailures = new Set<string>();
 
-  /**
-   * Is this path in the resource's own file manifest? `HEAD` on the NUI file
-   * server returns 200 + Content-Length when it is, 404 when it isn't. Only a
-   * 404 counts as absent; a network error counts as served — both lean toward
-   * staying local, since the failure to avoid is re-downloading a file the
-   * client can already read. A genuine miss surfaces later in the consumer's
-   * own local-path load, not here.
-   */
+  /** Retrieval evidence only: a marker does not validate a whole bundle or codec. */
   async function servedByResource(path: string): Promise<boolean> {
+    const deadline = fetchDeadline(timeoutMs);
     try {
-      const resp = await doFetch(path, { method: "HEAD" });
-      return resp.status !== 404;
+      const resp = await doFetch(path, { method: "GET", signal: deadline.signal });
+      return resp.ok && (await resp.arrayBuffer()).byteLength > 0;
     } catch {
-      return true;
+      return false;
+    } finally {
+      deadline.release();
     }
   }
 

@@ -369,3 +369,17 @@ describe("one endpoint, and an earlier draft had two", () => {
     expect(h.sent[0]?.url).toBe("https://example.invalid/api/v1/analytics/events");
   });
 });
+
+
+test("backoff distinguishes no response from an HTTP refusal", () => {
+  for (const status of [0, 429, 500, 502]) {
+    const h = harness();
+    for (let i = 0; i < 3; i++) {
+      h.store.accept(0, [event(i)]);
+      h.transport.flush();
+      h.answer(status);
+    }
+    expect(h.logs.at(-1)).toContain(status === 0 ? "transport failed (no HTTP response)" : `sink refused the batch (HTTP ${status})`);
+    expect(h.logs.at(-1)).not.toContain("unreachable");
+  }
+});

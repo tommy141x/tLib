@@ -145,8 +145,9 @@ interface HarnessOptions {
   remoteZip?: Uint8Array | number;
   /** Bytes the marketplace answers with for a single-file download. */
   remoteFile?: Uint8Array | number;
-  /** Make the local HEAD probe reject rather than answer. */
+  /** Make the local GET probe reject rather than answer. */
   probeThrows?: boolean;
+  localResponse?: () => Response;
 }
 
 function harness(opts: HarnessOptions = {}): Harness {
@@ -176,6 +177,7 @@ function harness(opts: HarnessOptions = {}): Harness {
     }
 
     if (opts.probeThrows) throw new TypeError("Failed to fetch");
+    if (opts.localResponse) return opts.localResponse();
     // Strip the cache-busting query the document fetch adds.
     const path = url.split("?")[0] as string;
     const body = local?.[path];
@@ -253,7 +255,7 @@ describe("after a resource restart, tWeb is not consulted", () => {
     const afterFirst = h.requests.length;
 
     // `ensureBundle` runs on every load in the consumers. Without the memo of
-    // the local verdict this would be one HEAD per load, forever.
+    // the local verdict this would be one GET per load, forever.
     expect(h.cache.ensureBundle("tradio-fancy")).toBeUndefined();
     await h.cache.acquireBundle("tradio-fancy", REMOTE_ZIP);
 
@@ -273,7 +275,7 @@ describe("after a resource restart, tWeb is not consulted", () => {
 
     expect(h.remote()).toEqual([]);
     expect(h.cache.hasBundle("tradio-json")).toBe(false);
-    // Two HEADs, not one: `ui.html` is tried first since it's the document
+    // Two GETs, not one: `ui.html` is tried first since it's the document
     // consumers load; only its absence reaches the second marker.
     expect(h.requests.map((r) => r.url)).toEqual([
       "../../layouts/tradio-json/ui.html",
@@ -298,8 +300,8 @@ describe("after a resource restart, tWeb is not consulted", () => {
         if (url.startsWith(MARKETPLACE)) {
           return new Response(bundleZip() as unknown as BodyInit, { status: 200 });
         }
-        if ((init?.method ?? "GET") === "HEAD" && url.endsWith("module.json")) {
-          return new Response(null, { status: 200 });
+        if ((init?.method ?? "GET") === "GET" && url.endsWith("module.json")) {
+          return new Response('{"kind":"layout"}', { status: 200 });
         }
         return new Response(null, { status: 404 });
       },
@@ -327,16 +329,139 @@ describe("after a resource restart, tWeb is not consulted", () => {
     expect(h.cache.fileUrl("siren.wav")).toBe("blob:test/1");
   });
 
-  test("a broken local probe stays local rather than becoming a remote dependency", async () => {
-    // The conservative direction: if the probe itself cannot answer, we must
-    // not conclude "not served locally" and reach for tWeb on every asset.
-    const h = harness({ probeThrows: true });
+  for (const [name, opts] of Object.entries<HarnessOptions>({
+    "HTTP 403": { localResponse: () => new Response("denied", { status: 403 }) },
+    "HTTP 404": { localResponse: () => new Response("missing", { status: 404 }) },
+    "HTTP 405": { localResponse: () => new Response("unsupported", { status: 405 }) },
+    "HTTP 500": { localResponse: () => new Response("failed", { status: 500 }) },
+    "empty HTTP 200": { localResponse: () => new Response("") },
+    "HTTP 204": { localResponse: () => new Response(null, { status: 204 }) },
+    "thrown fetch": { probeThrows: true },
+    "unreadable HTTP 200 body": {
+      localResponse: () => new Response(new ReadableStream({
+        start(controller) { controller.error(new Error("body failed")); },
+      })),
+    },
+  })) {
+    test(`${name} cannot establish a local verdict; downloaded assets are memoized`, async () => {
+      const h = harness(opts);
+      const soundUrl = `${MARKETPLACE}/api/v1/items/x/download`;
+      await h.cache.acquireBundle("tradio-fancy", REMOTE_ZIP);
+      await h.cache.acquireFile("siren.wav", soundUrl);
+      expect(h.remote()).toEqual([REMOTE_ZIP, soundUrl]);
+      expect(h.cache.hasBundle("tradio-fancy")).toBe(true);
+      expect(h.cache.fileUrl("siren.wav")).not.toBeNull();
+      const count = h.requests.length;
+      await h.cache.acquireBundle("tradio-fancy", REMOTE_ZIP);
+      await h.cache.acquireFile("siren.wav", soundUrl);
+      expect(h.cache.ensureBundle("tradio-fancy")).toBeUndefined();
+      expect(h.requests.length).toBe(count);
+      expect(h.requests.every((r) => r.method === "GET")).toBe(true);
+    });
+  }
 
+  test("the local deadline covers a stalled body, not only response headers", async () => {
+    let downloads = 0;
+    const cache = createRuntimeAssetCache({
+      tag: "test",
+      bundleBase: (key) => `../../layouts/${key}/`,
+      filePath: (name) => `../../layouts/sounds/${name}`,
+      timeoutMs: 10,
+      logger: { log: () => {}, warn: () => {} },
+      objectUrls: { create: () => "blob:test", revoke: () => {} },
+      fetchImpl: async (input, init) => {
+        if (input.startsWith(MARKETPLACE)) {
+          downloads++;
+          return new Response("sound bytes");
+        }
+        return new Response(new ReadableStream({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () => controller.error(new Error("timeout")), { once: true });
+          },
+        }));
+      },
+    });
+    await cache.acquireFile("siren.wav", `${MARKETPLACE}/api/v1/items/x/download`);
+    expect(downloads).toBe(1);
+    expect(cache.fileUrl("siren.wav")).toBe("blob:test");
+  });
+
+  test("HEAD 200 for a missing file cannot suppress the download", async () => {
+    const requests: string[] = [];
+    const cache = createRuntimeAssetCache({
+      tag: "test",
+      bundleBase: (key) => `../../layouts/${key}/`,
+      filePath: (name) => `../../layouts/sounds/${name}`,
+      logger: { log: () => {}, warn: () => {} },
+      objectUrls: { create: () => "blob:test", revoke: () => {} },
+      fetchImpl: async (input, init) => {
+        requests.push(`${init?.method ?? "GET"} ${input}`);
+        if (init?.method === "HEAD") return new Response(null, { status: 200 });
+        if (input === REMOTE_ZIP) return new Response(bundleZip() as unknown as BodyInit);
+        return new Response(null, { status: 404 });
+      },
+    });
+    await cache.acquireBundle("tradio-fancy", REMOTE_ZIP);
+    expect(cache.hasBundle("tradio-fancy")).toBe(true);
+    expect(requests).toEqual([
+      "GET ../../layouts/tradio-fancy/ui.html",
+      "GET ../../layouts/tradio-fancy/module.json",
+      `GET ${REMOTE_ZIP}`,
+    ]);
+  });
+
+  test("local bytes remain usable with the marketplace offline, until explicitly evicted", async () => {
+    const h = harness({
+      local: {
+        "../../layouts/tradio-fancy/ui.html": LAYOUT_HTML,
+        "../../layouts/sounds/siren.wav": "RIFF",
+      },
+      remoteZip: 503,
+      remoteFile: 503,
+    });
+    const soundUrl = `${MARKETPLACE}/api/v1/items/x/download`;
     await h.cache.acquireBundle("tradio-fancy", REMOTE_ZIP);
-    await h.cache.acquireFile("siren.wav", `${MARKETPLACE}/api/v1/items/x/download`);
-
+    await h.cache.acquireFile("siren.wav", soundUrl);
+    expect(h.requests.map((r) => r.method)).toEqual(["GET", "GET"]);
+    await h.cache.acquireFile("siren.wav", soundUrl);
+    await h.cache.acquireBundle("tradio-fancy", REMOTE_ZIP);
+    expect(h.requests.length).toBe(2);
+    expect(await h.cache.bundleDocument("tradio-fancy")).toContain('class="radio"');
+    h.cache.evictFile("siren.wav");
+    h.cache.evictBundle("tradio-fancy");
+    await h.cache.acquireBundle("tradio-fancy", REMOTE_ZIP);
+    await h.cache.acquireFile("siren.wav", soundUrl);
+    expect(h.requests.length).toBe(5);
     expect(h.remote()).toEqual([]);
   });
+
+  test("a failed first marker does not prevent using a readable second marker", async () => {
+    let probes = 0;
+    const h = harness({ localResponse: () => ++probes === 1
+      ? new Response("failure", { status: 500 })
+      : new Response('{"kind":"layout"}') });
+    await h.cache.acquireBundle("tradio-json", REMOTE_ZIP);
+    expect(probes).toBe(2);
+    expect(h.remote()).toEqual([]);
+    expect(h.cache.ensureBundle("tradio-json")).toBeUndefined();
+  });
+
+  test("a failed probe and offline download do not latch a bundle as local", async () => {
+    let available = false;
+    const h = harness({
+      localResponse: () => available ? new Response(LAYOUT_HTML) : new Response(null, { status: 500 }),
+      remoteZip: 503,
+    });
+    await h.cache.acquireBundle("tradio-fancy", REMOTE_ZIP);
+    expect(h.cache.hasBundle("tradio-fancy")).toBe(false);
+    expect(h.remote()).toEqual([REMOTE_ZIP, REMOTE_ZIP]);
+    available = true;
+    const retry = h.cache.ensureBundle("tradio-fancy");
+    expect(retry).not.toBeUndefined();
+    await retry;
+    expect(h.cache.ensureBundle("tradio-fancy")).toBeUndefined();
+    expect(h.remote()).toEqual([REMOTE_ZIP, REMOTE_ZIP]);
+  }, 10_000);
 
   test("syncFiles downloads only the entries the resource cannot serve", async () => {
     // The replay path. `installedSounds` carries the shipped tones too, so an
@@ -561,7 +686,7 @@ describe("eviction", () => {
       objectUrls: { create: () => `blob:test/${++seq}`, revoke: (u) => revoked.push(u) },
       fetchImpl: async (input, init) => {
         requests.push(String(input));
-        if ((init?.method ?? "GET") === "HEAD") return new Response(null, { status: 404 });
+        if (!String(input).startsWith(MARKETPLACE)) return new Response(null, { status: 404 });
         await gate;
         return new Response(bundleZip() as unknown as BodyInit, { status: 200 });
       },
@@ -619,7 +744,7 @@ describe("the expanded-size ceiling", () => {
       objectUrls: { create: () => `blob:test/${++seq}`, revoke: () => {} },
       fetchImpl: async (input, init) => {
         requests.push(String(input));
-        if ((init?.method ?? "GET") === "HEAD") return new Response(null, { status: 404 });
+        if (!String(input).startsWith(MARKETPLACE)) return new Response(null, { status: 404 });
         return new Response(
           zipOf({
             "ui.html": "<div></div>",
@@ -663,7 +788,7 @@ describe("the data-URL mode, for a sandboxed iframe", () => {
         revoke: (u) => revoked.push(u),
       },
       fetchImpl: async (input, init) => {
-        if ((init?.method ?? "GET") === "HEAD") return new Response(null, { status: 404 });
+        if (!String(input).startsWith(MARKETPLACE)) return new Response(null, { status: 404 });
         if (String(input).endsWith("/download")) {
           return new Response(bundleZip() as unknown as BodyInit, { status: 200 });
         }

@@ -456,7 +456,10 @@ function H.init(webui)
                         -- resource's NUI focus trips. Closing itself must stay — a
                         -- stuck cursor is worse, and a Lua test pins that — but an
                         -- ambiguous signal must not delete work; reopening restores it.
-                        recovered = { owner = session.owner, draft = S.copy(session.draft) }
+                        -- S.copy accepts one layout, not the owner:id map.
+                        local draft = {}
+                        for key, value in pairs(session.draft) do draft[key] = S.copy(value) end
+                        recovered = { owner = session.owner, draft = draft }
                         log('HUD editor closed: ' .. reason
                             .. '. Your changes were kept -- reopen with /tlibhud to carry on.', 3)
                         close(false)

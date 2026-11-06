@@ -17,12 +17,16 @@ const cfg: BoundHttpConfig = {
   publicUrlOverride: null,
   upstreamTimeoutMs: 2000,
   maxConnections: 64,
+  portImplied: false,
 };
 
 let upstream: http.Server;
 let upstreamPort: number;
+/** TCP connections the upstream has accepted, for the socket-reuse assertion. */
+let upstreamConnections = 0;
 let router: Router;
 let routerPort: number;
+const routerLogs: string[] = [];
 
 /** Upstream stand-in: echoes what it was asked for, plus the fixtures we need. */
 function buildUpstream(): http.Server {
@@ -69,6 +73,10 @@ function buildUpstream(): http.Server {
     );
   });
 
+  s.on("connection", () => {
+    upstreamConnections += 1;
+  });
+
   const wss = new WebSocketServer({ server: s, path: "/ws" });
   wss.on("connection", (ws) => ws.on("message", (m) => ws.send(`echo:${m}`)));
   return s;
@@ -109,7 +117,7 @@ beforeAll(async () => {
   router = new Router(
     { ...cfg, port: routerPort },
     () => "Test Server",
-    () => {}
+    (_level, message) => { routerLogs.push(message); }
   );
   router.start();
   await Bun.sleep(120);
@@ -120,7 +128,7 @@ afterAll(async () => {
   await new Promise<void>((r) => upstream.close(() => r()));
 });
 
-beforeEach(() => clear());
+beforeEach(() => { clear(); routerLogs.length = 0; });
 
 const mountProxy = (over: Record<string, unknown> = {}) =>
   register({
@@ -397,6 +405,8 @@ describe("proxying", () => {
     const res = await get("/app/x");
     expect(res.status).toBe(502);
     expect(await res.text()).toContain("not responding");
+    expect(routerLogs).toHaveLength(1);
+    expect(routerLogs[0]).toContain("failed:");
   });
 });
 
@@ -602,5 +612,51 @@ describe("index path", () => {
     mountProxy({ stripPrefix: true });
     expect((await get("/app")).status).toBe(301);
     expect((await get("/app/")).status).toBe(200);
+  });
+});
+
+describe("teardown is not a fault", () => {
+  test("a caller that hangs up mid-response is neither logged nor answered", async () => {
+    const logs: string[] = [];
+    let ready!: (url: string) => void;
+    const listening = new Promise<string>((resolve) => {
+      ready = resolve;
+    });
+    const instance = new Router(
+      { ...cfg, port: 0 },
+      () => "Test",
+      (level, msg) => {
+        logs.push(`${level}: ${msg}`);
+      },
+      (state, url) => {
+        if (state === "listening" && url) ready(url);
+      }
+    );
+    try {
+      instance.start();
+      const url = await listening;
+      mountProxy();
+
+      const abort = new AbortController();
+      const res = await fetch(`${url}/app/sse`, { signal: abort.signal });
+      expect(res.status).toBe(200);
+      abort.abort();
+      await Bun.sleep(200);
+
+      expect(logs).toEqual([]);
+      // And the listener is still serving, which an unhandled 'error' would not be.
+      expect((await fetch(`${url}/app`)).status).toBe(200);
+    } finally {
+      instance.stop();
+    }
+  });
+
+  test("upstream sockets are not reused, so an idle close cannot race a write", async () => {
+    // Two completed requests must create two upstream connections.
+    mountProxy();
+    const before = upstreamConnections;
+    expect((await get("/app/one")).status).toBe(200);
+    expect((await get("/app/two")).status).toBe(200);
+    expect(upstreamConnections - before).toBe(2);
   });
 });

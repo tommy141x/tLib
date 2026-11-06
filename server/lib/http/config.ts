@@ -32,6 +32,12 @@ export interface HttpConfig {
   host: string;
   /** null when no listener is wanted; the ingress is then the only door. */
   port: number | null;
+  /**
+   * True when `port` came from the host-only default rather than from
+   * `tlib_http_port`. An operator who set only the host did not ask for 7777
+   * and has no reason to expect it, so `index.ts` says the number out loud.
+   */
+  portImplied: boolean;
   publicUrlOverride: string | null;
   /** Upstream connect + header timeout. Bodies may stream indefinitely. */
   upstreamTimeoutMs: number;
@@ -45,11 +51,13 @@ export type BoundHttpConfig = HttpConfig & { port: number };
 /** `getConvar` is injected only by `config.test.ts`; nothing else passes it. */
 export function resolveConfig(getConvar = fGetConvar): HttpConfig {
   const host = strConvar(getConvar, "tlib_http_host", "");
+  const port = intConvar(getConvar, "tlib_http_port");
   return {
     host: host || DEFAULT_HOST,
     // A bind address is an instruction to bind: an operator who set only the
     // host has said where the listener goes, not whether to have one.
-    port: intConvar(getConvar, "tlib_http_port") ?? (host ? DEFAULT_PORT : null),
+    port: port ?? (host ? DEFAULT_PORT : null),
+    portImplied: port === null && host !== "",
     publicUrlOverride: strConvar(getConvar, "tlib_http_public_url", "") || null,
     upstreamTimeoutMs: 30_000,
     maxConnections: 1024,

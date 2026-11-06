@@ -404,6 +404,14 @@ local function buildOutput(opts, release, infoValues)
     local author  = opts.author
     local color   = opts.color or TEAL
 
+    -- Include the artifact identity without changing the version used for comparisons.
+    local build = nil
+    do
+        local ok, value = pcall(GetResourceMetadata, resource, 'tlib_build', 0)
+        if ok and type(value) == 'string' and value ~= '' then build = value end
+    end
+    local currentText = 'v' .. stripV(current) .. (build and (' ' .. build) or '')
+
     -- The display title is not put through the figlet: that font has glyphs for
     -- letters and digits only, no space or apostrophe, so "Tommy's Radar
     -- Detector" would render as TommysRadarDetector at 173 columns against
@@ -440,17 +448,17 @@ local function buildOutput(opts, release, infoValues)
     local urls = {}
     local urlSet = {}
     if not release or not release.version then
-        lines[#lines + 1] = color .. '  Version:  ' .. GREY .. 'v' .. stripV(current)
+        lines[#lines + 1] = color .. '  Version:  ' .. GREY .. currentText
         if release and release.status then
             lines[#lines + 1] = GREY .. '  Updates:  ' .. release.status
         else
             lines[#lines + 1] = '^1  Updates:  Could not check for updates'
         end
     elseif not parseVer(current) or not parseVer(release.version) then
-        lines[#lines + 1] = color .. '  Version:  ' .. GREY .. 'v' .. stripV(current)
+        lines[#lines + 1] = color .. '  Version:  ' .. GREY .. currentText
         lines[#lines + 1] = '^3  Updates:  Could not compare versions'
     elseif isOutdated(current, release.version) then
-        local versionLine = color .. '  Version:  ' .. GREY .. 'v' .. stripV(current) .. ' ' .. color .. '→ ' .. color .. 'v' .. stripV(release.version)
+        local versionLine = color .. '  Version:  ' .. GREY .. currentText .. ' ' .. color .. '→ ' .. color .. 'v' .. stripV(release.version)
         if release.url and release.url ~= '' then
             versionLine = versionLine .. ' ' .. GREY .. '(see link below)'
             if not urlSet[release.url] then
@@ -460,7 +468,7 @@ local function buildOutput(opts, release, infoValues)
         end
         lines[#lines + 1] = versionLine
     else
-        lines[#lines + 1] = color .. '  Version:  ' .. color .. 'v' .. stripV(current) .. ' ' .. GREY .. '— up to date'
+        lines[#lines + 1] = color .. '  Version:  ' .. color .. currentText .. ' ' .. GREY .. '— up to date'
     end
 
     local maxLineW = 45

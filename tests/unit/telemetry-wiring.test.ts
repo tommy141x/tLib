@@ -69,6 +69,14 @@ describe("the event names exist twice in Lua and must agree", () => {
     expect(luaString(consumerLua, "Telemetry\\.NUI_CALLBACK")).toBe(DIAG_NUI_CALLBACK);
   });
 
+  test("the bundle's console sink is the event sv_telemetry.lua listens on", () => {
+    // Same class of silent failure as the pairs above, one layer lower: the
+    // transport's lines would go to an event with no handler, so a sink that had
+    // stopped for the session would say nothing at all.
+    expect(read("server/lib/telemetry/index.ts")).toContain('const LOG_EVENT = "tlib:diag:log"');
+    expect(serverLua).toContain("AddEventHandler('tlib:diag:log'");
+  });
+
   test("the consent NUI message name is the same on both sides", () => {
     // Lua sends it with SendNUIMessage; collect.ts subscribes with onNuiEvent.
     expect(consumerLua).toContain("'tlib:diag:consent'");

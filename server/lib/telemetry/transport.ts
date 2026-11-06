@@ -79,7 +79,8 @@ export interface TransportOptions {
   /** Overridable for the suite. */
   now?: () => number;
   post?: PostFn;
-  log?: (line: string) => void;
+  /** Logger levels: 1 DEBUG, 2 INFO, 3 WARN, 4 ERROR. */
+  log?: (line: string, level?: number) => void;
   /**
    * The bearer token. Defaults to `TLIB_ANALYTICS_KEY`, with
    * `tlib_telemetry_key` overriding it for a dev run.
@@ -150,6 +151,7 @@ export const performPost: PostFn = (url, body, headers, done) => {
  * events and read nothing, and a leak costs a daily event budget, not data. So
  * it is rotatable, and rotating it stops older installs reporting.
  */
+// Provision a tWeb api_keys token scoped analytics:ingest; production preflight refuses an empty key.
 export const TLIB_ANALYTICS_KEY = "";
 
 function credential(): string {
@@ -213,8 +215,12 @@ export function createTransport(opts: TransportOptions): Transport {
       // Doubled AFTER the wait is chosen, so the first open uses the base
       // cooldown rather than twice it.
       b.cooldownMs = Math.min(b.cooldownMs * 2, BREAKER_MAX_COOLDOWN_MS);
+      const failure = status <= 0
+        ? "transport failed (no HTTP response)"
+        : `sink refused the batch (HTTP ${status})`;
       log(
-        `[tLib] diagnostics ${label} sink unreachable (HTTP ${status}); pausing for ${Math.round(wait / 1000)}s`
+        `diagnostics ${label} ${failure}; pausing for ${Math.round(wait / 1000)}s`,
+        1
       );
     }
   }
@@ -238,7 +244,7 @@ export function createTransport(opts: TransportOptions): Transport {
       if (!saidNoCredential) {
         saidNoCredential = true;
         log(
-          "[tLib] diagnostics are on, but this build carries no ingest credential, so nothing " +
+          "diagnostics are on, but this build carries no ingest credential, so nothing " +
             "is being sent and nothing is reaching us. That is our omission and not a setting " +
             "on your server — there is nothing for you to supply. Leave it on and a later tLib " +
             "will start reporting, or 'set tlib_telemetry 0' to stop opting in."
@@ -256,13 +262,15 @@ export function createTransport(opts: TransportOptions): Transport {
     /**
      * The ring's losses are read but not sent: the contract declares no
      * measure slot, and an unread counter grows for the life of the server.
-     * They are said out loud on the server console instead.
+     * Said at DEBUG: a gap in OUR feed is a fact about our data, and an
+     * operator can do nothing with it.
      */
     const drops = opts.store.readDrops();
     if (drops > 0) {
       log(
-        `[tLib] diagnostics queue dropped ${drops} event(s) to stay bounded — the sink was ` +
-          "unreachable or one client flooded. The feed has a gap of that size."
+        `diagnostics queue dropped ${drops} event(s) to stay bounded — the sink was ` +
+          "refused or unreachable, or one client flooded. The feed has a gap of that size.",
+        1
       );
     }
     const body: AnalyticsBatchBody = {
@@ -303,7 +311,7 @@ export function createTransport(opts: TransportOptions): Transport {
         const permanent = permanentReason(status);
         if (permanent) {
           b.permanentlyStopped = permanent;
-          log(`[tLib] diagnostics disabled for this session: ${permanent}`);
+          log(`diagnostics disabled for this session: ${permanent}`, 3);
           // Dropped rather than returned: a batch nothing will ever accept is a
           // queue that can never drain.
           return;
@@ -316,11 +324,12 @@ export function createTransport(opts: TransportOptions): Transport {
         if (b.consecutiveUnreachable >= UNREACHABLE_FAILURES_BEFORE_STOP) {
           b.permanentlyStopped = `the ingest never answered (${b.consecutiveUnreachable} attempts, no HTTP response)`;
           log(
-            `[tLib] diagnostics disabled for this session: ${b.permanentlyStopped}. Something ` +
+            `diagnostics disabled for this session: ${b.permanentlyStopped}. Something ` +
               `between this server and ${opts.baseUrl()} is dropping the connection — outbound ` +
               "HTTPS, DNS, or a host firewall. Nothing was ever delivered, and queued events " +
               "are discarded from here on. Restart the resource once the network is fixed, or " +
-              "'set tlib_telemetry false' to stop opting in."
+              "'set tlib_telemetry false' to stop opting in.",
+            3
           );
           // Dropped for the same reason a 401 batch is: a queue that can never
           // drain spends the session evicting newer events to hold older ones.
@@ -345,7 +354,7 @@ export function createTransport(opts: TransportOptions): Transport {
         } catch (e) {
           // An interval callback that throws in FiveM's Node runtime is an
           // unhandled error on the console every minute.
-          log(`[tLib] diagnostics flush threw: ${e instanceof Error ? e.message : String(e)}`);
+          log(`diagnostics flush threw: ${e instanceof Error ? e.message : String(e)}`, 4);
         }
       }, FLUSH_INTERVAL_MS);
     },

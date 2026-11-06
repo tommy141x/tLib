@@ -51,6 +51,9 @@ import type { HttpStatus } from "./status";
 /** The script a consumer must load to answer anything on the FiveM server port. */
 const INGRESS_DOOR_SUFFIX = "tlib/server/sv_http_ingress.lua";
 
+/** Both keys that put a file in a consumer's SERVER VM — see `bridge.test.ts`. */
+const INGRESS_DOOR_KEYS = ["server_script", "shared_script"] as const;
+
 /**
  * Does `resource` load tLib's ingress door?
  *
@@ -77,25 +80,31 @@ export function loadsIngressDoor(
   countMetadata: (resource: string, key: string) => number,
   readMetadata: (resource: string, key: string, index: number) => string | null
 ): boolean {
-  let count: number;
-  try {
-    count = countMetadata(resource, "server_script");
-  } catch {
-    return true;
-  }
-  if (!Number.isFinite(count) || count <= 0) return true;
-  for (let i = 0; i < count; i++) {
-    let entry: string | null;
+  let scanned = 0; // across BOTH keys: a zero on one is an answer, not an absent runtime
+  for (const key of INGRESS_DOOR_KEYS) {
+    let count: number;
     try {
-      entry = readMetadata(resource, "server_script", i);
+      count = countMetadata(resource, key);
     } catch {
-      continue;
-    }
-    // `@tLib/...` as written, any separator, any casing of the resource name.
-    if (typeof entry === "string" && entry.replace(/\\/g, "/").toLowerCase().endsWith(INGRESS_DOOR_SUFFIX))
       return true;
+    }
+    if (!Number.isInteger(count) || count < 0) return true;
+    if (count === 0) continue;
+    scanned += count;
+    for (let i = 0; i < count; i++) {
+      let entry: string | null;
+      try {
+        entry = readMetadata(resource, key, i);
+      } catch {
+        return true;
+      }
+      if (typeof entry !== "string") return true;
+      // `@tLib/...` as written, any separator, any casing of the resource name.
+      if (typeof entry === "string" && entry.replace(/\\/g, "/").toLowerCase().endsWith(INGRESS_DOOR_SUFFIX))
+        return true;
+    }
   }
-  return false;
+  return scanned === 0;
 }
 
 /**
@@ -167,10 +176,20 @@ export function registerBridge(
 
     const id = str(opts.id) || caller;
     const mount = str(opts.mount);
-    if (!mount) return { ok: false, error: "'mount' is required" };
+    if (!mount) {
+      log("warn", `${caller} called RegisterWebApp without a 'mount'; nothing was registered`);
+      return { ok: false, error: "'mount' is required" };
+    }
 
     const port = int(opts.port);
-    if (port === null) return { ok: false, error: "'port' is required and must be a number" };
+    if (port === null) {
+      log(
+        "warn",
+        `${caller} called RegisterWebApp for '${mount}' without a numeric 'port' — it must be ` +
+          `the port ${caller}'s own listener is bound to; nothing was registered`
+      );
+      return { ok: false, error: "'port' is required and must be a number" };
+    }
 
     const descriptor: Mount = {
       kind: "proxy",
@@ -193,12 +212,43 @@ export function registerBridge(
 
     const current = status();
     if (!current.ready || !current.publicUrl) {
-      // Refuse rather than claim the mount: the caller's retry would collide once bind completes.
-      return {
-        ok: false,
-        retryable: true,
-        error: current.error ?? "tLib HTTP is still resolving its public address",
-      };
+      // Refuse rather than claim the mount: the caller's retry would collide once bind
+      // completes. And SAY SO — a consumer refused here that never subscribes to
+      // 'tLib:http:status' is gone from the hub for the life of the server, and the hub
+      // reads "No destinations are listed" while its panel answers on its own port.
+      const error = current.error ?? "tLib HTTP is still resolving its public address";
+      log(
+        "warn",
+        `${caller} tried to mount '${mount}' before tLib was ready (${error}). ${caller} must ` +
+          `re-register on 'tLib:http:status' or after onResourceStart('tLib'), or it will not ` +
+          `appear on the hub at all.`
+      );
+      return { ok: false, retryable: true, error };
+    }
+
+    // ⛔ Mounted, hub-listed, unreachable. Reported 2026-11-02: a current tLib against a
+    // tRadio from before tRadio shipped the door rendered two confident hub cards whose
+    // links both answered FXServer's bare `Not found.` REFUSED and not merely logged,
+    // because a card promising that address is worse than no card, and a consumer that
+    // believes it mounted prints the address one line later. Before `register`, so no
+    // mount is taken; and it costs nothing real, since on this door nothing could answer.
+    if (
+      runtime.countMetadata !== undefined &&
+      runtime.readMetadata !== undefined &&
+      !loadsIngressDoor(caller, runtime.countMetadata, runtime.readMetadata)
+    ) {
+      const error =
+        `${caller} does not load tLib's ingress door, so '${mount}' cannot be served on the ` +
+        `FiveM server port: the first path segment IS the resource name and is routed before ` +
+        `any resource code runs, so only ${caller} can serve ${caller}'s paths. Fix: add ` +
+        `server_script '@tLib/server/sv_http_ingress.lua' to ${caller}'s fxmanifest — if ` +
+        `${caller} is a product, update it. Or set 'tlib_http_port' to bind tLib's own ` +
+        `listener, which serves every mount without this.`;
+      if (current.door === "ingress") {
+        log("error", error);
+        return { ok: false, error };
+      }
+      log("warn", `${error} The current listener still serves this mount.`);
     }
 
     const result = register(descriptor);
@@ -220,34 +270,6 @@ export function registerBridge(
     }
 
     const url = mountUrl(current.publicUrl, result.mount, current.door);
-
-    // ⛔ Mounted, hub-listed, and completely unreachable — the one failure this router
-    // could not previously name.
-    //
-    // Reported 2026-11-02 by a server running a current tLib against a tRadio from before
-    // tRadio shipped the door. The hub rendered two confident cards; both links answered
-    // FXServer's bare `Not found.`, which says nothing about tLib, the mount, or the
-    // resource. The server console had the mount line and the WebSocket warning and no
-    // hint that the app could not be reached at all.
-    //
-    // An error, not a warning: unlike the WebSocket fallback above, nothing works.
-    if (
-      current.door === "ingress" &&
-      runtime.countMetadata !== undefined &&
-      runtime.readMetadata !== undefined &&
-      !loadsIngressDoor(caller, runtime.countMetadata, runtime.readMetadata)
-    ) {
-      log(
-        "error",
-        `${caller} mounted '${result.mount.mount}' but does not load tLib's ingress door, ` +
-          `so ${url} will answer FXServer's own 404 and nothing will say why. On the FiveM ` +
-          `server port the first path segment IS the resource name and is routed before any ` +
-          `resource code runs, so only ${caller} can serve ${caller}'s paths. Fix: add ` +
-          `server_script '@tLib/server/sv_http_ingress.lua' to ${caller}'s fxmanifest — if ` +
-          `${caller} is a product, update it. Or set 'tlib_http_port' to bind tLib's own ` +
-          `listener, which serves every mount without this.`
-      );
-    }
 
     // No success line: the consumer prints this URL in its own startup banner one line later.
     return { ok: true, url };

@@ -25,12 +25,23 @@ local function host(convars)
     env.IsDuplicityVersion = function() return false end
     env.GetConvar = function(name, default) return (convars or {})[name] or default end
     env.GetCurrentServerEndpoint = function() return ENDPOINT end
-    env.GetResourceKvpString = function(key) return env.store[key] end
-    env.GetResourceKvpFloat = function(key) return tonumber(env.store[key]) or 0.0 end
-    env.GetResourceKvpInt = function(key) return math.floor(tonumber(env.store[key]) or 0) end
-    env.SetResourceKvp = function(key, value) env.store[key] = tostring(value) end
-    env.SetResourceKvpFloat = function(key, value) env.store[key] = tostring(value) end
-    env.SetResourceKvpInt = function(key, value) env.store[key] = tostring(math.floor(value)) end
+    -- TYPED, like the real store. An earlier version of this fake was one plain
+    -- Lua table, which made `set` writing a typed number and `get` reading with
+    -- GetResourceKvpString unreproducible BY CONSTRUCTION -- the suite was green
+    -- while the pair threw `bad cast` on a customer's client and killed the
+    -- calling chunk. KVP values are msgpack-encoded and a wrong-typed read raises.
+    local function read(key, want)
+        local cell = env.store[key]
+        if cell == nil then return nil end
+        if cell.type ~= want then error('bad cast', 0) end
+        return cell.value
+    end
+    env.GetResourceKvpString = function(key) return read(key, 'string') end
+    env.GetResourceKvpFloat = function(key) return read(key, 'float') or 0.0 end
+    env.GetResourceKvpInt = function(key) return read(key, 'int') or 0 end
+    env.SetResourceKvp = function(key, value) env.store[key] = { type = 'string', value = tostring(value) } end
+    env.SetResourceKvpFloat = function(key, value) env.store[key] = { type = 'float', value = value + 0.0 } end
+    env.SetResourceKvpInt = function(key, value) env.store[key] = { type = 'int', value = math.floor(value) } end
     env.DeleteResourceKvp = function(key) env.store[key] = nil end
     -- StartFindKvp/FindKvp over a prefix. `has` only ever asks for an exact key,
     -- so one match is enough, but the walk is real: it is how `has` tells
@@ -64,6 +75,12 @@ local function host(convars)
         end,
     }
     return env
+end
+
+--- The raw value under a key, whatever type it was written as.
+local function stored(env, key)
+    local cell = env.store[key]
+    return cell and cell.value
 end
 
 local function loadKvp(env)
@@ -158,7 +175,7 @@ do
 
     prefs.setBool('playerDisabled', false)
     check(prefs.getBool('playerDisabled') == false, 'a written false reads back as false, not nil')
-    check(env.store['tafk:playerDisabled'] == 'false', 'the write landed on the namespaced key')
+    check(stored(env, 'tafk:playerDisabled') == 'false', 'the write landed on the namespaced key')
     prefs.delete('playerDisabled')
     check(prefs.getBool('playerDisabled') == nil, 'deleting returns it to unset')
 
@@ -169,6 +186,47 @@ do
     check(kvp.getString('absent') == '', 'the default string accessor still returns empty')
 end
 print('PASS nilWhenUnset changes only the never-written answer')
+
+-- set/get are inverse
+
+do
+    -- `kvp.set`/`kvp.get` is documented public API with no internal caller, so
+    -- only consumers ever hit it and nothing here covered it. It stored a number
+    -- with SetResourceKvpInt/Float and read every type back with
+    -- GetResourceKvpString: the read raised, and an error at file scope takes the
+    -- rest of the chunk with it.
+    local env = host()
+    local kvp = loadKvp(env)
+
+    kvp.set('count', 7)
+    kvp.set('scale', 1.5)
+    kvp.set('name', 'tgs')
+    kvp.set('on', true)
+    kvp.set('off', false)
+    kvp.set('list', { 'a', 'b' })
+
+    check(kvp.get('count') == 7, 'an integer round-trips as a number, got ' .. tostring(kvp.get('count')))
+    check(kvp.get('scale') == 1.5, 'a float round-trips as a number, got ' .. tostring(kvp.get('scale')))
+    check(kvp.get('name') == 'tgs', 'a string round-trips')
+    check(kvp.get('on') == true, 'true round-trips')
+    check(kvp.get('off') == false, 'false round-trips')
+    check(kvp.get('list')[2] == 'b', 'a table round-trips')
+    check(kvp.get('never-written', 'fallback') == 'fallback', 'an unset key is the default')
+
+    -- A key an OLDER build wrote as a typed number. Part of the fix cannot reach
+    -- these -- they are already on players' machines -- so the getters must
+    -- degrade to the default rather than take the caller's chunk down.
+    env.SetResourceKvpInt('legacyInt', 42)
+    env.SetResourceKvpFloat('legacyFloat', 0.25)
+    check(kvp.get('legacyInt', 'default') == 'default', 'a legacy typed int reads as the default, not an error')
+    check(kvp.getString('legacyInt', 'default') == 'default', 'getString survives a legacy typed key')
+    check(kvp.getBool('legacyFloat', true) == true, 'getBool survives a legacy typed key')
+    check(kvp.getJson('legacyFloat', 'default') == 'default', 'getJson survives a legacy typed key')
+    -- And the typed pair still agrees with itself.
+    check(kvp.getInt('legacyInt') == 42, 'getInt still reads a typed int')
+    check(kvp.getFloat('legacyFloat') == 0.25, 'getFloat still reads a typed float')
+end
+print('PASS kvp.set and kvp.get are inverse, and a legacy typed key degrades instead of throwing')
 
 -- settings.serverScoped
 
@@ -186,7 +244,7 @@ do
     settings:set('radio_setting_volume', 0.8)
     settings:set('radio_setting_fx_overrides', { 'a', 'b' })
 
-    check(env.store['tgstudios_radio_setting_volume'] == '0.8', 'an unscoped setting lands on the plain key')
+    check(stored(env, 'tgstudios_radio_setting_volume') == '0.8', 'an unscoped setting lands on the plain key')
     check(
         env.store['tgstudios_radio_setting_fx_overrides_' .. tag] ~= nil,
         'a serverScoped setting lands on the tagged key'

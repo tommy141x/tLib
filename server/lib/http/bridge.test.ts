@@ -34,6 +34,27 @@ test("a consumer that does not load the door is caught — the reported case", (
   expect(loadsIngressDoor("tRadio", m.count, m.read)).toBe(false);
 });
 
+test("a consumer that loads the door as a shared_script passes too", () => {
+  // `shared_script` also puts the file in the server VM, and this only scanned
+  // `server_script` — so a resource with one script list was reported as not
+  // loading the door at all, at `error`, the one level that must not cry wolf.
+  const m = {
+    count: (_res: string, key: string) => (key === "shared_script" ? 1 : 0),
+    read: (_res: string, key: string) =>
+      key === "shared_script" ? "@tLib/server/sv_http_ingress.lua" : null,
+  };
+  expect(loadsIngressDoor("tRadio", m.count, m.read)).toBe(true);
+
+  // And a resource with both lists where NEITHER carries the door is still caught:
+  // a zero count on one key is an answer, not an unanswerable runtime.
+  const both = {
+    count: (_res: string, key: string) =>
+      key === "server_script" ? 2 : key === "shared_script" ? 1 : 0,
+    read: () => "config/config.lua",
+  };
+  expect(loadsIngressDoor("tRadio", both.count, both.read)).toBe(false);
+});
+
 test("the match survives separators and casing, which the manifest does not normalise", () => {
   for (const entry of [
     "@tLib/server/sv_http_ingress.lua",

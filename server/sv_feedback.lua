@@ -57,11 +57,14 @@ local function attributedResource(claimed)
     return nil
 end
 
+--- Build metadata distinguishes republished releases without changing the version gate.
 local function versionOf(resource)
     if not resource then return nil end
     local ok, value = pcall(GetResourceMetadata, resource, 'version', 0)
-    if ok and type(value) == 'string' and value ~= '' then return value end
-    return nil
+    if not ok or type(value) ~= 'string' or value == '' then return nil end
+    local built, build = pcall(GetResourceMetadata, resource, 'tlib_build', 0)
+    if built and type(build) == 'string' and build ~= '' then return value .. '+' .. build end
+    return value
 end
 
 --- Returns false plus a reason key when the send was not even attempted.
