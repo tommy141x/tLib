@@ -1,0 +1,3 @@
+# Shell hooks must be LF. A CRLF checkout (Windows, core.autocrlf) leaves a carriage return on
+# every line, and the secret gate's own control refuses the file as not the canonical bytes.
+.githooks/* text eol=lf
