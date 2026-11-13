@@ -42,17 +42,25 @@ end
 
 --- What a step's outcome means, for choosing words:
 ---   ok             the step passed
----   refused        nothing answered and the failure came back on its own: a closed port, a
----                  reset, a name that does not resolve
----   silent         nothing answered and nothing failed either, until the timer: a firewall
+---   refused        nothing answered and the failure came back promptly on its own: a closed
+---                  port, a reset, a name that does not resolve
+---   silent         nothing answered, or the failure only arrived after seconds: a firewall
 ---                  dropping packets, or a router that cannot loop back to its own address
 ---   wrong-service  something answered, but not what the step expected
---- `refused` is a fast failure, not proof of a closed port; `errorData` carries whatever
---- the engine said.
+---
+--- `refused` is the strong claim, so it needs the strong evidence: a refusal is one round
+--- trip, and a status-0 callback that took seconds is the engine's own connect timeout,
+--- which is what a dropped packet looks like from here. Whether FXServer reports a refusal
+--- promptly at all is not established offline; if it never does, every failure is `silent`
+--- and the wording degrades to "could not confirm", which is true. `errorData` and
+--- `elapsedMs` on the step are the evidence either way.
+local REFUSED_MAX_MS = 2000
+
 local function classify(passed, resp)
     if passed then return 'ok' end
     if resp.status ~= 0 then return 'wrong-service' end
-    return resp.timedOut and 'silent' or 'refused'
+    if resp.timedOut or resp.elapsedMs >= REFUSED_MAX_MS then return 'silent' end
+    return 'refused'
 end
 
 local function extractPort(url)

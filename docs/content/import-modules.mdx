@@ -1039,11 +1039,11 @@ case instead of one sentence covering all of them:
 | `class` | Meaning |
 | --- | --- |
 | `ok` | The step passed. |
-| `refused` | Nothing answered and the failure came back on its own, quickly: a closed port, a reset, a name that does not resolve. `errorData` holds whatever the engine said. |
-| `silent` | Nothing answered and nothing failed either, until `timeout` ended it: packets dropped by a firewall, or a router that cannot loop back to its own public address. |
+| `refused` | Nothing answered and the failure came back on its own within two seconds: a closed port, a reset, a name that does not resolve. `errorData` holds whatever the engine said. |
+| `silent` | Nothing answered, or the failure only arrived after two seconds or more (the engine's own connect timeout): packets dropped by a firewall, or a router that cannot loop back to its own public address. |
 | `wrong-service` | Something answered, but `expect` rejected it. |
 
-`refused` is a fast failure, not proof that the port is closed. `failedClass` is the class of
+`refused` is a fast failure, not proof that the port is closed. Whether FXServer reports a refused connection that promptly on every host has not been established, so word a `silent` result as "could not confirm" rather than as "blocked"; the class never claims more than the timing supports. `failedClass` is the class of
 the step in `failedStep`, and `elapsedMs` is how long that step took. Give a step
 `errorMsgs = { refused = '…', silent = '…', ['wrong-service'] = '…' }` to choose the words by
 class; a class with no entry falls back to `errorMsg`, so a step written before classes

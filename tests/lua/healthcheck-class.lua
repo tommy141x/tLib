@@ -5,9 +5,11 @@
 -- both reached the consumer as `status 0`. They differ in the one thing the old code did not
 -- record: a refusal comes back on its own, a silence only ends when the timer does.
 --
--- HYPOTHESIS, not proven here: that FXServer's PerformHttpRequest really does call back fast
--- with status 0 (or the empty-headers 200) on a closed port. The suite proves the module's
--- classification given that; one run on a live VPS and one behind a NAT router proves the premise.
+-- NOT PROVEN here: that FXServer's PerformHttpRequest calls back promptly with status 0 (or the
+-- empty-headers 200) on a closed port. The module is written so either answer is safe: a refusal
+-- that never calls back reads as silent, and a status-0 that took seconds (the engine's own
+-- timeout, which is what a dropped packet looks like) is not allowed to read as refused. A live
+-- run on a VPS and one behind a NAT router would show which of the two the engine does.
 
 local realPrint = print
 local passed = 0
@@ -109,6 +111,20 @@ test('a request that never calls back is SILENT: the timer ends it, not the netw
     local r = check(function() return nil end)
     assert(not r.success and r.failedClass == 'silent', tostring(r.failedClass))
     assert(r.steps[1].elapsedMs >= 8000, 'a silence is as long as the timeout: ' .. tostring(r.steps[1].elapsedMs))
+end)
+
+test('a status-0 callback that took seconds is SILENT: it is the engine own timeout, not a refusal', function()
+    -- The harmful way for the premise to be wrong: a firewall drop surfacing as status 0 after
+    -- the engine gave up on connecting. Calling that "refused" would tell the operator nothing
+    -- is listening, when the port may be open and the router is the problem.
+    local slow = check(function() return { after = 5000, status = 0, body = '', headers = {}, errorData = 'timed out' } end)
+    assert(slow.failedClass == 'silent', tostring(slow.failedClass))
+    assert(slow.steps[1].elapsedMs == 5000 and slow.steps[1].errorData == 'timed out')
+
+    local edge = check(function() return { after = 1999, status = 0, body = '', headers = {} } end)
+    assert(edge.failedClass == 'refused', 'a round trip under two seconds is still a refusal: ' .. tostring(edge.failedClass))
+    local over = check(function() return { after = 2000, status = 0, body = '', headers = {} } end)
+    assert(over.failedClass == 'silent', tostring(over.failedClass))
 end)
 
 test('the engine\'s refused-connection shape (200, empty body, no headers) is REFUSED, not healthy', function()
