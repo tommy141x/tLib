@@ -32,6 +32,7 @@ export {
   addDirToZip,
   BUILD_STAMP_KEY,
   buildViteUI,
+  COMMIT_STAMP_KEY,
   cleanDir,
   createZip,
   installDeps,
@@ -191,6 +192,8 @@ export {
   failing,
   formatFindings,
 } from "./runtime-state-contract.ts";
+export type { Git, ReleaseState } from "./release-gate.ts";
+export { assertReleasable, assertVersionShape, bunGit, tagRelease } from "./release-gate.ts";
 export type { VersionTarget } from "./version.ts";
 export {
   getManifestVersion,

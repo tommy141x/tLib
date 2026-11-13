@@ -20,6 +20,7 @@ import { stageFontLicences } from "./font-licences.ts";
 import { checkLicenses, formatLicenseReport } from "./license.ts";
 import { type LicenceSource, mergeLicenceFiles } from "./licence-bundle.ts";
 import { assertManifestStaged } from "./manifest-coverage.ts";
+import { bunGit, type ReleaseState, tagRelease } from "./release-gate.ts";
 
 export function step(label: string) {
   console.log(`\n→ ${label}`);
@@ -81,9 +82,15 @@ export function stageFiles(root: string, dist: string, includes: string[]) {
 }
 
 export const BUILD_STAMP_KEY = "tlib_build";
+export const COMMIT_STAMP_KEY = "tlib_commit";
 
-// Matches the blank lines ahead of the stamp too, so re-stamping is idempotent.
-const STAMP_LINE = new RegExp(`\\n*^${BUILD_STAMP_KEY}\\s+'[^']*'[ \\t]*$\\n?`, "m");
+// Matches the blank lines ahead of the stamp too, so re-stamping is idempotent. One
+// pattern for both keys: stripped one after the other, the first removal eats the
+// newline the second one's `^` needs.
+const STAMP_LINES = new RegExp(
+  `\\n*^(?:${BUILD_STAMP_KEY}|${COMMIT_STAMP_KEY})\\s+'[^']*'[ \\t]*$\\n?`,
+  "gm"
+);
 
 function stagedPaths(dist: string, prefix = ""): string[] {
   const out: string[] = [];
@@ -96,18 +103,21 @@ function stagedPaths(dist: string, prefix = ""): string[] {
 }
 
 /**
- * Stamp the staged manifest with a build id hashed from the staged bytes, not a version
- * bump: v1.0 was republished in place with a crash fix (`c9a8f8f`) and no version change, so
- * `tradio_diag` printed `tLib 1.0.0` for both trees with no way to confirm a customer had the
- * fix. The hash, derived from the bytes `prod` is about to zip, is the identity. Its own key,
- * never `version` — `imports.lua` enforces `tlib_min_version` out of that string and every
- * consumer pins `'1.0'`.
+ * Stamp the staged manifest with a build id hashed from the staged bytes. The hash,
+ * derived from the bytes `prod` is about to zip, is what a diagnostic quotes to say which
+ * files a server holds; the release gate (`release-gate.ts`) is what gives every build
+ * somebody may run a version of its own. Its own key, never `version` — `imports.lua`
+ * enforces `tlib_min_version` out of that string.
+ *
+ * `commit` is the git commit the tree was built from, in a key of its own and left out of
+ * the hash: the same bytes committed twice are the same build, and a customer's paste has
+ * to lead back to a commit without anyone reading the tag list.
  */
-export function stampBuildId(dist: string, now = new Date()): string {
+export function stampBuildId(dist: string, now = new Date(), commit?: string): string {
   const manifestPath = join(dist, "fxmanifest.lua");
   // Trailing whitespace NORMALISED: stripping the stamp takes the blank line
   // ahead of it, so without this a restamp reports a new id for an unchanged tree.
-  const bare = `${readFileSync(manifestPath, "utf8").replace(STAMP_LINE, "").trimEnd()}\n`;
+  const bare = `${readFileSync(manifestPath, "utf8").replace(STAMP_LINES, "").trimEnd()}\n`;
 
   const hash = createHash("sha256");
   for (const rel of stagedPaths(dist)) {
@@ -118,7 +128,8 @@ export function stampBuildId(dist: string, now = new Date()): string {
   }
 
   const id = `${now.toISOString().slice(0, 10).replace(/-/g, "")}-${hash.digest("hex").slice(0, 8)}`;
-  writeFileSync(manifestPath, `${bare}\n${BUILD_STAMP_KEY} '${id}'\n`, "utf8");
+  const commitLine = commit ? `${COMMIT_STAMP_KEY} '${commit}'\n` : "";
+  writeFileSync(manifestPath, `${bare}\n${BUILD_STAMP_KEY} '${id}'\n${commitLine}`, "utf8");
   return id;
 }
 
@@ -204,6 +215,12 @@ export interface ProdConfig {
   /** `tlib_build` in the staged manifest (see `stampBuildId`). Opt-in: it changes
    *  the manifest of every resource that releases through here. */
   buildStamp?: boolean;
+  /**
+   * The verdict of `assertReleasable`, which the caller awaits BEFORE calling `runProd`:
+   * `runProd` is synchronous and its siblings do not await it. Stamps the commit, tags the
+   * version once the zip is written, and says what to upload. Opt-in like `buildStamp`.
+   */
+  release?: ReleaseState;
 }
 
 export function assertProductionFiles(root: string, files: string[]) {
@@ -226,7 +243,7 @@ export function buildProductionUI(
 }
 
 export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
-  const { name, root, uiBuilds, include } = config;
+  const { name, root, uiBuilds, include, release } = config;
 
   for (const ui of uiBuilds) {
     const cwd = join(root, ui.source);
@@ -291,13 +308,28 @@ export function runProd(config: ProdConfig, AdmZipClass: new () => ZipLike) {
   }
 
   // Last before the zip, so the id covers every staged byte.
+  let buildId: string | null = null;
   if (config.buildStamp) {
     step("Stamping the build id");
-    console.log(`  ${BUILD_STAMP_KEY} '${stampBuildId(dist)}'`);
+    buildId = stampBuildId(dist, new Date(), release?.commit);
+    console.log(`  ${BUILD_STAMP_KEY} '${buildId}'`);
   }
 
   // Download URLs depend on the stable filename; identity stays in the manifest.
   createZip(new AdmZipClass(), dist, join(root, ".build", `${name}.zip`), name, {
     expectConfig: config.expectConfig,
   });
+
+  if (release?.dev) {
+    console.log(`      DEV build from ${release.commit}: not a release, do not upload it.\n`);
+  } else if (release && buildId) {
+    // After the zip, so a build that failed leaves no tag claiming the version.
+    if (release.needsTag) {
+      console.log(`      tagged ${tagRelease(bunGit(root), name, release.version, buildId)}`);
+    }
+    console.log(
+      `      ${name} ${release.version} build ${buildId} from ${release.commit}.\n` +
+        `      Upload .build/${name}.zip as the asset of the release for tag v${release.version}.\n`
+    );
+  }
 }

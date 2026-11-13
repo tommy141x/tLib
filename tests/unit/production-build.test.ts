@@ -145,6 +145,32 @@ describe("production UI build selection", () => {
     }
   });
 
+  test("the commit is stamped in its own key and does not change the build id", () => {
+    // Same bytes committed twice are one build. If the commit fed the hash, the id could
+    // no longer answer "is this the same build as theirs?" across a rebase.
+    const dirs = [0, 1].map(() => {
+      const dist = mkdtempSync(join(tmpdir(), "tlib-stamp-commit-"));
+      writeFileSync(join(dist, "fxmanifest.lua"), "version '1.1'\n");
+      return dist;
+    });
+    try {
+      const day = new Date("2026-11-13T10:00:00Z");
+      const a = stampBuildId(dirs[0], day, "abc1234");
+      const b = stampBuildId(dirs[1], day, "def5678");
+      expect(a).toBe(b);
+      const manifest = readFileSync(join(dirs[0], "fxmanifest.lua"), "utf8");
+      expect(manifest).toContain("tlib_commit 'abc1234'");
+      // Restamping replaces both lines instead of stacking them.
+      expect(stampBuildId(dirs[0], day, "abc1234")).toBe(a);
+      const again = readFileSync(join(dirs[0], "fxmanifest.lua"), "utf8");
+      expect(again.match(/^tlib_commit/gm)).toHaveLength(1);
+      expect(again.match(/^tlib_build/gm)).toHaveLength(1);
+      expect(again).toMatch(/^version '1\.1'$/m);
+    } finally {
+      for (const dist of dirs) rmSync(dist, { recursive: true, force: true });
+    }
+  });
+
   test("tLib release selects the script that generates all three runtime artifacts", () => {
     const release = readFileSync(new URL("../../scripts/prod.ts", import.meta.url), "utf8");
     const pkg = JSON.parse(

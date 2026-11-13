@@ -1,6 +1,11 @@
 import { join } from "node:path";
 import AdmZip from "adm-zip";
-import { runProd } from "../shared/ts/build/index.ts";
+import {
+  assertReleasable,
+  bunGit,
+  getManifestVersion,
+  runProd,
+} from "../shared/ts/build/index.ts";
 
 // The release allowlist is written out file by file rather than as whole trees.
 // client/ and server/ both mix what runs on a server with what only builds it --
@@ -9,19 +14,33 @@ import { runProd } from "../shared/ts/build/index.ts";
 // server/dist/bundle.js -- so copying either directory whole would ship the
 // sources and their node_modules. A missing entry here is a hard error, not a
 // warning: see stageFiles in ../shared/ts/build/core.ts.
+//
+// `bun run prod` is a RELEASE build: it refuses a dirty tree or a version that a tag
+// already names on other files, and tags the version once the zip exists.
+// `bun run prod --dev` skips that, and the zip says so. See release-gate.ts.
+const root = join(import.meta.dir, "..");
+const version = await getManifestVersion(join(root, "fxmanifest.lua"));
+if (!version) throw new Error("Could not read a version from fxmanifest.lua");
+const release = await assertReleasable({
+  root,
+  version,
+  dev: process.argv.includes("--dev"),
+  // FiveM never reads package.json; the tooling does, so it has to agree with the manifest.
+  versionTargets: [{ kind: "json", file: "package.json" }],
+  git: bunGit(root),
+});
+
 runProd(
   {
     name: "tLib",
+    release,
     // tLib is the library, not a configurable resource: it ships no config.lua and
     // has no credentials of its own. Declared so `createZip`'s credential sanitizer
     // treats "no config file staged" as expected here and as a refusal everywhere else.
     expectConfig: false,
-    // v1.0 was republished in place with a crash fix in it and no version change,
-    // after which `tradio_diag` reported `tLib 1.0.0` for both trees. See
-    // stampBuildId: this is the id that tells them apart, and it is derived from
-    // the zipped bytes rather than remembered by whoever cuts the release.
+    // The build id a diagnostic quotes, derived from the zipped bytes. See stampBuildId.
     buildStamp: true,
-    root: join(import.meta.dir, ".."),
+    root,
     uiBuilds: [
       {
         source: "client/web",
