@@ -65,6 +65,8 @@ client_scripts {
 
 server_scripts {
     'server/dist/bundle.js',
+    -- Right after the bundle, whose absence or damage it exists to report.
+    'server/sv_install.lua',
     'server/lib/adapter/utils.lua',
     'server/lib/adapter/permission.lua',
     -- Before sv_permission and sv_marketplace: in demo mode it overrides both.

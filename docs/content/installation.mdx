@@ -11,9 +11,10 @@ published: true
 ### Download
 
 Take the latest release from
-[GitHub Releases](https://github.com/tommy141x/tLib/releases). A source checkout is not
-enough — only the release carries the built NUI page and server bundle. To work from source,
-see *Building from source* in the repository README.
+[GitHub Releases](https://github.com/tommy141x/tLib/releases/latest) and download the file
+named `tLib.zip`. **Not "Source code (zip)"**: that is the repository without its build, and
+only the release carries the built NUI page and server bundle. To work from source, see
+*Building from source* in the repository README.
 
 ### Extract
 
@@ -28,6 +29,29 @@ ensure tLib
 ```
 
 </Steps>
+
+### Check what you are running
+
+Type `tlib_version` in the **server console**. It prints one line to paste into a ticket,
+and a row for every resource that needs tLib:
+
+```txt
+tLib 1.1.2 build 20261113-ab12cd34 commit 3f9c1a2 @ <the tLib folder> | door=ingress listener=disabled netPort=30120 publicUrl=detected reachedFromOutside=no
+  tRadio 7.1 build 20261110-0f3e9a1c | needs tLib >= 1.1.2: ok
+```
+
+Every release has a version of its own — `1.1`, then `1.1.1`, `1.1.2` — so a version number
+means one exact build, and the **build** and **commit** say which files you hold. A resource
+that needs a newer tLib than you have refuses to start and says which version it needs, which
+one you have, and where to download it. No IP address appears in the line.
+
+If the version is not the one you just installed, the folder named after `@` is the folder
+FiveM is running. Look there for a second `tLib` folder or one extracted into a subfolder, and
+run `refresh` in the server console after replacing files, before restarting.
+
+If tLib's files did not all arrive — a source download, or a file cut short by an upload tool
+— tLib says so at startup, names each file, and links the release page. Extract `tLib.zip` on
+the server, or upload it by SFTP, rather than through a panel's file uploader.
 
 ## Who counts as an admin
 
