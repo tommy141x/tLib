@@ -34,6 +34,13 @@ function AddEventHandler(name, fn)
     table.insert(h.events[name], fn)
 end
 function GetCurrentResourceName() return 'tLib' end
+-- The adapter's registerNUICallback loads tlib.nui from the resource. string.dump rather than
+-- io.open: the fengari runtime does not implement io.open (same approach as adapter-fivem.lua).
+function LoadResourceFile(_, path) return string.dump(assert(loadfile(path))) end
+-- The watchdog tlib.nui.register arms only matters to a callback that never answers; the
+-- dialog `__tlib_nui_ready` handler answers at once, so a thread that never runs is enough.
+function GetGameTimer() return 0 end
+Citizen = { CreateThread = function() end, Wait = function() end }
 function GetInvokingResource() return h.owner end
 function RegisterNuiCallbackType() end
 function SendNUIMessage(message) h.messages[#h.messages + 1] = message end
