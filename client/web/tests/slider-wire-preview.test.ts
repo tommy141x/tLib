@@ -1,7 +1,7 @@
 /**
  * A slider drag reaches the host while it is happening, at a bounded rate.
  *
- * ── WHY THIS TEST EXISTS ───────────────────────────────────────────────────
+ * Why this test exists
  *
  * Committing on every `onValueChange` made a drag one NUI -> Lua ->
  * UpdateDialogField round trip PER PIXEL, so the commit was moved to

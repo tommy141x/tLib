@@ -115,7 +115,7 @@ export function NuiField(props: {
   // is exactly the one meant to be deduped.
   let committedSlider: number | undefined;
 
-  // ── Live preview on the wire, rate-limited ───────────────────────────────
+  // Live preview on the wire, rate-limited
   //
   // A drag used to be local-only until the pointer came up, because committing
   // on `onValueChange` meant one NUI -> Lua -> UpdateDialogField round trip PER

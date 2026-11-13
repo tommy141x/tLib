@@ -68,7 +68,7 @@ const INGRESS_DOOR_KEYS = ["server_script", "shared_script"] as const;
  * regex over a manifest also matches the same text inside a comment, and these are the
  * entries FXServer actually loaded.
  *
- * ⚠ FAILS OPEN. Any error, or a runtime that cannot answer, returns true — a diagnostic
+ * FAILS OPEN. Any error, or a runtime that cannot answer, returns true — a diagnostic
  * that cries wolf on a healthy server is worse than one that stays quiet, and this one's
  * whole job is to be believed when it fires.
  *
@@ -244,7 +244,7 @@ export function registerBridge(
       return { ok: false, retryable: true, error };
     }
 
-    // ⛔ Mounted, hub-listed, unreachable. Reported 2026-11-02: a current tLib against a
+    // Mounted, hub-listed, unreachable. Reported 2026-11-02: a current tLib against a
     // tRadio from before tRadio shipped the door rendered two confident hub cards whose
     // links both answered FXServer's bare `Not found.` REFUSED and not merely logged,
     // because a card promising that address is worse than no card, and a consumer that

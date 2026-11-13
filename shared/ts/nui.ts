@@ -18,7 +18,7 @@ export function __resetNuiBridgeWarning(): void {
   _noBridgeWarned = false;
 }
 
-// ⚠ The fallback is another resource's name, so it is only ever correct for tLib's own
+// The fallback is another resource's name, so it is only ever correct for tLib's own
 // pages. A CONSUMER whose page reaches this fallback POSTs its callbacks to
 // `https://tLib/<event>`, which has no such handler, and every call hangs to the
 // timeout below. `??` alone did not cover that: `GetParentResourceName` can exist
