@@ -39,7 +39,9 @@ export interface Finding {
 
 /** Lua with comments blanked, keeping line numbers. */
 function stripComments(source: string): string {
-  const blanked = source.replace(/--\[(=*)\[[\s\S]*?\]\1\]/g, (block) => block.replace(/[^\n]/g, " "));
+  const blanked = source.replace(/--\[(=*)\[[\s\S]*?\]\1\]/g, (block) =>
+    block.replace(/[^\n]/g, " ")
+  );
   return blanked
     .split("\n")
     .map((line) => line.replace(/--.*$/, ""))
@@ -85,7 +87,9 @@ if (import.meta.main) {
   const root = resolve(import.meta.dir, "..");
   const { files, findings } = scanTree(root);
   if (files < 50) {
-    console.error(`check:nui: read only ${files} Lua files under ${root}; the walk is broken, not clean.`);
+    console.error(
+      `check:nui: read only ${files} Lua files under ${root}; the walk is broken, not clean.`
+    );
     process.exit(2);
   }
 
@@ -97,7 +101,8 @@ if (import.meta.main) {
   }
 
   if (findings.length > 0) {
-    for (const f of findings) console.error(`${f.file}:${f.line}: ${f.what} -- use tlib.nui.register`);
+    for (const f of findings)
+      console.error(`${f.file}:${f.line}: ${f.what} -- use tlib.nui.register`);
     console.error(`check:nui: ${findings.length} bare NUI registration(s)`);
     process.exit(1);
   }

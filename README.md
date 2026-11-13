@@ -559,6 +559,41 @@ Converts between FiveM's coordinate system (Z-up) and Three.js (Y-up) for web ed
 - `threeToFivemPos(v)` — Three.js → FiveM position
 - `applyCameraSync(camera, position, focus)` — Sync a Three.js camera to a FiveM camera state
 
+### Retry loop (`@tlib/shared/retry`)
+
+One loop for a page that polls until something answers: a connection-info request, a `nui:ready`
+resend, a re-assert after a refusal. It is single-flight (the next delay starts when the attempt
+settles, so attempts never overlap), runs a fast stretch and then exponential slow delays up to a
+cap, jitters them, and gives up on a bound.
+
+```ts
+import { createRetryLoop } from "@tlib/shared/retry";
+
+const poll = createRetryLoop({
+  attempt: async () => {
+    await fetchNui("requestConnectionInfo");
+  },
+  schedule: { fastMs: 2_000, fastCount: 8, slowMs: 15_000, capMs: 60_000, jitter: 0.2 },
+  maxElapsedMs: 10 * 60_000,
+  onGiveUp: () => showPersistentMessage(),
+});
+
+poll.start();                  // does nothing if it is already running
+poll.succeed();                // the reply event arrived
+onPowerOn(() => poll.resume()); // a loop that gave up asks again, from the top
+```
+
+- `attempt` returns or resolves exactly `true` to finish; anything else, or a throw, retries.
+  It receives an `AbortSignal` that `stop()` aborts.
+- `start()` while running is a no-op, so a second caller cannot reset the backoff the first earned.
+- `resume()` revives a loop that gave up from the top of the schedule. On a running loop it resets
+  the backoff and asks at once. It does nothing for a loop that was stopped or has succeeded.
+- `stop()` and `succeed()` are final until the next `start()`. A hidden page pauses the timer and a
+  visible one resumes it (`pauseWhenHidden`, default on), and neither ever restarts a finished
+  loop. Time spent hidden does not count against `maxElapsedMs`.
+- `maxAttempts` and `maxElapsedMs` bound it; `onGiveUp` says which one ran out.
+- `retryDelay(schedule, delayIndex)` is the ladder as a pure function, for a "retrying in 30s" label.
+
 ---
 
 ## Installation

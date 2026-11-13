@@ -17,6 +17,7 @@
     "./hud-preview-script": "./hud-preview-script.ts",
     "./hud-template": "./hud-template.ts",
     "./latest-request": "./latest-request.ts",
+    "./retry": "./retry.ts",
     "./runtime-assets": "./runtime-assets.ts",
     "./ui-manifest": "./ui-manifest.ts",
     "./nui-kit": "./nui-kit/NuiButton.tsx",

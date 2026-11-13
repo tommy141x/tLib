@@ -25,27 +25,38 @@ describe("nui callback gate", () => {
         "a.lua",
         "RegisterNuiCallbackType(evt)\nAddEventHandler('__cfx_nui:' .. evt, fn)"
       );
-      expect(found.map((f) => f.what)).toEqual(["RegisterNuiCallbackType", "a raw __cfx_nui: handler"]);
+      expect(found.map((f) => f.what)).toEqual([
+        "RegisterNuiCallbackType",
+        "a raw __cfx_nui: handler",
+      ]);
       expect(found.map((f) => f.line)).toEqual([1, 2]);
     });
 
     test("an indented call inside a function", () => {
-      expect(scanSource("a.lua", "if x then\n    RegisterNUICallback (name, h)\nend")).toHaveLength(1);
+      expect(scanSource("a.lua", "if x then\n    RegisterNUICallback (name, h)\nend")).toHaveLength(
+        1
+      );
     });
   });
 
   describe("controls: the scan stays quiet on what is not a registration", () => {
     test("tlib.nui.register", () => {
-      expect(scanSource("a.lua", "tlib.nui.register('x', function(_, reply) reply(1) end)")).toEqual([]);
+      expect(
+        scanSource("a.lua", "tlib.nui.register('x', function(_, reply) reply(1) end)")
+      ).toEqual([]);
     });
 
     test("a line comment and a trailing comment", () => {
-      expect(scanSource("a.lua", "-- RegisterNUICallback is bare\nlocal x = 1 -- RegisterNUICallback")).toEqual([]);
+      expect(
+        scanSource("a.lua", "-- RegisterNUICallback is bare\nlocal x = 1 -- RegisterNUICallback")
+      ).toEqual([]);
     });
 
     test("a long comment, with the line numbers after it intact", () => {
       const source = "--[[\nRegisterNUICallback('x', f)\n]]\nRegisterNUICallback('y', f)";
-      expect(scanSource("a.lua", source)).toEqual([{ file: "a.lua", line: 4, what: "RegisterNUICallback" }]);
+      expect(scanSource("a.lua", source)).toEqual([
+        { file: "a.lua", line: 4, what: "RegisterNUICallback" },
+      ]);
     });
 
     test("a longer identifier that merely contains the name", () => {
