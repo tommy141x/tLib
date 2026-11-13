@@ -174,6 +174,8 @@ env.Platform = { _stub = function(name) return function() error(name .. ' is stu
 env.source = 1
 
 local function run(path) return assert(loadfile(path, 't', env))() end
+-- The rate limit comes from the real module, loaded by path the way tLib's own VM does.
+dofile('tests/fixtures/real-module.lua')(env, 'shared/imports/ratelimit/server.lua')
 run('shared/lib/adapter/events.lua')
 run('shared/lib/adapter/lifecycle.lua')
 run('server/sv_discovery.lua')

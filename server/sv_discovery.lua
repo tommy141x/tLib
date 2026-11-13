@@ -34,34 +34,6 @@ local function manifestLineFor(metadataKey, targetPath)
     return tostring(metadataKey) .. " '" .. tostring(targetPath) .. "'"
 end
 
--- The admin-gated handlers below are bounded by checkPerm; config_request is not,
--- and it's the expensive one -- it serialises the whole config map. A floor on
--- the call interval (not a token bucket, same as tLS) is enough since a client
--- only asks once per boot. Buckets are keyed by event name, not instance, since
--- each consumer resource's Discovery has its own eventPrefix and must not share a budget.
-local _rateBuckets = {}
-
-local function rateLimited(bucket, src, intervalMs)
-    -- Platform.now() is a stub off FiveM, where there are no net events to
-    -- limit in the first place.
-    if not _TLIB_IS_FIVEM then return false end
-    local b = _rateBuckets[bucket]
-    if not b then
-        b = {}
-        _rateBuckets[bucket] = b
-    end
-    local now = Platform.now()
-    local last = b[src]
-    if last and (now - last) < intervalMs then return true end
-    b[src] = now
-    return false
-end
-
--- Otherwise each bucket keeps one timestamp per player who ever connected, for the server's life.
-Platform.onPlayerDropped(function(src)
-    for _, b in pairs(_rateBuckets) do b[src] = nil end
-end)
-
 local function _loadFile(resource, path)
     if _TLIB_IS_FIVEM then
         return LoadResourceFile(resource, path)
@@ -1024,11 +996,17 @@ function Discovery.create(opts)
             return permCheck(src)
         end
 
+        -- The admin-gated handlers are bounded by checkPerm; config_request is not,
+        -- and it's the expensive one -- it serialises the whole config map. A floor
+        -- on the call interval is enough since a client only asks once per boot.
+        -- Named by event, not instance: each consumer's Discovery has its own
+        -- eventPrefix and must not share a budget.
+        local configRequestGate = Platform.rateLimit(prefix .. ":config_request", 1000)
         netHandler(prefix .. ":config_request", function()
             local src = source
             if not src or src <= 0 then return end
             -- After the cheap source check, before serialising the config map.
-            if rateLimited(prefix .. ":config_request", src, 1000) then return end
+            if configRequestGate(src) then return end
             -- See `broadcast` above: the owner answers this itself. This is the
             -- drop worth hearing about — a client that asks and is never told
             -- has no other way to find out.

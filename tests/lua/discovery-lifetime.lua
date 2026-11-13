@@ -120,6 +120,8 @@ env.source = 7
 local function run(path)
     return assert(loadfile(path, 't', env))()
 end
+-- The rate limit comes from the real module, loaded by path the way tLib's own VM does.
+dofile('tests/fixtures/real-module.lua')(env, 'shared/imports/ratelimit/server.lua')
 run('shared/lib/adapter/events.lua')
 -- discovery/server.lua frees its per-player rate-limit state through
 -- Platform.onPlayerDropped, which lives here rather than in events.lua. Loading

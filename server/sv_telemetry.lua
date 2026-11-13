@@ -21,14 +21,9 @@ local CONSENT_REQUEST_EVENT = 'tlib:diag:consentPlease'
 --- Minimum milliseconds between one player's batches. The NUI and the consumer
 --- client thread each flush every 15 s, so a 5 s floor accommodates both. A
 --- floor, not a bucket: there is no legitimate burst to bank allowance for.
-local INGEST_INTERVAL_MS = 5000
-
-local lastIngest = {}
-
-AddEventHandler('playerDropped', function()
-    local src = source
-    if src then lastIngest[src] = nil end
-end)
+--- One gate for the batch and the consent request: asking is cheaper than
+--- ingesting but still a round trip a client controls.
+local ingestGate = Platform.rateLimit('telemetry:ingest', 5000)
 
 --- The answer a client is told: only the three fields a client needs. The
 --- convar's value, the queue depth and the breaker state are operator-facing
@@ -63,10 +58,7 @@ RegisterNetEvent(INGEST_EVENT, function(payload)
 
     -- The floor is applied BEFORE the json.decode, the only expensive thing
     -- here: a limiter behind the parse still pays the parse per refused batch.
-    local now = GetGameTimer()
-    local last = lastIngest[src]
-    if last and (now - last) < INGEST_INTERVAL_MS then return end
-    lastIngest[src] = now
+    if ingestGate(src) then return end
 
     if type(payload) ~= 'string' or payload == '' then return end
     -- A client-supplied string with a hard ceiling. An oversized body is
@@ -81,12 +73,7 @@ end)
 RegisterNetEvent(CONSENT_REQUEST_EVENT, function()
     local src = source
     if not src or src <= 0 then return end
-    -- Same floor, same bucket: asking is cheaper than ingesting but it is
-    -- still a round trip a client controls.
-    local now = GetGameTimer()
-    local last = lastIngest[src]
-    if last and (now - last) < INGEST_INTERVAL_MS then return end
-    lastIngest[src] = now
+    if ingestGate(src) then return end
     TelemetryBroadcastConsent(src)
 end)
 

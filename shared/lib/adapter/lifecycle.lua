@@ -71,6 +71,21 @@ if _TLIB_SIDE == 'server' then
 end
 
 
+local _rateLimit
+
+--- A per-player minimum-interval gate, the one consumers get as tlib.ratelimit.bucket.
+--- tLib's own VM has no `tlib` global, so it loads that module by path; `name` is
+--- scoped to this VM. Off FiveM there are no net events to limit.
+--- @return fun(src: number|string): boolean  true when the call is REFUSED
+function Platform.rateLimit(name, intervalMs)
+    if not _TLIB_IS_FIVEM then return function() return false end end
+    _rateLimit = _rateLimit or load(
+        LoadResourceFile(GetCurrentResourceName(), 'shared/imports/ratelimit/server.lua'),
+        '@@tLib/shared/imports/ratelimit/server.lua'
+    )()
+    return _rateLimit.bucket(name, intervalMs)
+end
+
 --- The resource that invoked the export currently running, or nil if the host
 --- cannot tell. nil means unverified, not trusted -- anything keying ownership off
 --- this must fall back to an explicitly declared owner.

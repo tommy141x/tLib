@@ -1055,12 +1055,14 @@ what registers the `__tlib_hud_ready` NUI callback and tLib's start/stop handler
 
 ## ratelimit
 
-A per-player minimum interval on a net event, as a closure you call at the top of the
-handler.
+A per-player limit on a net event, as a closure you call at the top of the handler. Two shapes:
+`bucket` is a minimum interval, for an event that fires once per boot or key press;
+`tokens` is a token bucket, for an event that legitimately arrives in bursts.
 
 | Function | Description |
 | --- | --- |
 | `ratelimit.bucket(name, intervalMs)` | Returns `fn(src) -> boolean`. **`true` means refused.** |
+| `ratelimit.tokens(name, opts)` | Returns `fn(src, cost?) -> refused, retryAfterMs`. See below. |
 | `ratelimit.forget(src)` | Drop one player's timestamps. `nil` drops every player. |
 | `ratelimit.reset()` | Drop the buckets themselves. Tests only. |
 
@@ -1079,10 +1081,41 @@ end)
 Writing `if not gate(src) then return end` disables the handler rather than the rate limit.
 </Callout>
 
-`gate(nil)` answers `false`. Names are scoped to your own VM; the same name twice hands back
-two closures over **one** timestamp table and the last `intervalMs` wins. Disconnected
-players are swept for you. `net.fromClient` already applies a rate limit, so use this
-directly only for something that is not a net event, or to put several events on one budget.
+### tokens
+
+A player starts with `burst` tokens, each call spends `cost` (default `1`), and tokens come
+back at `refillPerSecond`. `burst` is what a legitimate flurry may spend at once — a join, a
+scan resume — and the refill rate is what bounds a sustained flood.
+
+```lua
+local access = tlib.ratelimit.tokens('requestRadioAccess', { burst = 15, refillPerSecond = 2 })
+
+RegisterNetEvent('tradio:requestRadioAccess', function()
+    if access(source) then return end
+end)
+
+local scan = tlib.ratelimit.tokens('trunkedScan', { burst = 40, refillPerSecond = 10 })
+local refused, retryAfterMs = scan(source, #channels)
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `burst` | *required* | Tokens a player starts with and the most they can hold. At least `1`. |
+| `refillPerSecond` | *required* | Tokens returned per second. Above `0`. |
+| `logWindowMs` | `30000` | A refusal prints one line per player per window, with how many were refused since the last. `0` prints every refusal. |
+| `onRefuse` | *none* | `fn(src, { name, refused, retryAfterMs })`, replacing the printed line. Same window. |
+
+A `cost` above `burst` can never pass and raises. A source that is not a positive number — a
+server-side emit, `nil` — is never limited, and a numeric string is the same player as its
+number. The refusal line is the reason a client that re-asks every few seconds does not fill the
+console.
+
+Names are scoped to your own VM, and the same name twice is one budget: two `bucket` closures
+share one timestamp table and the last `intervalMs` wins; two `tokens` closures share one token
+table and each keeps the limits it was made with. `bucket(name, ...)` answers `false` for a `nil`
+source. Disconnected players are swept for you, for both shapes. `net.fromClient` already
+applies a rate limit, so use these directly only for something that is not a net event, or to
+put several events on one budget.
 
 ---
 

@@ -18,35 +18,6 @@ local log = Logger.create('tLib/serversettings')
 
 ServerSettings = {}
 
--- saveEvent is bounded by Permission.registerAdminEvent; requestEvent is not --
--- anyone may fire it, and it costs an admin lookup, the onRequest callback and
--- a full settings payload back down the wire. A floor on the call interval
--- (not a token bucket) is enough since the client only fires once per panel
--- open. Keyed by event name since each consumer's ServerSettings has its own
--- requestEvent and must not share a budget.
-local _rateBuckets = {}
-
-local function rateLimited(bucket, src, intervalMs)
-    -- Platform.now() is a stub off FiveM, where there are no net events to
-    -- limit in the first place.
-    if not _TLIB_IS_FIVEM then return false end
-    local b = _rateBuckets[bucket]
-    if not b then
-        b = {}
-        _rateBuckets[bucket] = b
-    end
-    local now = Platform.now()
-    local last = b[src]
-    if last and (now - last) < intervalMs then return true end
-    b[src] = now
-    return false
-end
-
--- Otherwise each bucket keeps one timestamp per player who ever connected, for the server's life.
-Platform.onPlayerDropped(function(src)
-    for _, b in pairs(_rateBuckets) do b[src] = nil end
-end)
-
 --- Nested tables merge, scalars overwrite.
 local function deepMerge(target, source)
     for k, v in pairs(source) do
@@ -170,13 +141,20 @@ function ServerSettings.create(opts)
     end
 
     if reqEvent then
+        -- saveEvent is bounded by Permission.registerAdminEvent; requestEvent is
+        -- not -- anyone may fire it, and it costs an admin lookup, the onRequest
+        -- callback and a full settings payload back down the wire. A floor on the
+        -- call interval is enough since the client only fires once per panel open.
+        -- Named by event since each consumer's ServerSettings has its own
+        -- requestEvent and must not share a budget.
+        local requestGate = Platform.rateLimit(reqEvent, 1000)
         RegisterNetEvent(reqEvent, function()
             local src = source
             -- Before the admin lookup and the onRequest callback, both of which
             -- are the work this event actually costs. Only a real client is
             -- limited: a server-side emit has source 0 and is not a request
             -- anyone can forge.
-            if src and src > 0 and rateLimited(reqEvent, src, 1000) then return end
+            if src and src > 0 and requestGate(src) then return end
             local payload = { settings = settings }
             local ok, isAdm = pcall(Permission.isPlayerAdmin, src)
             payload.isAdmin = (ok and isAdm) or false
