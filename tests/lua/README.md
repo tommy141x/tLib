@@ -37,3 +37,17 @@ that inherit it.
 Comments here may mention a consumer by name when they are explaining history — why
 an invariant had to be written down once the engine stopped having exactly one user.
 Nothing in the code under `lua/menu` may.
+
+## What the whole test run needs
+
+`bun test`, `bun run test:dom` and `bun run test:lua` touch no network except one thing:
+the Lua VM, `fengari-node-cli`, is not a dependency of this repo (nothing that ships to a
+server should carry it) and is fetched into bunx's cache on first use. `test:lua`, the
+`:control` scripts and `tests/unit/secret-gate.test.ts` use it, so the first run on a
+machine, or after the OS clears its temp directory, needs the network once. Everything else
+runs offline: a loopback listener on an ephemeral port is the only socket a test opens.
+
+`bun test` does not depend on the machine's git configuration (identity, signing, hooks),
+its time zone or where TEMP is, and leaves nothing in the repo or in TEMP. The cases that
+read a sibling resource (`marketplace-base-url`, `versioncheck-provider`) skip when the
+sibling is not beside tLib; with it present they assert against that checkout's files.

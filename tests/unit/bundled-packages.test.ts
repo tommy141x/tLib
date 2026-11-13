@@ -7,8 +7,8 @@
  * releases — through tLib's marketplace installer, out of tLib's own `node_modules`, so
  * no manifest in tDetector's repo could have revealed it.
  */
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -28,8 +28,14 @@ var require_thing = __commonJS(function () {});
 function install() {}
 `;
 
+const dirs: string[] = [];
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
 function bundleFile(contents = BUNDLE): string {
   const dir = mkdtempSync(join(tmpdir(), "tlib-bundled-"));
+  dirs.push(dir);
   const file = join(dir, "bundle.js");
   writeFileSync(file, contents);
   return file;

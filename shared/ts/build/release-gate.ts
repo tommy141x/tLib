@@ -22,7 +22,13 @@ export const bunGit =
   (cwd: string): Git =>
   (args) => {
     const proc = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-    return { ok: proc.exitCode === 0, out: proc.stdout.toString().trim() };
+    const ok = proc.exitCode === 0;
+    // On failure the reason is on stderr ("Please tell me who you are"); without it the
+    // refusal built from `out` says only "git failed".
+    const out = (
+      ok ? proc.stdout.toString() : proc.stdout.toString() + proc.stderr.toString()
+    ).trim();
+    return { ok, out };
   };
 
 export interface ReleaseState {

@@ -56,7 +56,17 @@ describe("the pattern list has exactly one home", () => {
     fs.rmSync(script, { force: true });
 
     const stdout = new TextDecoder().decode(run.stdout).trim();
-    expect(run.exitCode).toBe(0);
+    if (run.exitCode !== 0) {
+      // The first run on a machine fetches fengari-node-cli into bunx's cache (it is not
+      // a dependency of this repo, by design: see scripts/test-lua.ts), so an offline cold
+      // cache lands here. Say that, instead of a bare "expected 0".
+      throw new Error(
+        `the Lua VM did not run (bunx exit ${run.exitCode}). It needs fengari-node-cli, fetched ` +
+          `on first use and cached after; run \`bun run test:lua\` once with network.
+` +
+          new TextDecoder().decode(run.stderr)
+      );
+    }
     const fromLua = stdout
       .split("\n")
       .map((line) => line.trim())

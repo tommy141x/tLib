@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { toSemver } from "../../shared/ts/build/version";
 import {
   assertReleasable,
   assertVersionShape,
   bunGit,
+  type Git,
   tagRelease,
 } from "../../shared/ts/build/release-gate";
 
@@ -22,11 +23,19 @@ function repo(version = "1.1") {
   roots.push(root);
   const git = bunGit(root);
   const run = (...args: string[]) => {
-    const r = git(["-c", "user.name=t", "-c", "user.email=t@example.com", ...args]);
+    const r = git(args);
     if (!r.ok) throw new Error(`git ${args.join(" ")}: ${r.out}`);
     return r.out;
   };
   run("init", "-q");
+  // Repo-local, so nothing depends on the machine's global git config: `tagRelease` runs
+  // through `git` without these and failed on a runner with no identity set, and a global
+  // signing or hooks setting would have broken the commit below the same way.
+  run("config", "user.name", "t");
+  run("config", "user.email", "t@example.com");
+  run("config", "commit.gpgsign", "false");
+  run("config", "tag.gpgsign", "false");
+  run("config", "core.hooksPath", join(root, ".git", "no-hooks"));
   writeFileSync(join(root, "fxmanifest.lua"), `version '${version}'\n`);
   writeFileSync(join(root, "package.json"), JSON.stringify({ version: toSemver(version) }));
   writeFileSync(join(root, "a.lua"), "one\n");
@@ -142,7 +151,18 @@ describe("release gate", () => {
   test("outside a git checkout a release is refused and a dev build says unknown", async () => {
     const root = mkdtempSync(join(tmpdir(), "tlib-nogit-"));
     roots.push(root);
-    const input = { root, version: "1.1", git: bunGit(root) };
+    // Git is told not to look above `root`: a TEMP that sits inside some checkout (a CI
+    // workspace, a redirected TEMP) would otherwise make this "a git checkout" after all.
+    const git: Git = (args) => {
+      const proc = Bun.spawnSync(["git", ...args], {
+        cwd: root,
+        env: { ...process.env, GIT_CEILING_DIRECTORIES: dirname(root) },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      return { ok: proc.exitCode === 0, out: proc.stdout.toString().trim() };
+    };
+    const input = { root, version: "1.1", git };
     await expect(assertReleasable({ ...input, dev: false })).rejects.toThrow("not a git checkout");
     expect((await assertReleasable({ ...input, dev: true })).commit).toBe("unknown");
   });
