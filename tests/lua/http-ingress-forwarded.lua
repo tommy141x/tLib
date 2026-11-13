@@ -54,9 +54,12 @@ PerformHttpRequest = function(target, _cb, method, body, headers)
     sent = { target = target, method = method, body = body, headers = headers }
 end
 
+local resolveArgs = nil
+
 exports = {
     tLib = {
-        ResolveHttpIngress = function(_self, _method, path, _name, _basePath, _owner)
+        ResolveHttpIngress = function(_self, _method, path, _name, _basePath, _owner, address, userAgent)
+            resolveArgs = { address = address, userAgent = userAgent }
             return { kind = 'upstream', host = '127.0.0.1', port = 30120, path = path, prefix = '/tRadio' }
         end,
     },
@@ -172,6 +175,18 @@ assert(spellings(out, 'content-type')[1] == 'application/json', 'Content-Type is
 -- Host itself is dropped: the router picks a mount from the path alone, which is
 -- what keeps it from being an open relay.
 assert(#spellings(out, 'host') == 0, 'Host is not forwarded')
+
+-- Who knocked travels with the question the door already asks, so tLib can notice the first
+-- request from another machine without a second export call per request. The header is read
+-- in whatever case the client sent it.
+relay({ ['user-agent'] = 'Mozilla/5.0' }, '198.51.100.4')
+assert(resolveArgs.address == '198.51.100.4', 'the peer address reaches ResolveHttpIngress')
+assert(resolveArgs.userAgent == 'Mozilla/5.0', 'the User-Agent reaches ResolveHttpIngress')
+relay({ ['User-Agent'] = 'tLib-HealthCheck' }, '198.51.100.4')
+assert(resolveArgs.userAgent == 'tLib-HealthCheck', 'a differently-cased User-Agent is found too')
+relay({}, nil)
+assert(resolveArgs.address == nil and resolveArgs.userAgent == nil,
+    'a request with neither passes nil, never an empty claim')
 
 print = realPrint
 print('PASS http-ingress-forwarded')

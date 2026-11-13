@@ -25,8 +25,10 @@
 export interface PublicUrl {
   /** Full base, no trailing slash — e.g. "https://example.com/radio". */
   base: string;
-  /** True when no convar was set and this came from IP detection. */
+  /** True when this came from IP detection: no value was set, or the one set was not used. */
   detected: boolean;
+  /** True when a value WAS set and not used: unparseable, or an address no host can have. */
+  rejected: boolean;
 }
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
@@ -34,11 +36,47 @@ const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 // Anything that cannot sit in an authority. Catches a pasted "ip:port (note)".
 const ILLEGAL = /[\s<>"'\\^`{|}]/;
 
+// What a docs example looks like once an operator has pasted it unedited: the `your-...`
+// words the install docs used, the names RFC 2606 reserves, and the three blocks RFC 5737
+// reserves for documentation. None can reach a server, so none is an answer.
+const PLACEHOLDER_NAME =
+  /^(?:your[-_.]?(?:server|ip|domain|address|host|public)[-_a-z0-9.]*|(?:[a-z0-9-]+\.)*example\.(?:com|org|net))$/i;
+const DOCUMENTATION_IPV4 = /^(?:192\.0\.2|198\.51\.100|203\.0\.113)\.\d{1,3}$/;
+
+/** True for a host that only ever appears in documentation. */
+export function isPlaceholderHost(host: string): boolean {
+  return PLACEHOLDER_NAME.test(host) || DOCUMENTATION_IPV4.test(host);
+}
+
+/**
+ * The Hub row of tLib's startup banner. A detected address names itself and the convar
+ * that overrides it: the host in it is a guess, and a wrong guess surfaces much later as a
+ * CORS refusal far from the cause. Nothing else is appended — the hub row once suggested
+ * `tlib_http_port 7777`, which on a host that never allocated 7777 binds a dead socket.
+ */
+export function hubRow(address: string, detected: boolean): string {
+  return detected
+    ? `${address} (detected — set tlib_http_public_url if players reach you another way)`
+    : address;
+}
+
+/** The warning for a `tlib_http_public_url` that was set and could not be used. */
+export function rejectedOverrideNotice(value: string): string {
+  return (
+    `tlib_http_public_url "${value}" is not an address tLib can use (a placeholder from the ` +
+    `docs, or not a web address), so tLib is detecting this server's public IP instead. Set it ` +
+    `to the address players type, such as "http://<your server's IP>:<your game port>" or ` +
+    `"https://radio.<your domain>".`
+  );
+}
+
 /**
  * `raw` is the convar verbatim; `detectedIp` is null when detection failed or
  * has not landed. Never throws — an unparseable value falls back to detection,
  * since a typo should not take the hub down, and a possibly-unreachable URL
- * beats a broken one.
+ * beats a broken one. A placeholder is treated as unparseable: printing
+ * `http://your-server-address:7777` as the panel's address is a confident lie, where
+ * a detected address at least says it is a guess.
  */
 export function resolvePublicUrl(
   raw: string | null,
@@ -46,11 +84,13 @@ export function resolvePublicUrl(
   port: number
 ): PublicUrl {
   const value = (raw ?? "").trim();
-  if (!value) return { base: autoBase(detectedIp, port), detected: true };
+  if (!value) return { base: autoBase(detectedIp, port), detected: true, rejected: false };
 
   const parsed = SCHEME.test(value) ? fromAbsolute(value) : fromBareAuthority(value, port);
-  if (!parsed) return { base: autoBase(detectedIp, port), detected: true };
-  return { base: parsed, detected: false };
+  if (!parsed || isPlaceholderHost(new URL(parsed).hostname)) {
+    return { base: autoBase(detectedIp, port), detected: true, rejected: true };
+  }
+  return { base: parsed, detected: false, rejected: false };
 }
 
 /** Detection fallback. "localhost" is correct for a dev box and harmless. */

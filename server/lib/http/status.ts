@@ -44,8 +44,39 @@ export interface HttpStatus {
    * through a proxy while tLib published a detected IP instead.
    */
   publicUrlDetected: boolean;
+  /**
+   * What became of `tlib_http_public_url`: "unset", "used", or "rejected" when it held
+   * something no host can have (a pasted docs placeholder, a typo) and detection answered
+   * instead. Carried out so `tlib_version` can name the one fact a support thread kept
+   * having to ask for.
+   */
+  publicUrlOverride: "unset" | "used" | "rejected";
   localUrl: string | null;
+  /**
+   * True once a request from ANOTHER machine has reached a door of tLib's. The only proof
+   * available from the inside that the printed address works for somebody else: a probe
+   * from this host to its own public address tests the router's hairpin, not the host's
+   * reachability. `reachedAt` is epoch milliseconds. No address is kept.
+   */
+  reachedFromOutside: boolean;
+  reachedAt: number | null;
   error: string | null;
+}
+
+/** The User-Agent shared/imports/healthcheck/server.lua sends. */
+const HEALTH_CHECK_AGENT = "tLib-HealthCheck";
+
+/**
+ * Could `address` be another machine? Loopback is this one, and so is the host's own
+ * detected public address, which is what a self-probe through the router arrives as.
+ * Anything unrecognisable is not evidence either way.
+ */
+export function isForeignAddress(address: unknown, ownPublicIp: string | null): boolean {
+  if (typeof address !== "string") return false;
+  const ip = address.trim().toLowerCase().replace(/^::ffff:/, "");
+  if (ip === "" || ip === "localhost" || ip === "::" || ip === "0.0.0.0") return false;
+  if (ip === "::1" || ip.startsWith("127.")) return false;
+  return ip !== ownPublicIp?.toLowerCase();
 }
 
 export class HttpReadiness {
@@ -57,6 +88,10 @@ export class HttpReadiness {
   // Starts true: until an override is accepted below, any address this ends
   // up publishing is a detected one.
   private publicUrlDetected = true;
+  private readonly overrideState: HttpStatus["publicUrlOverride"];
+  // Only to tell this host's own address apart from a visitor's. Never published.
+  private detectedIp: string | null = null;
+  private reachedAt: number | null = null;
 
   /**
    * `port` is the port the published address carries, which is the listener's
@@ -81,6 +116,11 @@ export class HttpReadiness {
     private readonly doors = { listener: true, ingress: true }
   ) {
     this.listenerState = doors.listener ? "starting" : "disabled";
+    this.overrideState = !override
+      ? "unset"
+      : resolvePublicUrl(override, null, 1).rejected
+        ? "rejected"
+        : "used";
     const initialPort = port();
     const resolved = initialPort === null ? null : resolvePublicUrl(override, null, initialPort);
     // Explicit localhost is supported. Only the implicit/provisional fallback
@@ -126,7 +166,10 @@ export class HttpReadiness {
       publicUrlState: this.publicUrlState,
       publicUrl: this.publicUrl,
       publicUrlDetected: this.publicUrlDetected,
+      publicUrlOverride: this.overrideState,
       localUrl: this.localUrl,
+      reachedFromOutside: this.reachedAt !== null,
+      reachedAt: this.reachedAt,
       error:
         this.listenerError ??
         (!this.doors.listener && !this.doors.ingress
@@ -149,10 +192,26 @@ export class HttpReadiness {
     this.changed(this.snapshot());
   }
 
+  /**
+   * A request arrived from `address`. The first one from another machine is announced
+   * through `changed`; every later one costs a comparison. The health check identifies
+   * itself by User-Agent and is skipped: with a hostname as the public address it comes
+   * back through the router from this host's own public address, and a hairpinning router
+   * would otherwise count the server visiting itself as the outside world.
+   */
+  noteRequestFrom(address: unknown, userAgent?: unknown): void {
+    if (this.reachedAt !== null || this.listenerState === "stopped") return;
+    if (typeof userAgent === "string" && userAgent.startsWith(HEALTH_CHECK_AGENT)) return;
+    if (!isForeignAddress(address, this.detectedIp)) return;
+    this.reachedAt = Date.now();
+    this.changed(this.snapshot());
+  }
+
   resolveAddress(ip: string | null): void {
     // A late discovery result from a stopped lifetime must not notify consumers
     // or resurrect publication after tLib has been restarted.
     if (this.listenerState === "stopped" || this.publicUrlState === "ready") return;
+    this.detectedIp = ip;
     const livePort = this.port();
     const resolved = ip && livePort !== null ? resolvePublicUrl(this.override, ip, livePort) : null;
     this.publicUrl = resolved?.base ?? null;

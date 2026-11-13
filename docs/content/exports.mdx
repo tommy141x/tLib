@@ -515,6 +515,32 @@ exports['tLib']:Fetch({ url = 'https://example.com/api', method = 'GET' },
 
 ---
 
+## Web hub status
+
+**Server.** Where tLib's panels can be reached, for a resource that prints an address or has to
+decide what to say about one. `exports['tLib']:GetHttpStatus()` returns a table, and the local
+server event `tLib:http:status` carries the same table on every change.
+
+| Field | Meaning |
+| --- | --- |
+| `ready` | A door is open and an address is known. Nothing is published before this. |
+| `door` | `"ingress"` (the FiveM server port), `"listener"` (tLib's own port) or `nil`. |
+| `listenerState` | `disabled`, `starting`, `listening`, `failed` or `stopped`. `disabled` is a listener nobody asked for. |
+| `publicUrl`, `publicUrlState` | The address tLib publishes, and `resolving`, `ready` or `failed`. |
+| `publicUrlDetected` | `true` when `publicUrl` came from IP detection rather than `tlib_http_public_url`. |
+| `publicUrlOverride` | `unset`, `used`, or `rejected` when `tlib_http_public_url` held something no server can have, such as a docs placeholder. |
+| `localUrl` | The listener's loopback address for a health check, or `nil` when no listener binds. |
+| `reachedFromOutside`, `reachedAt` | `true` once a request from **another machine** has reached a door of tLib's, and when (epoch milliseconds). Loopback, this server's own public address and tLib's own health check do not count. No address is kept. |
+| `error` | What to fix, or `nil`. |
+
+`reachedFromOutside` is the only proof available from inside the server that the printed address
+works for somebody else. A probe from the server to its own public address tests the router's
+loop-back, not the server's reachability, which is why a failed one is weak evidence and a
+visitor is strong. The same moment is announced once as the local server event
+`tlib:http:remote` with the time as its only argument.
+
+---
+
 ## Permissions
 
 **Client and server.** Levels: `0` none, `1` admin (`tlib.admin`), `2` superadmin

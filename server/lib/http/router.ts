@@ -32,7 +32,8 @@ export class Router {
       state: ListenerState,
       localUrl: string | null,
       error: string | null
-    ) => void = () => {}
+    ) => void = () => {},
+    private readonly onPeer: (address: unknown, userAgent?: unknown) => void = () => {}
   ) {}
 
   start(): void {
@@ -99,6 +100,7 @@ export class Router {
   }
 
   private onRequest(req: IncomingMessage, res: ServerResponse): void {
+    this.onPeer(req.socket.remoteAddress, req.headers["user-agent"]);
     const raw = req.url ?? "/";
 
     // Absolute-form request target (`GET http://host/ HTTP/1.1`), legal only for

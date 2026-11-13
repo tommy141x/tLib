@@ -1,0 +1,90 @@
+---
+title: "Hosted servers"
+description: "What differs on a game host or container panel: the address to use, uploading the release, files a resource cannot create, and what to send when it still does not work."
+order: 8
+group: "tLib"
+published: true
+---
+
+This page is for a server you rent from a host and manage through its panel, rather than a
+machine you administer. tLib needs nothing special there. The cases below are the ones that went
+wrong in practice, each with what to check.
+
+We do not keep a table of which host opens which port: it differs by plan, and the default setup
+needs none.
+
+## The address to use
+
+The panels answer on the **FiveM server port**, the port players type to join. Your host already
+opens it.
+
+```txt
+http://<the address players type to join>:<their port>/tLib/
+```
+
+The port your host shows for the game can differ from `30120`; use the one players connect with,
+not the one in `endpoint_add_tcp` if the two differ.
+
+tLib prints an address at startup. It is where tLib *expects* the panel to be, not a promise:
+tLib cannot see which port your host maps to the game from the outside. Open it from a phone with
+Wi-Fi off. If the page loads, the line was right.
+
+### The three lines to delete
+
+If you added any of these to `server.cfg` for an older version, **delete them**:
+
+```txt
+set tlib_http_ingress false
+set tlib_http_public_url "..."
+set tlib_http_port ...
+```
+
+They switch off the door that needs nothing and turn on one that needs a port your host never
+allocated, which is the usual reason a panel shows `ERR_CONNECTION_REFUSED`. Restart the **whole
+server** afterwards, not only the resource: a convar is read when the server starts.
+
+Keep them only if you deliberately asked your host for a second port and opened it. With
+`tlib_http_ingress false` and a listener set, tLib says so at startup — *tLib's panels are served
+only on port N* — and that port is the one that must be open.
+
+## Uploading tLib
+
+Use `tLib.zip` from the [release page](https://github.com/tommy141/tLib/releases/latest), not
+"Source code (zip)". Then either extract it on the server with the host's file manager, or
+upload it by SFTP.
+
+A panel's upload button can damage binary files. What it leaves behind loads without an error and
+fails later, often as a Lua `syntax error` pointing at a file you never edited. tLib checks its own
+built files at startup and, if one is missing or cut short, prints the file name and the way out.
+When it does, upload by SFTP instead of through the panel.
+
+Run `tlib_version` in the server console afterwards. The first line names the version, the build
+and the folder FiveM is actually running.
+
+## A resource cannot create files here
+
+Some container hosts start the game as a user that cannot create files inside the resource
+folders. It has been reported on Pterodactyl-based panels. The console shows `EACCES` or
+`permission denied`, for example for a file named `.tradio_write_test`, or a resource says it could
+not stage its files.
+
+The resource still runs. What fails is anything that has to create or change a file in its own
+folder: saved settings, backups, files staged for you to copy. That is a permission on the host,
+not something a setting in `server.cfg` or the resource can change.
+
+The fix is the host's: in its file manager, or by asking its support, make the resource folder
+writable by the user the game server runs as. Tell them the path in the message.
+
+## tLib says an older version than the one I installed
+
+Run `tlib_version`. Its first line names the folder tLib is running from:
+
+- a second `tLib` folder, or one extracted inside another folder, is the usual cause: FiveM starts
+  the first it finds;
+- after replacing files, run `refresh` in the server console, then restart.
+
+## What to send when it still fails
+
+The output of `tlib_version` (it holds no IP address), the `[tLib/http]` lines from startup, and
+the `server.cfg` lines that start `set tlib_` and `endpoint_add_`. With those,
+the door, the port and the version are no longer a guess.

@@ -130,7 +130,9 @@ export function registerBridge(
     invokingResource: fGetInvokingResource,
     countMetadata: fGetNumResourceMetadata,
     readMetadata: fGetResourceMetadata,
-  }
+  },
+  /** Told who is knocking on the FiveM server port; see `HttpReadiness.noteRequestFrom`. */
+  noteRequestFrom: (address: unknown, userAgent?: unknown) => void = () => {}
 ): void {
   const baseUrl = () => {
     const current = status();
@@ -157,16 +159,32 @@ export function registerBridge(
   // which is not dependable across the Lua→JS export boundary. Not an access gate and does not
   // need to be: it decides which prefix an app's URLs are built under, and a resource wanting
   // another's mount table could already read it from `ListWebApps`.
+  //
+  // `address` and `userAgent` ride along so the first request from another machine can be
+  // noticed without a second export call per request. They decide nothing here.
   runtime.exports(
     "ResolveHttpIngress",
-    (method: unknown, target: unknown, serverName: unknown, basePath: unknown, owner: unknown) =>
-      resolveIngress(
+    (
+      method: unknown,
+      target: unknown,
+      serverName: unknown,
+      basePath: unknown,
+      owner: unknown,
+      address?: unknown,
+      userAgent?: unknown
+    ) => {
+      // A subscriber to the status event that throws must not cost the request its answer.
+      try {
+        noteRequestFrom(address, userAgent);
+      } catch {}
+      return resolveIngress(
         String(method ?? "GET"),
         String(target ?? "/"),
         String(serverName ?? ""),
         String(basePath ?? ""),
         typeof owner === "string" && owner !== "" ? owner : null
-      )
+      );
+    }
   );
 
   runtime.exports("RegisterWebApp", (raw: unknown) => {
@@ -258,14 +276,15 @@ export function registerBridge(
     }
 
     // The mount is accepted either way — the app works and Socket.IO falls back to long polling.
-    // But the upgrade cannot cross the FiveM server port at all, and a silent fallback shows up as
-    // latency rather than as an error, which is the hardest shape of this to diagnose later.
+    // That is the default configuration, not a fault, so it is `info`. It stays a line at all
+    // because a silent fallback shows up as latency rather than as an error, which is the
+    // hardest shape of this to diagnose later.
     if (descriptor.websocket && current.door === "ingress") {
       log(
-        "warn",
-        `${caller} mounted '${result.mount.mount}' asking for WebSocket, which the FiveM ` +
-          `server port cannot carry — it will fall back to polling. Set 'tlib_http_port' ` +
-          `to bind a listener if that app needs a real socket.`
+        "info",
+        `${caller}'s '${result.mount.mount}' panel is using long polling on the FiveM server ` +
+          `port (about 58 ms per request against 11 ms with a real socket). A real socket ` +
+          `needs a port of its own: set tlib_http_port.`
       );
     }
 

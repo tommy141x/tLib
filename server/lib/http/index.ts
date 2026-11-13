@@ -8,10 +8,11 @@
 
 import { detectPublicIP } from "../realtime/public-ip";
 import { registerBridge } from "./bridge";
-import { resolveConfig } from "./config";
+import { bootNotices, resolveConfig } from "./config";
 import { fEmit, fGetConvar, fGetCurrentResourceName, fOn } from "./fivem";
 import { ingressUrlFrom } from "./ingress";
 import { registerInProcess } from "./mounts";
+import { hubRow, rejectedOverrideNotice } from "./public-url";
 import { clear, unregisterResource } from "./registry";
 import { Router } from "./router";
 import { HttpReadiness } from "./status";
@@ -73,27 +74,17 @@ export function installHttp(): void {
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
-  if (cfg.portImplied) {
-    log(
-      "warn",
-      `'tlib_http_host' is set with no 'tlib_http_port', so tLib will attempt to bind a listener on ` +
-        `${cfg.port} and resources mounted behind it will print that port, not the FiveM ` +
-        `server port. Remove 'tlib_http_host' to serve everything on the FiveM server port ` +
-        `instead, or set 'tlib_http_port' to say which port you meant.`
-    );
-  }
-
-  if (cfg.port === null && !ingressEnabled) {
-    log(
-      "error",
-      "'tlib_http_ingress' is false and 'tlib_http_port' is unset, so tLib has no door: " +
-        "the hub and every resource behind it are unreachable. Set 'tlib_http_port' to bind " +
-        "a listener, or drop 'tlib_http_ingress false' to serve on the FiveM server port."
-    );
-  }
+  for (const notice of bootNotices(cfg, ingressEnabled)) log(notice.level, notice.message);
 
   const doors = { listener: cfg.port !== null, ingress: ingressEnabled };
+  let announcedRemote = false;
   const readiness = new HttpReadiness(cfg.publicUrlOverride, advertisedPort, (status) => {
+    // Once, with no address in it: the line a consumer prints is "your panel has been reached
+    // from another machine", and the address of whoever reached it is theirs to keep.
+    if (status.reachedFromOutside && !announcedRemote) {
+      announcedRemote = true;
+      fEmit("tlib:http:remote", status.reachedAt);
+    }
     // Server-local notification; subscribe then query GetHttpStatus so a late
     // consumer cannot miss readiness. The hub URL goes to tLib's startup banner,
     // not a separate log line; a failure still logs loudly.
@@ -106,26 +97,24 @@ export function installHttp(): void {
         ? ingressUrlFrom(status.publicUrl, fGetConvar("netPort", ""), fGetCurrentResourceName())
         : null;
 
-      // The host is a guess in both URLs, so the hint travels with whichever is
-      // shown — see `status.ts` on why a guess must not read as a fact.
-      const detected = status.publicUrlDetected
-        ? " (detected — set tlib_http_public_url if players reach you another way)"
-        : "";
-
       // One row, one address, no second line. The listener's URL is not news at
       // boot: an operator who opened that port knows its number, and one who did
       // not must not be told to go there. Which door carries what belongs in the
-      // docs, not in a status line.
-      // Before 1.1 a listener on 7777 always bound, so an operator's bookmark on
-      // that port stopped answering after the update with nothing said anywhere.
-      const moved = cfg.port
-        ? ""
-        : " — no listener of tLib's own; 'set tlib_http_port 7777' restores the pre-1.1 one";
-      fEmit("tlib:vcInfo:hub", `${ingressUrl ?? status.publicUrl}${detected}${moved}`);
+      // docs, not in a status line. `tlib_http_port 7777` is not suggested here
+      // either: on a host that never allocated 7777 it binds a socket nobody can reach.
+      fEmit("tlib:vcInfo:hub", hubRow(ingressUrl ?? status.publicUrl ?? "", status.publicUrlDetected));
     } else if (status.publicUrlState === "failed") log("warn", status.error!);
     fEmit("tLib:http:status", status);
   }, doors);
-  registerBridge(() => readiness.snapshot(), log);
+  // Never throws into a request: the subscribers of `tlib:http:remote` are other resources.
+  const notePeer = (address: unknown, userAgent?: unknown) => {
+    try {
+      readiness.noteRequestFrom(address, userAgent);
+    } catch (error) {
+      log("warn", `could not record a visitor: ${error instanceof Error ? error.message : error}`);
+    }
+  };
+  registerBridge(() => readiness.snapshot(), log, undefined, notePeer);
   installed = true;
 
   // tLib's own in-process mounts (realtime at /rt). Registered either way: with
@@ -155,15 +144,15 @@ export function installHttp(): void {
         return;
       }
       readiness.listener(state, localUrl, error);
-    });
+    }, notePeer);
     router = bound;
     bound.start();
   }
 
   // Never publish implicit localhost while discovery is outstanding or failed.
   if (readiness.snapshot().publicUrlState === "resolving") {
-    if (cfg.publicUrlOverride) {
-      log("warn", "Invalid tlib_http_public_url; attempting public IP detection instead");
+    if (readiness.snapshot().publicUrlOverride === "rejected") {
+      log("warn", rejectedOverrideNotice(cfg.publicUrlOverride ?? ""));
     }
     cancelDetection = detectPublicIP((ip) => readiness.resolveAddress(ip));
   }

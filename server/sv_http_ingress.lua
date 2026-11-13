@@ -212,6 +212,14 @@ local function relayToUpstream(req, res, resolution, body)
     end, req.method or 'GET', body or '', forwardHeaders(req.headers, req.address, prefix))
 end
 
+--- Only so the router can tell tLib's own health check from a visitor; see
+--- `HttpReadiness.noteRequestFrom`. Headers arrive in whatever case the client sent.
+local function userAgent(headers)
+    for k, v in pairs(headers or {}) do
+        if tostring(k):lower() == 'user-agent' then return tostring(v) end
+    end
+end
+
 local function handle(req, res, body)
     -- FXServer strips `/<resource>` before handing over the path; the router's
     -- absolute paths go back under it or every link and redirect leaves the
@@ -224,7 +232,8 @@ local function handle(req, res, body)
     -- which raises rather than returning nil.
     local ok, resolved = pcall(function()
         return exports.tLib:ResolveHttpIngress(
-            req.method or 'GET', req.path or '/', serverName(), basePath, owner
+            req.method or 'GET', req.path or '/', serverName(), basePath, owner,
+            req.address, userAgent(req.headers)
         )
     end)
     -- Also nil until tLib's bundle has installed the bridge.

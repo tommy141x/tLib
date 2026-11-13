@@ -45,6 +45,53 @@ export interface HttpConfig {
   maxConnections: number;
 }
 
+export interface BootNotice {
+  level: "info" | "warn" | "error";
+  message: string;
+}
+
+/**
+ * What the boot log says about the CONFIGURATION itself, apart from how the binds go.
+ * Pure so a test can state the exact line for each combination: these are the lines an
+ * operator reads when a panel does not answer, and each one names the convar to delete or
+ * set, because "usually hairpin NAT" taught nobody anything.
+ */
+export function bootNotices(cfg: HttpConfig, ingressEnabled: boolean): BootNotice[] {
+  const notices: BootNotice[] = [];
+  if (cfg.portImplied) {
+    notices.push({
+      level: "warn",
+      message:
+        `'tlib_http_host' is set with no 'tlib_http_port', so tLib will attempt to bind a listener on ` +
+        `${cfg.port} and resources mounted behind it will print that port, not the FiveM ` +
+        `server port. Remove 'tlib_http_host' to serve everything on the FiveM server port ` +
+        `instead, or set 'tlib_http_port' to say which port you meant.`,
+    });
+  }
+  if (cfg.port === null && !ingressEnabled) {
+    notices.push({
+      level: "error",
+      message:
+        "'tlib_http_ingress' is false and 'tlib_http_port' is unset, so tLib has no door: " +
+        "the hub and every resource behind it are unreachable. Set 'tlib_http_port' to bind " +
+        "a listener, or drop 'tlib_http_ingress false' to serve on the FiveM server port.",
+    });
+  }
+  // The combination a game host's operator ends up with by copying the "old boundary"
+  // docs: the door that needs nothing is off and the one that needs a port the host never
+  // gave them is on.
+  if (cfg.port !== null && !ingressEnabled) {
+    notices.push({
+      level: "info",
+      message:
+        `tLib's panels are served only on port ${cfg.port}. Your host must have given ${cfg.port} to ` +
+        `this server (the game port needs nothing). If you did not ask for this, delete ` +
+        `'tlib_http_ingress false' and 'tlib_http_port' from server.cfg and restart the server.`,
+    });
+  }
+  return notices;
+}
+
 /** A config that binds, which is the only kind `Router` can start. */
 export type BoundHttpConfig = HttpConfig & { port: number };
 

@@ -99,6 +99,19 @@ Your server port is whatever `endpoint_add_tcp` declares — 30120 on a default 
 tLib prints the address when it starts, so you never have to work it out. Nothing to open,
 nothing to forward, no convar.
 
+<Callout type="info" title="On a hosted server you normally do nothing">
+  The panels use the same port players connect on, which your host already opens. Use
+  `http://<the address players type to join>:<their port>/tLib/` — the port your host shows
+  for the game may differ from `30120`; use that one.
+
+  **Delete these lines from `server.cfg` if you added them for an older version:**
+  `set tlib_http_ingress false`, `set tlib_http_public_url ...` and `set tlib_http_port ...`.
+  They force the old separate-port door, which most hosts do not let you open, and they are
+  the usual reason a panel that should work shows `ERR_CONNECTION_REFUSED`. Restart the whole
+  server afterwards, not only the resource. [Hosted servers](/docs/tLib/hosted-servers) covers
+  the rest of what differs on a host.
+</Callout>
+
 <Callout type="warning">
   **Keep the `/tLib/` on the end.** On the server port, FXServer owns `/` and serves its own
   join page there — so `http://<your server>:30120` with nothing after it opens the "join this
@@ -137,6 +150,22 @@ mounted on it.
 
 None of those limits apply to [tLib's own listener](#advanced-tlibs-own-listener), which is
 the route to take for a dispatch panel that is worked all day, or for a custom domain.
+
+### Which of these settings do I need?
+
+| You want | Set | Notes |
+| --- | --- | --- |
+| The panels to just work | nothing | Served on the FiveM server port, which is already open |
+| Nothing on the web at all | `set tlib_http_ingress false` | Turns the server-port door off for every resource; a resource's panels then need a listener |
+| A faster dispatch panel, WebSocket, big uploads | `set tlib_http_port 7777`, and open that port | Optional second door; Discord login and desktop-app updates move onto it |
+| A hostname, HTTPS or a reverse proxy | `set tlib_http_public_url "https://radio.example.com"` plus a proxy | Advertised only; tLib issues no certificate |
+| Your players' stored settings kept apart from another community's | `setr tlib_community_id "yourname"` | Does **not** separate two of your own servers |
+
+If your `server.cfg` still holds `tlib_http_ingress false`, a raw-IP `tlib_http_public_url`
+or `tlib_http_port 7777` from an older instruction, **remove them** unless you chose the
+separate port on purpose. They override the defaults and put you back on a door your host may
+not let you open. With the ingress off and a listener set, tLib says so at startup: *tLib's
+panels are served only on port N*.
 
 ## Depend on tLib
 
@@ -193,7 +222,7 @@ Then the convars, **above** `ensure tLib`. They are read once, when the resource
 
 ```txt title="server.cfg"
 set tlib_http_port 7777
-set tlib_http_public_url "http://123.45.67.89:7777"
+set tlib_http_public_url "http://203.0.113.10:7777"
 
 ensure tLib
 # ...then everything that depends on it
@@ -229,8 +258,8 @@ The scheme and port are inferred from the shape of what you write:
 | --- | --- |
 | *(nothing)* | `http://<detected-ip>:7777` |
 | `localhost` | `http://localhost:7777` |
-| `123.45.67.89` | `http://123.45.67.89:7777` |
-| `123.45.67.89:8080` | `http://123.45.67.89:8080` |
+| `203.0.113.10` | `http://203.0.113.10:7777` |
+| `203.0.113.10:8080` | `http://203.0.113.10:8080` |
 | `radio.example.com` | `https://radio.example.com` — no port |
 | `http://radio.example.com` | `http://radio.example.com` |
 | `https://example.com/radio` | `https://example.com/radio` |
@@ -239,16 +268,30 @@ A bare **domain** becomes `https` with no port, because a name only reaches your
 DNS points at it — which means a proxy or tunnel terminating TLS on 443, where `:7777` would
 be wrong. A bare **IP** stays on the port, because no certificate fits a bare IP.
 
+The addresses in this section are examples. `203.0.113.10` belongs to a range reserved for
+documentation, so nothing can be reached there: copy the layout, not the number.
+
 <Callout type="warning">
   **A wrong value here does not look like an address problem.** The page loads and then every
-  request it makes is refused, which reads as a broken backend. A value tLib cannot parse at
-  all is worse: it silently falls back to IP detection rather than erroring, so a typo looks
-  like detection misbehaving.
+  request it makes is refused, which reads as a broken backend.
+
+  A value no server can have is not used: a placeholder such as `your-server-address`, a name
+  under `example.com`, or an address from the documentation ranges (`192.0.2.x`,
+  `198.51.100.x`, `203.0.113.x`). tLib prints `tlib_http_public_url "<your value>" is not an
+  address tLib can use` and detects your public IP instead. A value that does not parse at all
+  gets the same treatment.
 
   tLib prints the address it resolved on startup and says which it did. If the line ends in
   `(detected — set tlib_http_public_url if players reach you another way)`, your convar was
   not used. Check that line before changing anything else.
 </Callout>
+
+### IPv6
+
+tLib's own listener binds IPv4 (`0.0.0.0`) unless you name another interface. To listen on
+IPv6, `set tlib_http_host "::"`: on a host that allows dual-stack sockets that serves IPv4 as
+well. On a host with IPv6 turned off, leave it unset — binding `::` there fails. The
+server-port door has no such setting; it is whatever FXServer itself listens on.
 
 ### A custom domain or HTTPS
 

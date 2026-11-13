@@ -173,6 +173,33 @@ describe("listener readiness", () => {
     }
   });
 
+  test("every request tells the peer observer who knocked, and what with", async () => {
+    const peers: unknown[][] = [];
+    let done!: (url: string) => void;
+    const listening = new Promise<string>((resolve) => {
+      done = resolve;
+    });
+    const instance = new Router(
+      { ...cfg, port: 0 },
+      () => "Test",
+      () => {},
+      (state, url) => {
+        if (state === "listening" && url) done(url);
+      },
+      (address, userAgent) => peers.push([address, userAgent])
+    );
+    try {
+      instance.start();
+      const url = await listening;
+      await fetch(`${url}/`, { headers: { "user-agent": "probe/1" } });
+      expect(peers).toHaveLength(1);
+      expect(String(peers[0][0])).toMatch(/127\.0\.0\.1$/);
+      expect(peers[0][1]).toBe("probe/1");
+    } finally {
+      instance.stop();
+    }
+  });
+
   test("occupied port reports failed rather than ready", async () => {
     let done!: (value: { state: string; url: string | null; error: string | null }) => void;
     const failed = new Promise<{ state: string; url: string | null; error: string | null }>(

@@ -2,7 +2,7 @@ import { detectPublicIP } from "../realtime/public-ip";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { registerBridge } from "./bridge";
 import { clear, hubDestinations, list, unregisterResource } from "./registry";
-import { HttpReadiness, type HttpStatus } from "./status";
+import { HttpReadiness, type HttpStatus, isForeignAddress } from "./status";
 
 beforeEach(clear);
 afterEach(clear);
@@ -124,7 +124,7 @@ describe("HTTP publication readiness", () => {
   });
 
   test("registration exports preserve one mount with independent child hub links", () => {
-    const h = harness("https://example.com");
+    const h = harness("https://mycommunity.net");
     h.state.listener("listening", "http://127.0.0.1:7777");
     const result = h.call("RegisterWebApp", {
       id: "radio",
@@ -136,25 +136,25 @@ describe("HTTP publication readiness", () => {
         { id: "external", path: "https://evil.example" },
       ],
     });
-    expect(result).toEqual({ ok: true, url: "https://example.com/dispatch" });
+    expect(result).toEqual({ ok: true, url: "https://mycommunity.net/dispatch" });
     expect(list()).toHaveLength(1);
     expect(hubDestinations()).toMatchObject([{ path: "/dispatch/admin", title: "Radio Admin" }]);
     expect(h.call("ListWebApps")[0].hubLinks).toHaveLength(1);
   });
 
   test("HTTPS public 443 never changes the local HTTP 7777 endpoint", () => {
-    const h = harness("https://example.com");
+    const h = harness("https://mycommunity.net");
     h.state.listener("listening", "http://127.0.0.1:7777");
     expect(h.call("GetHttpStatus")).toMatchObject({
       ready: true,
-      publicUrl: "https://example.com",
+      publicUrl: "https://mycommunity.net",
       localUrl: "http://127.0.0.1:7777",
     });
-    expect(h.mount()).toEqual({ ok: true, url: "https://example.com/dispatch" });
+    expect(h.mount()).toEqual({ ok: true, url: "https://mycommunity.net/dispatch" });
   });
 
   test("bind failure suppresses publication despite a valid public address", () => {
-    const h = harness("example.com");
+    const h = harness("mycommunity.net");
     h.state.listener("failed", null, "address already in use");
     expect(h.mount()).toMatchObject({
       ok: false,
@@ -196,7 +196,7 @@ describe("HTTP publication readiness", () => {
   });
 
   test("consumer restart can re-register after owner cleanup", () => {
-    const h = harness("example.com");
+    const h = harness("mycommunity.net");
     h.state.listener("listening", "http://127.0.0.1:7777");
     expect(h.mount().ok).toBe(true);
     expect(h.mount().ok).toBe(false); // collisions are not silently replaced
@@ -205,15 +205,15 @@ describe("HTTP publication readiness", () => {
   });
 
   test("tLib restart clears old mounts and publishes only the new lifetime", () => {
-    const old = harness("old.example.com");
+    const old = harness("old.mycommunity.net");
     old.state.listener("listening", "http://127.0.0.1:7777");
     expect(old.mount().ok).toBe(true);
     old.state.listener("stopped");
     clear(); // installHttp's own onResourceStop cleanup
-    const next = harness("new.example.com");
+    const next = harness("new.mycommunity.net");
     expect(next.mount().ok).toBe(false);
     next.state.listener("listening", "http://127.0.0.1:7777");
-    expect(next.mount()).toEqual({ ok: true, url: "https://new.example.com/dispatch" });
+    expect(next.mount()).toEqual({ ok: true, url: "https://new.mycommunity.net/dispatch" });
     expect(old.call("GetHubUrl")).toBe("");
   });
 });
@@ -308,8 +308,8 @@ describe("with no listener, the FiveM server port is the door", () => {
   });
 
   test("a configured public name is honoured, with the ingress path under it", () => {
-    const h = harness("https://example.com", noListener);
-    expect(h.mount("/consumer")).toEqual({ ok: true, url: "https://example.com/consumer" });
+    const h = harness("https://mycommunity.net", noListener);
+    expect(h.mount("/consumer")).toEqual({ ok: true, url: "https://mycommunity.net/consumer" });
   });
 
   test("turning the ingress off as well leaves no door, and says which convar opens one", () => {
@@ -341,11 +341,11 @@ describe("with no listener, the FiveM server port is the door", () => {
     // The negative control for the rule above: `publicUrl` carries the
     // LISTENER's port once one is configured, so an ingress path hung off it
     // would name 7777 with a 30120 path and reach nothing.
-    const h = harness("example.com");
+    const h = harness("mycommunity.net");
     h.state.listener("listening", "http://127.0.0.1:7777");
     expect(h.call("GetHttpStatus").door).toBe("listener");
-    expect(h.mount("/consumer")).toEqual({ ok: true, url: "https://example.com/consumer" });
-    expect(h.mount("/dispatch")).toEqual({ ok: true, url: "https://example.com/dispatch" });
+    expect(h.mount("/consumer")).toEqual({ ok: true, url: "https://mycommunity.net/consumer" });
+    expect(h.mount("/dispatch")).toEqual({ ok: true, url: "https://mycommunity.net/dispatch" });
   });
 });
 
@@ -426,4 +426,142 @@ describe("public-IP retry lifetime", () => {
       expect(h.events).toHaveLength(0);
     });
   }
+});
+
+describe("what became of tlib_http_public_url", () => {
+  const override = (value: string | null) =>
+    new HttpReadiness(value, () => 30120, () => {}, { listener: false, ingress: true }).snapshot()
+      .publicUrlOverride;
+
+  test("unset, used and rejected are three different answers", () => {
+    expect(override(null)).toBe("unset");
+    expect(override("https://radio.mycommunity.net")).toBe("used");
+    expect(override("http://your-server-address:7777")).toBe("rejected");
+    expect(override("not a url at all")).toBe("rejected");
+  });
+
+  test("a rejected value is replaced by detection, not published", () => {
+    const state = new HttpReadiness("your-server-address", () => 30120, () => {}, {
+      listener: false,
+      ingress: true,
+    });
+    expect(state.snapshot().publicUrl).toBeNull();
+    state.resolveAddress("198.18.0.9");
+    expect(state.snapshot()).toMatchObject({
+      publicUrl: "http://198.18.0.9:30120",
+      publicUrlDetected: true,
+      publicUrlOverride: "rejected",
+    });
+  });
+});
+
+// The only proof from the inside that the printed address works for somebody else. A probe
+// from the host to its own public address proves the router's hairpin and nothing about the
+// host, which is why "Server started successfully" could print beside ERR_CONNECTION_REFUSED.
+describe("reached from outside", () => {
+  const ready = () => {
+    const events: HttpStatus[] = [];
+    const state = new HttpReadiness(null, () => 30120, (v) => events.push(v), {
+      listener: false,
+      ingress: true,
+    });
+    state.resolveAddress("198.18.0.9");
+    events.length = 0;
+    return { state, events };
+  };
+
+  test("starts false, with no time", () => {
+    expect(ready().state.snapshot()).toMatchObject({ reachedFromOutside: false, reachedAt: null });
+  });
+
+  test("loopback is this machine, in every spelling", () => {
+    const { state, events } = ready();
+    for (const a of ["127.0.0.1", "127.8.9.1", "::1", "::ffff:127.0.0.1", "localhost", "", "::"]) {
+      state.noteRequestFrom(a);
+    }
+    state.noteRequestFrom(undefined);
+    state.noteRequestFrom(42);
+    expect(state.snapshot().reachedFromOutside).toBe(false);
+    expect(events).toHaveLength(0);
+  });
+
+  test("this host's own public address is a self-probe, not a visitor", () => {
+    const { state } = ready();
+    state.noteRequestFrom("198.18.0.9");
+    state.noteRequestFrom("::ffff:198.18.0.9");
+    expect(state.snapshot().reachedFromOutside).toBe(false);
+  });
+
+  test("tLib's own health check is not a visitor either, whatever it arrives from", () => {
+    const { state } = ready();
+    state.noteRequestFrom("198.51.100.4", "tLib-HealthCheck");
+    expect(state.snapshot().reachedFromOutside).toBe(false);
+  });
+
+  test("the first stranger flips it once, notifies once, and keeps no address", () => {
+    const { state, events } = ready();
+    state.noteRequestFrom("198.51.100.4", "Mozilla/5.0");
+    state.noteRequestFrom("198.51.100.5", "Mozilla/5.0");
+    const snap = state.snapshot();
+    expect(snap.reachedFromOutside).toBe(true);
+    expect(typeof snap.reachedAt).toBe("number");
+    expect(events).toHaveLength(1);
+    expect(JSON.stringify(snap)).not.toContain("198.51.100");
+  });
+
+  test("a stopped lifetime records nothing", () => {
+    const { state } = ready();
+    state.listener("stopped");
+    state.noteRequestFrom("198.51.100.4");
+    expect(state.snapshot().reachedFromOutside).toBe(false);
+  });
+
+  test("a private LAN address is another machine", () => {
+    expect(isForeignAddress("192.168.1.20", null)).toBe(true);
+    expect(isForeignAddress("10.0.0.5", "198.18.0.9")).toBe(true);
+    expect(isForeignAddress("2001:db8::1", null)).toBe(true);
+  });
+});
+
+describe("the bridge tells the readiness who knocked", () => {
+  const bridge = (note: (a: unknown, ua?: unknown) => void, logs: string[] = []) => {
+    const exports = new Map<string, (...args: unknown[]) => unknown>();
+    const state = new HttpReadiness(null, () => 30120, () => {}, { listener: false, ingress: true });
+    state.resolveAddress("198.18.0.9");
+    registerBridge(
+      () => state.snapshot(),
+      (_level, message) => logs.push(`${_level}: ${message}`),
+      { exports: (n, f) => void exports.set(n, f), invokingResource: () => "tRadio" },
+      note
+    );
+    return (name: string, ...args: unknown[]) => exports.get(name)!(...args) as any;
+  };
+
+  test("the address and user agent reach the readiness through the one export call", () => {
+    const seen: unknown[][] = [];
+    const call = bridge((a, ua) => seen.push([a, ua]));
+    call("ResolveHttpIngress", "GET", "/tLib/", "Srv", "/tLib", "tLib", "198.51.100.4", "curl/8");
+    expect(seen).toEqual([["198.51.100.4", "curl/8"]]);
+  });
+
+  test("a subscriber that throws costs the request nothing: it is still answered", () => {
+    const call = bridge(() => {
+      throw new Error("subscriber blew up");
+    });
+    const answer = call("ResolveHttpIngress", "GET", "/tLib/", "Srv", "/tLib", "tLib", "198.51.100.4");
+    expect(answer).toBeTruthy();
+    expect(answer.kind).toBeDefined();
+  });
+
+  test("a WebSocket mount on the FiveM server port is an info line about polling, not a warning", () => {
+    const logs: string[] = [];
+    const call = bridge(() => {}, logs);
+    call("RegisterWebApp", { id: "radio", mount: "/tRadio", port: 4321, websocket: true });
+    const line = logs.find((l) => l.includes("long polling"))!;
+    expect(line).toBeDefined();
+    expect(line.startsWith("info: ")).toBe(true);
+    expect(line).toContain("tRadio's '/tRadio' panel");
+    expect(line).toContain("set tlib_http_port");
+    expect(logs.some((l) => l.startsWith("warn: "))).toBe(false);
+  });
 });

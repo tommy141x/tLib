@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveConfig } from "./config";
+import { bootNotices, resolveConfig } from "./config";
 
 /** A convar table, as GetConvar sees it: absent is the empty string. */
 function convars(set: Record<string, string>) {
@@ -38,5 +38,45 @@ describe("binding a port is opt-in", () => {
       throw new Error("GetConvar is not a function");
     };
     expect(resolveConfig(throwing)).toMatchObject({ port: null, publicUrlOverride: null });
+  });
+});
+
+// The combination a game host's operator reaches by copying the old-boundary docs: the door
+// that needs nothing off, the one that needs a port the host never gave them on. germancatfish
+// ran it for four days and was told to open a Windows firewall port on a Linux container.
+describe("what the boot log says about the configuration", () => {
+  const notices = (set: Record<string, string>) => {
+    const cfg = resolveConfig(convars(set));
+    return bootNotices(cfg, set.tlib_http_ingress !== "false");
+  };
+
+  test("a default install says nothing", () => {
+    expect(notices({})).toEqual([]);
+  });
+
+  test("a listener beside the ingress says nothing: both doors are wanted", () => {
+    expect(notices({ tlib_http_port: "7777" })).toEqual([]);
+  });
+
+  test("ingress off with a listener names the port, the host's part, and the lines to delete", () => {
+    const [only, ...rest] = notices({ tlib_http_ingress: "false", tlib_http_port: "7777" });
+    expect(rest).toEqual([]);
+    expect(only.level).toBe("info");
+    expect(only.message).toContain("served only on port 7777");
+    expect(only.message).toContain("Your host must have given 7777 to this server");
+    expect(only.message).toContain("delete 'tlib_http_ingress false' and 'tlib_http_port'");
+  });
+
+  test("ingress off with no listener is the error it always was, and not the info line", () => {
+    const [only, ...rest] = notices({ tlib_http_ingress: "false" });
+    expect(rest).toEqual([]);
+    expect(only.level).toBe("error");
+    expect(only.message).toContain("no door");
+  });
+
+  test("a bind host with no port still warns about the implied port", () => {
+    const [only] = notices({ tlib_http_host: "127.0.0.1" });
+    expect(only.level).toBe("warn");
+    expect(only.message).toContain("7777");
   });
 });
