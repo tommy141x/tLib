@@ -234,6 +234,11 @@ is colour only, so a button that cannot be undone wants both:
 }
 ```
 
+The footer's submit button is already the primary action, so leave at most one `button` with
+`variant = 'primary'`, and give every `button` a `description` saying what it changes. A spec that
+does neither still opens; `ShowDialog` logs the fault at DEBUG under `tLib/dialog` for whoever is
+writing it (`exports['tLib']:SetLogLevel(1)`), and a player sees nothing.
+
 <ZoomableImage
   src="/assets/tLib/dialog--button-confirm.png"
   width={1600}

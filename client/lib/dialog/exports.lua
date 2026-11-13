@@ -105,6 +105,36 @@ local function serialiseField(f)
     return s
 end
 
+--- Authoring mistakes in a spec, as sentences. Spec content drifts where no stylesheet
+--- reaches: tLS shipped three `variant = 'primary'` buttons beside the footer's own and no
+--- descriptions at all. Meant for the person writing the spec, so it is logged at DEBUG at the
+--- one place a spec is in hand, and never shown to a player: it used to run in the player's
+--- NUI on every open of every dialog, for faults only the author can fix.
+local function specWarnings(fields)
+    local primaries, undescribed = {}, {}
+    for _, field in ipairs(fields) do
+        if field.type == 'button' then
+            if field.variant == 'primary' then primaries[#primaries + 1] = field.id end
+            if field.description == nil or field.description == '' then
+                undescribed[#undescribed + 1] = field.id
+            end
+        end
+    end
+
+    local warnings = {}
+    -- The footer's submit is already primary, so a primary FIELD competes with it.
+    if #primaries > 1 then
+        warnings[#warnings + 1] = ('%d fields declare variant "primary" (%s). The footer submit '
+            .. 'button is already the primary action, so these compete with it and with each '
+            .. 'other: leave one, or none.'):format(#primaries, table.concat(primaries, ', '))
+    end
+    if #undescribed > 0 then
+        warnings[#warnings + 1] = ('button field(s) with no description: %s. A button in a settings '
+            .. 'dialog changes something; say what.'):format(table.concat(undescribed, ', '))
+    end
+    return warnings
+end
+
 local function serialiseDialog(id, opts)
     local fields = {}
     if type(opts.fields) == 'table' then
@@ -519,6 +549,9 @@ function DialogExports.register()
             if not callable(cb) then return nil, 'Dialog callback must be callable' end
         end
         local serialised = serialiseDialog(id, opts)
+        for _, warning in ipairs(specWarnings(serialised.fields)) do
+            log(('dialog "%s": %s'):format(id, warning), 1)
+        end
         local seen = {}
         for _, field in ipairs(serialised.fields) do
             if seen[field.id] then return nil, 'Duplicate dialog field id' end

@@ -25,7 +25,6 @@ import {
   type DialogValues,
   validationErrors,
 } from "./dialog-model";
-import { dialogSpecWarnings } from "./dialog-spec";
 import {
   clampOffset,
   DIALOG_NO_TAB,
@@ -87,12 +86,6 @@ function DialogSession(props: {
   onExit: () => void;
 }) {
   const [dialog, setDialog] = createSignal(props.initial);
-  // Warn, never throw: a badly authored dialog must still open, or a content nit
-  // becomes a player-facing outage. See `dialogSpecWarnings` for why this checks
-  // the data rather than CSS.
-  for (const warning of dialogSpecWarnings(props.initial)) {
-    console.warn(`[tLib] dialog "${props.initial.id}": ${warning}`);
-  }
   const [attempted, setAttempted] = createSignal(false);
   const [touched, setTouched] = createSignal<Set<string>>(new Set());
   const [notice, setNotice] = createSignal("");
