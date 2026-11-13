@@ -17,7 +17,8 @@ import {
 //
 // `bun run prod` is a RELEASE build: it refuses a dirty tree or a version that a tag
 // already names on other files, and tags the version once the zip exists.
-// `bun run prod --dev` skips that, and the zip says so. See release-gate.ts.
+// `bun run prod --dev` skips that, and the zip says so. See release-gate.ts. The gate only
+// knows the tags this clone has: `git fetch --tags` first.
 const root = join(import.meta.dir, "..");
 const version = await getManifestVersion(join(root, "fxmanifest.lua"));
 if (!version) throw new Error("Could not read a version from fxmanifest.lua");
