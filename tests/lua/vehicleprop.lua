@@ -90,7 +90,7 @@ function AddEventHandler(name, fn) events[name] = fn end
 function RegisterNetEvent(name, fn) if fn then netEvents[name] = fn end end
 function TriggerServerEvent(name, ...) serverEvents[#serverEvents + 1] = { name = name, ... } end
 function TriggerEvent(name, ...) local fn = events[name]; if fn then fn(...) end end
-function RegisterNUICallback() end
+
 function SendNUIMessage() end
 function GetCurrentResourceName() return 'tTest' end
 
@@ -231,6 +231,7 @@ end
 
 tlib = {
     platform = { setInputMode = function() end, setKeepInputActive = function() end },
+    nui = { register = function() end },
 }
 -- The REAL drivenprop, not a stub, for the same reason the propeditor below is
 -- real: the lifecycle asks `isUnitScale` to choose between attaching a prop and

@@ -62,6 +62,9 @@ local function host(fivem)
         end
         for _, pair in ipairs(pending) do h.timers[pair[1]] = nil; pair[2]() end
     end
+    function GetGameTimer() return 0 end
+    Citizen = { CreateThread = function() end, Wait = function() end }
+    dofile('tests/fixtures/real-module.lua')(_G, 'shared/imports/nui/client.lua')
     -- Full paths, not a shared prefix plus a suffix: these files no longer sit
     -- under one root. The tree a file lives in is now the VM it loads into.
     for _, path in ipairs({

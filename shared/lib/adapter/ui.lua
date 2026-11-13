@@ -16,13 +16,24 @@ if _TLIB_IS_FIVEM then
     local _nuiQueue    = {}
     local _nuiReadyCbs = {}
 
+    -- tLib's own VM has no `tlib` global, so it loads the same module a consumer
+    -- gets as tlib.nui. Lazily: this file also runs on the server, which has no
+    -- NUI natives and no use for it.
+    local nuiModule
+    function Platform.registerNUICallback(name, handler, opts)
+        nuiModule = nuiModule or load(
+            LoadResourceFile(GetCurrentResourceName(), 'shared/imports/nui/client.lua'),
+            '@@tLib/shared/imports/nui/client.lua'
+        )()
+        return nuiModule.register(name, handler, opts)
+    end
+
     -- This is a shared_script and the server loads this branch too, but the NUI
     -- natives only exist on the client.
     if _TLIB_SIDE == 'client' then
-        RegisterNuiCallbackType('__tlib_nui_ready')
-        AddEventHandler('__cfx_nui:__tlib_nui_ready', function(_, resultCallback)
+        Platform.registerNUICallback('__tlib_nui_ready', function(_, reply)
             -- A table, not an encoded string: see onUIRequest below.
-            resultCallback({ ok = true })
+            reply({ ok = true })
             if _nuiReady then return end
             _nuiReady = true
 
@@ -60,18 +71,18 @@ if _TLIB_IS_FIVEM then
     end
 
     function Platform.onUIEvent(ui, evt, cb)
-        RegisterNuiCallbackType(evt)
-        AddEventHandler('__cfx_nui:' .. evt, function(body, resultCallback)
+        Platform.registerNUICallback(evt, function(body, reply)
             local data = type(body) == 'string' and json.decode(body) or body
             cb(data)
-            -- Not encoded: resultCallback serializes its own argument. See
+            -- Not encoded: the reply serializes its own argument. See
             -- onUIRequest below.
-            resultCallback({ ok = true })
+            reply({ ok = true })
         end)
     end
 
-    -- The answering form of onUIEvent. Replies are fire-once because CitizenFX
-    -- treats a second resultCallback as an error.
+    -- The answering form of onUIEvent. `cb` may answer later, so it is deferred;
+    -- the bound is a net above the engine's own watchdogs (the menu's action
+    -- timeout is 90 s), there to answer a handler that threw or forgot.
     --
     -- Hand the reply over as a table: resultCallback serializes it itself, so
     -- encoding it here encodes it twice and the browser's response.json()
@@ -79,16 +90,10 @@ if _TLIB_IS_FIVEM then
     --   resultCallback({ ok = true })              -> body {"ok":true}       object
     --   resultCallback(json.encode({ ok = true })) -> body "{\"ok\":true}"   string
     function Platform.onUIRequest(ui, evt, cb)
-        RegisterNuiCallbackType(evt)
-        AddEventHandler('__cfx_nui:' .. evt, function(body, resultCallback)
+        Platform.registerNUICallback(evt, function(body, reply)
             local data = type(body) == 'string' and json.decode(body) or body
-            local answered = false
-            cb(data, function(result)
-                if answered then return end
-                answered = true
-                resultCallback(result)
-            end)
-        end)
+            cb(data, reply)
+        end, { deferred = true, timeoutMs = 120000 })
     end
 
     function Platform.bringUIToFront(ui)
@@ -129,6 +134,7 @@ else
     Platform.sendUIEvent       = Platform._stub('sendUIEvent')
     Platform.onUIEvent         = Platform._stub('onUIEvent')
     Platform.onUIRequest       = Platform._stub('onUIRequest')
+    Platform.registerNUICallback = Platform._stub('registerNUICallback')
     Platform.bringUIToFront    = Platform._stub('bringUIToFront')
     Platform.setInputMode      = Platform._stub('setInputMode')
     Platform.setKeepInputActive = Platform._stub('setKeepInputActive')

@@ -42,6 +42,9 @@ Platform = {
     setTimeout = function() return {} end,
     clearTimeout = function() end,
 }
+function GetGameTimer() return 0 end
+Citizen = { CreateThread = function() end, Wait = function() end }
+dofile('tests/fixtures/real-module.lua')(_G, 'shared/imports/nui/client.lua')
 for _, path in ipairs({
     'shared/lib/adapter/shutdown.lua', 'shared/lib/adapter/lifecycle.lua',
     'shared/lib/adapter/ui.lua', 'client/cl_ui_effects.lua',

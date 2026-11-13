@@ -540,8 +540,8 @@ if not isServer and type(RegisterNetEvent) == 'function' then
         end)
     end
 
-    if type(RegisterNUICallback) == 'function' then
-        RegisterNUICallback(Telemetry.NUI_CALLBACK, function(data, cb)
+    if type(RegisterNuiCallbackType) == 'function' then
+        tlib.nui.register(Telemetry.NUI_CALLBACK, function(data, cb)
             local ok = pcall(function()
                 if type(data) ~= 'table' then return end
                 if not consentCache.enabled then return end

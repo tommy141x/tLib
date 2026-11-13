@@ -928,26 +928,26 @@ function PropEditor.create(descriptor)
 
     -- NUI callbacks
 
-    RegisterNUICallback(event('openPropEditor'), function(_, cb)
+    tlib.nui.register(event('openPropEditor'), function(_, cb)
         cb(1)
         open()
     end)
 
-    RegisterNUICallback(event('propMoved'), function(data, cb)
+    tlib.nui.register(event('propMoved'), function(data, cb)
         cb(1)
         if not active then return end
         offset = { x = data.x + 0.0, y = data.y + 0.0, z = data.z + 0.0 }
         reattach()
     end)
 
-    RegisterNUICallback(event('propRotated'), function(data, cb)
+    tlib.nui.register(event('propRotated'), function(data, cb)
         cb(1)
         if not active then return end
         rotation = { x = data.rx + 0.0, y = data.ry + 0.0, z = data.rz + 0.0 }
         reattach()
     end)
 
-    RegisterNUICallback(event('propScaled'), function(data, cb)
+    tlib.nui.register(event('propScaled'), function(data, cb)
         cb(1)
         if not active then return end
         if type(data) ~= 'table' then return end
@@ -955,7 +955,7 @@ function PropEditor.create(descriptor)
         reattach()
     end)
 
-    RegisterNUICallback(event('propEditorSave'), function(_, cb)
+    tlib.nui.register(event('propEditorSave'), function(_, cb)
         cb(1)
         if not active then return end
         TriggerServerEvent(d.saveEvent, key, {
@@ -974,12 +974,12 @@ function PropEditor.create(descriptor)
         close(true, false)
     end)
 
-    RegisterNUICallback(event('propEditorCancel'), function(_, cb)
+    tlib.nui.register(event('propEditorCancel'), function(_, cb)
         cb(1)
         close(false, false)
     end)
 
-    RegisterNUICallback(event('propEditorRemove'), function(_, cb)
+    tlib.nui.register(event('propEditorRemove'), function(_, cb)
         cb(1)
         if not active then return end
         TriggerServerEvent(d.removeEvent, key, displayName)
@@ -990,7 +990,7 @@ function PropEditor.create(descriptor)
     -- animation frame; deltas are device pixels. See orbit.ORBIT_SENS_PX for why
     -- this cannot be read from the pad, and tLib/shared/ts/camera-drag.ts for
     -- the sender.
-    RegisterNUICallback(event('propEditorCamDrag'), function(data, cb)
+    tlib.nui.register(event('propEditorCamDrag'), function(data, cb)
         cb(1)
         if not active then return end
         if type(data) ~= 'table' then return end
@@ -1003,24 +1003,24 @@ function PropEditor.create(descriptor)
 
     -- One wheel notch from the page; see `applyScrollZoom` for why the pad
     -- never sees it.
-    RegisterNUICallback(event('propEditorCamZoom'), function(data, cb)
+    tlib.nui.register(event('propEditorCamZoom'), function(data, cb)
         cb(1)
         if not active then return end
         if type(data) ~= 'table' then return end
         applyScrollZoom(tonumber(data.delta) or 0.0)
     end)
 
-    RegisterNUICallback(event('propEditorPanelHover'), function(data, cb)
+    tlib.nui.register(event('propEditorPanelHover'), function(data, cb)
         cb(1)
         panelHovered = data.hovered == true
     end)
 
-    RegisterNUICallback(event('setCamMode'), function(data, cb)
+    tlib.nui.register(event('setCamMode'), function(data, cb)
         cb(1)
         camMode = data.enabled == true
     end)
 
-    RegisterNUICallback(event('propEditorCameraCmd'), function(data, cb)
+    tlib.nui.register(event('propEditorCameraCmd'), function(data, cb)
         cb(1)
         if not active then return end
         cameraCommand(data.cmd)

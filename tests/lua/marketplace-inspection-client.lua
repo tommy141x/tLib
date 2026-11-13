@@ -1,7 +1,6 @@
 local callbacks, events, sent, messages = {}, {}, {}, {}
 Logger = { create = function() return function() end end }
-Platform = { export = function() end }
-function RegisterNUICallback(event, cb) callbacks[event] = cb end
+Platform = { export = function() end, registerNUICallback = function(event, cb) callbacks[event] = cb end }
 function RegisterNetEvent(event, cb) events[event] = cb end
 function TriggerServerEvent(...) sent[#sent + 1] = { ... } end
 function SendNUIMessage(message) messages[#messages + 1] = message end

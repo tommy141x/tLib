@@ -65,7 +65,7 @@ function tLibHud.edit()
     if GetResourceState('tLib') ~= 'started' then return false, 'tLib is not started' end
     return exports['tLib']:OpenHudEditor()
 end
-RegisterNUICallback('__tlib_hud_ready', function(_, cb)
+tlib.nui.register('__tlib_hud_ready', function(_, cb)
     ready = true
     for _, data in pairs(latest) do SendNUIMessage({ tlibHud = data }) end
     cb({ ok = true })

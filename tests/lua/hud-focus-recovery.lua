@@ -48,6 +48,8 @@ Platform = {
     clearTimeout = function(token) timers[token] = nil end,
     TriggerEvent = function() end,
 }
+Citizen = { CreateThread = function() end, Wait = function() end }
+dofile('tests/fixtures/real-module.lua')(_G, 'shared/imports/nui/client.lua')
 UIEffects = { acquireBlur = function() return {} end, releaseBlur = function() end }
 -- Full paths, not a shared prefix plus a suffix: these files no longer sit under
 -- one root. The tree a file lives in is now the VM it loads into.

@@ -7,9 +7,14 @@ local refuse, threads = false, {}
 GetResourceState = function() return state end
 SendNUIMessage = function(data) messages[#messages + 1] = data end
 AddEventHandler = function(name, fn) events[name] = fn end
-RegisterNUICallback = function(name, fn) nui[name] = fn end
+RegisterNuiCallbackType = function() end
+GetCurrentResourceName = function() return 'consumer' end
+GetGameTimer = function() return 0 end
 CreateThread = function(fn) threads[#threads + 1] = coroutine.create(fn) end
 Wait = function() coroutine.yield() end
+Citizen = { CreateThread = function() end, Wait = function() end }
+tlib = { nui = dofile('shared/imports/nui/client.lua') }
+setmetatable(nui, { __index = function(_, name) return events['__cfx_nui:' .. name] end })
 local function tick()
     for _, thread in ipairs(threads) do
         if coroutine.status(thread) == 'suspended' then assert(coroutine.resume(thread)) end

@@ -66,13 +66,13 @@ local function registerExports()
     end)
 end
 
-RegisterNUICallback('marketplaceClose', function(_, cb)
+Platform.registerNUICallback('marketplaceClose', function(_, cb)
     SetNuiFocus(false, false)
     cb('ok')
 end)
 
 -- Forwarded to the server, which owns the ACE check and the install.
-RegisterNUICallback('marketplaceInstall', function(data, cb)
+Platform.registerNUICallback('marketplaceInstall', function(data, cb)
     cb(1)
     if type(data) ~= 'table' then return end
     if type(data.resource) ~= 'string' or type(data.type) ~= 'string' or type(data.slug) ~= 'string' then
@@ -83,7 +83,7 @@ RegisterNUICallback('marketplaceInstall', function(data, cb)
     TriggerServerEvent('tlib:marketplace:install', data.resource or '', data.type, data.slug, version)
 end)
 
-RegisterNUICallback('marketplaceUninstall', function(data, cb)
+Platform.registerNUICallback('marketplaceUninstall', function(data, cb)
     cb(1)
     if type(data) ~= 'table' then return end
     if type(data.type) ~= 'string' or type(data.slug) ~= 'string' then return end
@@ -94,7 +94,7 @@ end)
 -- itself, and it cannot: CEF's origin is `cfx-nui-tLib` and the marketplace
 -- host sends no Access-Control-Allow-Origin, so a direct fetch returns a body
 -- the browser will not let the page read. See `server/sv_marketplace.lua`.
-RegisterNUICallback('marketplaceBrowse', function(data, cb)
+Platform.registerNUICallback('marketplaceBrowse', function(data, cb)
     cb(1)
     if type(data) ~= 'table' or type(data.requestId) ~= 'string' then return end
     TriggerServerEvent('tlib:marketplace:browse', data)
@@ -110,7 +110,7 @@ end)
 -- carries only a slug and a desired state; the server resolves identity itself
 -- from the event's `source`. Never add a license, identifier or player name to
 -- this payload: it would let a player like as somebody else.
-RegisterNUICallback('marketplaceLike', function(data, cb)
+Platform.registerNUICallback('marketplaceLike', function(data, cb)
     cb(1)
     if type(data) ~= 'table' or type(data.requestId) ~= 'string' or type(data.slug) ~= 'string' then return end
     -- `next` is the state being asked for rather than a toggle, so a retry after
@@ -125,7 +125,7 @@ end)
 -- The UI preview DOCUMENT, for the same reason. The sound preview is NOT here:
 -- it is an <audio> element pointed at the listing's absolute `preview_url`,
 -- which needs neither this round trip nor a credential.
-RegisterNUICallback('marketplacePreview', function(data, cb)
+Platform.registerNUICallback('marketplacePreview', function(data, cb)
     cb(1)
     if type(data) ~= 'table' or type(data.requestId) ~= 'string' or type(data.slug) ~= 'string' then return end
     TriggerServerEvent('tlib:marketplace:preview', data)
@@ -137,7 +137,7 @@ end)
 -- A theme's published DEFINITION, for the dispatch-panel preview. Relayed as
 -- text: this VM never decodes it, because the only check worth making is the
 -- frame-contract one the NUI applies before it posts the theme across.
-RegisterNUICallback('marketplaceThemeJson', function(data, cb)
+Platform.registerNUICallback('marketplaceThemeJson', function(data, cb)
     cb(1)
     if type(data) ~= 'table' or type(data.requestId) ~= 'string' or type(data.slug) ~= 'string' then return end
     TriggerServerEvent('tlib:marketplace:themeJson', data)
@@ -147,7 +147,7 @@ RegisterNetEvent('tlib:marketplace:themeJsonResult', function(result)
 end)
 
 -- Read-only, but still server-side: it needs the ACE and a registered resource.
-RegisterNUICallback('marketplaceInspect', function(data, cb)
+Platform.registerNUICallback('marketplaceInspect', function(data, cb)
     cb(1)
     if type(data) ~= 'table' or type(data.resource) ~= 'string'
         or type(data.type) ~= 'string' or type(data.slug) ~= 'string'

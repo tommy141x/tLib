@@ -49,6 +49,7 @@ end
 local REAL = {
     telemetry = 'shared/imports/telemetry/shared.lua',
     occupancy = 'shared/imports/occupancy/server.lua',
+    nui = 'shared/imports/nui/client.lua',
 }
 
 --- Run the REAL imports.lua against a fake tLib install and record what the
@@ -76,7 +77,9 @@ local function fixture(opts)
     _ENV.GetPlayerName = function() return 'tester' end
     _ENV.RegisterNetEvent = function(name) wired.netEvents[name] = true end
     _ENV.AddEventHandler = function(name) wired.netEvents[name] = true end
-    _ENV.RegisterNUICallback = function(name) wired.nuiCallbacks[name] = true end
+    -- tlib.nui.register declares the callback type; that declaration is what a
+    -- NUI POST is routed by, so it is what the suite records.
+    _ENV.RegisterNuiCallbackType = function(name) wired.nuiCallbacks[name] = true end
     _ENV.SendNUIMessage = function() end
     _ENV.TriggerServerEvent = function() end
     -- Returns without running the body: every autoloaded module's thread starts
@@ -135,6 +138,8 @@ local function fixture(opts)
     local realLoad = load
     local wantReal = {}
     for _, name in ipairs(real) do wantReal[name] = true end
+    -- telemetry registers its callback through tlib.nui, so that module has to be real too.
+    if wantReal.telemetry then wantReal.nui = true end
 
     _ENV.load = function(chunk, chunkname, mode, env)
         -- Branding is the real file too: the studio rule is half of what is

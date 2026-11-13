@@ -487,6 +487,69 @@ gate. Pass `allow`, with a `tlib.access` gate inside it rather than a second mec
 A rate-limited call is dropped **silently**, so a feature that must reopen a panel it just
 closed uses `panel:reopen()` from [opengate](#opengate), not the request path.
 
+## nui
+
+An NUI callback that always answers. Client only.
+
+cfx's `RegisterNUICallback` catches a handler that throws, prints it, and never calls `cb`.
+The page's `fetch` then hangs until its 10 second deadline and F8 says
+`callback "X" did not answer within 10000ms`. `nui.register` owns the `cb`, so that cannot
+happen.
+
+```lua
+tlib.nui.register('saveLayout', function(data, reply)
+    saveLayout(data)
+    reply({ ok = true })
+end)
+```
+
+| Handler does | The page receives |
+| --- | --- |
+| Calls `reply(value)` | `value`. Later calls are ignored. |
+| Returns a value | That value. |
+| Returns nothing and never replies | `{ ok = true }` |
+| Throws | `{ ok = false, error = "handler_error", detail = "<message>" }`, and the error is printed once per distinct message. |
+| Has not answered after `timeoutMs` | `{ ok = false, error = "timeout" }`, and the timeout is printed once. |
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `timeoutMs` | `8000` | The bound on how long a handler may take to answer. Keep it under the page's 10 second `fetchNui` deadline, or the page gives up first. |
+| `deferred` | `false` | For a handler that returns **before** it answers, because it hands `reply` to an event or a timer. Returning no longer answers; only `reply` or the timeout does. |
+
+A handler that blocks on `Citizen.Wait` is answered `timeout` at the bound and its own answer
+is dropped. Answer first and do the slow work afterwards:
+
+```lua
+tlib.nui.register('nui:ready', function(_, reply)
+    reply({ ok = true })
+    Citizen.CreateThread(function() sendInitPayload() end)
+end)
+```
+
+Registering the same name twice replaces the first handler and says so once.
+`tlib.nui.failures()` returns every distinct failure so far as `{ name, kind, message, count }`,
+with `kind` one of `threw`, `timeout` or `late`, for a diagnostics line.
+
+<Callout type="warning">
+A failure answers `{ ok = false, ... }` with a normal 200, so a page that ignores the reply
+reads it as success. Check `result?.ok === false` where the answer matters.
+</Callout>
+
+**Migrating a resource.** The signature matches, so it is a rename:
+
+```lua
+-- before
+RegisterNUICallback('saveLayout', function(data, cb) ... cb('ok') end)
+-- after
+tlib.nui.register('saveLayout', function(data, cb) ... cb('ok') end)
+```
+
+A handler that answers from another event or a timer needs `{ deferred = true }`; without it,
+returning would answer `{ ok = true }` before the real answer. tLib's own tree is checked by
+`bun run check:nui`, which fails on a bare `RegisterNUICallback`, `RegisterNuiCallbackType`
+or raw `__cfx_nui:` handler. `bun run check:nui --siblings` counts the same in each checked-out
+resource.
+
 ## opengate
 
 The "may I open my panel?" handshake: the client asks, the server decides fresh on every

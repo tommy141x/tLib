@@ -25,13 +25,16 @@ local nuiMessages = {}
 local serverEvents = {}
 
 Citizen = { CreateThread = function() end, Wait = function() end }
-function RegisterNUICallback(name, fn) nuiCallbacks[name] = fn end
+
 function SendNUIMessage(msg) nuiMessages[#nuiMessages + 1] = msg end
 function TriggerServerEvent(name, ...) serverEvents[#serverEvents + 1] = { name = name, ... } end
 function AddEventHandler() end
 function GetCurrentResourceName() return 'test_resource' end
 
-tlib = { platform = { setInputMode = function() end, setKeepInputActive = function() end } }
+tlib = {
+    platform = { setInputMode = function() end, setKeepInputActive = function() end },
+    nui = { register = function(name, fn) nuiCallbacks[name] = fn end },
+}
 -- The REAL drivenprop, not a stub. The editor asks it which of the two
 -- attachment mechanisms a placement needs (`isUnitScale`) and borrows its
 -- driver, so a stub here would let the editor take the attached path for a

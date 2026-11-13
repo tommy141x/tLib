@@ -76,6 +76,10 @@ json = {
 
 Platform = { _stub = function(name) return function() error('stub ' .. name, 0) end end }
 
+function GetCurrentResourceName() return 'tLib' end
+function GetGameTimer() return 0 end
+Citizen = { CreateThread = function() end, Wait = function() end }
+dofile('tests/fixtures/real-module.lua')(_G, 'shared/imports/nui/client.lua')
 assert(loadfile(UI, 't', _G),
     'shared/lib/adapter/ui.lua not found -- run this suite from the tLib resource root')()
 
@@ -137,6 +141,25 @@ Platform.onUIRequest({}, 'probe_table_body', function(data) secondReceived = dat
 handlers['probe_table_body']({ already = 'parsed' }, function() end)
 equal(type(secondReceived), 'table', 'a table body is handed over as a table')
 equal(secondReceived.already, 'parsed', 'a table body is not re-decoded')
+
+-- A handler that throws is still answered
+--
+-- cfx catches a throw in a raw handler and never calls resultCallback, which
+-- leaves the page's fetch hanging to its deadline. Every NUI callback tLib owns
+-- goes through tlib.nui.register, which answers a structured error instead.
+local realPrint, noise = print, {}
+print = function(...) noise[#noise + 1] = table.concat({ ... }, ' ') end
+local thrownReply, thrownEventReply
+Platform.onUIRequest({}, 'probe_request_throws', function() error('request broke', 0) end)
+handlers['probe_request_throws']({}, function(result) thrownReply = result end)
+Platform.onUIEvent({}, 'probe_event_throws', function() error('event broke', 0) end)
+handlers['probe_event_throws']({}, function(result) thrownEventReply = result end)
+print = realPrint
+check(thrownReply and thrownReply.ok == false and thrownReply.error == 'handler_error',
+    'onUIRequest answers a handler that threw')
+check(thrownEventReply and thrownEventReply.ok == false and thrownEventReply.error == 'handler_error',
+    'onUIEvent answers a handler that threw')
+check(#noise == 2 and noise[1]:find('request broke', 1, true), 'each throw is reported')
 
 -- And the encoder was never touched on the reply path
 --
