@@ -758,7 +758,10 @@ describe("module.json contract", () => {
       fs.mkdirSync(path.dirname(fixture), { recursive: true });
       fs.writeFileSync(fixture, generated);
     }
-    const onDisk = fs.existsSync(fixture) ? fs.readFileSync(fixture, "utf8") : "";
+    // autocrlf checks the fixture out as CRLF on Windows, and a bare toBe then fails
+    // with a diff that shows no difference. The Lua gate reads the table, not its endings.
+    const text = fs.existsSync(fixture) ? fs.readFileSync(fixture, "utf8") : "";
+    const onDisk = text.replaceAll("\r\n", "\n");
     expect(onDisk).toBe(generated);
   });
 });
