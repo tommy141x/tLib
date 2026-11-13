@@ -1,6 +1,6 @@
 ---
 title: "Import Modules"
-description: "The 40 Lua modules behind the tlib global — access, config, permission, platform, kvp, settings and the rest."
+description: "The 43 Lua modules behind the tlib global — access, config, permission, platform, kvp, settings and the rest."
 order: 3
 group: "tLib"
 published: true
@@ -563,6 +563,49 @@ returning would answer `{ ok = true }` before the real answer. tLib's own tree i
 `bun run check:nui`, which fails on a bare `RegisterNUICallback`, `RegisterNuiCallbackType`
 or raw `__cfx_nui:` handler. `bun run check:nui --siblings` counts the same in each checked-out
 resource.
+
+## item
+
+Run a function when a player uses an inventory item. Server only.
+
+```lua
+tlib.item.onUse('radio', function(src, info)
+    TriggerClientEvent('myres:open', src)
+end)
+```
+
+Every inventory announces a use differently. `onUse` registers with each one that is running, so
+the resource does not need to know which this server has:
+
+| Inventory | How the use arrives |
+| --- | --- |
+| ox_inventory 2.43+ | A `usingItem` hook filtered to the item. |
+| ox_inventory, any version or fork | The `ox_inventory:usedItem` event. |
+| qbx_core | `CreateUseableItem`. |
+| qb-core | `GetCoreObject().Functions.CreateUseableItem`. Skipped when qbx_core is running, which presents itself as qb-core. |
+| es_extended | `getSharedObject().RegisterUsableItem`. |
+
+Call it at load time. An inventory that starts after your resource, or restarts and forgets its
+registry, is registered with again, so `server.cfg` order does not matter.
+
+`handler(src, { item, via })` runs once per use. `via` names the path that delivered it. A second use
+of the same item by the same player inside 250 ms is treated as the same use, because the ox
+bridges announce one use through both the hook and the framework registry. A handler that throws
+is reported once and does not affect the inventory.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `consume` | `false` | `true` lets ox_inventory consume the item as it normally would. The default cancels ox's own use (no consume, durability or animation) for an item that opens something rather than being spent. Other inventories consume on their own terms. |
+
+`tlib.item.status(name)` answers `{ strategies, proven }` for a diagnostics line. `proven` is false
+when only the ox `usedItem` event is registered: it always registers, and nothing shows this fork
+emits it. In that case tell the operator to add `client.event` (or their inventory's equivalent) to
+the item's entry in the items file.
+
+<Callout type="warning">
+This registers a **use**. Whether a player is *carrying* the item is a different question, and
+[`access`](#access) answers it with its `item` rule for every inventory.
+</Callout>
 
 ## opengate
 
