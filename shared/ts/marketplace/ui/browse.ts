@@ -9,8 +9,24 @@
  */
 
 import { fetchNui, onNuiEvent } from "../../nui";
+import { asFailureKind, type MarketplaceFailureKind } from "../failure";
 import { type PanelThemeDefinition, parsePanelThemeDefinition } from "./preview-frame";
 import type { MarketplaceItem } from "./types";
+
+/**
+ * A failed marketplace read. `kind` says what to tell the player (a 404 and an
+ * unreachable host need different advice); `message` is the technical line and
+ * is shown beneath it.
+ */
+export class MarketplaceRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly kind: MarketplaceFailureKind
+  ) {
+    super(message);
+    this.name = "MarketplaceRequestError";
+  }
+}
 
 export interface BrowseParams {
   /** Product scope, e.g. `tDetector`. Omitted browses the whole catalogue. */
@@ -64,22 +80,30 @@ let sequence = 0;
 function ensureListener(event: string): void {
   if (listening.has(event)) return;
   listening.add(event);
-  onNuiEvent<{ requestId?: string; ok?: boolean; error?: string }>(event, (reply) => {
-    const id = typeof reply?.requestId === "string" ? reply.requestId : "";
-    const entry = pending.get(id);
-    if (!entry) return;
-    pending.delete(id);
-    window.clearTimeout(entry.timer);
-    if (reply.ok !== true) {
-      entry.fail(new Error(reply.error || "Marketplace unavailable"));
-      return;
+  onNuiEvent<{ requestId?: string; ok?: boolean; error?: string; kind?: string }>(
+    event,
+    (reply) => {
+      const id = typeof reply?.requestId === "string" ? reply.requestId : "";
+      const entry = pending.get(id);
+      if (!entry) return;
+      pending.delete(id);
+      window.clearTimeout(entry.timer);
+      if (reply.ok !== true) {
+        entry.fail(
+          new MarketplaceRequestError(
+            reply.error || "Marketplace unavailable",
+            asFailureKind(reply.kind)
+          )
+        );
+        return;
+      }
+      try {
+        entry.settle(entry.read(reply as never));
+      } catch (e) {
+        entry.fail(e instanceof Error ? e : new Error(String(e)));
+      }
     }
-    try {
-      entry.settle(entry.read(reply as never));
-    } catch (e) {
-      entry.fail(e instanceof Error ? e : new Error(String(e)));
-    }
-  });
+  );
 }
 
 /**
@@ -103,7 +127,10 @@ function nuiRequest<T>(
       fn();
     };
     const timer = window.setTimeout(
-      () => finish(() => reject(new Error("Marketplace request timed out"))),
+      () =>
+        finish(() =>
+          reject(new MarketplaceRequestError("Marketplace request timed out", "timeout"))
+        ),
       REPLY_TIMEOUT_MS
     );
     pending.set(requestId, {
@@ -115,12 +142,19 @@ function nuiRequest<T>(
 
     signal?.addEventListener(
       "abort",
-      () => finish(() => reject(new Error("Marketplace request cancelled"))),
+      () =>
+        finish(() =>
+          reject(new MarketplaceRequestError("Marketplace request cancelled", "cancelled"))
+        ),
       { once: true }
     );
 
     void fetchNui(callback, { ...payload, requestId }).then((ack) => {
-      if (ack === null) finish(() => reject(new Error("Marketplace bridge unavailable")));
+      if (ack === null) {
+        finish(() =>
+          reject(new MarketplaceRequestError("Marketplace bridge unavailable", "bridge"))
+        );
+      }
     });
   });
 }

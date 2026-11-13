@@ -300,6 +300,10 @@
 .mp-muted {
   color: var(--nui-muted);
 }
+.mp-empty .mp-muted {
+  max-width: 56ch;
+  text-align: center;
+}
 .mp-fg {
   color: var(--nui-text);
 }

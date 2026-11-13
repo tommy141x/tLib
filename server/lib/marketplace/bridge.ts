@@ -9,11 +9,21 @@ import {
   assertItemBelongsToResource,
   CatalogueError,
 } from "../../../shared/ts/marketplace/catalogue";
+import { classifyMarketplaceFailure } from "../../../shared/ts/marketplace/failure";
 import { type BrowseParams, browseItems, likeItem, previewHtml, themeJson } from "./browse";
 import { fExports } from "./fivem";
 import { register as registerTarget } from "./registry";
 
 let installed = false;
+
+type ReadDone = (ok: boolean, err: string | null, value?: unknown, kind?: string) => void;
+
+// The failure's kind rides as the fourth argument so the panel can explain a 404
+// differently from an unreachable host; `err` stays the technical line.
+function failed(done: ReadDone, e: unknown): void {
+  const { kind, message } = classifyMarketplaceFailure(e);
+  done(false, message, undefined, kind);
+}
 
 export function registerBridge(): void {
   if (installed) return;
@@ -38,7 +48,7 @@ export function registerBridge(): void {
   // exactly once, no rejection escapes into the Lua VM.
   fExports("mpBrowse", (paramsJson: unknown, cb: unknown) => {
     if (typeof cb !== "function") return;
-    const done = cb as (ok: boolean, err: string | null, value?: unknown) => void;
+    const done = cb as ReadDone;
 
     let params: BrowseParams = {};
     if (typeof paramsJson === "string" && paramsJson) {
@@ -52,7 +62,7 @@ export function registerBridge(): void {
 
     void browseItems(params).then(
       (result) => done(true, null, JSON.stringify(result)),
-      (e: unknown) => done(false, e instanceof Error ? e.message : String(e))
+      (e: unknown) => failed(done, e)
     );
   });
 
@@ -67,7 +77,7 @@ export function registerBridge(): void {
   // operator setting; the per-player guarantee depends on the native being the source.
   fExports("mpLike", (slug: unknown, license: unknown, next: unknown, cb: unknown) => {
     if (typeof cb !== "function") return;
-    const done = cb as (ok: boolean, err: string | null, value?: unknown) => void;
+    const done = cb as ReadDone;
     if (typeof slug !== "string" || !slug) {
       done(false, "slug required");
       return;
@@ -78,7 +88,7 @@ export function registerBridge(): void {
     }
     void likeItem(slug, license, next === true).then(
       (state) => done(true, null, JSON.stringify(state)),
-      (e: unknown) => done(false, e instanceof Error ? e.message : String(e))
+      (e: unknown) => failed(done, e)
     );
   });
 
@@ -86,14 +96,14 @@ export function registerBridge(): void {
   //
   fExports("mpPreviewHtml", (slug: unknown, cb: unknown) => {
     if (typeof cb !== "function") return;
-    const done = cb as (ok: boolean, err: string | null, value?: unknown) => void;
+    const done = cb as ReadDone;
     if (typeof slug !== "string" || !slug) {
       done(false, "slug required");
       return;
     }
     void previewHtml(slug).then(
       (html) => done(true, null, html),
-      (e: unknown) => done(false, e instanceof Error ? e.message : String(e))
+      (e: unknown) => failed(done, e)
     );
   });
 
@@ -102,14 +112,14 @@ export function registerBridge(): void {
   // A `theme` item's published definition, for the dispatch-panel preview.
   fExports("mpThemeJson", (slug: unknown, cb: unknown) => {
     if (typeof cb !== "function") return;
-    const done = cb as (ok: boolean, err: string | null, value?: unknown) => void;
+    const done = cb as ReadDone;
     if (typeof slug !== "string" || !slug) {
       done(false, "slug required");
       return;
     }
     void themeJson(slug).then(
       (json) => done(true, null, json),
-      (e: unknown) => done(false, e instanceof Error ? e.message : String(e))
+      (e: unknown) => failed(done, e)
     );
   });
 

@@ -28,7 +28,7 @@ const WEB = resolve(ROOT, "client", "web");
 
 /**
  * The suite may not shrink below this many passing tests. MEASURED, not a target:
- * `client/web/tests` reports 142 today. A floor rather than an equality, but it
+ * `client/web/tests` reports 149 today. A floor rather than an equality, but it
  * has to stay close enough to the real count that a whole FILE going empty cannot
  * slip under it. A stale floor is not a conservative floor: tLS left one at 209
  * while its suite grew to 398, which had quietly disarmed it. Re-measure when you
@@ -49,7 +49,7 @@ const INTERNAL_ONLY_TESTS = 24 + 31 + 16 + 3 + 1 + 8;
 const HAS_INTERNAL =
   existsSync(resolve(ROOT, "internal", "shared-ts", "prop-editor", "PropEditor.tsx")) &&
   existsSync(resolve(ROOT, "internal", "shared-ts", "ui", "undo-redo.tsx"));
-const DEFAULT_MINIMUM_TESTS = HAS_INTERNAL ? 142 : 142 - INTERNAL_ONLY_TESTS;
+const DEFAULT_MINIMUM_TESTS = HAS_INTERNAL ? 149 : 149 - INTERNAL_ONLY_TESTS;
 
 const raw = process.env.TLIB_DOM_TEST_MIN;
 let MINIMUM_TESTS = DEFAULT_MINIMUM_TESTS;

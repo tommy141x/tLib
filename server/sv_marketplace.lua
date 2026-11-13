@@ -110,7 +110,10 @@ Platform.export('tLib', 'RegisterMarketplaceType', function(kind, opts)
         return exports['tLib']:mpRegisterType(resource, kind, opts.installPath)
     end)
     if not called or not ok then
-        log('RegisterMarketplaceType: node bridge rejected registration for "' .. kind .. '"', 3)
+        local why = called and 'the export answered false' or tostring(ok)
+        local hint = (not called and why:find('No such export', 1, true))
+            and " tLib's server bundle is not running; check the boot log for a Node or bundle error." or ''
+        log(('RegisterMarketplaceType: node bridge rejected registration for "%s": %s.%s'):format(kind, why, hint), 3)
         return false
     end
     _typeRegistrations[resource .. ':' .. kind] = {
@@ -256,7 +259,7 @@ local function beginRead(src, action, opts)
     if not name(requestId, 128, '^[%w_%-]+$') then return end
 
     if not isAdmin(src) then
-        readReply(src, action, requestId, { ok = false, error = 'not authorized (needs tlib.admin ACE)' })
+        readReply(src, action, requestId, { ok = false, error = 'not authorized (needs tlib.admin ACE)', kind = 'denied' })
         return
     end
 
@@ -266,7 +269,7 @@ local function beginRead(src, action, opts)
     -- outbound requests.
     local inFlight = _reads[src] or 0
     if inFlight >= READ_MAX_IN_FLIGHT then
-        readReply(src, action, requestId, { ok = false, error = 'too many marketplace requests in flight' })
+        readReply(src, action, requestId, { ok = false, error = 'too many marketplace requests in flight', kind = 'busy' })
         return
     end
     _reads[src] = inFlight + 1
@@ -284,8 +287,23 @@ end
 -- arrives at all, so a panel is never left spinning forever.
 local function readBackstop(settle)
     SetTimeout(20000, function()
-        settle({ ok = false, error = 'marketplace request timed out' })
+        settle({ ok = false, error = 'marketplace request timed out', kind = 'timeout' })
     end)
+end
+
+-- `kind` is the panel's vocabulary (shared/ts/marketplace/failure.ts); the
+-- bundle classifies a failed request and passes it as the callback's fourth
+-- argument. A bridge that cannot be called at all has no bundle to ask.
+local function bridgeDown(settle, what, err)
+    log(('marketplace %s bridge failed: %s'):format(what, tostring(err)), 3)
+    local missing = tostring(err):find('No such export', 1, true)
+    settle({
+        ok = false,
+        kind = 'bridge',
+        error = missing
+            and "tLib's server bundle is not running, so the marketplace cannot answer (check the boot log for a Node or bundle error)"
+            or 'marketplace bridge unavailable',
+    })
 end
 
 -- The marketplace's like endpoint de-duplicates on (item, license); that only
@@ -349,14 +367,14 @@ RegisterNetEvent('tlib:marketplace:browse', function(opts)
     }
 
     local dispatched, dispatchErr = pcall(function()
-        exports['tLib']:mpBrowse(json.encode(params), function(ok, err, resultJson)
+        exports['tLib']:mpBrowse(json.encode(params), function(ok, err, resultJson, kind)
             if not ok then
-                settle({ ok = false, error = tostring(err or 'marketplace unavailable') })
+                settle({ ok = false, error = tostring(err or 'marketplace unavailable'), kind = kind })
                 return
             end
             local decoded, parsed = pcall(json.decode, resultJson or '')
             if not decoded or type(parsed) ~= 'table' or type(parsed.items) ~= 'table' then
-                settle({ ok = false, error = 'unexpected marketplace response' })
+                settle({ ok = false, error = 'unexpected marketplace response', kind = 'bad_response' })
                 return
             end
             settle({
@@ -369,8 +387,7 @@ RegisterNetEvent('tlib:marketplace:browse', function(opts)
         end)
     end)
     if not dispatched then
-        log('marketplace browse bridge failed: ' .. tostring(dispatchErr), 3)
-        settle({ ok = false, error = 'marketplace bridge unavailable' })
+        bridgeDown(settle, 'browse', dispatchErr)
         return
     end
     readBackstop(settle)
@@ -404,14 +421,14 @@ RegisterNetEvent('tlib:marketplace:like', function(opts)
     end
 
     local dispatched, dispatchErr = pcall(function()
-        exports['tLib']:mpLike(slug, license, opts.next == true, function(ok, err, stateJson)
+        exports['tLib']:mpLike(slug, license, opts.next == true, function(ok, err, stateJson, kind)
             if not ok then
-                settle({ ok = false, error = tostring(err or 'marketplace unavailable') })
+                settle({ ok = false, error = tostring(err or 'marketplace unavailable'), kind = kind })
                 return
             end
             local decoded, parsed = pcall(json.decode, stateJson or '')
             if not decoded or type(parsed) ~= 'table' or type(parsed.likes) ~= 'number' then
-                settle({ ok = false, error = 'unexpected marketplace response' })
+                settle({ ok = false, error = 'unexpected marketplace response', kind = 'bad_response' })
                 return
             end
             settle({
@@ -425,8 +442,7 @@ RegisterNetEvent('tlib:marketplace:like', function(opts)
         end)
     end)
     if not dispatched then
-        log('marketplace like bridge failed: ' .. tostring(dispatchErr), 3)
-        settle({ ok = false, error = 'marketplace bridge unavailable' })
+        bridgeDown(settle, 'like', dispatchErr)
         return
     end
     readBackstop(settle)
@@ -447,17 +463,16 @@ RegisterNetEvent('tlib:marketplace:preview', function(opts)
     end
 
     local dispatched, dispatchErr = pcall(function()
-        exports['tLib']:mpPreviewHtml(slug, function(ok, err, html)
+        exports['tLib']:mpPreviewHtml(slug, function(ok, err, html, kind)
             if not ok or type(html) ~= 'string' then
-                settle({ ok = false, error = tostring(err or 'preview unavailable') })
+                settle({ ok = false, error = tostring(err or 'preview unavailable'), kind = ok and 'bad_response' or kind })
                 return
             end
             settle({ ok = true, slug = slug, html = html })
         end)
     end)
     if not dispatched then
-        log('marketplace preview bridge failed: ' .. tostring(dispatchErr), 3)
-        settle({ ok = false, error = 'marketplace bridge unavailable' })
+        bridgeDown(settle, 'preview', dispatchErr)
         return
     end
     readBackstop(settle)
@@ -479,17 +494,16 @@ RegisterNetEvent('tlib:marketplace:themeJson', function(opts)
     end
 
     local dispatched, dispatchErr = pcall(function()
-        exports['tLib']:mpThemeJson(slug, function(ok, err, json)
+        exports['tLib']:mpThemeJson(slug, function(ok, err, json, kind)
             if not ok or type(json) ~= 'string' then
-                settle({ ok = false, error = tostring(err or 'theme preview unavailable') })
+                settle({ ok = false, error = tostring(err or 'theme preview unavailable'), kind = ok and 'bad_response' or kind })
                 return
             end
             settle({ ok = true, slug = slug, json = json })
         end)
     end)
     if not dispatched then
-        log('marketplace themeJson bridge failed: ' .. tostring(dispatchErr), 3)
-        settle({ ok = false, error = 'marketplace bridge unavailable' })
+        bridgeDown(settle, 'themeJson', dispatchErr)
         return
     end
     readBackstop(settle)

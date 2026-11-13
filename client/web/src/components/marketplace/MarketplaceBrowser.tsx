@@ -12,6 +12,7 @@
 
 import type { JSX } from "@solidjs/web";
 import { createEscapeLayer } from "@tlib/shared/escape-layer";
+import type { MarketplaceFailureKind } from "@tlib/shared/marketplace/failure";
 import { localInstallKind } from "@tlib/shared/marketplace/local-name";
 import {
   browseMarketplace,
@@ -26,6 +27,7 @@ import {
   isBuiltin,
   likeMarketplaceItem,
   type MarketplaceItem,
+  MarketplaceRequestError,
   matchesInspectionReply,
   type OpenData,
   PreviewOverlay,
@@ -71,7 +73,9 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   const [search, setSearch] = createSignal("");
   const [items, setItems] = createSignal<MarketplaceItem[]>([]);
   const [loading, setLoading] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
+  const [error, setError] = createSignal<{ message: string; kind: MarketplaceFailureKind } | null>(
+    null
+  );
   const [operationError, setOperationError] = createSignal<string | null>(null);
   const [installStates, setInstallStates] = createSignal<Record<string, InstallState>>({});
   const [installedLayouts, setInstalledLayouts] = createSignal<string[]>([]);
@@ -140,6 +144,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     );
   }
 
+  let applied: OpenData | null = null;
   let searchDebounce: number | null = null;
   let browseRequest = 0;
   let installedRequest = 0;
@@ -162,18 +167,24 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   }
 
   /**
-   * `forTab` exists because a Solid 2 signal write isn't readable through the
-   * signal in the same tick. Re-reading `tab()` right after `setTab(next)` got
-   * the tab just left, so every browse fetched the wrong type — invisible in
-   * tRadio (50 items under both types) but not tRadar (5 and 0).
+   * `forTab`, `forSort` and `forSearch` exist because a Solid 2 signal write isn't
+   * readable through the signal in the same tick. Re-reading `tab()` right after
+   * `setTab(next)` got the tab just left, so every browse fetched the wrong type —
+   * invisible in tRadio (50 items under both types) but not tRadar (5 and 0).
+   *
+   * The open payload is read from `applied` for the same reason: `applyOpenData`
+   * has just written `baseUrl` and `resourceFilter`, and the read here saw their old
+   * values. The first open of a session therefore bailed on an empty `baseUrl` and
+   * fetched nothing, so the panel sat on its empty state until a tab was clicked.
    */
   async function fetchItems(
     offset = 0,
     forTab?: "uis" | "sounds" | "installed",
-    forSort?: "downloads" | "created_at"
+    forSort?: "downloads" | "created_at",
+    forSearch?: string
   ) {
-    const base = baseUrl();
-    if (!base || !props.active) {
+    const open = applied;
+    if (!open?.baseUrl || !props.active) {
       // A tab switch or reopen can bail here with `loading` already true;
       // without this the grid sits on "Loading items…" with nothing in flight.
       setLoading(false);
@@ -193,8 +204,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
       const page = await browseMarketplace(
         {
           type: activeTab === "uis" ? "ui" : activeTab === "sounds" ? "sound" : undefined,
-          resource: resourceFilter() ?? undefined,
-          search: search() || undefined,
+          resource: open.resource,
+          search: (forSearch ?? search()) || undefined,
           sort: forSort ?? sort(),
           limit: pageSize,
           cursor: offset,
@@ -208,13 +219,14 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
       setHasNextPage(page.hasMore);
     } catch (e) {
       if (request !== browseRequest) return;
-      setError(
-        controller.signal.aborted
-          ? "Marketplace request timed out"
-          : e instanceof Error
-            ? e.message
-            : String(e)
-      );
+      if (controller.signal.aborted) {
+        setError({ message: "Marketplace request timed out", kind: "timeout" });
+      } else {
+        setError({
+          message: e instanceof Error ? e.message : String(e),
+          kind: e instanceof MarketplaceRequestError ? e.kind : "error",
+        });
+      }
       setItems([]);
       setHasNextPage(false);
     } finally {
@@ -269,12 +281,12 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   }
 
   async function fetchInstalledItems() {
-    const base = baseUrl();
-    if (!base) return;
+    const open = applied;
+    if (!open?.baseUrl) return;
     const request = ++installedRequest;
     setInstalledLoading(true);
     try {
-      const resource = resourceFilter() ?? undefined;
+      const resource = open.resource;
       // Two sequences, not one unfiltered one: a `ui` and a `sound` may share a
       // slug, and the per-request cap is per type — merging would halve what
       // either can carry in a page.
@@ -286,6 +298,21 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     } finally {
       if (request === installedRequest) setInstalledLoading(false);
     }
+  }
+
+  /**
+   * An empty list is a real answer, not a failure: the catalogue answered 200 with
+   * nothing for this type. Say which, so a product with no sounds published yet
+   * (tDetector's Sounds tab for most of its life) reads as "none yet".
+   */
+  function emptyText(): string {
+    const term = search().trim();
+    if (term) return `No items match "${term}".`;
+    const what = tab() === "sounds" ? "sounds" : "UIs";
+    const resource = resourceFilter();
+    return resource
+      ? `No ${what} are published for ${resource} yet.`
+      : `No ${what} are published yet.`;
   }
 
   function applyOpenData(data: OpenData) {
@@ -337,12 +364,11 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
     setInstallStates(seed);
 
     if (opening === "installed") void fetchInstalledItems();
-    else void fetchItems(0, opening);
+    else void fetchItems(0, opening, "downloads", "");
   }
 
   // `applied` is identity, not a deep compare: a fresh object off an NUI
   // message means "something changed"; the same object resent means it didn't.
-  let applied: OpenData | null = null;
   // Two-argument form instead of an `untrack` wrapper: in Solid 2 only
   // `compute` tracks, so the handler writing most of this component's signals
   // can't re-trigger itself.
@@ -665,12 +691,15 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
                     </div>
                   }
                 >
-                  <Show when={!error()} fallback={<ErrorPane message={error() as string} />}>
+                  <Show
+                    when={!error()}
+                    fallback={<ErrorPane message={error()?.message ?? ""} kind={error()?.kind} />}
+                  >
                     <Show
                       when={items().length > 0}
                       fallback={
                         <div role="status" class="mp-empty">
-                          No items found.
+                          {emptyText()}
                         </div>
                       }
                     >

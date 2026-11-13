@@ -465,6 +465,25 @@ For `ProvideMarketplaceData`, give your dialog a tab with `view = "marketplace"`
 it when the server answers with what is installed. Use `OpenMarketplace` where there is no
 host dialog to embed in.
 
+### When the list does not load
+
+The panel reads the catalogue through the server, so the server's own connection decides what
+it shows. A failure is explained rather than reported as a bare status, and what is installed
+on your server is never touched by a failed browse.
+
+| The panel says | It means | What to do |
+| --- | --- | --- |
+| *No sounds are published for tDetector yet* | The marketplace answered, and has nothing of that type for the product. Not an error. | Nothing. Switch tab, or check back later. |
+| *The marketplace could not find its catalogue* | The website answered "not found" for the list. An empty catalogue never does this. Usually the site is being updated, or `tlib_api_base_url` is wrong. | Wait a few minutes; if you set `tlib_api_base_url`, check it. |
+| *This server cannot reach the marketplace* | No connection at all (DNS, refused, TLS). The line below names the cause, for example `ENOTFOUND`. | Check the server's internet access and that outgoing HTTPS is allowed. |
+| *The marketplace is not answering* | No reply inside 10 seconds. | Retry; look at the server's connection. |
+| *The marketplace is having trouble* | The website returned a 5xx. | Retry later. |
+| *The marketplace refused this server* | A 401 or 403 for this tLib's key. | Update tLib; remove `tlib_api_base_url` if you set it. |
+| *tLib's marketplace service is not running* | The part of tLib that talks to the website did not start, so there is nothing to ask. The server console shows `No such export mpRegisterType` or `mpBrowse`. | Read the boot log above that line for the Node or bundle error, then restart tLib. |
+| *Not allowed* | The player lacks `tlib.admin`. | Grant it. |
+
+Retry asks again. The technical line shown under the message is what to paste into a bug report.
+
 ---
 
 ## Logger
