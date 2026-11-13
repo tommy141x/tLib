@@ -459,14 +459,4 @@ function S.pruneMenus(menus)
     return result
 end
 
--- Independent of the wall clock; a negative delta resets safely after timer wrap.
-function S.consume(bucket, now, burst, refill)
-    if not bucket.at then bucket.at, bucket.tokens = now, burst end
-    bucket.tokens = math.min(burst, bucket.tokens + math.max(0, now - bucket.at) * refill / 1000)
-    bucket.at = now
-    if bucket.tokens < 1 then return false end
-    bucket.tokens = bucket.tokens - 1
-    return true
-end
-
 return MenuSchema

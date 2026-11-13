@@ -33,12 +33,8 @@ F.perPlayerMs = 60000
 --- rejected by a limiter they cannot see.
 F.perServerPerMinute = 6
 
-local lastByPlayer = {}
+local playerGate = Platform.rateLimit('feedback', F.perPlayerMs)
 local windowStartedAt, windowCount = 0, 0
-
-Platform.onPlayerDropped(function(src)
-    if src then lastByPlayer[src] = nil end
-end)
 
 --- Which resource a message is about. The client's claim is checked, not
 --- trusted (neither test is `GetResourceState`, which would accept any
@@ -73,15 +69,16 @@ end
 --- invented here would reach the dialog untranslated and read as a crash.
 local function admit(src)
     local now = Platform.now()
-    local last = lastByPlayer[src]
-    if last and now >= last and (now - last) < F.perPlayerMs then return false, 'rate-limited' end
-    if now - windowStartedAt >= 60000 then
+    if now < windowStartedAt or now - windowStartedAt >= 60000 then
         windowStartedAt, windowCount = now, 0
     end
+    -- The server ceiling is read before the player's own minute is started and
+    -- counted after it passes, so a player turned away by the ceiling keeps
+    -- their minute and a player turned away by their own minute does not use up
+    -- one of the server's six. The player gate stamps on admission, which is
+    -- also what stops a second press racing the first while the HTTP call is out.
     if windowCount >= F.perServerPerMinute then return false, 'rate-limited' end
-    -- Stamped on ADMISSION, which is also what stops a second press racing the
-    -- first while the HTTP call is still out.
-    lastByPlayer[src] = now
+    if playerGate(src) then return false, 'rate-limited' end
     windowCount = windowCount + 1
     return true
 end

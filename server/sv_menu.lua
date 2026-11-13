@@ -45,6 +45,9 @@ E.registry = registry
 
 local cooldowns = {}
 
+-- Built once: the limits are fixed at creation, and nothing changes E.config afterwards.
+local requestGate = Platform.rateTokens('menu:request', E.config.rateLimit)
+
 
 local function sendSnapshot(source, requestId)
     local value = registry:snapshot(source)
@@ -176,7 +179,7 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
     local function immediate(message)
         Platform.TriggerClientEvent(S.events.response, src, requestId, { ok = false, error = message })
     end
-    if not S.consume(state.bucket, Platform.now(), E.config.rateLimit.burst, E.config.rateLimit.refillPerSecond) then
+    if requestGate(src) then
         immediate('Rate limit exceeded'); return
     end
     if state.pending then immediate('An action is already running'); return end

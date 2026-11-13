@@ -35,10 +35,8 @@ local tokenStates = {}
 
 local sweepInstalled = false
 
---- Drops every remembered timestamp for one player.
----
---- Exposed because a resource that pools or re-keys player ids has to be able
---- to say so; ordinary consumers never call it, because `playerDropped` does.
+--- Drops one player's state. `playerDropped` already does this; it is exposed
+--- for a resource that pools or re-keys player ids.
 --- @param src number|string|nil  nil forgets everyone
 function RateLimit.forget(src)
     if src == nil then
@@ -67,17 +65,12 @@ local function installSweep()
     end)
 end
 
---- A named rate-limit gate.
+--- A named minimum-interval gate: `if gate(src) then return end`.
 ---
---- Returns a FUNCTION rather than a table so the call site reads as the
---- question it is asking:
----
----     if gate(src) then return end
----
---- Calling `bucket` twice with the same name returns two functions over the
---- SAME timestamps, deliberately: two handlers that are two ways of asking for
---- the same thing should share one limit. The interval is whatever the most
---- recent call said, for the same reason — one name, one rule.
+--- The same name returns closures over the SAME timestamps, so two handlers that
+--- ask for one thing share one limit. A clock that runs backwards (the 32-bit
+--- game timer wrapping) lets the call through and restarts the interval; without
+--- that a player connected across the wrap stays refused until the clock catches up.
 ---
 --- @param name string      the bucket's name, unique within this resource
 --- @param intervalMs number  minimum milliseconds between one player's calls
@@ -100,7 +93,7 @@ function RateLimit.bucket(name, intervalMs)
         if src == nil then return false end
         local now = (GetGameTimer and GetGameTimer()) or 0
         local last = b[src]
-        if last and (now - last) < intervalMs then return true end
+        if last and now >= last and (now - last) < intervalMs then return true end
         b[src] = now
         return false
     end
@@ -108,23 +101,16 @@ end
 
 --- A token bucket per player, for an event that arrives in bursts.
 ---
---- A player starts with `burst` tokens, each call spends `cost` (default 1) and
---- tokens come back at `refillPerSecond`, up to `burst`. So `burst` is what a
---- legitimate flurry may spend at once and the refill rate is what bounds a
---- sustained flood.
+--- A player starts with `burst` tokens; each call spends `cost` (default 1) and
+--- tokens return at `refillPerSecond` up to `burst`. `gate(src [, cost])` answers
+--- `refused [, retryAfterMs]`. A source that is not a positive number (a
+--- server-side emit, nil, a marker) is never limited; a numeric string is its number.
 ---
---- `gate(src [, cost])` answers `refused [, retryAfterMs]`. A source that is not
---- a positive number (a server-side emit, nil, an internal marker) is never
---- limited, and a numeric string is the same player as its number.
----
---- A refusal is reported once per `logWindowMs` per player, with how many were
---- refused since the last report, so a client that re-asks every few seconds
---- cannot fill the console. `onRefuse(src, info)` replaces the printed line;
---- `info` is `{ name, refused, retryAfterMs }`. `logWindowMs = 0` reports every
---- refusal.
----
---- The same name returns closures over ONE state table; each closure keeps the
---- limits it was made with.
+--- A refusal is reported once per `logWindowMs` per player with the count since
+--- the last report (`0` reports every one); `onRefuse(src, info)` replaces the
+--- printed line, `info` being `{ name, refused, retryAfterMs }`. A backwards clock
+--- refills nothing and restarts from now. The same name shares one state table;
+--- each closure keeps the limits it was made with.
 ---
 --- @param name string
 --- @param opts { burst: number, refillPerSecond: number, logWindowMs?: number, onRefuse?: fun(src: number, info: table) }
@@ -170,8 +156,8 @@ function RateLimit.tokens(name, opts)
             local elapsed = (now - state.at) / 1000
             if elapsed > 0 then
                 state.tokens = math.min(burst, state.tokens + elapsed * refill)
-                state.at = now
             end
+            state.at = now
         end
 
         if state.tokens >= cost then
@@ -199,9 +185,7 @@ function RateLimit.tokens(name, opts)
     end
 end
 
---- Everything forgotten, including the bucket names. Tests only: a suite that
---- drove one bucket and then another would otherwise inherit the first one's
---- timestamps.
+--- Everything forgotten, including the names. Tests only.
 function RateLimit.reset()
     buckets = {}
     tokenStates = {}

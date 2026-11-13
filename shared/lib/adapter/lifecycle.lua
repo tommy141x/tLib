@@ -73,17 +73,29 @@ end
 
 local _rateLimit
 
---- A per-player minimum-interval gate, the one consumers get as tlib.ratelimit.bucket.
---- tLib's own VM has no `tlib` global, so it loads that module by path; `name` is
---- scoped to this VM. Off FiveM there are no net events to limit.
---- @return fun(src: number|string): boolean  true when the call is REFUSED
-function Platform.rateLimit(name, intervalMs)
-    if not _TLIB_IS_FIVEM then return function() return false end end
+-- tLib's own VM has no `tlib` global, so the module consumers get as
+-- tlib.ratelimit is loaded by path. Names are scoped to this VM.
+local function rateLimitModule()
     _rateLimit = _rateLimit or load(
         LoadResourceFile(GetCurrentResourceName(), 'shared/imports/ratelimit/server.lua'),
         '@@tLib/shared/imports/ratelimit/server.lua'
     )()
-    return _rateLimit.bucket(name, intervalMs)
+    return _rateLimit
+end
+
+--- tlib.ratelimit.bucket: a per-player minimum-interval gate.
+--- Off FiveM there are no net events to limit.
+--- @return fun(src: number|string): boolean  true when the call is REFUSED
+function Platform.rateLimit(name, intervalMs)
+    if not _TLIB_IS_FIVEM then return function() return false end end
+    return rateLimitModule().bucket(name, intervalMs)
+end
+
+--- tlib.ratelimit.tokens: a per-player token bucket, for requests that arrive in bursts.
+--- @return fun(src: number|string|nil, cost?: number): boolean, number|nil
+function Platform.rateTokens(name, opts)
+    if not _TLIB_IS_FIVEM then return function() return false end end
+    return rateLimitModule().tokens(name, opts)
 end
 
 --- The resource that invoked the export currently running, or nil if the host

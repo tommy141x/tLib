@@ -556,7 +556,7 @@ end
 function R:playerState(source)
     local state = self.players[source]
     if not state then
-        state = { bucket = {} }
+        state = {}
         self.players[source] = state
     end
     return state

@@ -239,4 +239,26 @@ do
 end
 report('PASS Platform.rateLimit gives the library VM the same gate')
 
+-- The game timer is 32-bit and wraps. A player connected across the wrap must not
+-- stay refused until the clock climbs back past the stamp it left behind.
+do
+    local RateLimit = fresh()
+    local gate = RateLimit.tokens('wrap', { burst = 2, refillPerSecond = 1 })
+    now = 4294960000
+    check(gate(7) == false and gate(7) == false, 'the burst passes before the wrap')
+    check(gate(7) == true, 'and is spent')
+    now = 1000
+    check(gate(7) == true, 'a clock that ran backwards refills nothing')
+    now = 2000
+    check(gate(7) == false, 'one second after the wrap one token is back, not "never"')
+
+    local bucket = RateLimit.bucket('wrap-bucket', 1000)
+    now = 4294960000
+    check(bucket(7) == false and bucket(7) == true, 'the interval holds before the wrap')
+    now = 500
+    check(bucket(7) == false, 'a backwards clock restarts the interval instead of refusing until it catches up')
+    check(bucket(7) == true, 'and the restarted interval holds')
+end
+report('PASS a wrapping game timer does not lock a player out')
+
 report(('PASS ratelimit-tokens (%d checks)'):format(checks))
