@@ -33,6 +33,15 @@ CreateThread(function()
     RemoveEventHandler(_bootHandler)
 end)
 
+--- `<build> (<commit>)`, or just the build, or nothing on a source checkout.
+local function buildRow()
+    local build = GetResourceMetadata(GetCurrentResourceName(), 'tlib_build', 0)
+    if not build or build == '' then return nil end
+    local commit = GetResourceMetadata(GetCurrentResourceName(), 'tlib_commit', 0)
+    if commit and commit ~= '' then return ('%s (%s)'):format(build, commit) end
+    return build
+end
+
 local vc = load(LoadResourceFile(GetCurrentResourceName(), 'shared/imports/versioncheck/server.lua'), '@@tLib/shared/imports/versioncheck/server.lua')()
 
 vc({
@@ -47,8 +56,9 @@ vc({
     -- still gets its banner rather than one with a missing row.
     info = {
         -- Absent on a source checkout; `buildOutput` skips an empty value, so this
-        -- row appears only on a released build, to tell two 1.0.0 trees apart.
-        { key = 'Build',  value = GetResourceMetadata(GetCurrentResourceName(), 'tlib_build', 0) },
+        -- row appears only on a released build. The commit is what turns a pasted banner
+        -- into the exact files that were uploaded.
+        { key = 'Build',  value = buildRow() },
         { key = 'Hub',    event = 'tlib:vcInfo:hub' },
         { key = 'Spawns', event = 'tlib:vcInfo:spawns' },
     },

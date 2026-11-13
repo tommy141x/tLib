@@ -184,7 +184,8 @@ end
 --- A version read also carries `tlib_build` when the resource declares one, as
 --- `1.0.0 (build 20261024-7f3a91c2)` -- a hash of the released bytes
 --- (`stampBuildId` in shared/ts/build/core.ts), so it answers "which tree is
---- this" when an in-place republish leaves the version number unchanged.
+--- this" when two downloads share a version number. A release that also knows its
+--- commit adds it: `1.1.2 (build 20261113-ab12cd34, commit 3f9c1a2)`.
 --- Composed here rather than at the call sites so no consumer needs a release
 --- to start reporting it; the compatibility gate in imports.lua reads `version`
 --- straight from the manifest, not through here.
@@ -203,6 +204,8 @@ function Diag.meta(resource, key)
     if key ~= nil and key ~= 'version' then return value end
     local build = field('tlib_build')
     if not build then return value end
+    local commit = field('tlib_commit')
+    if commit then return ('%s (build %s, commit %s)'):format(value, build, commit) end
     return ('%s (build %s)'):format(value, build)
 end
 

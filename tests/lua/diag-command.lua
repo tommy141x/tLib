@@ -47,6 +47,8 @@ local resourceMeta = {
     -- themselves 1.0.0 distinguishable in a report -- the republish-in-place of
     -- v1.0 is why.
     tStamped = { version = '1.0.0', tlib_build = '20261024-7f3a91c2' },
+    -- A release cut by the gate in shared/ts/build/release-gate.ts also records its commit.
+    tCommitted = { version = '1.1.2', tlib_build = '20261113-ab12cd34', tlib_commit = '3f9c1a2' },
 }
 function GetResourceMetadata(resource, key)
     local entry = resourceMeta[resource]
@@ -137,6 +139,8 @@ must(Diag.meta('tStamped') == '1.0.0 (build 20261024-7f3a91c2)',
     'a stamped build must report its build id: ' .. tostring(Diag.meta('tStamped')))
 must(Diag.meta('tStamped', 'version') == '1.0.0 (build 20261024-7f3a91c2)',
     'naming the version key explicitly must behave the same as defaulting to it')
+must(Diag.meta('tCommitted') == '1.1.2 (build 20261113-ab12cd34, commit 3f9c1a2)',
+    'a release that recorded its commit must report it: ' .. tostring(Diag.meta('tCommitted')))
 must(Diag.meta('tLib') == '1.0.0',
     'an unstamped build reports its bare version, not a fabricated build id')
 -- Any OTHER key is untouched. `tlib_min_version` goes through this same function
