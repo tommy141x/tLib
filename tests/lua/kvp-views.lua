@@ -228,6 +228,81 @@ do
 end
 print('PASS kvp.set and kvp.get are inverse, and a legacy typed key degrades instead of throwing')
 
+-- Every getter against every stored type
+--
+-- A key is stored with exactly one of three setters and read with one of six
+-- getters. Reading with the wrong one is a raised `bad cast` / `insufficient
+-- bytes` (native 5240da5a) in the host, and at file scope it kills the chunk:
+-- a resource that reads a saved callsign on load then never finishes loading.
+-- The matrix asserts the outcome for all 18 pairs: nothing raises, a match reads
+-- back, and a mismatch is the caller's default.
+
+do
+    local env = host()
+    local reported = {}
+    env.print = function(line) reported[#reported + 1] = line end
+    local kvp = loadKvp(env)
+
+    local STORED = {
+        string = function(key) env.SetResourceKvp(key, 'text') end,
+        float = function(key) env.SetResourceKvpFloat(key, 0.25) end,
+        int = function(key) env.SetResourceKvpInt(key, 42) end,
+    }
+    -- Each getter, the type it reads natively, and the value a match reads back.
+    local GETTERS = {
+        { name = 'getString', native = 'string', value = 'text', default = 'fallback' },
+        { name = 'getFloat', native = 'float', value = 0.25, default = 9.5 },
+        { name = 'getInt', native = 'int', value = 42, default = 9 },
+        { name = 'getBool', native = 'string', value = nil, default = true },
+        { name = 'getJson', native = 'string', value = nil, default = 'fallback' },
+        { name = 'get', native = 'string', value = 'text', default = 'fallback' },
+    }
+
+    local pairsChecked = 0
+    for storedType, store in pairs(STORED) do
+        for _, getter in ipairs(GETTERS) do
+            local key = ('matrix_%s_%s'):format(storedType, getter.name)
+            store(key)
+            local ok, result = pcall(kvp[getter.name], key, getter.default)
+            check(ok, ('%s on a key stored as %s must not raise: %s'):format(getter.name, storedType, tostring(result)))
+            pairsChecked = pairsChecked + 1
+            if storedType == getter.native then
+                if getter.value ~= nil then
+                    check(result == getter.value, ('%s must read back what %s stored, got %s'):format(
+                        getter.name, storedType, tostring(result)))
+                end
+            else
+                check(result == getter.default, ('%s on a key stored as %s must be the default, got %s'):format(
+                    getter.name, storedType, tostring(result)))
+            end
+        end
+    end
+    check(pairsChecked == 18, 'every getter was tried against every stored type')
+
+    -- Said once per key, with enough in it to find the key.
+    reported = {}
+    env.SetResourceKvpInt('callsign', 12)
+    kvp.getString('callsign', 'x'); kvp.getString('callsign', 'x'); kvp.getBool('callsign', false)
+    check(#reported == 1, 'a mistyped key is reported once, not per read: ' .. #reported)
+    check(reported[1]:find('callsign', 1, true) and reported[1]:find('tlib.kvp', 1, true),
+        'and the line names the key: ' .. tostring(reported[1]))
+    kvp.getFloat('callsign', 0.0)
+    check(#reported == 1, 'a second accessor reading the same key does not repeat the line')
+
+    -- With no default, the zero value of the type, the same as for an unset key.
+    env.SetResourceKvp('nodefault', 'text')
+    check(kvp.getInt('nodefault') == 0 and kvp.getFloat('nodefault') == 0.0, 'no default reads as zero')
+    local quiet = kvp.view({ nilWhenUnset = true })
+    check(quiet.getFloat('nodefault') == nil and quiet.getInt('nodefault') == nil, 'nilWhenUnset reads a mistyped key as nil')
+
+    -- A well-typed read prints nothing.
+    reported = {}
+    kvp.setString('fine', 'v'); kvp.setInt('fineInt', 3); kvp.setFloat('fineFloat', 1.5)
+    kvp.getString('fine'); kvp.getInt('fineInt'); kvp.getFloat('fineFloat')
+    check(#reported == 0, 'a correctly typed read is silent')
+end
+print('PASS every getter survives every stored type, and a mistyped key is reported once')
+
 -- settings.serverScoped
 
 do

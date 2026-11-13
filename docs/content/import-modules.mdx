@@ -336,6 +336,20 @@ decide means "shared".
 | `kvp.getPrefix()` | The community prefix, or `nil` — usually `nil`. |
 | `kvp.serverTag()` | This server's tag, or `""` when no endpoint has resolved. |
 
+**Reading with the wrong accessor is safe.** The host raises `bad cast` or
+`native 5240da5a: insufficient bytes` when `GetResourceKvpString` reads a key stored with
+`SetResourceKvpInt`/`Float` (and `GetResourceKvpInt`/`Float` on a string), and at file scope that
+stops the whole script from loading. Every `kvp` getter reads through a `pcall` and returns your
+default instead, and prints one line naming the key the first time it happens:
+
+```text
+[tRadio] tlib.kvp: "tgs_radio_callsign" was stored as a different type than getString/getBool/getJson/get reads, so the default is returned. Write it with the matching setter, or tlib.kvp.delete it.
+```
+
+`kvp.set` stores a number as a string, so `kvp.get` reads it back; only keys written by an older
+build with `setInt`/`setFloat` are affected. Call the raw natives directly and you get the raise.
+Use `kvp.getString` (or a `kvp.view`) rather than `GetResourceKvpString`.
+
 ---
 
 ## settings

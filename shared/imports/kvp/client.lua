@@ -32,6 +32,20 @@ local kvp = {}
 
 local _prefix = nil
 
+--- resolved key -> true once the mistyped-read line has been printed for it.
+local _reportedMistyped = {}
+
+--- A read used a different accessor than the key was written with. The caller gets
+--- its default; this says so, once per key, because the alternative is a setting
+--- that silently never loads.
+local function reportMistyped(resolved, accessor)
+    if _reportedMistyped[resolved] then return end
+    _reportedMistyped[resolved] = true
+    print(('^3[%s] tlib.kvp: "%s" was stored as a different type than %s reads, so the default is returned. '
+        .. 'Write it with the matching setter, or tlib.kvp.delete it.^7')
+        :format(GetCurrentResourceName(), resolved, accessor))
+end
+
 do
     local function sanitize(s)
         return s:gsub("[^%w%-_]", "")
@@ -115,13 +129,23 @@ local function buildAccessors(into, opts)
 
     local nilWhenUnset = opts ~= nil and opts.nilWhenUnset == true
 
-    --- `GetResourceKvpString` RAISES `bad cast` on a key written with
-    --- `SetResourceKvpInt`/`Float` -- values are msgpack-encoded -- and at file scope
-    --- that kills the chunk. `set` no longer writes typed numbers, but keys already on
-    --- players' machines do, so degrading to the default is the only way to reach them.
+    --- Every getter reads through a pcall. `GetResourceKvpString` RAISES `bad cast` (or
+    --- `insufficient bytes`, native 5240da5a) on a key written with `SetResourceKvpInt`/
+    --- `Float` -- values are msgpack-encoded -- and `GetResourceKvpInt`/`Float` raise on a
+    --- string; at file scope that kills the chunk. `set` no longer writes typed numbers,
+    --- but keys already on players' machines do, so degrading to the default is the only
+    --- way to reach them.
     local function rawString(key)
         local ok, value = pcall(GetResourceKvpString, k(key))
         if ok then return value end
+        reportMistyped(k(key), 'getString/getBool/getJson/get')
+        return nil
+    end
+
+    local function rawNumber(read, accessor, key)
+        local ok, value = pcall(read, k(key))
+        if ok then return value end
+        reportMistyped(k(key), accessor)
         return nil
     end
 
@@ -151,12 +175,16 @@ local function buildAccessors(into, opts)
 
     function into.getFloat(key, default)
         if not into.has(key) then return unset(default, 0.0) end
-        return GetResourceKvpFloat(k(key))
+        local value = rawNumber(GetResourceKvpFloat, 'getFloat', key)
+        if value == nil then return unset(default, 0.0) end
+        return value
     end
 
     function into.getInt(key, default)
         if not into.has(key) then return unset(default, 0) end
-        return GetResourceKvpInt(k(key))
+        local value = rawNumber(GetResourceKvpInt, 'getInt', key)
+        if value == nil then return unset(default, 0) end
+        return value
     end
 
     function into.getBool(key, default)
