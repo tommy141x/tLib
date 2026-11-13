@@ -15,6 +15,10 @@ end
 
 local context = IsDuplicityVersion() and 'server' or 'client'
 
+-- The release page, not the file: it is where "Source code" and tLib.zip sit side by side,
+-- and picking the wrong one is the most common way to end up here.
+local TLIB_RELEASES_URL = 'https://github.com/tommy141x/tLib/releases/latest'
+
 -- Enforce tlib_min_version *before* anything touches tlib, so an outdated tLib
 -- says "update tLib" instead of "No such export X". Duplicated from
 -- versioncheck/server.lua: this file runs in consumer VMs, that one in tLib's.
@@ -37,8 +41,28 @@ if requiredVersion and requiredVersion ~= '' then
         elseif cur[i] > req[i] then break end
     end
     if outdated then
-        error(('\n^1[%s] requires tLib v%s or newer — installed tLib is v%s. Update tLib.^0')
-            :format(resourceName, requiredVersion, tlibVersion), 0)
+        local build = GetResourceMetadata(tLibName, 'tlib_build', 0)
+        local have = build and build ~= ''
+            and ('tLib %s (build %s)'):format(tlibVersion, build)
+            or ('tLib %s'):format(tlibVersion)
+        if context == 'client' then
+            error(('\n^1[%s] needs tLib %s or newer; this server has %s. Download tLib.zip (not '
+                .. '"Source code") from %s^0'):format(resourceName, requiredVersion, have, TLIB_RELEASES_URL), 0)
+        end
+        -- Boxed and then stopped. An error() here aborts only this shared_script, the
+        -- resource starts without `tlib`, and what scrolls past is a second, unrelated
+        -- failure that names no version.
+        local rule = ('^1[%s] %s^0'):format(resourceName, ('-'):rep(60))
+        print(rule)
+        print(('^1[%s] needs tLib %s or newer; this server has %s.^0')
+            :format(resourceName, requiredVersion, have))
+        print(('^1[%s] Download tLib.zip (not "Source code") from:^0'):format(resourceName))
+        print(('^1[%s]   %s^0'):format(resourceName, TLIB_RELEASES_URL))
+        print(('^1[%s] Replace the whole tLib folder (extract it on the server or upload by '
+            .. 'SFTP), then restart the server. %s has been stopped.^0'):format(resourceName, resourceName))
+        print(rule)
+        StopResource(resourceName)
+        error(('%s needs tLib %s or newer'):format(resourceName, requiredVersion), 0)
     end
 end
 

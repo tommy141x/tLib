@@ -30,9 +30,16 @@ local function test(name, fn)
     report('PASS ' .. name)
 end
 
+local stopped, printed = {}, {}
+local realPrint = print
+
 --- Load the REAL imports.lua with a consumer pinning `required` against a tLib
---- declaring `installed`. Returns nil on success, or the gate's error message.
-local function gate(required, installed)
+--- declaring `installed` (and, optionally, stamped `build`). Returns nil on success, or
+--- the gate's error message. `side` is 'server' or 'client'.
+local function gate(required, installed, build, side)
+    stopped, printed = {}, {}
+    _ENV.StopResource = function(name) stopped[#stopped + 1] = name end
+    _ENV.print = function(line) printed[#printed + 1] = tostring(line) end
     _ENV.tlib = nil
     _ENV.GetCurrentResourceName = function() return 'consumer' end
     _ENV.GetResourceState = function() return 'started' end
@@ -42,14 +49,16 @@ local function gate(required, installed)
             return resource == 'consumer' and required or nil
         end
         if key == 'version' then return resource == 'tLib' and installed or nil end
+        if key == 'tlib_build' then return resource == 'tLib' and build or nil end
         return nil
     end
     _ENV.LoadResourceFile = function() return nil end
-    _ENV.IsDuplicityVersion = function() return false end
+    _ENV.IsDuplicityVersion = function() return side ~= 'client' end
     _ENV.exports = setmetatable({}, { __index = function() return {} end })
 
     local chunk = assert(loadfile('imports.lua'))
     local ok, err = pcall(chunk)
+    _ENV.print = realPrint
     if ok then return nil end
     return tostring(err)
 end
@@ -63,10 +72,11 @@ end
 local function refuses(required, installed)
     local err = gate(required, installed)
     assert(err ~= nil, ('pin %s should REFUSE tLib %s, but it loaded'):format(required, installed))
-    assert(err:find('requires tLib v' .. required, 1, true),
-        ('expected the "update tLib" message naming %s, got: %s'):format(required, err))
-    assert(err:find('installed tLib is v' .. installed, 1, true),
-        ('expected the message to name the installed version %s, got: %s'):format(installed, err))
+    local box = table.concat(printed, '\n')
+    assert(box:find('needs tLib ' .. required .. ' or newer', 1, true),
+        ('expected the message to name the required version %s, got: %s'):format(required, box))
+    assert(box:find('this server has tLib ' .. installed, 1, true),
+        ('expected the message to name the installed version %s, got: %s'):format(installed, box))
 end
 
 test('every consumer pin (1.0) accepts the tLib being shipped (1.0.0)', function()
@@ -124,8 +134,46 @@ test('an unparseable installed version is treated as 0.0.0, i.e. refused', funct
     -- GetResourceMetadata answering nil means `or '0.0.0'` in imports.lua.
     local err = gate('1.0', nil)
     assert(err ~= nil, 'a tLib with no declared version must not satisfy a 1.0 pin')
-    assert(err:find('installed tLib is v0.0.0', 1, true),
-        'expected the message to name 0.0.0, got: ' .. err)
+    assert(table.concat(printed, ' '):find('this server has tLib 0.0.0', 1, true),
+        'expected the message to name 0.0.0, got: ' .. table.concat(printed, ' '))
+end)
+
+test('a refusal prints the version, a download link and stops the consumer', function()
+    local err = gate('1.1.2', '1.1', '20261028-6e6b22fa')
+    assert(err ~= nil, 'a 1.1 tLib must not satisfy a 1.1.2 pin')
+    local box = table.concat(printed, '\n')
+    -- The build id is what separates this tLib from the three other 1.1 downloads.
+    assert(box:find('this server has tLib 1.1 (build 20261028-6e6b22fa)', 1, true), box)
+    assert(box:find('https://github.com/tommy141x/tLib/releases/latest', 1, true), box)
+    assert(box:find('not "Source code"', 1, true), box)
+    assert(#stopped == 1 and stopped[1] == 'consumer',
+        'the consumer must be stopped, or it starts without tlib and fails somewhere else')
+    -- The one error line names the pin and nothing else: the box above is the message.
+    assert(err == 'consumer needs tLib 1.1.2 or newer', err)
+end)
+
+test('a client VM gets one plain error with the link and does not stop anything', function()
+    local err = gate('1.1.2', '1.1', nil, 'client')
+    assert(err ~= nil)
+    assert(err:find('needs tLib 1.1.2 or newer; this server has tLib 1.1', 1, true), err)
+    assert(err:find('releases/latest', 1, true), err)
+    assert(#stopped == 0 and #printed == 0, 'the client VM cannot stop a server resource')
+end)
+
+test('a patch release is told apart from the minor it follows', function()
+    -- The reason releases get a patch number: four different tLib builds all said 1.1, and a
+    -- consumer pinned to 1.1 accepted every one. 1.1.1 is refused by all of them.
+    refuses('1.1.1', '1.1')
+    refuses('1.1.2', '1.1.1')
+    allows('1.1.1', '1.1.1')
+    allows('1.1.1', '1.1.2')
+    allows('1.1', '1.1.2')
+    allows('1.1.2', '1.2')
+end)
+
+test('a satisfied pin prints nothing and stops nothing', function()
+    allows('1.1.1', '1.1.1')
+    assert(#printed == 0 and #stopped == 0)
 end)
 
 report(('Passed %d imports.lua min-version tests'):format(passed))
