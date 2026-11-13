@@ -79,7 +79,10 @@ export async function assertReleasable(opts: {
 
   assertVersionShape(version);
 
-  for (const { file, expected, actual } of await readBackVersions(opts.versionTargets ?? [], root)) {
+  for (const { file, expected, actual } of await readBackVersions(
+    opts.versionTargets ?? [],
+    root
+  )) {
     throwIfMissed(file, expected, actual, version);
   }
 

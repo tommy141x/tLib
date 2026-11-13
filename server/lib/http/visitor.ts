@@ -16,7 +16,10 @@ export function isVisitor(
 ): boolean {
   if (typeof userAgent === "string" && userAgent.startsWith(HEALTH_CHECK_AGENT)) return false;
   if (typeof address !== "string") return false;
-  const ip = address.trim().toLowerCase().replace(/^::ffff:/, "");
+  const ip = address
+    .trim()
+    .toLowerCase()
+    .replace(/^::ffff:/, "");
   if (ip === "" || ip === "localhost" || ip === "::" || ip === "0.0.0.0") return false;
   if (ip === "::1" || ip.startsWith("127.")) return false;
   return ip !== ownPublicIp?.toLowerCase();
