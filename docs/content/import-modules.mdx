@@ -607,6 +607,27 @@ This registers a **use**. Whether a player is *carrying* the item is a different
 [`access`](#access) answers it with its `item` rule for every inventory.
 </Callout>
 
+## lockedmodels
+
+Vehicles a server refuses to re-configure. Server only. Set `tlib_locked_models` in
+`server.cfg` (see [Convars](/docs/tLib/convars#accessibility-and-locked-vehicles)); unset locks
+nothing.
+
+```lua
+if tlib.lockedmodels.isLocked(model) then
+    return -- keep what is stored, drop the incoming change
+end
+```
+
+| Function | Description |
+| --- | --- |
+| `lockedmodels.isLocked(model)` | `true` for a name, or a hash in either signed or unsigned form. Consumers key models differently (tLS by name, tUnit by hash), so one set answers both. |
+| `lockedmodels.any()` | Is anything locked at all. |
+| `lockedmodels.list()` | A copy of the configured names, for a diagnostics line. |
+
+The set is read once when the module loads, never from a payload, so a client cannot lock or
+unlock a model by sending a flag.
+
 ## opengate
 
 The "may I open my panel?" handshake: the client asks, the server decides fresh on every
@@ -1183,6 +1204,10 @@ A `cost` above `burst` can never pass and raises. A source that is not a positiv
 server-side emit, `nil` — is never limited, and a numeric string is the same player as its
 number. The refusal line is the reason a client that re-asks every few seconds does not fill the
 console.
+
+A clock that runs backwards (the 32-bit game timer wrapping) never leaves a player refused until
+it catches up: `bucket` lets the call through and restarts the interval, `tokens` refills
+nothing and restarts from now.
 
 Names are scoped to your own VM, and the same name twice is one budget: two `bucket` closures
 share one timestamp table and the last `intervalMs` wins; two `tokens` closures share one token

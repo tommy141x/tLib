@@ -23,7 +23,7 @@ shared_scripts {
 exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctly.')
 ```
 
-## Three things to know first
+## Four things to know first
 
 - It detects the framework you already run and normalises what it reports — see
   [`access`](/docs/tLib/import-modules#access).
@@ -31,6 +31,11 @@ exports['tLib']:ShowToast(nil, 'success', 'tLib is running', 'Installed correctl
   [Convars](/docs/tLib/convars).
 - A tLib restart takes its consumers' menus with it; they re-register when it returns — see
   the [lifecycle adapter](/docs/tLib/menu-consumers#shared-lifecycle-adapter-api-v1).
+- Every release has a version of its own, and `tlib_version` in the server console prints the
+  version, build and commit you are running, one line to paste into a ticket — see
+  [Installation](/docs/tLib/installation#check-what-you-are-running). On a rented game host,
+  read [Hosted servers](/docs/tLib/hosted-servers) first: the address to use, how to upload the
+  release, and the files a resource cannot create there.
 
 ## Requirements
 

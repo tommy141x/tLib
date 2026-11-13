@@ -178,6 +178,13 @@ not a reload. Out-of-range or non-numeric values fall back to the default rather
 | `tlib_hud_profile` | `setr` | string | *(empty — the server endpoint)* | Namespaces each player's saved HUD placement. Set it when one community runs several endpoints that should share one layout. |
 | `tlib_community_id` | `setr` | string, `[A-Za-z0-9_-]` only | *(empty — falls back to `sv_projectName`)* | Prefix for tLib's KVP keys, separating **your** community's player storage from another community's. It does **not** separate two of your own servers: that is a per-key `serverScoped` opt-in inside the resource, not a convar — see [Import modules → kvp](/docs/tLib/import-modules). Left empty (the default, since neither this nor `sv_projectName` is a standard FiveM convar) keys are stored with no prefix. Disallowed characters are stripped; a value that strips to nothing falls through to `sv_projectName`. Read by client Lua **and** the server bundle. |
 
+## Accessibility and locked vehicles
+
+| Convar | Command | Type / unit | Default | What it does |
+| --- | --- | --- | --- | --- |
+| `tlib_reduce_motion` | `setr` | `0` or `1` | `0` | The house default for reduced motion in tLib's pages. `prefers-reduced-motion` does not work inside FiveM's browser, so tLib writes its own switch instead. A player's own answer (stored on their machine) wins over this, so changing it never overrules someone who chose. A resource with its own page reads the answer from `exports.tLib:GetReduceMotion()` or the `tlib:reduceMotion` event. |
+| `tlib_locked_models` | `set` | model names, separated by commas or spaces | *(none)* | Vehicles this server refuses to re-configure: a consumer that stores per-vehicle configuration keeps what is stored and drops an incoming change for these models. For a reference build whose vehicles must stay as shipped while every other vehicle stays editable. Names are case-insensitive and read once at start, so a change needs a restart. Server only; nothing a client sends can lock or unlock a model. |
+
 ## Not convars
 
 These look similar and are not convars. Do not put them in `server.cfg`:
@@ -185,6 +192,7 @@ These look similar and are not convars. Do not put them in `server.cfg`:
 | Name | What it actually is |
 | --- | --- |
 | `tlib_min_version`, `tlib_module`, `tlib_modules` | `fxmanifest.lua` metadata keys on the **consuming** resource. |
+| `tlib_commit` | A `fxmanifest.lua` metadata key written beside `tlib_build`: the short commit the release was cut from. It is not part of the build hash, so the same files committed twice are one build. Do not set it. |
 | `tlib_build` | A `fxmanifest.lua` metadata key **tLib's release writes into its own manifest**: a content hash of the download, so a `<resource>_diag` line can tell two builds with the same version number apart. Do not set, edit or remove it — an edited one is a lie about which files you have. Absent means the copy was not cut by a release. |
 | `tlib_menu_selftest`, `tlib_menu_refresh`, `tlib_menu_permissions` | Console commands. |
 | `tlib_version` | A console command (server console or rcon only): one line with tLib's version, build and commit, one row per resource that needs tLib, and which door the panels use. No IP address appears in it. |
