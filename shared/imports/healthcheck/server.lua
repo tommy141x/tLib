@@ -1,14 +1,31 @@
 -- tlib.healthcheck
 -- see tRadio/server/sv_version.lua for usage
 
+--- One GET, with the two facts the old `status = 0` threw away: how long it took to fail and
+--- whether it failed at all. `timedOut` is OUR timer firing; a failure that came back on its
+--- own is fast, and a fast failure and a silence are different problems with different fixes.
 local function httpGet(url, timeoutMs)
     local p = promise.new()
     local resolved = false
+    local started = GetGameTimer()
 
-    PerformHttpRequest(url, function(status, body, headers)
+    PerformHttpRequest(url, function(status, body, headers, errorData)
         if not resolved then
             resolved = true
-            p:resolve({ status = status or 0, body = body or '' })
+            status = status or 0
+            -- A refused connection is reported as status 200 with an empty body and NO headers
+            -- at all (even a 204 carries Date), measured on the ingress relay. Taking that at
+            -- face value passed a dead port as a healthy empty page.
+            if (headers == nil or next(headers) == nil) and (body == nil or body == '') then
+                status = 0
+            end
+            p:resolve({
+                status = status,
+                body = body or '',
+                errorData = type(errorData) == 'string' and errorData ~= '' and errorData or nil,
+                elapsedMs = GetGameTimer() - started,
+                timedOut = false,
+            })
         end
     end, 'GET', '', { ['User-Agent'] = 'tLib-HealthCheck' })
 
@@ -16,11 +33,26 @@ local function httpGet(url, timeoutMs)
         Wait(timeoutMs or 8000)
         if not resolved then
             resolved = true
-            p:resolve({ status = 0, body = '' })
+            p:resolve({ status = 0, body = '', elapsedMs = GetGameTimer() - started, timedOut = true })
         end
     end)
 
     return Citizen.Await(p)
+end
+
+--- What a step's outcome means, for choosing words:
+---   ok             the step passed
+---   refused        nothing answered and the failure came back on its own: a closed port, a
+---                  reset, a name that does not resolve
+---   silent         nothing answered and nothing failed either, until the timer: a firewall
+---                  dropping packets, or a router that cannot loop back to its own address
+---   wrong-service  something answered, but not what the step expected
+--- `refused` is a fast failure, not proof of a closed port; `errorData` carries whatever
+--- the engine said.
+local function classify(passed, resp)
+    if passed then return 'ok' end
+    if resp.status ~= 0 then return 'wrong-service' end
+    return resp.timedOut and 'silent' or 'refused'
 end
 
 local function extractPort(url)
@@ -77,24 +109,31 @@ local function runSteps(base, steps, timeout)
             passed = resp.status >= 200 and resp.status < 600
         end
 
+        local class = classify(passed, resp)
         if not passed then
+            -- `errorMsgs[class]` first: a consumer that can say something true about a
+            -- refusal and something else about a silence should not have to share one line.
+            local byClass = type(step.errorMsgs) == 'table' and step.errorMsgs[class] or nil
             if resp.status == 0 then
-                stepError = step.errorMsg or ('Connection failed on step: ' .. step.name)
+                stepError = byClass or step.errorMsg or ('Connection failed on step: ' .. step.name)
             else
-                stepError = step.errorMsg or ('Check failed on step: ' .. step.name)
+                stepError = byClass or step.errorMsg or ('Check failed on step: ' .. step.name)
             end
             stepError = substituteVars(stepError, base)
         end
 
         results[i] = {
-            name   = step.name,
-            passed = passed,
-            status = resp.status,
-            error  = stepError,
+            name      = step.name,
+            passed    = passed,
+            status    = resp.status,
+            error     = stepError,
+            class     = class,
+            elapsedMs = resp.elapsedMs,
+            errorData = resp.errorData,
         }
 
         if not passed then
-            return results, step.name, stepError
+            return results, step.name, stepError, class
         end
     end
     return results, nil, nil
@@ -113,23 +152,24 @@ local function check(opts)
     --- result still reports it as `url`, which is what consumers read.
     local function run(base)
         CreateThread(function()
-            local stepResults, failedStep, failMsg
+            local stepResults, failedStep, failMsg, failedClass
             local attempts = 0
 
             for attempt = 0, retries do
                 attempts = attempt + 1
                 if attempt > 0 then Wait(retryDelay) end
-                stepResults, failedStep, failMsg = runSteps(base, steps, timeout)
+                stepResults, failedStep, failMsg, failedClass = runSteps(base, steps, timeout)
                 if not failedStep then break end
             end
 
             local result = {
-                success    = failedStep == nil,
-                steps      = stepResults,
-                attempts   = attempts,
-                failedStep = failedStep,
-                message    = failedStep and failMsg or 'All checks passed',
-                url        = base,
+                success     = failedStep == nil,
+                steps       = stepResults,
+                attempts    = attempts,
+                failedStep  = failedStep,
+                failedClass = failedClass,
+                message     = failedStep and failMsg or 'All checks passed',
+                url         = base,
             }
 
             if callback then callback(result) end

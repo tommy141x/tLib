@@ -1021,8 +1021,8 @@ they are `nil`.
 Ordered HTTP GET probes against a base URL, with retries, delivering one aggregate result.
 `tlib.healthcheck(opts)` and `.check(opts)` are the same call and return **nothing**.
 Everything arrives at `opts.callback` as
-`{ success, steps, attempts, failedStep, message, url }`, each step being
-`{ name, passed, status, error }`.
+`{ success, steps, attempts, failedStep, failedClass, message, url }`, each step being
+`{ name, passed, status, error, class, elapsedMs, errorData }`.
 
 - Defaults: one step (`reachable`, path `/`), `retries` 2 (three attempts), `retryDelay`
   1000, `timeout` 8000, `delay` 500. With no `expect`, a step passes on any status 200–599.
@@ -1032,6 +1032,23 @@ Everything arrives at `opts.callback` as
   and a retry restarts at step 1. A timeout is `status = 0`, not an error.
 - `%port%` in a step's `errorMsg` becomes the port parsed from the URL — 443, 80, or a
   literal `?`.
+
+A failed step also says **how** it failed, in `class`, so a message can be true about each
+case instead of one sentence covering all of them:
+
+| `class` | Meaning |
+| --- | --- |
+| `ok` | The step passed. |
+| `refused` | Nothing answered and the failure came back on its own, quickly: a closed port, a reset, a name that does not resolve. `errorData` holds whatever the engine said. |
+| `silent` | Nothing answered and nothing failed either, until `timeout` ended it: packets dropped by a firewall, or a router that cannot loop back to its own public address. |
+| `wrong-service` | Something answered, but `expect` rejected it. |
+
+`refused` is a fast failure, not proof that the port is closed. `failedClass` is the class of
+the step in `failedStep`, and `elapsedMs` is how long that step took. Give a step
+`errorMsgs = { refused = '…', silent = '…', ['wrong-service'] = '…' }` to choose the words by
+class; a class with no entry falls back to `errorMsg`, so a step written before classes
+behaves as it did. A connection the engine reports as status 200 with an empty body and no
+headers at all is a refused connection, and is reported as `status = 0`.
 
 ---
 
