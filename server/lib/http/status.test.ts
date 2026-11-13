@@ -2,7 +2,8 @@ import { detectPublicIP } from "../realtime/public-ip";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { registerBridge } from "./bridge";
 import { clear, hubDestinations, list, unregisterResource } from "./registry";
-import { HttpReadiness, type HttpStatus, isForeignAddress } from "./status";
+import { HttpReadiness, type HttpStatus } from "./status";
+import { isVisitor } from "./visitor";
 
 beforeEach(clear);
 afterEach(clear);
@@ -517,9 +518,9 @@ describe("reached from outside", () => {
   });
 
   test("a private LAN address is another machine", () => {
-    expect(isForeignAddress("192.168.1.20", null)).toBe(true);
-    expect(isForeignAddress("10.0.0.5", "198.18.0.9")).toBe(true);
-    expect(isForeignAddress("2001:db8::1", null)).toBe(true);
+    expect(isVisitor("192.168.1.20", undefined, null)).toBe(true);
+    expect(isVisitor("10.0.0.5", "Mozilla/5.0", "198.18.0.9")).toBe(true);
+    expect(isVisitor("2001:db8::1", undefined, null)).toBe(true);
   });
 });
 

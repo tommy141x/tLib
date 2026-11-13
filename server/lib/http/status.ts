@@ -6,6 +6,7 @@
 // then no origin of tLib's to probe, and a consumer must skip the probe rather
 // than substitute a guess.
 import { resolvePublicUrl } from "./public-url";
+import { isVisitor } from "./visitor";
 
 /**
  * "disabled" is a listener that was never asked for, and it is a state of its
@@ -44,39 +45,13 @@ export interface HttpStatus {
    * through a proxy while tLib published a detected IP instead.
    */
   publicUrlDetected: boolean;
-  /**
-   * What became of `tlib_http_public_url`: "unset", "used", or "rejected" when it held
-   * something no host can have (a pasted docs placeholder, a typo) and detection answered
-   * instead. Carried out so `tlib_version` can name the one fact a support thread kept
-   * having to ask for.
-   */
+  /** "rejected": `tlib_http_public_url` held something no host can have and detection answered. */
   publicUrlOverride: "unset" | "used" | "rejected";
   localUrl: string | null;
-  /**
-   * True once a request from ANOTHER machine has reached a door of tLib's. The only proof
-   * available from the inside that the printed address works for somebody else: a probe
-   * from this host to its own public address tests the router's hairpin, not the host's
-   * reachability. `reachedAt` is epoch milliseconds. No address is kept.
-   */
+  /** A request from ANOTHER machine has reached a door (see visitor.ts); epoch ms; no address kept. */
   reachedFromOutside: boolean;
   reachedAt: number | null;
   error: string | null;
-}
-
-/** The User-Agent shared/imports/healthcheck/server.lua sends. */
-const HEALTH_CHECK_AGENT = "tLib-HealthCheck";
-
-/**
- * Could `address` be another machine? Loopback is this one, and so is the host's own
- * detected public address, which is what a self-probe through the router arrives as.
- * Anything unrecognisable is not evidence either way.
- */
-export function isForeignAddress(address: unknown, ownPublicIp: string | null): boolean {
-  if (typeof address !== "string") return false;
-  const ip = address.trim().toLowerCase().replace(/^::ffff:/, "");
-  if (ip === "" || ip === "localhost" || ip === "::" || ip === "0.0.0.0") return false;
-  if (ip === "::1" || ip.startsWith("127.")) return false;
-  return ip !== ownPublicIp?.toLowerCase();
 }
 
 export class HttpReadiness {
@@ -192,17 +167,10 @@ export class HttpReadiness {
     this.changed(this.snapshot());
   }
 
-  /**
-   * A request arrived from `address`. The first one from another machine is announced
-   * through `changed`; every later one costs a comparison. The health check identifies
-   * itself by User-Agent and is skipped: with a hostname as the public address it comes
-   * back through the router from this host's own public address, and a hairpinning router
-   * would otherwise count the server visiting itself as the outside world.
-   */
+  /** The first visitor is announced through `changed`; every later request costs a comparison. */
   noteRequestFrom(address: unknown, userAgent?: unknown): void {
     if (this.reachedAt !== null || this.listenerState === "stopped") return;
-    if (typeof userAgent === "string" && userAgent.startsWith(HEALTH_CHECK_AGENT)) return;
-    if (!isForeignAddress(address, this.detectedIp)) return;
+    if (!isVisitor(address, userAgent, this.detectedIp)) return;
     this.reachedAt = Date.now();
     this.changed(this.snapshot());
   }
