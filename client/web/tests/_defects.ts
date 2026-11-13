@@ -100,7 +100,7 @@ export const DEFECTS: Record<string, Defect> = {
     find: "return (realSpread as any)(node, accessor, skipChildren);",
     replace: "return (realSpread as any)(node, accessor, ...rest);",
     count: 1,
-    total: 62,
+    total: 69,
     path: "lucide-solid/dist/esm/Icon.mjs:37 -> the rewritten `solid-js/web` -> this shim's spread -> real @solidjs/web spread -> collectProps' skip(prop)",
     reddens: [
       "renders an <svg> in the SVG namespace, not an empty container",
