@@ -12,6 +12,8 @@ const source = readFileSync(
   .replace(/^import\b[^;]*;\r?\n/gm, "")
   .replace(/^export /gm, "");
 const js = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
+/** Runs inside the stubbed `installFromData`, i.e. while the real one would hold the thread. */
+let duringInstall: (() => void) | undefined;
 function fixture(protectedInventory?: ProtectedBuiltinInventory) {
   const events: Record<string, (...args: any[]) => void> = {};
   const results: any[] = [];
@@ -46,8 +48,9 @@ function fixture(protectedInventory?: ProtectedBuiltinInventory) {
       return pending;
     },
     (...args: any[]) => {
+      duringInstall?.();
       writes.push(args);
-      return { ok: true, installedAt: "/resource/layouts/item" };
+      return { ok: true, installedAt: "/resource/layouts/item", fileCount: 3, bytesWritten: 4096 };
     },
     (...args: any[]) => {
       writes.push(args);
@@ -112,6 +115,40 @@ test("agent delegates writes to shared installer with own resource target", asyn
     ok: true,
     installedAt: "/resource/layouts/item",
   });
+});
+test("an install reports how long it held the server thread, and names a slow one", async () => {
+  const realNow = Date.now;
+  const warnings: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (line: string) => warnings.push(line);
+  try {
+    let clock = 1_000_000;
+    Date.now = () => clock;
+
+    duringInstall = () => {
+      clock += 12;
+    };
+    const quick = fixture();
+    quick.send("Install");
+    await quick.finish();
+    expect(quick.results[0]).toMatchObject({ ok: true, blockedMs: 12 });
+    expect(warnings).toEqual([]);
+
+    duringInstall = () => {
+      clock += 340;
+    };
+    const slow = fixture();
+    slow.send("Install");
+    await slow.finish();
+    expect(slow.results[0]).toMatchObject({ ok: true, blockedMs: 340 });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('"item" held the server thread for 340 ms');
+    expect(warnings[0]).toContain("3 files");
+  } finally {
+    Date.now = realNow;
+    console.warn = realWarn;
+    duringInstall = undefined;
+  }
 });
 test("agent serializes install and uninstall for same target", async () => {
   const f = fixture();

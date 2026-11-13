@@ -64,6 +64,9 @@ export interface AgentConfig {
    */
   validators?: Record<string, ContentValidator>;
 }
+/** An install that keeps the server thread this long is named in the log; a frame is 16 ms. */
+const BLOCKED_WARN_MS = 100;
+
 interface Payload {
   url?: string;
   slug: string;
@@ -177,7 +180,7 @@ export function createMarketplaceAgent(config: AgentConfig): MarketplaceAgent {
     if (stopped || !raw || typeof raw !== "object") return;
     const p = raw as Payload;
     if (typeof p.token !== "string" || !p.token || p.token.length > 128) return;
-    const reply = (result: { ok: boolean; error?: string }) => {
+    const reply = (result: { ok: boolean; error?: string; blockedMs?: number }) => {
       if (!stopped)
         g.emit("tlib:marketplace:agentResult", { token: p.token, slug: p.slug, ...result });
     };
@@ -215,7 +218,21 @@ export function createMarketplaceAgent(config: AgentConfig): MarketplaceAgent {
     }
     void downloadBundle(p.url!, maxBundleBytes)
       .then(({ buf, hash, size }) => {
-        if (!stopped) reply(installFromData(target, p.slug, buf, hash, size));
+        if (stopped) return;
+        // Unzip, hash, stage and commit are all synchronous, so for this long nothing else
+        // on the server ran. Recorded because a slow shared-host disk makes it visible as a
+        // hitch and nothing else in the log connects the two.
+        const started = Date.now();
+        const result = installFromData(target, p.slug, buf, hash, size);
+        const blockedMs = Date.now() - started;
+        if (blockedMs >= BLOCKED_WARN_MS) {
+          console.warn(
+            `[${resourceName}] installing "${p.slug}" held the server thread for ${blockedMs} ms` +
+              (result.ok ? ` (${result.fileCount} files, ${result.bytesWritten} bytes)` : "") +
+              ". Players saw a hitch of that size; a slow disk is the usual cause."
+          );
+        }
+        reply({ ...result, blockedMs });
       })
       .catch((error: unknown) =>
         reply({ ok: false, error: error instanceof Error ? error.message : String(error) })

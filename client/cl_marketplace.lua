@@ -163,10 +163,11 @@ RegisterNetEvent('tlib:marketplace:installResult', function(result)
     if type(result) == 'table' and result.ok then
         -- Counts, not a path: the server no longer sends `installedAt`, and these
         -- answer the question an admin watching a progress spinner actually has.
-        log(('installed "%s" (%s file(s), %s bytes)'):format(
+        log(('installed "%s" (%s file(s), %s bytes, %s ms on the server thread)'):format(
             tostring(result.slug),
             tostring(result.fileCount or '?'),
-            tostring(result.bytesWritten or '?')
+            tostring(result.bytesWritten or '?'),
+            tostring(result.blockedMs or '?')
         ), 2)
     else
         log(('install failed for "%s": %s'):format(

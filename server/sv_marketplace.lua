@@ -68,6 +68,7 @@ local function reply(p, result)
         type = p.itemType, action = p.action, token = p.token,
         requestId = p.requestId, inspection = result.inspection,
         fileCount = result.fileCount, bytesWritten = result.bytesWritten,
+        blockedMs = result.blockedMs,
     })
 end
 local function release(p)

@@ -53,6 +53,10 @@ function buildUpstream(): http.Server {
       res.write("event: hello\ndata: 1\n\n");
       return; // deliberately left open
     }
+    if (at("/reset")) {
+      req.socket.destroy();
+      return;
+    }
     if (at("/big")) {
       res.writeHead(200, { "content-type": "application/octet-stream" });
       return res.end(Buffer.alloc(1024 * 512, 0x41));
@@ -117,7 +121,9 @@ beforeAll(async () => {
   router = new Router(
     { ...cfg, port: routerPort },
     () => "Test Server",
-    (_level, message) => { routerLogs.push(message); }
+    (_level, message) => {
+      routerLogs.push(message);
+    }
   );
   router.start();
   await Bun.sleep(120);
@@ -128,7 +134,10 @@ afterAll(async () => {
   await new Promise<void>((r) => upstream.close(() => r()));
 });
 
-beforeEach(() => { clear(); routerLogs.length = 0; });
+beforeEach(() => {
+  clear();
+  routerLogs.length = 0;
+});
 
 const mountProxy = (over: Record<string, unknown> = {}) =>
   register({
@@ -673,6 +682,37 @@ describe("teardown is not a fault", () => {
       expect(logs).toEqual([]);
       // And the listener is still serving, which an unhandled 'error' would not be.
       expect((await fetch(`${url}/app`)).status).toBe(200);
+    } finally {
+      instance.stop();
+    }
+  });
+
+  test("an upstream that resets while the caller still waits is a warning and a 502", async () => {
+    // The other half of the case above: the silence is only for callers that left. A reset
+    // the caller is waiting on is a real fault and has to stay audible.
+    const logs: string[] = [];
+    let ready!: (url: string) => void;
+    const listening = new Promise<string>((resolve) => {
+      ready = resolve;
+    });
+    const instance = new Router(
+      { ...cfg, port: 0 },
+      () => "Test",
+      (level, msg) => {
+        logs.push(`${level}: ${msg}`);
+      },
+      (state, url) => {
+        if (state === "listening" && url) ready(url);
+      }
+    );
+    try {
+      instance.start();
+      const url = await listening;
+      mountProxy();
+      const res = await fetch(`${url}/app/reset`);
+      expect(res.status).toBe(502);
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatch(/^warn: .*failed: ECONNRESET$/);
     } finally {
       instance.stop();
     }
