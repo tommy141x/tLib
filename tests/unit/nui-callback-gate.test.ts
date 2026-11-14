@@ -32,6 +32,12 @@ describe("nui callback gate", () => {
       expect(found.map((f) => f.line)).toEqual([1, 2]);
     });
 
+    // REGISTER_NUI_CALLBACK, the native, reaches Lua with this casing.
+    test("RegisterNuiCallback, the native spelling", () => {
+      const found = scanSource("a.lua", "RegisterNuiCallback('x', function(_, cb) cb(1) end)");
+      expect(found.map((f) => f.what)).toEqual(["RegisterNuiCallback"]);
+    });
+
     test("an indented call inside a function", () => {
       expect(scanSource("a.lua", "if x then\n    RegisterNUICallback (name, h)\nend")).toHaveLength(
         1

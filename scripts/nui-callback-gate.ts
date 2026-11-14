@@ -27,6 +27,8 @@ const SKIP_DIRS = new Set(["node_modules", ".git", "internal", "tests", "dist", 
 // registration one level down, which is how the menu adapter did it.
 const BARE = [
   { re: /\bRegisterNUICallback\s*\(/, what: "RegisterNUICallback" },
+  // The REGISTER_NUI_CALLBACK native, which Lua spells this way.
+  { re: /\bRegisterNuiCallback\s*\(/, what: "RegisterNuiCallback" },
   { re: /\bRegisterNuiCallbackType\s*\(/, what: "RegisterNuiCallbackType" },
   { re: /['"]__cfx_nui:/, what: "a raw __cfx_nui: handler" },
 ];
