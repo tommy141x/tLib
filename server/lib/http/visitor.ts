@@ -16,9 +16,13 @@ export function isVisitor(
 ): boolean {
   if (typeof userAgent === "string" && userAgent.startsWith(HEALTH_CHECK_AGENT)) return false;
   if (typeof address !== "string") return false;
+  // `[v6]:port` and `v4:port` lose the port; a bare v6 address has several colons and is
+  // left alone. The ingress door passes FXServer's peer string, the listener Node's.
   const ip = address
     .trim()
     .toLowerCase()
+    .replace(/^\[([^\]]+)\](?::\d+)?$/, "$1")
+    .replace(/^([^:]+):\d+$/, "$1")
     .replace(/^::ffff:/, "");
   if (ip === "" || ip === "localhost" || ip === "::" || ip === "0.0.0.0") return false;
   if (ip === "::1" || ip.startsWith("127.")) return false;

@@ -522,6 +522,18 @@ describe("reached from outside", () => {
     expect(isVisitor("10.0.0.5", "Mozilla/5.0", "198.18.0.9")).toBe(true);
     expect(isVisitor("2001:db8::1", undefined, null)).toBe(true);
   });
+
+  // The ingress door hands over FXServer's `req.address`, which may carry the peer's port
+  // (HYPOTHESIS: not measured offline). Either spelling must classify the same.
+  test("an address with the peer's port is judged by its host", () => {
+    expect(isVisitor("127.0.0.1:51234", undefined, null)).toBe(false);
+    expect(isVisitor("[::1]:51234", undefined, null)).toBe(false);
+    expect(isVisitor("198.18.0.9:51234", undefined, "198.18.0.9")).toBe(false);
+    expect(isVisitor("[::ffff:198.18.0.9]:51234", undefined, "198.18.0.9")).toBe(false);
+    expect(isVisitor("198.51.100.4:51234", undefined, "198.18.0.9")).toBe(true);
+    expect(isVisitor("[2001:db8::1]:443", undefined, null)).toBe(true);
+    expect(isVisitor("2001:db8::1", undefined, null)).toBe(true);
+  });
 });
 
 describe("the bridge tells the readiness who knocked", () => {
