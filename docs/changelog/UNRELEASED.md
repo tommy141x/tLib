@@ -1,9 +1,8 @@
 <!--
-DRAFT, not a changelog entry. It is .md, not .mdx, so scripts/check-docs.mjs does not scan it.
-Move the bullets into the tWeb changelog entry for the next tLib release and delete this file.
-No version heading is cut here on purpose: the next release must be at least 1.1.1, because 1.1
-already names four different builds, and a resource that uses anything under "Added" needs
-`tlib_min_version` raised to it.
+DRAFT for tLib 1.2.0 (the manifest spells it '1.2': a trailing .0 is dropped, and the tag is v1.2).
+Not cut as a release: no tag, no zip, nothing pushed. It is .md, not .mdx, so scripts/check-docs.mjs does not scan it.
+Move the bullets into the tWeb changelog entry for tLib 1.2.0 and delete this file.
+Every resource that uses anything under "Added" or "Fixed" below names `tlib_min_version '1.2.0'`.
 -->
 
 ## Fixed
@@ -17,7 +16,7 @@ already names four different builds, and a resource that uses anything under "Ad
   whether its minimum is met. No IP address is in it.
 - tLib checks its own built files at startup and names any that are missing or cut short, so a
   source download or a file damaged by a panel's upload tool is reported by tLib itself.
-- Every release now has a version of its own, `1.1`, then `1.1.1`. A release records its commit
+- Every release now has a version of its own, `1.2`, then `1.2.1`. A release records its commit
   beside its build, and both appear in tLib's banner and in every `_diag` line.
 - The marketplace panel opened with nothing in it on the first open of a session, until a tab was
   clicked. It now loads straight away, scoped to the resource that opened it.

@@ -169,6 +169,9 @@ test('a patch release is told apart from the minor it follows', function()
     allows('1.1.1', '1.1.2')
     allows('1.1', '1.1.2')
     allows('1.1.2', '1.2')
+    -- The manifest drops a trailing .0, so a consumer's '1.2.0' pin must accept tLib's '1.2'.
+    allows('1.2.0', '1.2')
+    refuses('1.2.0', '1.1.9')
 end)
 
 test('a satisfied pin prints nothing and stops nothing', function()
