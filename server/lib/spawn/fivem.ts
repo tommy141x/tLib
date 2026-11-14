@@ -78,7 +78,7 @@ export function resourceAuthors(resourceName: string): string[] {
  * is the only state that means "not installed" — `stopped` is an installed
  * resource that may yet start, so the banner counts it. An engine that will
  * not answer reads as installed, because the allowlist is disclosure and
- * under-reporting it is worse than naming something dormant.
+ * under-reporting it is worse than naming something that cannot run.
  */
 export function resourceInstalled(resourceName: string): boolean {
   try {

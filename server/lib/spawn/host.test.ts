@@ -76,7 +76,7 @@ describe("serving", () => {
   it("files two callers' identical keys separately", async () => {
     const host = quiet();
     const a = JSON.parse(host.serve(plan(SLEEPER), "tAI", "llama")) as { pid: number };
-    const b = JSON.parse(host.serve(plan(SLEEPER), "tRadio", "llama")) as { pid: number };
+    const b = JSON.parse(host.serve(plan(SLEEPER), "tRadioAI", "llama")) as { pid: number };
     expect(b.pid).not.toBe(a.pid);
     host.killEverything();
     await until(() => !alive(a.pid) && !alive(b.pid));
@@ -105,7 +105,7 @@ describe("reaping", () => {
   it("kills a caller's children when that caller stops", async () => {
     const host = quiet();
     const mine = JSON.parse(host.serve(plan(SLEEPER), "tDB", "pocketbase")) as { pid: number };
-    const theirs = JSON.parse(host.serve(plan(SLEEPER), "tRadio", "llama")) as { pid: number };
+    const theirs = JSON.parse(host.serve(plan(SLEEPER), "tRadioAI", "llama")) as { pid: number };
 
     const killed = host.killAll("tDB");
 
@@ -129,10 +129,10 @@ describe("reaping", () => {
 
   it("reaps a running one-shot too", async () => {
     const host = quiet();
-    const started = JSON.parse(host.run(plan(SLEEPER), "tRadio", null)) as { job: string };
-    expect(host.killAll("tRadio")).toBe(1);
+    const started = JSON.parse(host.run(plan(SLEEPER), "tRadioAI", null)) as { job: string };
+    expect(host.killAll("tRadioAI")).toBe(1);
     // The job is forgotten as well as killed, so a later poll cannot adopt it.
-    expect(JSON.parse(host.job("tRadio", started.job))).toEqual({ state: "unknown" });
+    expect(JSON.parse(host.job("tRadioAI", started.job))).toEqual({ state: "unknown" });
   });
 
   it("forgets a stopped caller's entries, so a restart starts clean", async () => {
@@ -185,14 +185,14 @@ describe("one-shot jobs", () => {
         plan(
           "let s='';process.stdin.on('data',c=>{s+=c});process.stdin.on('end',()=>{console.log('got:'+s.trim())})"
         ),
-        "tRadio",
+        "tRadioAI",
         "hello dispatch\n"
       )
     ) as { job: string };
 
     let stdout = "";
     await until(() => {
-      const answer = JSON.parse(host.job("tRadio", started.job)) as {
+      const answer = JSON.parse(host.job("tRadioAI", started.job)) as {
         state: string;
         stdout?: string;
       };
@@ -288,7 +288,7 @@ describe("duplex (bytes) mode", () => {
   it("refuses a write from a resource that does not own the key", () => {
     const host = quiet();
     host.serve(plan(ECHO), "tAI", "tts", "bytes");
-    expect(host.write("tRadio", "tts", Buffer.from("x").toString("base64"))).toBe(false);
+    expect(host.write("tRadioAI", "tts", Buffer.from("x").toString("base64"))).toBe(false);
     host.killEverything();
   });
 

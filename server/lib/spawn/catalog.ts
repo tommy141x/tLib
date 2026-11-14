@@ -85,18 +85,6 @@ export interface Program {
 export interface Caller {
   resource: string;
   /**
-   * The declaring product no longer ships the feature that runs these, so the
-   * startup banner omits it. STILL ALLOWED — this is disclosure, not
-   * permission, and a dev build that re-enables the feature keeps working
-   * without a catalog edit.
-   *
-   * Deliberately a flag rather than a check for the binaries on disk: they sit
-   * in a working tree whether or not the code that execs them is compiled in,
-   * so their presence answers a different question than the one the banner is
-   * asking. Remove the flag when the feature returns.
-   */
-  dormant?: boolean;
-  /**
    * The `author` its fxmanifest is expected to declare.
    *
    * Defence in depth only. See rung 3 in the header: this is logged on a
@@ -109,7 +97,7 @@ export interface Caller {
 // Shared argument vocabulary
 
 /**
- * llama.cpp's server, which tAI and tRadio both run.
+ * llama.cpp's server, which tAI and tRadioAI both run.
  *
  * `--host` is `loopback`, not `text`: an engine that can be told to bind
  * `0.0.0.0` is an unauthenticated model server on the public internet, and it is
@@ -146,7 +134,7 @@ const LLAMA_SERVER_FLAGS: FlagSpec[] = [
 
 /**
  * The same engine, declared twice because the two products lay it out
- * differently — tAI at `bin/<platform>/`, tRadio one level deeper under an
+ * differently — tAI at `bin/<platform>/`, tRadioAI one level deeper under an
  * engine name. Only the paths differ; the argument vocabulary is upstream's and
  * is therefore shared.
  */
@@ -270,20 +258,16 @@ export const FAMILY: Caller[] = [
     ],
   },
   {
-    resource: "tRadio",
-    // DORMANT since 2026-10-26. These three engines exist only for the AI
-    // dispatcher, which was withdrawn from releases after Tebex locked both
-    // tRadio packages over it — so a shipped tRadio execs none of them and the
-    // banner must not say it will. The declaration stays because the withdrawal
-    // is suspension, not deletion; drop this flag when the feature returns.
-    dormant: true,
-    // tRadio ships three engines, each execed through its bundled loader when
-    // the release carries one. Loader directory is per engine, not one shared
+    resource: "tRadioAI",
+    // Three engines, each execed through its bundled loader when the release
+    // carries one. tRadioAI's own releases carry no binaries at all (the engines
+    // are fetched from their upstreams on first start into server/bin), so on a
+    // glibc host the loader directory is simply absent and the binary is execed
+    // directly. Loader directory is per engine, not one shared
     // `server/bin/linux/lib`: llama.cpp and whisper.cpp each ship a `libggml`
     // built from a different revision, and a shared directory hands one of
-    // them a library it wasn't linked against. Three ~15 MB closures is the
-    // price of avoiding that.
-    author: "TIMMYG Studios",
+    // them a library it wasn't linked against.
+    author: "Tommy Johnston",
     programs: [
       llamaServer({
         win32: "server/bin/win/llama/llama-server.exe",
@@ -303,15 +287,14 @@ export const FAMILY: Caller[] = [
           {
             label: "whisper-server",
             head: [],
+            // Exactly the four flags tRadioAI passes. `--convert` is deliberately
+            // absent: it shells out to ffmpeg, which most game panels do not have,
+            // and tRadioAI only ever sends 16 kHz mono WAV.
             flags: [
               { name: "--model", form: "value", value: "path" },
               { name: "--host", form: "value", value: "loopback" },
               { name: "--port", form: "value", value: "port" },
               { name: "--threads", form: "value", value: "int" },
-              { name: "--processors", form: "value", value: "int" },
-              { name: "--convert", form: "bare" },
-              { name: "--no-timestamps", form: "bare" },
-              { name: "--language", form: "value", value: "word" },
             ],
           },
         ],
@@ -331,11 +314,8 @@ export const FAMILY: Caller[] = [
             head: [],
             flags: [
               { name: "--model", form: "value", value: "path" },
-              { name: "--config", form: "value", value: "path" },
               { name: "--espeak_data", form: "value", value: "path" },
               { name: "-f", form: "value", value: "path" },
-              { name: "--output_file", form: "value", value: "path" },
-              { name: "--json-input", form: "bare" },
             ],
           },
         ],
@@ -355,11 +335,6 @@ export function findProgram(caller: Caller, id: string): Program | undefined {
 /**
  * One line per caller, for the startup banner.
  *
- * `dormant` entries are omitted. They remain in the allowlist above — this is
- * disclosure, not permission — but the banner is read by operators as "what
- * this server will run", and naming a program that the declaring product no
- * longer ships is worse than saying nothing.
- *
  * `isInstalled` IS REQUIRED, and the banner was wrong without it. The
  * allowlist is hardcoded and ships complete, so an unfiltered list told every
  * server that tDB spawns pocketbase and tAI spawns llama-server — on servers
@@ -371,7 +346,7 @@ export function findProgram(caller: Caller, id: string): Program | undefined {
  * runtime dependency; `installSpawn()` supplies the real check.
  */
 export function describeFamily(isInstalled: (resource: string) => boolean): string[] {
-  return FAMILY.filter((c) => !c.dormant && isInstalled(c.resource)).map(
+  return FAMILY.filter((c) => isInstalled(c.resource)).map(
     (c) => `${c.resource} → ${c.programs.map((p) => p.id).join(", ")}`
   );
 }

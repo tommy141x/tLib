@@ -16,7 +16,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { describeFamily } from "../../server/lib/spawn/catalog";
+import { describeFamily, FAMILY, findCaller } from "../../server/lib/spawn/catalog";
 
 const none = () => false;
 const all = () => true;
@@ -36,11 +36,15 @@ describe("describeFamily", () => {
     expect(describeFamily(none).join(" | ")).toBe("");
   });
 
-  test("still omits dormant callers even when they are installed", () => {
-    // tRadio is dormant: present in the allowlist as disclosure, but it no
-    // longer ships the program, so naming it would be a status line about
-    // software that cannot run.
-    expect(describeFamily(all).some((r) => r.startsWith("tRadio"))).toBe(false);
+  test("names tRadioAI, with its three engines, when it is installed", () => {
+    const rows = describeFamily((resource) => resource === "tRadioAI");
+    expect(rows).toEqual(["tRadioAI → llama-server, whisper-server, piper"]);
+  });
+
+  test("never names tRadio: its engines belong to the add-on", () => {
+    expect(describeFamily(all).some((r) => r.startsWith("tRadio "))).toBe(false);
+    expect(FAMILY.some((c) => c.resource === "tRadio")).toBe(false);
+    expect(findCaller("tRadio")).toBeUndefined();
   });
 
   test("carries no convar instruction — that is documentation, not status", () => {
@@ -49,6 +53,42 @@ describe("describeFamily", () => {
     for (const row of describeFamily(all)) {
       expect(row).not.toInclude("add_unsafe_child_process_permission");
       expect(row).not.toInclude("convar");
+    }
+  });
+});
+
+describe("the tRadioAI grant", () => {
+  const caller = findCaller("tRadioAI");
+  const flagsOf = (program: string) =>
+    caller?.programs
+      .find((p) => p.id === program)
+      ?.invocations.flatMap((i) => i.flags.map((f) => f.name))
+      .sort();
+
+  test("is exactly llama-server, whisper-server and piper", () => {
+    expect(caller?.programs.map((p) => p.id)).toEqual(["llama-server", "whisper-server", "piper"]);
+  });
+
+  test("whisper-server takes four flags and never --convert, which shells out to ffmpeg", () => {
+    expect(flagsOf("whisper-server")).toEqual(["--host", "--model", "--port", "--threads"]);
+  });
+
+  test("piper takes exactly the three flags tRadioAI passes", () => {
+    expect(flagsOf("piper")).toEqual(["--espeak_data", "--model", "-f"]);
+  });
+
+  test("llama-server accepts every flag tRadioAI starts it with", () => {
+    const allowed = new Set(flagsOf("llama-server"));
+    for (const flag of [
+      "--model",
+      "--host",
+      "--port",
+      "--ctx-size",
+      "--threads",
+      "--no-webui",
+      "--reasoning",
+    ]) {
+      expect(allowed.has(flag)).toBe(true);
     }
   });
 });

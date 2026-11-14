@@ -36,7 +36,7 @@ interface Shape {
   /** The binary the catalog resolves to for each program on this platform. */
   pocketbase: string;
   llamaTAI: string;
-  llamaTRadio: string;
+  llamaTRadioAI: string;
   piper: string;
   node: string;
   sidecar: string;
@@ -55,8 +55,8 @@ const POSIX: Shape = (() => {
     at,
     pocketbase: at("tDB/.runtime/pocketbase-linux"),
     llamaTAI: at("tAI/bin/linux/llama-server"),
-    llamaTRadio: at("tRadio/server/bin/linux/llama/llama-server"),
-    piper: at("tRadio/server/bin/linux/piper/piper"),
+    llamaTRadioAI: at("tRadioAI/server/bin/linux/llama/llama-server"),
+    piper: at("tRadioAI/server/bin/linux/piper/piper"),
     node: at("tAI/bin/linux/node"),
     sidecar: at("tAI/bin/tts-sidecar.js"),
   };
@@ -75,8 +75,8 @@ const WINDOWS: Shape = (() => {
     at,
     pocketbase: at("tDB\\.runtime\\pocketbase-win.exe"),
     llamaTAI: at("tAI\\bin\\win\\llama-server.exe"),
-    llamaTRadio: at("tRadio\\server\\bin\\win\\llama\\llama-server.exe"),
-    piper: at("tRadio\\server\\bin\\win\\piper\\piper.exe"),
+    llamaTRadioAI: at("tRadioAI\\server\\bin\\win\\llama\\llama-server.exe"),
+    piper: at("tRadioAI\\server\\bin\\win\\piper\\piper.exe"),
     node: at("tAI\\bin\\win\\node.exe"),
     sidecar: at("tAI\\bin\\tts-sidecar.js"),
   };
@@ -92,10 +92,10 @@ function filesystem(shape: Shape): Record<string, string> {
     self(shape.llamaTAI),
     self(shape.node),
     self(shape.sidecar),
-    self(shape.at("tRadio")),
-    self(shape.llamaTRadio),
+    self(shape.at("tRadioAI")),
+    self(shape.llamaTRadioAI),
     self(shape.piper),
-    self(shape.join(shape.llamaTRadio, "..")),
+    self(shape.join(shape.llamaTRadioAI, "..")),
     self(shape.join(shape.piper, "..")),
     // Somewhere outside every resource, for the symlink-escape cases.
     [
@@ -135,7 +135,7 @@ function probesFor(shape: Shape, overrides: Partial<Probes> = {}): Probes {
  *
  * The bundled loader is the case this exists for. It cannot go in
  * `filesystem()`: putting it there would make loader-exec the default for every
- * tRadio assertion in this file, and the fact under test is that *both* forms
+ * tRadioAI assertion in this file, and the fact under test is that *both* forms
  * are reachable — direct-exec is what every glibc host does today and must keep
  * doing, so it has to stay the behaviour of the unmodified fixture.
  */
@@ -170,8 +170,8 @@ function isDirectory(shape: Shape, target: string): boolean {
   return (
     target === shape.at("tDB") ||
     target === shape.at("tAI") ||
-    target === shape.at("tRadio") ||
-    target === shape.join(shape.llamaTRadio, "..") ||
+    target === shape.at("tRadioAI") ||
+    target === shape.join(shape.llamaTRadioAI, "..") ||
     target === shape.join(shape.piper, "..")
   );
 }
@@ -247,8 +247,8 @@ for (const shape of [POSIX, WINDOWS]) {
         (resolveSpawn("tAI", { program: "llama-server", args: [] }, probes()) as Answer).binary
       ).toBe(shape.llamaTAI);
       expect(
-        (resolveSpawn("tRadio", { program: "llama-server", args: [] }, probes()) as Answer).binary
-      ).toBe(shape.llamaTRadio);
+        (resolveSpawn("tRadioAI", { program: "llama-server", args: [] }, probes()) as Answer).binary
+      ).toBe(shape.llamaTRadioAI);
     });
 
     it("refuses a program whose file is missing from the resource", () => {
@@ -277,7 +277,7 @@ for (const shape of [POSIX, WINDOWS]) {
     });
 
     it("refuses a cwd that escapes through ..", () => {
-      const plan = resolveSpawn("tRadio", { program: "piper", args: [], cwd: "../tDB" }, probes());
+      const plan = resolveSpawn("tRadioAI", { program: "piper", args: [], cwd: "../tDB" }, probes());
       expect((plan as Answer).error).toContain("may only run in");
     });
 
@@ -287,7 +287,7 @@ for (const shape of [POSIX, WINDOWS]) {
       const real = filesystem(shape);
       const elsewhere = shape.platform === "win32" ? "C:\\Windows" : "/etc";
       const plan = resolveSpawn(
-        "tRadio",
+        "tRadioAI",
         { program: "piper", args: [], cwd: "server/bin/win/piper" },
         probes({
           realpath: (target) =>
@@ -302,7 +302,7 @@ for (const shape of [POSIX, WINDOWS]) {
 
     it("refuses a cwd another program declares", () => {
       const plan = resolveSpawn(
-        "tRadio",
+        "tRadioAI",
         {
           program: "piper",
           args: [],
@@ -432,7 +432,7 @@ for (const shape of [POSIX, WINDOWS]) {
   describe(`${shape.label}: environment`, () => {
     it("allows a declared variable", () => {
       const plan = resolveSpawn(
-        "tRadio",
+        "tRadioAI",
         { program: "piper", args: [], env: { LD_LIBRARY_PATH: "/x" } },
         probes()
       );
@@ -443,7 +443,7 @@ for (const shape of [POSIX, WINDOWS]) {
       // LD_PRELOAD into a process tLib spawns is code execution with the
       // containment rule intact, which is why this is a list and not a filter.
       const plan = resolveSpawn(
-        "tRadio",
+        "tRadioAI",
         { program: "piper", args: [], env: { LD_PRELOAD: "/tmp/x.so" } },
         probes()
       );
@@ -500,7 +500,7 @@ for (const shape of [POSIX, WINDOWS]) {
    * reads as a corrupt download. The fix bundles glibc's loader and libraries
    * inside the resource.
    *
-   * No tRadio release carries that bundle yet, so **the fixture without a
+   * No tRadioAI release carries that bundle yet, so **the fixture without a
    * loader is production**: the direct-exec assertions are not optional here.
    */
   describe(`${shape.label}: the bundled loader`, () => {
@@ -512,17 +512,17 @@ for (const shape of [POSIX, WINDOWS]) {
       "--port",
       "18291",
     ];
-    const engineDir = shape.join(shape.llamaTRadio, "..");
+    const engineDir = shape.join(shape.llamaTRadioAI, "..");
     const libDir = shape.join(engineDir, "lib");
     const loaderPath = shape.join(libDir, "ld-linux-x86-64.so.2");
     const bundle = { [libDir]: libDir, [loaderPath]: loaderPath };
 
     const llama = (p: Probes) =>
-      resolveSpawn("tRadio", { program: "llama-server", args: ENGINE_ARGS }, p);
+      resolveSpawn("tRadioAI", { program: "llama-server", args: ENGINE_ARGS }, p);
 
     it("execs the binary directly when the release carries no loader", () => {
       const plan = llama(probes());
-      expect((plan as Answer).binary).toBe(shape.llamaTRadio);
+      expect((plan as Answer).binary).toBe(shape.llamaTRadioAI);
       expect((plan as Answer).argv).toEqual(ENGINE_ARGS);
     });
 
@@ -531,7 +531,7 @@ for (const shape of [POSIX, WINDOWS]) {
       // only file in the directory. Starting the engine the old way beats
       // refusing to start it at all.
       const plan = llama(probesPlus(shape, { [libDir]: libDir }, [libDir]));
-      expect((plan as Answer).binary).toBe(shape.llamaTRadio);
+      expect((plan as Answer).binary).toBe(shape.llamaTRadioAI);
       expect((plan as Answer).argv).toEqual(ENGINE_ARGS);
     });
 
@@ -557,7 +557,7 @@ for (const shape of [POSIX, WINDOWS]) {
         expect((plan as Answer).argv).toEqual([
           "--library-path",
           `${libDir}:${engineDir}`,
-          shape.llamaTRadio,
+          shape.llamaTRadioAI,
           ...ENGINE_ARGS,
         ]);
       });
@@ -578,7 +578,7 @@ for (const shape of [POSIX, WINDOWS]) {
         // The loader is prepended after the argument matching, so it cannot
         // become a way past it.
         const plan = resolveSpawn(
-          "tRadio",
+          "tRadioAI",
           { program: "llama-server", args: [...ENGINE_ARGS, "--rpc", "0.0.0.0:1"] },
           probesPlus(shape, bundle, [libDir])
         );
@@ -600,7 +600,7 @@ for (const shape of [POSIX, WINDOWS]) {
             },
           })
         );
-        expect((plan as Answer).binary).toBe(shape.llamaTRadio);
+        expect((plan as Answer).binary).toBe(shape.llamaTRadioAI);
         expect((plan as Answer).argv).toEqual(ENGINE_ARGS);
       });
 
@@ -610,7 +610,7 @@ for (const shape of [POSIX, WINDOWS]) {
         const piperLib = shape.join(shape.piper, "..", "lib");
         const piperLoader = shape.join(piperLib, "ld-linux-x86-64.so.2");
         const plan = resolveSpawn(
-          "tRadio",
+          "tRadioAI",
           { program: "piper", args: ["--model", "/srv/voices/en.onnx", "-f", "/tmp/out.wav"] },
           probesPlus(shape, { [piperLib]: piperLib, [piperLoader]: piperLoader }, [piperLib])
         );
@@ -623,7 +623,7 @@ for (const shape of [POSIX, WINDOWS]) {
         // there would be a mistake, not an instruction. The gate branches on
         // the platform, so this cannot be reached by shipping the wrong file.
         const plan = llama(probesPlus(shape, bundle, [libDir]));
-        expect((plan as Answer).binary).toBe(shape.llamaTRadio);
+        expect((plan as Answer).binary).toBe(shape.llamaTRadioAI);
         expect((plan as Answer).argv).toEqual(ENGINE_ARGS);
       });
     }

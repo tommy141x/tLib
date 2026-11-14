@@ -36,7 +36,7 @@ function recorder(options: {
   };
 }
 
-const BINARY = "/opt/fxserver/resources/[tScripts]/tRadio/server/bin/linux/llama/llama-server";
+const BINARY = "/opt/fxserver/resources/[tScripts]/tRadioAI/server/bin/linux/llama/llama-server";
 
 describe("the mode bit on Linux", () => {
   it("chmods a binary the release delivered without the bit", () => {
@@ -69,7 +69,7 @@ describe("the mode bit on Linux", () => {
     // bundled loader the product's own binary is an *argument*, and the file
     // handed to execve is one the product never names.
     const loader =
-      "/opt/fxserver/resources/[tScripts]/tRadio/server/bin/linux/llama/lib/ld-linux-x86-64.so.2";
+      "/opt/fxserver/resources/[tScripts]/tRadioAI/server/bin/linux/llama/lib/ld-linux-x86-64.so.2";
     const fs = recorder({ platform: "linux", executable: false });
     ensureExecutable(loader, fs);
     expect(fs.chmodded).toEqual([loader]);
@@ -83,7 +83,7 @@ describe("the mode bit on Windows", () => {
     // chance of being read as meaningful.
     const fs = recorder({ platform: "win32", executable: false });
     ensureExecutable(
-      "C:\\fxserver\\resources\\[tScripts]\\tRadio\\server\\bin\\win\\llama\\llama-server.exe",
+      "C:\\fxserver\\resources\\[tScripts]\\tRadioAI\\server\\bin\\win\\llama\\llama-server.exe",
       fs
     );
     expect(fs.asked).toEqual([]);
