@@ -28,9 +28,11 @@ Every resource that uses anything under "Added" or "Fixed" below names `tlib_min
   look.
 - A saved setting stored by an older build no longer stops a resource loading when tLib reads it as
   the wrong type: `tlib.kvp.getFloat` and `getInt` fall back to the default and print one line
-  naming the key.
+  naming the key. A saved value that is not valid JSON reads as the default in `getJson` and as
+  its text in `get`, instead of stopping the resource.
 - A server whose game timer wrapped no longer refuses a player's requests until the clock catches
-  up. `tlib.ratelimit` restarts the interval instead.
+  up. `tlib.ratelimit` restarts the interval instead, and a refusal after the wrap is reported
+  again.
 - A `tlib_http_public_url` copied from the docs (`your-server-address`, `example.com`, the
   `203.0.113.x` documentation addresses) is no longer used as the panel's address. tLib quotes
   the value, says it is not usable, and detects your public IP instead.
@@ -80,7 +82,7 @@ Every resource that uses anything under "Added" or "Fixed" below names `tlib_min
   different files, a version that is not `X.Y` or `X.Y.Z` (Z above zero), and a `package.json` that
   disagrees with the manifest, then tags `v<version>` once the zip exists. `--dev` skips that and
   stamps the commit `+dirty`. Run `git fetch --tags` first.
-- `bun run check:nui` fails on a bare `RegisterNUICallback`, `RegisterNuiCallbackType` or raw
+- `bun run check:nui` fails on a bare `RegisterNUICallback`, `RegisterNuiCallback`, `RegisterNuiCallbackType` or raw
   `__cfx_nui:` handler in tLib-owned code; `--siblings` counts the same in each checked-out
   resource.
 - `bun run setup` now installs `internal/shared-ts` when it exists. Without it six test files failed
