@@ -644,7 +644,9 @@ Starting those engines is a separate, gated surface — see [Child processes](#c
 add_unsafe_child_process_permission tLib
 ```
 
-tLib makes the call, so no other resource needs its own grant.
+tLib makes the call, so no other resource needs its own grant. The resources the catalog
+currently names are tDB (PocketBase), tAI (llama-server and a speech sidecar) and tRadioAI
+(llama-server, whisper-server, piper); a resource not in the catalog cannot spawn anything.
 
 | Export | Description |
 | --- | --- |

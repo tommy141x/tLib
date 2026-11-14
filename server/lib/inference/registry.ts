@@ -1,6 +1,6 @@
 // The engine registry: who is already serving what, on this server, right now.
 //
-// Resources that ship local inference — tAI, tRadio — each work alone, which
+// Resources that ship local inference — tAI, tRadioAI — each work alone, which
 // means each is prepared to load its own model. Installed together on one box
 // that is two copies of the same multi-gigabyte weights in memory for no gain.
 // This is the bookkeeping that lets the second one find the first.

@@ -14,7 +14,7 @@ describe("Registry", () => {
     const handle = registry.advertise("tAI", text);
     expect(handle).not.toBe("");
 
-    const found = registry.lookup("tRadio", "text", text.workload);
+    const found = registry.lookup("tRadioAI", "text", text.workload);
     expect(found?.resource).toBe("tAI");
     expect(found?.url).toBe("http://127.0.0.1:18291/v1/chat/completions");
   });
@@ -28,7 +28,7 @@ describe("Registry", () => {
   test("a different workload is not a match", () => {
     const registry = new Registry();
     registry.advertise("tAI", text);
-    expect(registry.lookup("tRadio", "text", "llama-3.2-3b-q4_k_m")).toBeNull();
+    expect(registry.lookup("tRadioAI", "text", "llama-3.2-3b-q4_k_m")).toBeNull();
   });
 
   test("rejects an endpoint that is not on loopback", () => {
@@ -37,7 +37,7 @@ describe("Registry", () => {
       registry.advertise("tAI", { ...text, url: "http://10.0.0.5:18291/v1/chat/completions" })
     ).toBe("");
     expect(registry.advertise("tAI", { ...text, url: "https://api.openai.com/v1" })).toBe("");
-    expect(registry.lookup("tRadio", "text", text.workload)).toBeNull();
+    expect(registry.lookup("tRadioAI", "text", text.workload)).toBeNull();
   });
 
   test("accepts localhost and ::1", () => {
@@ -46,7 +46,7 @@ describe("Registry", () => {
       registry.advertise("tAI", { ...text, url: "http://localhost:18291/v1/chat/completions" })
     ).not.toBe("");
     expect(
-      registry.advertise("tRadio", { ...text, url: "http://[::1]:18291/v1/chat/completions" })
+      registry.advertise("tRadioAI", { ...text, url: "http://[::1]:18291/v1/chat/completions" })
     ).not.toBe("");
   });
 
@@ -62,7 +62,7 @@ describe("Registry", () => {
     registry.advertise("tAI", { ...text, url: "http://127.0.0.1:18999/v1/chat/completions" });
 
     expect(registry.list()).toHaveLength(1);
-    expect(registry.lookup("tRadio", "text", text.workload)?.url).toBe(
+    expect(registry.lookup("tRadioAI", "text", text.workload)?.url).toBe(
       "http://127.0.0.1:18999/v1/chat/completions"
     );
   });
@@ -70,7 +70,7 @@ describe("Registry", () => {
   test("withdraw only works for the resource that advertised", () => {
     const registry = new Registry();
     const handle = registry.advertise("tAI", text);
-    expect(registry.withdraw("tRadio", handle)).toBe(false);
+    expect(registry.withdraw("tRadioAI", handle)).toBe(false);
     expect(registry.withdraw("tAI", handle)).toBe(true);
     expect(registry.list()).toHaveLength(0);
   });
@@ -79,10 +79,10 @@ describe("Registry", () => {
     const registry = new Registry();
     registry.advertise("tAI", text);
     registry.advertise("tAI", { ...text, capability: "transcription" });
-    registry.advertise("tRadio", { ...text, url: "http://127.0.0.1:18291/v1/chat/completions" });
+    registry.advertise("tRadioAI", { ...text, url: "http://127.0.0.1:18291/v1/chat/completions" });
 
     expect(registry.withdrawAll("tAI")).toBe(2);
-    expect(registry.list().map((entry) => entry.resource)).toEqual(["tRadio"]);
+    expect(registry.list().map((entry) => entry.resource)).toEqual(["tRadioAI"]);
   });
 
   test("handles are stamped with the boot epoch", () => {

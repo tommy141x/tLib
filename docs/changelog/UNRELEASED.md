@@ -70,6 +70,10 @@ already names four different builds, and a resource that uses anything under "Ad
 - Docs: Hosted servers, "Which of these settings do I need?", IPv6, the web hub status fields, why a
   marketplace list fails and what to do, and the `lockedmodels` module with its `tlib_locked_models`
   and `tlib_reduce_motion` convars, which were read but not documented.
+- The child-process catalog names `tRadioAI` (llama-server, whisper-server, piper) in place of `tRadio`,
+  and the startup banner lists it when it is installed. Its whisper-server entry no longer accepts
+  `--convert`, which shells out to ffmpeg. `add_unsafe_child_process_permission tLib` is still the
+  only line a server needs, and only when it runs a local engine.
 
 ## For people who build tLib
 
