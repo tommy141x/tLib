@@ -303,6 +303,24 @@ do
 end
 print('PASS every getter survives every stored type, and a mistyped key is reported once')
 
+-- A string that is not JSON. FiveM's json.decode raises on one (rxi json.lua), so a value
+-- cut short or hand-edited killed the reading chunk the same way a bad cast did.
+do
+    local env = host()
+    env.json.decode = function(s)
+        if s:sub(-1) ~= ']' and s:sub(-1) ~= '}' then error('expected \']\' or \',\' at line 1 col ' .. #s, 0) end
+        return {}
+    end
+    local kvp = loadKvp(env)
+    env.SetResourceKvp('layout', '{"x":0.5,"y"')
+    env.SetResourceKvp('list', '[1,2')
+    local ok, result = pcall(kvp.getJson, 'layout', 'fallback')
+    check(ok and result == 'fallback', 'getJson on malformed JSON is the default: ' .. tostring(result))
+    ok, result = pcall(kvp.get, 'list', 'fallback')
+    check(ok and result == '[1,2', 'get on malformed JSON is the stored text: ' .. tostring(result))
+end
+print('PASS malformed JSON reads as the default, not a raise')
+
 -- settings.serverScoped
 
 do

@@ -197,8 +197,9 @@ local function buildAccessors(into, opts)
     function into.getJson(key, default)
         local v = rawString(key)
         if v and v ~= "" then
-            local decoded = json.decode(v)
-            if decoded then return decoded end
+            -- json.decode raises on text that is not JSON (a write cut short, a hand edit).
+            local ok, decoded = pcall(json.decode, v)
+            if ok and decoded then return decoded end
         end
         return default
     end
@@ -248,8 +249,8 @@ local function buildAccessors(into, opts)
         local n = tonumber(v)
         if n then return n end
         if v:sub(1, 1) == "{" or v:sub(1, 1) == "[" then
-            local decoded = json.decode(v)
-            if decoded then return decoded end
+            local ok, decoded = pcall(json.decode, v)
+            if ok and decoded then return decoded end
         end
         return v
     end
