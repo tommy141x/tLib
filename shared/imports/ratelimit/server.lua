@@ -144,8 +144,9 @@ function RateLimit.tokens(name, opts)
         local key = tonumber(src)
         if not key or key <= 0 then return false end
         cost = cost or 1
-        assert(type(cost) == 'number' and cost > 0 and cost <= burst,
-            ('tlib.ratelimit.tokens "%s": cost must be above 0 and at most burst (%d)'):format(name, burst))
+        if type(cost) ~= 'number' or cost <= 0 or cost > burst then
+            error(('tlib.ratelimit.tokens "%s": cost must be above 0 and at most burst (%s)'):format(name, burst), 2)
+        end
 
         local now = (GetGameTimer and GetGameTimer()) or 0
         local state = states[key]
@@ -167,7 +168,8 @@ function RateLimit.tokens(name, opts)
 
         local retryAfterMs = math.ceil((cost - state.tokens) / refill * 1000)
         state.refused = state.refused + 1
-        if not state.reportedAt or window == 0 or (now - state.reportedAt) >= window then
+        if not state.reportedAt or window == 0 or now < state.reportedAt
+            or (now - state.reportedAt) >= window then
             local info = { name = name, refused = state.refused, retryAfterMs = retryAfterMs }
             state.refused = 0
             state.reportedAt = now

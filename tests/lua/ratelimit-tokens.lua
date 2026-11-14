@@ -258,7 +258,31 @@ do
     now = 500
     check(bucket(7) == false, 'a backwards clock restarts the interval instead of refusing until it catches up')
     check(bucket(7) == true, 'and the restarted interval holds')
+
+    local quiet = RateLimit.tokens('wrap-report', { burst = 1, refillPerSecond = 1, logWindowMs = 30000 })
+    now = 4294960000
+    quiet(8)
+    printed = {}
+    check(quiet(8) == true and #printed == 1, 'the first refusal before the wrap is reported')
+    now = 1000
+    printed = {}
+    check(quiet(8) == true and #printed == 1,
+        'after the wrap a refusal opens a new report window instead of staying silent until the clock catches up')
 end
 report('PASS a wrapping game timer does not lock a player out')
+
+-- burst is "a number of at least 1", so a fractional one is legal and must work: the cost
+-- check once formatted its message with %d on every call, which raises for 2.5.
+do
+    local RateLimit = fresh()
+    local gate = RateLimit.tokens('fractional', { burst = 2.5, refillPerSecond = 1 })
+    local ok, first, second = pcall(function() return gate(9), gate(9) end)
+    check(ok, 'a fractional burst does not raise on an ordinary call: ' .. tostring(first))
+    check(first == false and second == false, 'and its whole tokens pass')
+    check(gate(9) == true, 'the half token left is not enough for a cost of 1')
+    local refused, err = pcall(gate, 9, 3)
+    check(not refused and tostring(err):find('at most burst %(2.5%)'), 'a cost above burst names the burst: ' .. tostring(err))
+end
+report('PASS a fractional burst works and an oversized cost is refused by name')
 
 report(('PASS ratelimit-tokens (%d checks)'):format(checks))
