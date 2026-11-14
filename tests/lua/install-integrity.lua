@@ -27,6 +27,10 @@ local function test(name, fn)
     realPrint('PASS ' .. name)
 end
 
+-- The page imports.lua prints to an outdated consumer (imports-min-version.lua pins it there).
+-- sv_install.lua once named another account, tommy141, so the boot check linked to a 404.
+local RELEASES_URL = 'https://github.com/tommy141x/tLib/releases/latest'
+
 local PAGE = '<script type="module" crossorigin src="./assets/index-39pXhfrw.js"></script>\n'
     .. '<link rel="stylesheet" crossorigin href="./assets/index-_FA5fhix.css">'
 
@@ -82,7 +86,7 @@ test('a source download (no built files) is named as that, with the release page
     assert(text:find('tLib/server/dist/bundle.js: missing', 1, true), text)
     assert(text:find('tLib/client/ui/assets/index-39pXhfrw.js: missing', 1, true), text)
     assert(text:find('green "Code" button', 1, true), text)
-    assert(text:find('https://github.com/tommy141/tLib/releases/latest', 1, true), text)
+    assert(text:find(RELEASES_URL, 1, true), 'expected ' .. RELEASES_URL .. ' in: ' .. text)
     assert(text:find('not "Source code"', 1, true), text)
     assert(text:find('Replace the whole tLib folder, then restart the server', 1, true), text)
 end)

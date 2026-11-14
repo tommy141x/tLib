@@ -11,7 +11,7 @@ local RESOURCE = GetCurrentResourceName()
 
 -- Same page imports.lua names. The page, not the zip: it is where "Source code" and
 -- tLib.zip sit side by side, and picking the wrong one is how most of these start.
-local RELEASES_URL = 'https://github.com/tommy141/tLib/releases/latest'
+local RELEASES_URL = 'https://github.com/tommy141x/tLib/releases/latest'
 
 -- Floors, not sizes. Each is far under what the release ships (bundle 353 KB, page script
 -- 574 KB, stylesheet 64 KB, HUD helper 6 KB) so a smaller rebuild never trips one, and far
