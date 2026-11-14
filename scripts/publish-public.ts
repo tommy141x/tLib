@@ -39,6 +39,8 @@ const PRIVATE = [
   "client/web/tests/export-badge.test.tsx",
   "client/web/tests/confirm-delete-unmount.test.tsx",
   "client/web/tests/harness.test.tsx",
+  // Moved out of internal/shared-ts in 61ba257; it still loads select.tsx from there.
+  "client/web/tests/select-classes.test.ts",
   // These two reached `main` while the guard below was throwing instead of
   // checking. Listing them here removes them: the strip loop deletes any
   // PRIVATE path in the worktree, so the next replayed commit carries that.
