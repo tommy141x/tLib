@@ -43,6 +43,38 @@ local function _loadFile(resource, path)
     end
 end
 
+--- A resource's JSON file, decoded. `json.decode` RAISES on text that is not JSON -- a hand
+--- edit with a stray comma, a write cut short -- and these are files other people edit, so
+--- nothing in this file calls it bare.
+---
+--- `doc, state, detail`:
+---   doc, 'ok'              the decoded object
+---   nil, 'empty', kind     absent or blank (kind nil), or valid JSON that is not an object
+---                          (kind is its Lua type; 'nil' for a JSON null)
+---   nil, 'corrupt', why    present and unparseable; never written over, see readForRewrite
+local function readJson(resource, path)
+    local raw = _loadFile(resource, path)
+    if not raw or raw == "" then return nil, 'empty' end
+    local ok, decoded = pcall(json.decode, raw)
+    if not ok then return nil, 'corrupt', tostring(decoded) end
+    if type(decoded) ~= "table" then
+        return nil, 'empty', type(decoded)
+    end
+    return decoded, 'ok'
+end
+
+--- The object in a file about to be REWRITTEN with one entry changed, or nil plus why it
+--- must not be. An absent file is rewritten from nothing. An unparseable one is left alone:
+--- a hand edit that broke the JSON is repairable, a file replaced by one model is not.
+local function readForRewrite(resource, path)
+    local doc, state, detail = readJson(resource, path)
+    if state == 'corrupt' then
+        return nil, tostring(resource) .. "/" .. tostring(path) .. " is not valid JSON ("
+            .. tostring(detail) .. "). It has NOT been changed; fix or delete it."
+    end
+    return doc or {}
+end
+
 -- Measured from one resource's VM:
 --   SaveResourceFile(<own resource>,   …) → 1
 --   SaveResourceFile(<other resource>, …) → false        -- sandbox refusal
@@ -91,6 +123,11 @@ local function _saveFile(resource, path, content)
         .. "' and has no Node fs bridge of its own to fall back on",
         'denied'
 end
+
+-- ServerSettings writes a consumer's file from this VM too, and must not grow a second
+-- copy of the three-outcome contract above.
+Discovery.saveFile = _saveFile
+Discovery.readJson = readJson
 
 --- Write a staged file into `resource`, falling back to tLib.
 ---
@@ -288,6 +325,7 @@ function Discovery.create(opts)
     local configs         = {}   -- { [model] = configData }
     local externalSources = {}   -- { [model] = { resource, filePath } }
     local hashToName      = {}   -- { [hashString] = spawnName }
+    local unreadable      = {}   -- { [localFilePath] = decode error } while that file is unparseable
 
     local inst = {}
 
@@ -390,32 +428,57 @@ function Discovery.create(opts)
 
     function inst:loadLocal(filePath)
         filePath = filePath or localFile
-        local raw = _loadFile(ownerResource, filePath)
-        if raw and raw ~= "" then
-            local decoded = json.decode(raw)
-            if type(decoded) ~= "table" then
-                if decoded ~= nil then
-                    log("[" .. tag .. "] loadLocal: '" .. tostring(ownerResource) .. "/" .. tostring(filePath)
-                        .. "' decoded to a " .. type(decoded) .. ", expected an object — ignoring it", 4)
-                end
-                decoded = {}
+        local decoded, state, detail = readJson(ownerResource, filePath)
+        if state == 'corrupt' then
+            -- Remembered, not just reported: this instance now holds none of what is in
+            -- that file, so its next save would replace the lot with one model.
+            unreadable[filePath] = detail
+            log("[" .. tag .. "] '" .. tostring(ownerResource) .. "/" .. tostring(filePath)
+                .. "' is not valid JSON (" .. tostring(detail) .. "), so none of its configs loaded."
+                .. " It has NOT been changed, and nothing will be saved over it. Fix the file and"
+                .. " restart " .. tostring(ownerResource) .. ".", 4)
+            return
+        end
+        unreadable[filePath] = nil
+        if not decoded then
+            if not detail then return end
+            if detail ~= 'nil' then
+                log("[" .. tag .. "] loadLocal: '" .. tostring(ownerResource) .. "/" .. tostring(filePath)
+                    .. "' decoded to a " .. detail .. ", expected an object — ignoring it", 4)
             end
-            if localSection then
-                configs = (type(decoded[localSection]) == "table") and decoded[localSection] or {}
-            else
-                configs = decoded
-            end
-            -- Only config tables get a hash alias — deduplicateConfigs indexes
-            -- both sides of an alias as tables.
-            for key, value in pairs(configs) do
-                if type(value) == "table" then registerAlias(key) end
-            end
+            decoded = {}
+        end
+        if localSection then
+            configs = (type(decoded[localSection]) == "table") and decoded[localSection] or {}
+        else
+            configs = decoded
+        end
+        -- Only config tables get a hash alias — deduplicateConfigs indexes
+        -- both sides of an alias as tables.
+        for key, value in pairs(configs) do
+            if type(value) == "table" then registerAlias(key) end
         end
     end
 
     function inst:saveLocal(filePath)
         filePath = filePath or localFile
         log("[" .. tag .. "] saveLocal: resource='" .. tostring(ownerResource) .. "' file='" .. tostring(filePath) .. "' section='" .. tostring(localSection) .. "'", 1)
+
+        -- Both halves are needed. The file as it is NOW decides whether sibling sections
+        -- can be merged; the file as it was at LOAD decides whether this instance ever
+        -- held its configs. An operator who repairs the JSON without restarting has a
+        -- readable file and an instance that would still overwrite it with one model.
+        local fileData, state, detail = readJson(ownerResource, filePath)
+        if state == 'corrupt' or unreadable[filePath] then
+            local where = tostring(ownerResource) .. "/" .. tostring(filePath)
+            local err = state == 'corrupt'
+                and (where .. " is not valid JSON (" .. tostring(detail) .. "), so it is not being overwritten.")
+                or (where .. " was not valid JSON when it was loaded (" .. tostring(unreadable[filePath])
+                    .. "), so none of its configs are held here and it is not being overwritten.")
+            log("[" .. tag .. "] saveLocal REFUSED — " .. err .. " This change is in effect until a restart"
+                .. " and is not saved. Fix the file and restart " .. tostring(ownerResource) .. ".", 4)
+            return false, err, 'corrupt'
+        end
         local localOnly = {}
         for model, cfg in pairs(configs) do
             if type(cfg) ~= "table" then
@@ -436,10 +499,7 @@ function Discovery.create(opts)
         local encoded
         if localSection then
             -- Merge, so sibling sections of the same file survive.
-            local raw = _loadFile(ownerResource, filePath)
-            log("[" .. tag .. "] saveLocal: read existing file — " .. (raw and (tostring(#raw) .. " bytes") or "nil/empty"), 1)
-            local fileData = (raw and raw ~= "") and json.decode(raw) or {}
-            if type(fileData) ~= "table" then fileData = {} end
+            fileData = fileData or {}
             fileData[localSection] = localOnly
             encoded = json.encode(fileData)
         else
@@ -468,12 +528,15 @@ function Discovery.create(opts)
         local configPath = declaredConfigPath(resName)
         if not configPath or configPath == "" then return 0 end
 
-        local raw = _loadFile(resName, configPath)
-        if not raw or raw == "" then return 0 end
-
-        local extConfigs = json.decode(raw)
-        if type(extConfigs) ~= "table" then
-            if extConfigs ~= nil then
+        local extConfigs, state, detail = readJson(resName, configPath)
+        if not extConfigs then
+            -- One pack's bad file costs that pack, not the scan: a raise here used to end
+            -- scanExternal for every resource after it in the index.
+            if state == 'corrupt' then
+                log("[" .. tag .. "] '" .. resName .. "/" .. configPath .. "' is not valid JSON ("
+                    .. tostring(detail) .. ") — none of its configs loaded. Fix the file and restart "
+                    .. resName .. ".", 3)
+            elseif detail and detail ~= 'nil' then
                 log("[" .. tag .. "] '" .. resName .. "/" .. configPath .. "' is not a JSON object — ignoring", 3)
             end
             return 0
@@ -591,9 +654,14 @@ function Discovery.create(opts)
 
         local ext = externalSources[model]
         if ext then
-            local raw = _loadFile(ext.resource, ext.filePath)
-            local extData = (raw and raw ~= "") and json.decode(raw) or {}
-            if type(extData) ~= "table" then extData = {} end
+            local extData, unreadableErr = readForRewrite(ext.resource, ext.filePath)
+            if not extData then
+                -- Not staged either: a staged copy holding this one model would read as the
+                -- finished file, and copying it into place is the overwrite being refused.
+                log("[" .. tag .. "] Could NOT save '" .. tostring(model) .. "' — " .. unreadableErr
+                    .. " The change is in effect here until a restart.", 4)
+                return false, unreadableErr, 'corrupt'
+            end
             extData[model] = config
             local encodedExt = json.encode(extData)
             local ok, err, kind = _saveFile(ext.resource, ext.filePath, encodedExt)
@@ -650,11 +718,12 @@ function Discovery.create(opts)
         local ext = externalSources[model]
         local warning = nil
         if ext then
-            local raw = _loadFile(ext.resource, ext.filePath)
-            local extData = (raw and raw ~= "") and json.decode(raw) or {}
-            if type(extData) ~= "table" then extData = {} end
-            extData[model] = nil
-            local ok, err = _saveFile(ext.resource, ext.filePath, json.encode(extData))
+            local extData, err = readForRewrite(ext.resource, ext.filePath)
+            local ok = false
+            if extData then
+                extData[model] = nil
+                ok, err = _saveFile(ext.resource, ext.filePath, json.encode(extData))
+            end
             if not ok then
                 -- Gone from memory but still on disk, so it reappears on the next scan.
                 -- Deleting the entry by hand is the only way to remove it from a resource that can't write itself.
@@ -708,9 +777,8 @@ function Discovery.create(opts)
     --- Remove one model from a file another resource owns.
     --- Returns ok, err. Never throws: the target may not even exist any more.
     local function clearFromExternal(ext, model)
-        local raw = _loadFile(ext.resource, ext.filePath)
-        local extData = (raw and raw ~= "") and json.decode(raw) or {}
-        if type(extData) ~= "table" then extData = {} end
+        local extData, err = readForRewrite(ext.resource, ext.filePath)
+        if not extData then return false, err end
         if extData[model] == nil then return true end   -- already absent
         extData[model] = nil
         return _saveFile(ext.resource, ext.filePath, json.encode(extData))
@@ -793,9 +861,16 @@ function Discovery.create(opts)
         -- plus this model. Reads are never sandboxed, so this is accurate even
         -- when the write that follows is refused — which is what makes the
         -- staged copy something an operator can simply drop into place.
-        local raw = _loadFile(targetResource, targetPath)
-        local targetData = (raw and raw ~= "") and json.decode(raw) or {}
-        if type(targetData) ~= "table" then targetData = {} end
+        local targetData, unreadableErr = readForRewrite(targetResource, targetPath)
+        if not targetData then
+            -- Nothing committed, same as a refused write: still local, still served.
+            info.error = unreadableErr
+            info.errorKind = 'corrupt'
+            info.message = "Could not export into '" .. tostring(targetResource) .. "' — " .. unreadableErr
+                .. " Nothing was exported; the config is unchanged and still local."
+            log("[" .. tag .. "] EXPORT NOT COMPLETED: " .. info.message, 4)
+            return false, targetPath, info
+        end
         local cleanConfig = {}
         for k, v in pairs(config) do
             if k ~= "_local" then cleanConfig[k] = v end
@@ -927,18 +1002,12 @@ function Discovery.create(opts)
         if count == 0 then
             for _, ext in pairs(externalSources) do
                 if ext.resource == resName then
-                    local raw2 = _loadFile(resName, ext.filePath)
-                    if raw2 and raw2 ~= "" then
-                        local extConfigs = json.decode(raw2)
-                        if type(extConfigs) == "table" then
-                            for model2, cfg2 in pairs(extConfigs) do
-                                if type(cfg2) == "table" then
-                                    registerAlias(model2)
-                                    if not configs[model2] then
-                                        configs[model2] = cfg2
-                                        count = count + 1
-                                    end
-                                end
+                    for model2, cfg2 in pairs(readJson(resName, ext.filePath) or {}) do
+                        if type(cfg2) == "table" then
+                            registerAlias(model2)
+                            if not configs[model2] then
+                                configs[model2] = cfg2
+                                count = count + 1
                             end
                         end
                     end
@@ -1017,9 +1086,24 @@ function Discovery.create(opts)
             Platform.TriggerClientEvent(receiveEv, src, configs)
         end)
 
+        -- A model key off the wire: a spawn name or a hash. Any other type becomes a table
+        -- key json.encode cannot write, and from then on every save of every model fails.
+        local function modelKey(model)
+            local kind = type(model)
+            if kind == "string" then return model ~= "" and #model <= 128 end
+            return kind == "number" and model == model
+        end
+
         netHandler(prefix .. ":config_save", function(model, config)
             local src = source
             if not checkPerm(src) then return end
+            -- Before afterSave and the broadcast: a save that was refused changed nothing,
+            -- and an owner persisting its own copy on afterSave would write the old one out.
+            if not modelKey(model) or type(config) ~= "table" then
+                log("[" .. tag .. "] config_save from player " .. tostring(src) .. " refused: expected a model"
+                    .. " name or hash and a config table, got " .. type(model) .. " and " .. type(config), 3)
+                return
+            end
             model = resolveModel(model)
             inst:saveModelConfig(model, config)
             TriggerEvent(metadataKey .. ":afterSave", model)
@@ -1029,6 +1113,7 @@ function Discovery.create(opts)
         netHandler(prefix .. ":config_remove", function(model)
             local src = source
             if not checkPerm(src) then return end
+            if not modelKey(model) then return end
             model = resolveModel(model)
             if not configs[model] then return end
             inst:removeModelConfig(model)
@@ -1041,6 +1126,7 @@ function Discovery.create(opts)
             local src = source
             if not src or src <= 0 then return end
             if not checkPerm(src) then return end
+            if not modelKey(model) then return end
             model = resolveModel(model)
             local ext = externalSources[model]
             Platform.TriggerClientEvent(sourceInfoEv, src, model, ext and ext.resource or nil)
@@ -1056,6 +1142,10 @@ function Discovery.create(opts)
         netHandler(prefix .. ":exportConfig", function(model, targetResource)
             local src = source
             if not checkPerm(src) then return end
+            -- The target is a resource NAME: it is handed to natives that raise on anything
+            -- else, and joined into the staging path.
+            if not modelKey(model) or type(targetResource) ~= "string" or targetResource == ""
+                or targetResource:find("[/\\%c]") then return end
             model = resolveModel(model)
             if not configs[model] then return end
 

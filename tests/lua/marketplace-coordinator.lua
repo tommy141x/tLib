@@ -10,6 +10,7 @@ Platform = {
     export = function(_, _, cb) register = cb end,
     AddNetEventHandler = function() end,
     TriggerClientEvent = function() end,
+    onResourceStop = function() end,
 }
 -- Install now asks the Node bridge whether the ITEM's own `resource` matches
 -- the product it is being installed into — the one thing the registry key

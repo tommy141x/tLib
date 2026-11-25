@@ -26,6 +26,7 @@ Platform = {
     export = function(_, _, cb) register = cb end,
     AddNetEventHandler = function() end,
     TriggerClientEvent = function() end,
+    onResourceStop = function() end,
 }
 exports = setmetatable({}, { __index = function(_, name)
     if name ~= 'tLib' then return nil end
