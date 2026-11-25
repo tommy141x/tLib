@@ -28,11 +28,18 @@ export class Router {
     private readonly cfg: BoundHttpConfig,
     private readonly serverName: () => string,
     private readonly log: Log,
+    // Returning true means the caller has already explained this state to the
+    // operator and the generic log below would contradict it. The only case
+    // today is `tlib_http_port` set to the FiveM server port with the ingress
+    // on: the bind fails EADDRINUSE, but the hub IS reachable on that port, so
+    // "the hub and every resource behind it will be unreachable" is false.
+    // Measured 2026-11-25: that config answered 200 on /tLib while printing the
+    // unreachable error.
     private readonly onState: (
       state: ListenerState,
       localUrl: string | null,
       error: string | null
-    ) => void = () => {},
+    ) => boolean | void = () => {},
     private readonly onPeer: (address: unknown, userAgent?: unknown) => void = () => {}
   ) {}
 
@@ -47,7 +54,7 @@ export class Router {
 
     server.on("error", (err: NodeJS.ErrnoException) => {
       if (this.server !== server) return;
-      this.onState("failed", null, err.message);
+      if (this.onState("failed", null, err.message) === true) return;
       if (err.code === "EADDRINUSE") {
         this.log(
           "error",

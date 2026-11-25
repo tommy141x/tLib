@@ -130,18 +130,28 @@ export function installHttp(): void {
       // already owns that socket, so the attempt fails EADDRINUSE and a
       // perfectly reasonable-looking config produced a server with no door.
       //
+      // Ingress-gated, because "what happens anyway" IS the ingress: with
+      // `tlib_http_ingress false` nothing serves that port. Measured 2026-11-25
+      // at ingress false, port 30120 — this branch said no listener was needed
+      // and both /tLib doors then answered nothing.
+      //
       // Compared HERE rather than before `start()` because `netPort` is not
       // readable yet on a COLD BOOT — it reads "0" while FXServer is still
       // starting, and only a resource restart sees the real value. By the time a
       // bind has failed it is always readable.
-      if (state === "failed" && cfg.port === Number.parseInt(fGetConvar("netPort", ""), 10)) {
+      if (
+        state === "failed" &&
+        ingressEnabled &&
+        cfg.port === Number.parseInt(fGetConvar("netPort", ""), 10)
+      ) {
         log(
           "info",
           "'tlib_http_port' is the FiveM server port, which already serves the hub — " +
             "no second listener is needed, and none was bound."
         );
         readiness.listener("disabled", null, null);
-        return;
+        // true suppresses the Router's "hub unreachable" EADDRINUSE error.
+        return true;
       }
       readiness.listener(state, localUrl, error);
     }, notePeer);
