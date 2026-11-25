@@ -14,6 +14,7 @@
  * Exit 0 pass, 1 a finding, 2 the gate could not run.
  */
 
+import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { siblingResources } from "./siblings.ts";
@@ -74,8 +75,37 @@ function luaFiles(dir: string): string[] {
   return out;
 }
 
+/**
+ * The gate judges a resource's OWN Lua, and git is what decides which that is.
+ * A resource's ignored paths hold other people's code — vendored reference
+ * copies of rival lighting scripts, marketplace layouts, pma-voice — which we
+ * did not write and cannot fix. Walking the filesystem blind read 271 files in
+ * tLS against 109 tracked and failed on 20 bare registrations, every one of
+ * them under the gitignored assets/reference/; tRadio's tree walks 540 Lua
+ * files of which all 540 are ignored.
+ *
+ * Returns null outside a work tree (a release tarball, a vendored copy), where
+ * "tracked" means nothing and the walk is the only answer available.
+ */
+function trackedLuaFiles(root: string): string[] | null {
+  const res = spawnSync("git", ["-C", root, "ls-files", "-z", "--", "*.lua"], {
+    encoding: "buffer",
+  });
+  if (res.status !== 0) return null;
+  const rels = res.stdout.toString("utf8").split("\0").filter(Boolean);
+  return rels.map((r) => join(root, r));
+}
+
 export function scanTree(root: string): { files: number; findings: Finding[] } {
-  const files = luaFiles(root);
+  // SKIP_DIRS is applied to both sources: the walk prunes as it descends, and a
+  // tracked path can still sit under tests/ or internal/.
+  const files = (trackedLuaFiles(root) ?? luaFiles(root)).filter((abs) =>
+    relative(root, abs)
+      .split("\\")
+      .join("/")
+      .split("/")
+      .every((seg) => !SKIP_DIRS.has(seg))
+  );
   const findings: Finding[] = [];
   for (const abs of files) {
     const rel = relative(root, abs).split("\\").join("/");
