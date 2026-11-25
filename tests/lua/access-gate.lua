@@ -690,5 +690,22 @@ if (after - before) ~= 1 then
         .. 'is being timed, which buries every real framework round trip'):format(after - before))
 end
 
+-- The 32-bit game timer wrapping
+-- The memo is held for ANSWER_TTL_MS. Compared without a lower bound, the
+-- difference stays negative after the timer wraps and the TTL never expires
+-- again -- so a grant evaluated once outlives every later revocation of it.
+
+reset()
+local wrapGate = access.gate({ mode = 'ace', ace = 'tprobe.wrap' }, { key = 'wrap', label = 'the radio' })
+gameTime = 2000000
+aceGrants['21|tprobe.wrap'] = true
+assert(wrapGate:allowed(21), 'precondition: the ace grant opens the gate and is memoised')
+aceGrants['21|tprobe.wrap'] = nil
+assert(wrapGate:allowed(21), 'precondition: inside the TTL the memoised grant is reused')
+
+gameTime = 1900000
+assert(wrapGate:allowed(21) == false,
+    'a grant memoised before the timer wrapped does not outlive its revocation')
+
 print = realPrint
 print('PASS access-gate')

@@ -83,7 +83,9 @@ local function fire(item, src, via)
 
     local now = GetGameTimer()
     local last = entry.last[src]
-    if last and (now - last) < DUPLICATE_WINDOW_MS then return end
+    -- `now >= last`: after the 32-bit game timer wraps the difference is negative, and every
+    -- later use of the item would read as a duplicate of the one before the wrap.
+    if last and now >= last and (now - last) < DUPLICATE_WINDOW_MS then return end
     entry.last[src] = now
 
     local ok, err = pcall(entry.handler, src, { item = item, via = via })

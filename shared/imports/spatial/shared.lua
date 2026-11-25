@@ -22,7 +22,9 @@ local function rebuildIndex()
 
     local p = platform()
     local now = p.now()
-    if (now - lastUpdate) < REFRESH_MS then return end
+    -- `now >= lastUpdate`: the server's game timer is 32-bit, and after it wraps the
+    -- difference stays negative -- the index would never be rebuilt again.
+    if now >= lastUpdate and (now - lastUpdate) < REFRESH_MS then return end
     lastUpdate = now
 
     index = {}

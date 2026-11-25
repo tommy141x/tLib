@@ -391,7 +391,9 @@ local lastSeen = {}
 local function admit(fp)
     local now = (GetGameTimer and GetGameTimer()) or 0
     for key, seen in pairs(lastSeen) do
-        if (now - seen) > DEDUPE_WINDOW_MS then lastSeen[key] = nil end
+        -- `now < seen`: after the 32-bit game timer wraps, an entry from before it would
+        -- never age out and that fault would stay deduplicated for good.
+        if now < seen or (now - seen) > DEDUPE_WINDOW_MS then lastSeen[key] = nil end
     end
     if lastSeen[fp] and (now - lastSeen[fp]) < DEDUPE_WINDOW_MS then return false end
     lastSeen[fp] = now

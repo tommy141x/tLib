@@ -378,7 +378,10 @@ function Gate:allowed(src)
     local key = tostring(src)
     local now = (GetGameTimer and GetGameTimer()) or 0
     local memo = self.memo[key]
-    if memo and (now - memo.at) < ANSWER_TTL_MS then return memo.value end
+    -- `now >= memo.at`: when the 32-bit game timer wraps, the difference goes negative and
+    -- stays under the TTL, so a grant from before the wrap would outlive its revocation
+    -- until the player reconnected.
+    if memo and now >= memo.at and (now - memo.at) < ANSWER_TTL_MS then return memo.value end
 
     -- Instrumented on the MISS path only. `evaluate` calls out to whichever
     -- framework and inventory the customer runs -- a profiler once attributed

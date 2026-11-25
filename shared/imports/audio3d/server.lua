@@ -192,7 +192,10 @@ function Bus:allow(netId, clean, now)
         self.lastEmit[netId] = bucket
     end
 
-    if (now - bucket.windowStart) >= 1000 then
+    -- A clock that ran backwards (the 32-bit game timer wrapping) opens a new window and
+    -- clears the floors. Without both tests the differences stay negative, the window
+    -- never rolls over, and the vehicle is silent until everyone aboard has left it.
+    if now < bucket.windowStart or (now - bucket.windowStart) >= 1000 then
         bucket.windowStart = now
         bucket.count = 0
     end
@@ -204,7 +207,7 @@ function Bus:allow(netId, clean, now)
         if v ~= nil then key = tostring(v) end
     end
     local last = bucket.partitions[key]
-    if last ~= nil and (now - last) < self.minIntervalMs then return false end
+    if last ~= nil and now >= last and (now - last) < self.minIntervalMs then return false end
 
     bucket.partitions[key] = now
     bucket.count = bucket.count + 1

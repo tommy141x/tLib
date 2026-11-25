@@ -369,7 +369,10 @@ local lastMoved = {} -- [src] = timestamp
 RegisterNetEvent('tlib:occupancy:moved', function()
     local src = source
     local now = GetGameTimer()
-    if lastMoved[src] and (now - lastMoved[src]) < 100 then return end
+    local last = lastMoved[src]
+    -- `now >= last`: after the 32-bit game timer wraps the difference is negative, and this
+    -- player's pings would be dropped until they reconnected.
+    if last and now >= last and (now - last) < 100 then return end
     lastMoved[src] = now
     -- refreshOccupant, so a ping from the back seat registers the rear tier
     -- rather than being written down as "on foot". This is the only way a rear

@@ -459,4 +459,16 @@ assert(occupancy.tierOf(3) == occupancy.TIER_REAR,
 assert(occupancy.isControllerOf(3, 60) == true, 'the live gate is right immediately')
 assert(occupancy.tierOf(3) == occupancy.TIER_DRIVER, 'and repairs the cache on its way past')
 
+-- The game timer is 32-bit and wraps. Unguarded, the difference against this
+-- player's last ping stays negative, so every later ping is dropped as a
+-- duplicate and the cache holds where they were until they reconnect.
+seats[3] = { seat = 2, netId = 60 }
+clock = clock - 100000
+source = 3
+moved()
+assert(occupancy.tierOf(3) == occupancy.TIER_REAR,
+    'a ping after the timer wrapped is processed, not dropped inside a window that never reopens')
+local wrapSeat, wrapNet = occupancy.occupantSeatOf(3)
+assert(wrapSeat == 2 and wrapNet == 60, 'and the cache holds the seat that ping reported')
+
 print('PASS: a client move ping refreshes the server cache, rate-limited and re-read')

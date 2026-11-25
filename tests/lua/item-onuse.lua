@@ -296,6 +296,27 @@ do
 end
 report('PASS a disconnect frees the per-player window')
 
+-- The clock running backwards
+
+do
+    local Item = fresh()
+    local hooks = {}
+    states.ox_inventory, versions.ox_inventory = 'started', '2.44.1'
+    exportsByResource.ox_inventory = { registerHook = function(_, _, fn) hooks[#hooks + 1] = fn return 1 end }
+    local uses, handler = recorder()
+    Item.onUse('radio', handler)
+
+    now = 500000
+    hooks[1]({ source = 5 })
+    check(#uses == 1, 'the use before the wrap runs the handler')
+    -- The game timer is 32-bit. Unguarded, the difference stays negative after it
+    -- wraps and every later use reads as a duplicate of this one, for good.
+    now = 400000
+    hooks[1]({ source = 5 })
+    check(#uses == 2, 'a use after the timer wrapped is a new use, not a swallowed duplicate')
+end
+report('PASS a wrapped game timer does not swallow every later use of an item')
+
 -- Arguments
 
 do

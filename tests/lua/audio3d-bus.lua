@@ -196,4 +196,27 @@ assert(wide:getRange() == 40, 'a malformed range leaves the previous one standin
 assert(not pcall(audio3d.createBus, { event = 'x' }), 'range is required')
 assert(not pcall(audio3d.createBus, { range = 10 }), 'event is required')
 
+-- The 32-bit game timer wrapping
+
+-- Both halves of the limit compare against a stored timestamp. Unguarded, the
+-- differences stay negative after a wrap: the window never rolls over and the
+-- partition floor never expires, so the vehicle goes silent until everybody
+-- aboard has left it.
+local wrapBus = audio3d.createBus({
+    event = 'tradar:wrapped',
+    range = 25,
+    rateBy = 'kind',
+    minIntervalMs = 100,
+    fields = { kind = { type = 'string', max = 16 } },
+})
+reset()
+assert(wrapBus:emit(1, { kind = 'tone' }) > 0, 'the tone before the wrap goes out')
+local throttledBefore = wrapBus:stats().throttled
+now = now - 100000
+assert(wrapBus:emit(1, { kind = 'tone' }) > 0,
+    'a tone after the wrap is delivered, not read as inside the floor')
+assert(wrapBus:stats().throttled == throttledBefore, 'and is not counted as throttled')
+assert(wrapBus:emit(1, { kind = 'tone' }) == 0,
+    'while the floor still holds at that same instant, so the wrap did not disable the limit')
+
 print('ok')

@@ -44,10 +44,10 @@ export class TokenBucket {
     public readonly refillPerSec: number
   ) {
     this.tokens = capacity;
-    this.last = nowMs();
+    this.last = monotonicMs();
   }
   tryConsume(n = 1): boolean {
-    const now = nowMs();
+    const now = monotonicMs();
     const elapsed = (now - this.last) / 1000;
     this.last = now;
     this.tokens = Math.min(this.capacity, this.tokens + elapsed * this.refillPerSec);
@@ -61,6 +61,15 @@ export class TokenBucket {
 
 function nowMs(): number {
   return Date.now();
+}
+
+/**
+ * The buckets' clock. Not the wall clock: one stepped backwards (an NTP
+ * correction, a resumed VM) makes the elapsed time negative, which SUBTRACTS
+ * tokens, and a talker's frames are then dropped for as long as the step was.
+ */
+function monotonicMs(): number {
+  return performance.now();
 }
 
 export interface SessionManagerOptions {

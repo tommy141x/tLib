@@ -80,4 +80,12 @@ spatial.clear()
 assert(#spatial.getNearbyPlayers({ x = 0, y = 0, z = 0 }, 10) == 0,
     'clear empties the index without waiting for the next refresh')
 
+-- The server's game timer is 32-bit and wraps. A difference left unguarded stays
+-- negative from then on, so the index was never rebuilt again for the life of the
+-- process and every query answered from whatever it last held.
+coordsById[4] = { x = 2, y = 0, z = 0 }
+now = now - 100000
+assert(ids(spatial.getNearbyPlayers({ x = 0, y = 0, z = 0 }, 10)) == '1,3,4',
+    'a clock that ran backwards rebuilds the index rather than freezing it')
+
 print('PASS: spatial cache gates on readiness, honours its refresh window and survives disconnects')
