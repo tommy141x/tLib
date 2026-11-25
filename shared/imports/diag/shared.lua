@@ -501,7 +501,7 @@ function Diag.command(opts)
 
         function ctx.blank() emit('') end
 
-        function ctx.section(text) emit(('── %s ──'):format(tostring(text))) end
+        function ctx.section(text) emit(('-- %s --'):format(tostring(text))) end
 
         function ctx.kv(key, value, width)
             emit(('  %-' .. tostring(width or 24) .. 's %s')
@@ -535,7 +535,7 @@ function Diag.command(opts)
             for _, message in ipairs(errors) do ctx.message('ERROR ' .. tostring(message)) end
         end
 
-        emit(('──────── %s ────────'):format(opts.title or (scope .. ' diagnostics')))
+        emit(('-------- %s --------'):format(opts.title or (scope .. ' diagnostics')))
 
         local ok, err = pcall(build, ctx)
         if not ok then
@@ -546,7 +546,7 @@ function Diag.command(opts)
 
         emit('')
         emit(opts.footer or 'No credentials appear above; this output is safe to paste.')
-        emit('─────────────────────────────────────────')
+        emit('-----------------------------------------')
 
         if route ~= 'caller' or src == 0 then
             for _, text in ipairs(out) do print(prefix .. text) end

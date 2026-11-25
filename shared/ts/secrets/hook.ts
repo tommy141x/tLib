@@ -27,7 +27,7 @@ import * as path from "node:path";
  */
 export const PRE_COMMIT = `#!/bin/sh
 # Managed by tLib — shared/ts/secrets/hook.ts writes this file.
-# ⛔ Do not edit here. Run \`bun run ../tLib/scripts/secret-gate.ts --write-hooks\`
+# Do not edit here. Run \`bun run ../tLib/scripts/secret-gate.ts --write-hooks\`
 #    (or \`bun run secrets:install-hooks\`) to refresh it; a control asserts every
 #    resource's copy is byte-identical to tLib's.
 #

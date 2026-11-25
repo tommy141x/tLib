@@ -112,7 +112,7 @@ function run(){
   if(FN&&++tries<40){setTimeout(run,100);return;}
   bind();
 }
-// ⚠️ Only the named-function path waits. The script is injected at the end of
+// Only the named-function path waits. The script is injected at the end of
 // <body>, so every element it binds already exists, and a purely declarative
 // layout has nothing to wait FOR — the delay used to be unconditional, which is
 // fine for a live preview and wrong for a headless screenshot run, where the
