@@ -57,8 +57,9 @@ end
 --- has tlib.admin permission. Denied attempts are logged automatically.
 --- @param eventName string   The net event name to register
 --- @param handler function   function(src, ...) called only for admins
+--- @return any  the handler cookie, for Platform.RemoveEventHandler
 function Permission.registerAdminEvent(eventName, handler)
-    RegisterNetEvent(eventName, function(...)
+    return Platform.AddNetEventHandler(eventName, function(...)
         local src = source
         local ok, isAdm = pcall(Permission.isPlayerAdmin, src)
         if not ok or not isAdm then
@@ -69,6 +70,20 @@ function Permission.registerAdminEvent(eventName, handler)
     end)
 end
 
+-- The export registers in THIS VM a handler that belongs to another resource. Unremoved, a
+-- consumer's restart leaves the old one here beside the new: every admin action then also
+-- calls a function in a VM that no longer exists, and prints the denial once per restart.
+local exported = {} -- [resource] = { { live, cookie }, ... }
+
+Platform.onResourceStop(function(stopped)
+    for _, entry in ipairs(exported[stopped] or {}) do
+        -- The flag as well as the removal: RemoveEventHandler is not on every build.
+        entry.live = false
+        Platform.RemoveEventHandler(entry.cookie)
+    end
+    exported[stopped] = nil
+end)
+
 function Permission.registerExports()
     Platform.export('tLib', 'IsPlayerAdmin', function(src)
         return Permission.isPlayerAdmin(src)
@@ -77,6 +92,15 @@ function Permission.registerExports()
         return Permission.getPlayerLevel(src)
     end)
     Platform.export('tLib', 'RegisterAdminEvent', function(eventName, handler)
-        Permission.registerAdminEvent(eventName, handler)
+        local owner = Platform.getInvokingResource()
+        local entry = { live = true }
+        entry.cookie = Permission.registerAdminEvent(eventName, function(...)
+            if entry.live then return handler(...) end
+        end)
+        -- No invoker means tLib's own VM, whose handlers go when it does.
+        if owner then
+            exported[owner] = exported[owner] or {}
+            exported[owner][#exported[owner] + 1] = entry
+        end
     end)
 end
