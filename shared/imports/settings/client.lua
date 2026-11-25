@@ -38,7 +38,12 @@ local function coerce(m, value)
     elseif t == 'bool' then
         return value == true or value == "true"
     elseif t == 'json' then
-        if type(value) == 'string' then return json.decode(value) or m.default end
+        if type(value) == 'string' then
+            -- json.decode raises on text that is not JSON; a malformed server default
+            -- must cost that one setting its value, not the chunk applying all of them.
+            local ok, decoded = pcall(json.decode, value)
+            return (ok and decoded) or m.default
+        end
         return value
     else
         return tostring(value)

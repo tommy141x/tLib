@@ -262,6 +262,10 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
     end
 
     if action.clientAction then
+        -- `~= nil`, not `or`: a fixed value of `false` is a value, and `or` would hand
+        -- the client's own in its place.
+        local value = body.value
+        if action.fixedValue ~= nil then value = action.fixedValue end
         -- The handler name is scoped to the owner, so a resource can only name a
         -- handler in its own namespace. That is what makes client dispatch safe
         -- to offer to every resource.
@@ -269,7 +273,7 @@ Platform.AddNetEventHandler(S.events.request, function(requestId, body)
             ok = true,
             owner = entry.owner,
             clientAction = action.clientAction,
-            value = action.fixedValue or body.value,
+            value = value,
             capabilities = registry:capabilities(src),
         })
         return

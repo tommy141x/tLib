@@ -45,8 +45,10 @@ local function _format(source, lvl, args, n)
 end
 
 local function _emit(source, ...)
-    local args = { ... }
-    local n    = #args
+    -- table.pack, not `#{...}`: the length of a table with a trailing nil stops before it,
+    -- so `log('name:', GetPlayerName(src))` for a player with no name printed `name:`.
+    local args = table.pack(...)
+    local n    = args.n
 
     local lvl
     lvl, n     = _extractLevel(args, n)
@@ -107,7 +109,9 @@ function Logger.registerExports()
     local function _formatForConsumer(loggerId, args)
         if type(args) ~= 'table' then return nil end
 
-        local n = #args
+        -- `n` when CreateLogger's closure packed its own varargs; `Log` is handed a plain
+        -- array from another VM, which has no count to carry.
+        local n = type(args.n) == 'number' and args.n or #args
         local lvl
         lvl, n = _extractLevel(args, n)
 
@@ -140,7 +144,7 @@ function Logger.registerExports()
             and opts.minLevel or nil
 
         local closure = function(...)
-            local args = { ... }
+            local args = table.pack(...)
             local savedMin
             if localMin then
                 savedMin  = _minLevel

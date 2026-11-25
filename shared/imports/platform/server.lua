@@ -20,8 +20,18 @@ function platform.getPlayers()
     return GetPlayers()
 end
 
+--- A server id as a positive number, or nil. `GetPlayers()` answers in STRINGS, and a string
+--- compared with `<= 0` raises in Lua 5.4 instead of answering -- which is what
+--- `getNearbyPlayers` below did on any server with a player connected.
+local function serverId(source)
+    local id = tonumber(source)
+    if not id or id <= 0 then return nil end
+    return id
+end
+
 function platform.getPlayerName(source)
-    if not source or source <= 0 then return nil end
+    source = serverId(source)
+    if not source then return nil end
     local name = GetPlayerName(source)
     if not name or name == "" then return nil end
     return name
@@ -29,7 +39,8 @@ end
 
 -- pcall-guarded: GetPlayerPed on a disconnected source throws.
 function platform.getPlayerPed(source)
-    if not source or source <= 0 then return nil end
+    source = serverId(source)
+    if not source then return nil end
     local ok, ped = pcall(GetPlayerPed, source)
     if not ok or not ped or ped == 0 then return nil end
     return ped

@@ -374,6 +374,39 @@ do
 end
 print('PASS settings.serverScoped isolates per-server tuning and nothing else')
 
+-- A json setting handed text that is not JSON. `coerce` is the one ladder both
+-- `set` and `applyDefaults` go through, so a raise there costs the whole chunk
+-- applying a server's defaults, not just the one setting that is malformed.
+
+do
+    -- A whole new host per case: `set` marks the key user-set, which makes a
+    -- later applyDefaults on a shared store skip the setting and assert nothing.
+    local function freshSettings()
+        local env = host({ tlib_community_id = 'tgstudios' })
+        env.json.decode = function(s)
+            if s == '{"a":2}' then return { a = 2 } end
+            error('expected value at line 1 col 1', 0)
+        end
+        env.tlib = { kvp = loadKvp(env) }
+        return loadSettings(env).create({ { key = 'k', type = 'json', default = { a = 1 } } })
+    end
+
+    local settings = freshSettings()
+    local ok = pcall(settings.applyDefaults, settings, { k = '{bad' })
+    check(ok, 'a malformed server default for a json setting does not raise')
+    check(settings:get('k').a == 1, 'and the declared default is the effective value')
+
+    settings = freshSettings()
+    ok = pcall(settings.set, settings, 'k', '{bad')
+    check(ok, 'setting a json setting to malformed text does not raise either')
+    check(settings:get('k').a == 1, 'and falls back to the declared default')
+
+    settings = freshSettings()
+    settings:applyDefaults({ k = '{"a":2}' })
+    check(settings:get('k').a == 2, 'a valid JSON server default is decoded, not stored as text')
+end
+print('PASS a malformed json setting costs that one setting its value, not the chunk')
+
 -- Negative controls, run
 --
 -- Each control is a view-like object blind to exactly one option. The suite
