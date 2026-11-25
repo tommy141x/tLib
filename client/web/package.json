@@ -11,13 +11,13 @@
   "dependencies": {
     "@ark-ui/solid": "6.0.0-next.0",
     "@solid-primitives/i18n": "^3.0.0-next.6",
-    "@solid-primitives/utils": "7.0.0-next.7",
-    "@solidjs/web": "2.0.0-rc.18",
+    "@solid-primitives/utils": "7.0.1",
+    "@solidjs/web": "2.0.3",
     "@tanstack/solid-form": "^1.33.5",
     "@unocss/reset": "^66.11.0",
     "clsx": "^2.1.1",
     "lucide-solid": "^1.61.0",
-    "solid-js": "2.0.0-rc.18",
+    "solid-js": "2.0.3",
     "unocss-merge": "^0.10.0"
   },
   "devDependencies": {
@@ -26,7 +26,7 @@
     "@iconify/json": "^2.2.547",
     "@solidjs/compiler": "2.0.0-rc.18",
     "@solidjs/testing-library": "1.0.0-rc.2",
-    "@solidjs/vite-plugin": "3.0.0-next.51",
+    "@solidjs/vite-plugin": "3.0.1",
     "@testing-library/dom": "^10.4.2",
     "@unocss/preset-attributify": "^66.11.0",
     "@unocss/preset-web-fonts": "^66.11.0",
@@ -35,8 +35,8 @@
     "typescript": "7.1.0-beta",
     "unocss": "^66.11.0",
     "unplugin-icons": "^24.0.0",
-    "vite": "npm:@voidzero-dev/vite-plus-core@^1.4.0",
-    "vite-plus": "^1.4.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@8.3.8001",
+    "vite-plus": "1.8.0"
   },
   "patchedDependencies": {
     "@zag-js/solid@2.0.0-next.3": "patches/@zag-js%2Fsolid@2.0.0-next.3.patch",
@@ -44,8 +44,8 @@
   },
   "overrides": {
     "@ark-ui/solid": "6.0.0-next.0",
-    "@solid-primitives/keyed": "3.0.0-next.4",
-    "@solid-primitives/utils": "7.0.0-next.7",
+    "@solid-primitives/keyed": "3.0.0",
+    "@solid-primitives/utils": "7.0.1",
     "@zag-js/accordion": "2.0.0-next.3",
     "@zag-js/anatomy": "2.0.0-next.3",
     "@zag-js/angle-slider": "2.0.0-next.3",

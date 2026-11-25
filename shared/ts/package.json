@@ -43,9 +43,9 @@
     "@types/bun": "^1.4.4",
     "@types/three": ">=0.150.0",
     "unocss": "^66.11.0",
-    "@solidjs/vite-plugin": "3.0.0-next.51",
-    "@solidjs/web": "2.0.0-rc.18",
-    "solid-js": "2.0.0-rc.18",
+    "@solidjs/vite-plugin": "3.0.1",
+    "@solidjs/web": "2.0.3",
+    "solid-js": "2.0.3",
     "typescript": "7.1.0-beta"
   },
   "peerDependencies": {
@@ -61,8 +61,8 @@
   },
   "overrides": {
     "@ark-ui/solid": "6.0.0-next.0",
-    "@solid-primitives/keyed": "3.0.0-next.4",
-    "@solid-primitives/utils": "7.0.0-next.7",
+    "@solid-primitives/keyed": "3.0.0",
+    "@solid-primitives/utils": "7.0.1",
     "@zag-js/accordion": "2.0.0-next.3",
     "@zag-js/anatomy": "2.0.0-next.3",
     "@zag-js/angle-slider": "2.0.0-next.3",
