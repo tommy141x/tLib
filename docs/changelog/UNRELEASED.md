@@ -32,7 +32,34 @@ Every resource that uses anything under "Added" or "Fixed" below names `tlib_min
   its text in `get`, instead of stopping the resource.
 - A server whose game timer wrapped no longer refuses a player's requests until the clock catches
   up. `tlib.ratelimit` restarts the interval instead, and a refusal after the wrap is reported
-  again.
+  again. The same wrap no longer leaves a `tlib.access` gate repeating its last answer, a usable
+  item ignoring every later use, a vehicle's `tlib.audio3d` sounds muted, or the
+  `tlib.spatial` index frozen, each until the player reconnected or the vehicle emptied.
+- A vehicle pack whose config file has a mistake in its JSON no longer stops every pack after it
+  from loading. tLib names the file and carries on with the rest.
+- A data file that is not valid JSON is never written over. tLib used to read it as empty and
+  replace it on the next save, which deleted everything else in it. It now names the file, keeps
+  the change for the session, and saves normally again once the file is fixed and the resource
+  restarted. This covers `CreateDiscovery` and `CreateServerSettings`, and a vehicle pack's own
+  file when a config is saved, removed or exported into it.
+- `CreateServerSettings` saves reach the disk. On a server where one resource may not write into
+  another's folder its saves were refused and nothing said so. They now go through the owning
+  resource's own file bridge, `set`, `merge` and `save` return whether the file was written, and
+  a save that did not land is logged with the reason.
+- Restarting a resource that uses `CreateServerSettings` or `RegisterAdminEvent` no longer leaves
+  its old handlers running inside tLib. After a restart an admin's save was also applied by the
+  copy from before it, which wrote its older settings back over the file.
+- `tlib.platform.getNearbyPlayers` no longer raises whenever a player is connected, and
+  `getPlayerPed` and `getPlayerName` accept the string ids `GetPlayers()` returns.
+- A page left open on a live stream or a download behind the web hub no longer hangs when the
+  resource serving it restarts. The connection closes, so the page reconnects.
+- On the game port, the address an app is given for a visitor no longer includes the connection's
+  port, so an app that limits requests per address counts a visitor once and not once per
+  connection.
+- A server whose system clock is corrected backwards no longer drops a player's realtime frames
+  until the clock catches up.
+- A config save, removal or export sent with something that is not a model name is refused before
+  it is stored, so it can no longer leave every later save of that data file failing.
 - A `tlib_http_public_url` copied from the docs (`your-server-address`, `example.com`, the
   `203.0.113.x` documentation addresses) is no longer used as the panel's address. tLib quotes
   the value, says it is not usable, and detects your public IP instead.

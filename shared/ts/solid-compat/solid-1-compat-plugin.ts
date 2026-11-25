@@ -70,6 +70,12 @@ export interface Solid1CompatShimOptions {
    * output that no build, typecheck or unit test here can observe. See README.md.
    */
   ariaAttributeFix?: boolean;
+  /**
+   * Path substrings (e.g. `/src/components/ui/`) treated as vendor though under the consumer's
+   * own `src/`: shadcn.io copies Solid 1 source in. Must be tested BEFORE the throw below —
+   * widening only the vendor gate after it left the option inert, and no `tsc`/test can show it.
+   */
+  extraVendorDirs?: readonly string[];
 }
 
 /**
@@ -107,7 +113,7 @@ function assertWinsTheSpecifierRace(
 }
 
 export function solid1CompatShim(options: Solid1CompatShimOptions): CompatShimPlugin {
-  const { vendorPackages, ariaAttributeFix = false } = options;
+  const { vendorPackages, ariaAttributeFix = false, extraVendorDirs = [] } = options;
   if (vendorPackages.length === 0) {
     throw new Error(
       "[solid-1-compat-shim] `vendorPackages` is empty. The redirect gate matches on a " +
@@ -136,7 +142,8 @@ export function solid1CompatShim(options: Solid1CompatShimOptions): CompatShimPl
     : {};
   const shimFiles = new Set([...Object.values(shims), ...Object.values(alwaysShimmed)]);
   // Matches any file inside that package's tree, however deep.
-  const vendorDirs = vendorPackages.map((pkg) => `/node_modules/${pkg}/`);
+  const vendorDirs = [...vendorPackages.map((pkg) => `/node_modules/${pkg}/`), ...extraVendorDirs];
+  const isExtraVendor = (importer: string) => extraVendorDirs.some((dir) => importer.includes(dir));
 
   // Resolved against the CONSUMER's root, never `import.meta.url`, which is tLib
   // and still on Solid 1. `configResolved` rebinds both to `config.root`;
@@ -210,7 +217,11 @@ export function solid1CompatShim(options: Solid1CompatShimOptions): CompatShimPl
       // `solid-js`. Both are load-bearing; see README.md.
       const ourSrc = `${path.resolve(process.cwd(), "src").replaceAll("\\", "/")}/`;
       const normalizedImporter = (importer ?? "").replaceAll("\\", "/");
-      if (SOLID_1_ONLY_SPECIFIERS.has(source) && normalizedImporter.startsWith(ourSrc)) {
+      if (
+        SOLID_1_ONLY_SPECIFIERS.has(source) &&
+        normalizedImporter.startsWith(ourSrc) &&
+        !isExtraVendor(normalizedImporter)
+      ) {
         throw new Error(
           `[solid-1-compat-shim] "${source}" imported from "${importer}" (under our own src/). ` +
             `Solid 2 has no such specifier and the compat shim is vendor-only — src/ must import ` +

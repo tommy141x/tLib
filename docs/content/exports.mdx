@@ -716,6 +716,18 @@ the browser *after* the request already succeeded.
 time: `GetInvokingResource()` is `nil` during top-level execution, and without the name the
 file I/O targets tLib instead of you.
 
+`CreateServerSettings` writes your file from tLib's VM, so the sandbox rule in the next section
+applies to it: where the native write is refused, your server bundle has to call
+`registerWriteResourceFile()` from `tLib/shared/ts/fs/server.ts`. `set`, `merge` and `save`
+return whether the file was written, and a write that did not land is logged with the reason.
+
+<Callout type="warning">
+**A file that is not valid JSON is never written over**, by `CreateDiscovery` or
+`CreateServerSettings`. A hand edit that broke the JSON is repairable; the same file replaced
+by one setting is not. tLib names the file in the console, keeps the change in memory for the
+session, and saves normally again once the file is fixed and your resource restarted.
+</Callout>
+
 ---
 
 ## Exporting a config into another resource
