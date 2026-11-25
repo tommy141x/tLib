@@ -188,5 +188,34 @@ relay({}, nil)
 assert(resolveArgs.address == nil and resolveArgs.userAgent == nil,
     'a request with neither passes nil, never an empty claim')
 
+-- The peer's PORT is new on every connection, so an app bucketing by
+-- X-Forwarded-For would give each connection its own rate limit -- which is no
+-- rate limit at all. Only the header is normalised; the door's own router still
+-- sees the raw address.
+
+out = relay({}, '203.0.113.7:51234')
+xff = spellings(out, 'x-forwarded-for')
+assert(#xff == 1 and xff[1] == '203.0.113.7',
+    'a host:port peer address is forwarded as the host alone, got: ' .. tostring(xff[1]))
+assert(resolveArgs.address == '203.0.113.7:51234',
+    'while the raw address, port included, still reaches ResolveHttpIngress')
+
+out = relay({}, '[2001:db8::1]:443')
+assert(spellings(out, 'x-forwarded-for')[1] == '2001:db8::1',
+    'a bracketed IPv6 peer with a port is unwrapped to the address')
+
+out = relay({}, '[2001:db8::1]')
+assert(spellings(out, 'x-forwarded-for')[1] == '2001:db8::1',
+    'a bracketed IPv6 peer with no port is unwrapped too')
+
+out = relay({}, '2001:db8::1')
+assert(spellings(out, 'x-forwarded-for')[1] == '2001:db8::1',
+    'and a bare IPv6 address is not truncated at its last colon')
+
+local firstConnection = spellings(relay({}, '203.0.113.7:51234'), 'x-forwarded-for')[1]
+local secondConnection = spellings(relay({}, '203.0.113.7:60001'), 'x-forwarded-for')[1]
+assert(firstConnection == secondConnection,
+    'two connections from one host share one header value, so they share one bucket')
+
 print = realPrint
 print('PASS http-ingress-forwarded')

@@ -5,7 +5,9 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import * as http from "node:http";
+import * as net from "node:net";
 import type { AddressInfo } from "node:net";
+import { type Duplex, PassThrough } from "node:stream";
 import { WebSocketServer } from "ws";
 import type { BoundHttpConfig } from "./config";
 import { clear, register } from "./registry";
@@ -52,6 +54,13 @@ function buildUpstream(): http.Server {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
       res.write("event: hello\ndata: 1\n\n");
       return; // deliberately left open
+    }
+    if (at("/dies")) {
+      // Headers and a first event, then the process behind the stream goes away.
+      res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+      res.write("event: hello\ndata: 1\n\n");
+      setTimeout(() => req.socket.destroy(), 50);
+      return;
     }
     if (at("/reset")) {
       req.socket.destroy();
@@ -481,6 +490,25 @@ describe("streaming", () => {
     expect(chunk).toContain("event: hello");
     await reader.cancel();
   });
+
+  test("an upstream that dies mid-body ends the caller's response instead of hanging it", async () => {
+    // `pipe` ends its destination only on a clean end. A resource restarting under an open
+    // SSE stream closes without one, and the caller is then left holding a response nobody
+    // is writing to: an EventSource never reconnects, because nothing told it the stream ended.
+    mountProxy({ stripPrefix: true });
+    const res = await get("/app/dies");
+    const reader = res.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain("event: hello");
+
+    const next = await Promise.race([
+      reader.read().then(
+        (r) => (r.done ? "ENDED" : "DATA"),
+        () => "ERRORED"
+      ),
+      Bun.sleep(1500).then(() => "TIMEOUT"),
+    ]);
+    expect(["ENDED", "ERRORED"]).toContain(next);
+  });
 });
 
 describe("websocket upgrade", () => {
@@ -530,6 +558,70 @@ describe("websocket upgrade", () => {
   test("refuses an upgrade on a mount that did not opt into websockets", async () => {
     mountProxy({ websocket: false });
     expect(await wsEcho("/app/ws")).toBe("ERROR");
+  });
+
+  // The two cases below hand the router a socket directly. The windows they cover are a few
+  // hundred microseconds wide on a real connection, which is exactly why nothing saw them.
+  const upgrade = (path: string): PassThrough => {
+    const socket = new PassThrough();
+    const req = {
+      url: path,
+      method: "GET",
+      headers: { upgrade: "websocket", host: "hub.example.com" },
+      socket: { remoteAddress: "127.0.0.1" },
+    } as unknown as http.IncomingMessage;
+    (
+      router as unknown as {
+        onUpgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer): void;
+      }
+    ).onUpgrade(req, socket, Buffer.alloc(0));
+    return socket;
+  };
+
+  test("a caller that resets under a refused upgrade is not an unhandled error", () => {
+    // Node's HTTP server removes its own 'error' listener before emitting 'upgrade', and an
+    // EventEmitter with none THROWS on 'error' -- out of the socket's own I/O callback.
+    const socket = upgrade("/nothing-is-mounted-here");
+    expect(() => socket.emit("error", new Error("read ECONNRESET"))).not.toThrow();
+    expect(socket.destroyed).toBe(true);
+  });
+
+  test("a caller that leaves mid-handshake takes the upstream attempt with it, quietly", async () => {
+    // An upstream that accepts the connection and never answers the upgrade.
+    let held: net.Socket | null = null;
+    let released = false;
+    const holder = net.createServer((connection) => {
+      held = connection;
+      // Drained, or the unread handshake sits in the buffer and this side never reaches
+      // the end of the stream to notice the other one has gone.
+      connection.resume();
+      connection.on("close", () => {
+        released = true;
+      });
+      connection.on("error", () => {});
+    });
+    await new Promise<void>((r) => holder.listen(0, "127.0.0.1", r));
+    try {
+      mountProxy({ upstream: { host: "127.0.0.1", port: (holder.address() as AddressInfo).port } });
+      const socket = upgrade("/app/ws");
+      for (let i = 0; i < 50 && held === null; i++) await Bun.sleep(10);
+      expect(held).not.toBeNull();
+
+      socket.destroy();
+      for (let i = 0; i < 50 && !released; i++) await Bun.sleep(10);
+
+      // Well inside upstreamTimeoutMs (2000): the attempt ended because the caller did,
+      // not because the timeout eventually noticed.
+      expect(released).toBe(true);
+      // And nobody is told the upstream failed -- it did not.
+      await Bun.sleep(50);
+      expect(routerLogs).toEqual([]);
+    } finally {
+      // Not awaited: `close` calls back only once every connection has gone, so a failed
+      // assertion above would be reported as this test timing out instead.
+      (held as net.Socket | null)?.destroy();
+      holder.close();
+    }
   });
 });
 

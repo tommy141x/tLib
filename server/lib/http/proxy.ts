@@ -76,6 +76,15 @@ export function proxyRequest(
 
     res.writeHead(upRes.statusCode ?? 502, outHeaders);
     upRes.pipe(res);
+
+    // `pipe` ends `res` only on a clean end, and once a response has arrived the request
+    // no longer reports the socket closing. So an upstream that dies mid-body -- its
+    // resource restarting under an open SSE stream or a download -- left the caller
+    // holding a response nobody would ever finish. An EventSource in that state never
+    // reconnects: nothing told it the stream was over.
+    upRes.on("close", () => {
+      if (!upRes.complete && !res.writableEnded) res.destroy();
+    });
   });
 
   upstream.on("error", (err: NodeJS.ErrnoException) => {
@@ -135,8 +144,20 @@ export function proxyUpgrade(
     upstream.destroy(new Error("upstream upgrade timeout"));
   });
 
+  // A caller that leaves before the upstream has answered. Without this the handshake ran
+  // on to its timeout for nobody, and its failure was then logged as the upstream's fault.
+  let callerGone = false;
+  socket.on("close", () => {
+    callerGone = true;
+    upstream.destroy();
+  });
+
   upstream.on("upgrade", (upRes, upSocket, upHead) => {
     upstream.setTimeout(0);
+    if (callerGone) {
+      upSocket.destroy();
+      return;
+    }
 
     const statusLine = `HTTP/1.1 ${upRes.statusCode} ${upRes.statusMessage}\r\n`;
     const headerLines = Object.entries(sanitizeUpgradeHeaders(upRes.headers))
@@ -153,6 +174,10 @@ export function proxyUpgrade(
     };
     socket.on("error", bail);
     upSocket.on("error", bail);
+    // `pipe` carries an orderly end across and nothing else: a side that is destroyed
+    // closes without one, and the other half of the tunnel would stay open behind it.
+    socket.on("close", bail);
+    upSocket.on("close", bail);
 
     // Both are net.Sockets at runtime even though the upgrade signature types
     // the client side as a bare Duplex. Nagle batching adds latency to the small
@@ -173,6 +198,7 @@ export function proxyUpgrade(
   });
 
   upstream.on("error", (err: NodeJS.ErrnoException) => {
+    if (callerGone) return;
     log(
       "warn",
       `${mount.mount} upgrade -> ${mount.upstream.port} failed: ${err.code ?? err.message}`

@@ -221,6 +221,11 @@ export class Router {
   }
 
   private onUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    // The HTTP server removes its own 'error' listener before handing an upgrade over, so
+    // from here the socket has none until somebody downstream adds one. A caller that
+    // resets under one of the refusals below was an unhandled 'error' event.
+    socket.on("error", () => socket.destroy());
+
     const raw = req.url ?? "/";
     const qIndex = raw.indexOf("?");
     const search = qIndex === -1 ? "" : raw.slice(qIndex);

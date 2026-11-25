@@ -81,6 +81,17 @@ local DROP_RESPONSE = {
     ['keep-alive'] = true,
 }
 
+--- The peer's HOST. `req.address` may arrive as `host:port` -- `isVisitor` strips one from
+--- the same input -- and a port left in here gives every connection its own X-Forwarded-For
+--- rate-limit bucket. A bare IPv6 address is left alone.
+local function peerHost(address)
+    if type(address) ~= 'string' then return nil end
+    local host = address:match('^%[([^%]]+)%]:%d+$') or address:match('^%[([^%]]+)%]$')
+        or address:match('^([^:]+):%d+$') or address
+    if host == '' then return nil end
+    return host
+end
+
 --- The listener's proxy forwarding context (lib/http/headers.ts buildForwardHeaders), with one
 --- difference that is the whole point: `X-Forwarded-Prefix` carries this door's base path too, so
 --- an app building its `<base href>` or links from it lands inside `/tLib/...`, not at the root.
@@ -94,7 +105,8 @@ local function forwardHeaders(headers, address, prefix)
     end
     -- Every relayed request reaches the app from 127.0.0.1; this is the only
     -- way it can rate-limit or log by the real peer.
-    if address and address ~= '' then
+    address = peerHost(address)
+    if address then
         out['X-Forwarded-For'] = address
         out['X-Forwarded-Proto'] = 'http'
     end
