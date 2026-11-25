@@ -1,3 +1,13 @@
 # Shell hooks must be LF. A CRLF checkout (Windows, core.autocrlf) leaves a carriage return on
 # every line, and the secret gate's own control refuses the file as not the canonical bytes.
 .githooks/* text eol=lf
+
+# Every consumer's Stream Deck stamp hashes these three files as bytes on disk, because the
+# launcher is an input to the packed plugin exactly as the plugin's own src/ is. With
+# core.autocrlf=true and no attribute, a working tree holding LF and one holding CRLF both read
+# as clean to git, so the hash depended on which form a given checkout happened to produce: this
+# tree carries LF while `git worktree add` of the same commit produced CRLF, 249 carriage returns
+# apart in main.rs alone. That is what made tRadio's and tLS's 2026-11-14 stamps read STALE
+# against sources no commit had touched. The stamps were right when written; the bytes under them
+# were never pinned.
+shared/rust/deck-launcher/** text=auto eol=lf
