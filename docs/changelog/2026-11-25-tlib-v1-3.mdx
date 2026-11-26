@@ -1,0 +1,33 @@
+---
+product: tlib
+version: "1.3"
+date: "2026-11-25"
+---
+
+## Fixes
+
+- **A server up for about 25 days quietly stopped honouring permissions.** A permission could keep
+  being granted after it was revoked. The same fault made a usable item read every later use as a
+  duplicate and left a vehicle's tLib sounds muted until it emptied, each until the server was
+  restarted.
+- **A config or data file that will not parse is now left alone and named in the console.** tLib
+  used to read it as empty and write a fresh copy over it on the next save, taking everything else
+  in the file with it.
+- **Settings a resource saves through tLib now reach the disk.** They could be refused with nothing
+  said, so a change looked saved and was gone after a restart.
+- **Restarting a resource no longer leaves its old admin handlers running in tLib.** An admin's
+  save was applied twice, and the older copy wrote its stale settings back over the file.
+- **An older tLib is refused with one boxed message** naming the version the resource needs, the
+  version and build you have, and where to get it. It used to abort quietly and leave the resource
+  running without tLib.
+- `tlib_version` prints one paste-safe line for a ticket: tLib's version, build and commit, and a
+  row per resource that needs tLib with whether its minimum is met. No IP address is in it.
+- A menu row a resource pins off stays off instead of taking the player's own value.
+- Looking up nearby players no longer errors on any server with somebody connected.
+- Console lines are no longer cut short at the first empty value.
+- One malformed server default no longer discards every other default with it.
+
+## For operators
+
+- Nothing to migrate. If you set both `tlib_http_port` and `tlib_http_ingress false`, the console
+  now warns which of the two wins.
