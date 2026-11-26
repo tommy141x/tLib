@@ -1,0 +1,25 @@
+# The launcher's toolchain is part of the release contract, not a local
+# preference. tRadio's and tLS's notices gate asserts that the rustc commit
+# stamped into the PUBLISHED plugin.exe equals the RUST_STD pin in
+# scripts/third-party-notices.ts, because the vendored
+# assets/third-party/rust-std.LICENSE-MIT.txt is that version's licence and
+# shipping a notice naming a version you did not build with is the thing the
+# gate exists to prevent.
+#
+# Without this file the build uses whatever rustup's default happens to be.
+# Measured 2026-11-25: a pack run with the toolchain named explicitly produced
+# a correct 1.91.1 artifact, and a later plain `bun run build` silently rebuilt
+# it with the 1.100.0 default and failed the notices gate with a commit
+# mismatch — after deck:stale had already reported CURRENT.
+#
+# Moving off 1.91.1 means re-vendoring that tag's LICENSE-MIT and updating
+# RUST_STD.version and .commit in the same change. Bumping one alone is what
+# the gate refuses.
+[toolchain]
+channel = "1.91.1"
+# deck-pack builds `--target x86_64-pc-windows-msvc`, and a bare channel can
+# resolve to the gnu host, which does not carry that target: measured here as
+# E0463 "can't find crate for `std`" on the first run after this file was added.
+# Declared so rustup installs it rather than naming a host triple in `channel`,
+# which would make the file wrong on any other machine.
+targets = ["x86_64-pc-windows-msvc"]

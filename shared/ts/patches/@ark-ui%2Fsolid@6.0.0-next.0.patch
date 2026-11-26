@@ -15,11 +15,615 @@ index 95ea91b6866e7fd939b7e96bb20e92090830a76a..965eb9162457ef06fd4c9648cbb32ab2
    return createMemo(() => ({
      ...api(),
      unmounted: !api().visible && !wasVisible() && renderStrategyProps.lazyMount || renderStrategyProps.unmountOnExit && !api().visible && wasVisible()
+diff --git a/dist/chunk/4XXMGU75.jsx b/dist/chunk/4XXMGU75.jsx
+index ac1afb320e8f6e04eaee98a52b7f359f68458395..b9de9277891459ad46b9d6215995821939742fcb 100644
+--- a/dist/chunk/4XXMGU75.jsx
++++ b/dist/chunk/4XXMGU75.jsx
+@@ -165,7 +165,7 @@ var ColorPickerChannelSliderValueText = (props) => {
+ 
+ // src/components/color-picker/color-picker-content.tsx
+ import { mergeProps as mergeProps10 } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ var ColorPickerContent = (props) => {
+   const api = useColorPickerContext();
+   const presenceApi = usePresenceContext();
+@@ -174,9 +174,8 @@ var ColorPickerContent = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />));
++  return <Show when={!presenceApi().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/color-picker/color-picker-context.tsx
+@@ -241,9 +240,8 @@ var ColorPickerPositioner = (props) => {
+   const api = useColorPickerContext();
+   const presenceApi = usePresenceContext();
+   const mergedProps = mergeProps17(() => api().getPositionerProps(), props);
+-  return <Show2 when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} />
+-    </Show2>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} />));
++  return <Show2 when={!presenceApi().unmounted}>{__arkNode2}</Show2>;
+ };
+ 
+ // src/components/color-picker/color-picker-root.tsx
+diff --git a/dist/chunk/5IMMWRCB.jsx b/dist/chunk/5IMMWRCB.jsx
+index d4566dac1bf2ac41903a7eeb77017ebfd057cd44..79a17277644e6be8374f9986010b22615598a2db 100644
+--- a/dist/chunk/5IMMWRCB.jsx
++++ b/dist/chunk/5IMMWRCB.jsx
+@@ -218,7 +218,12 @@ var useCheckbox = (ownProps = {}) => {
+     required: field?.().required,
+     dir: locale().dir,
+     getRootNode: environment().getRootNode,
+-    ...props()
++    ...props(),
++    // PATCHED (web-next): an `id` or `ids` passed as undefined keeps Ark's own (the generated id,
++    // the Field's label/control ids), as shadcn.io's checkbox expects: it forwards both whether set
++    // or not, and an explicit undefined otherwise gives every box one input id and unlinks its label.
++    id: props().id ?? id,
++    ids: props().ids ?? { label: field?.().ids.label, hiddenInput: field?.().ids.control }
+   }));
+   const service = useMachine(checkbox.machine, machineProps);
+   return createMemo3(() => checkbox.connect(service, normalizeProps));
+diff --git a/dist/chunk/FXPQSRDJ.jsx b/dist/chunk/FXPQSRDJ.jsx
+index 2ff39d4c8c5f840e246f7c1bc1a93f22c0dd4274..ac86351e4b3d4a0592ebd1c06c38a04bcc242d9d 100644
+--- a/dist/chunk/FXPQSRDJ.jsx
++++ b/dist/chunk/FXPQSRDJ.jsx
+@@ -55,7 +55,7 @@ var SelectClearTrigger = (props) => {
+ 
+ // src/components/select/select-content.tsx
+ import { mergeProps as mergeProps2 } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ var SelectContent = (props) => {
+   const select2 = useSelectContext();
+   const presenceApi = usePresenceContext();
+@@ -64,9 +64,8 @@ var SelectContent = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={select2().getContentState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={select2().getContentState()} />));
++  return <Show when={!presenceApi().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/select/select-context.tsx
+@@ -223,9 +222,8 @@ var SelectPositioner = (props) => {
+   const select2 = useSelectContext();
+   const presenceApi = usePresenceContext();
+   const mergedProps = mergeProps14(() => select2().getPositionerProps(), props);
+-  return <Show3 when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} />
+-    </Show3>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} />));
++  return <Show3 when={!presenceApi().unmounted}>{__arkNode2}</Show3>;
+ };
+ 
+ // src/components/select/select-root.tsx
+diff --git a/dist/chunk/GEET262Z.jsx b/dist/chunk/GEET262Z.jsx
+index 69f4a8454c1420763796e69db88c6ac96fe47339..1ed4d3201ba5fc4f97520a9629975582edd9829e 100644
+--- a/dist/chunk/GEET262Z.jsx
++++ b/dist/chunk/GEET262Z.jsx
+@@ -32,7 +32,7 @@ __export(swap_exports, {
+ 
+ // src/components/swap/swap-indicator.tsx
+ import { mergeProps } from "@zag-js/solid";
+-import { Show, splitProps } from "solid-js";
++import { Show, splitProps, untrack } from "solid-js";
+ 
+ // src/components/swap/use-swap-context.ts
+ var [SwapProvider, useSwapContext] = createContext({
+@@ -49,9 +49,8 @@ var SwapIndicator = (props) => {
+     return p();
+   };
+   const mergedProps = mergeProps(() => swap().getIndicatorProps({ type: localProps.type }), restProps);
+-  return <Show when={!presence().unmounted}>
+-      <ark.span {...mergedProps} ref={composeRefs(presence().ref, localProps.ref)} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.span {...mergedProps} ref={composeRefs(presence().ref, localProps.ref)} />));
++  return <Show when={!presence().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/swap/swap-root.tsx
+diff --git a/dist/chunk/HV5ZR6WK.jsx b/dist/chunk/HV5ZR6WK.jsx
+index fb77eab0d048c88fe056ce13f07872920345f662..52ec68ba631d76fe711cfc9c2bc8d93cfc590a21 100644
+--- a/dist/chunk/HV5ZR6WK.jsx
++++ b/dist/chunk/HV5ZR6WK.jsx
+@@ -57,7 +57,7 @@ var FloatingPanelCloseTrigger = (props) => {
+ 
+ // src/components/floating-panel/floating-panel-content.tsx
+ import { mergeProps as mergeProps3 } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ var FloatingPanelContent = (props) => {
+   const floatingPanel2 = useFloatingPanelContext();
+   const presence = usePresenceContext();
+@@ -66,13 +66,12 @@ var FloatingPanelContent = (props) => {
+     () => presence().presenceProps,
+     props
+   );
+-  return <Show when={!presence().unmounted}>
+-      <ark.div
++  const __arkNode1 = untrack(() => (<ark.div
+     {...mergedProps}
+     ref={composeRefs(presence().ref, props.ref)}
+     state={floatingPanel2().getContentState()}
+-  />
+-    </Show>;
++  />));
++  return <Show when={!presence().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/floating-panel/floating-panel-context.tsx
+@@ -101,9 +100,8 @@ var FloatingPanelPositioner = (props) => {
+   const floatingPanel2 = useFloatingPanelContext();
+   const mergedProps = mergeProps6(() => floatingPanel2().getPositionerProps(), props);
+   const presence = usePresenceContext();
+-  return <Show2 when={!presence().unmounted}>
+-      <ark.div {...mergedProps} />
+-    </Show2>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} />));
++  return <Show2 when={!presence().unmounted}>{__arkNode2}</Show2>;
+ };
+ 
+ // src/components/floating-panel/floating-panel-resize-trigger.tsx
+diff --git a/dist/chunk/I54B53VI.jsx b/dist/chunk/I54B53VI.jsx
+index 22d0fecb3209632f89e37ae0f821081db401ebe2..47c4f62438408ce12778c178b6fd0b1e49a55f4b 100644
+--- a/dist/chunk/I54B53VI.jsx
++++ b/dist/chunk/I54B53VI.jsx
+@@ -88,7 +88,7 @@ var TourActions = (props) => {
+ 
+ // src/components/tour/tour-arrow.tsx
+ import { mergeProps as mergeProps2 } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ var TourArrow = (props) => {
+   const tour2 = useTourContext();
+   const mergedProps = mergeProps2(() => tour2().getArrowProps(), props);
+@@ -117,14 +117,13 @@ var TourBackdrop = (props) => {
+     () => presence().presenceProps,
+     props
+   );
+-  return <Show2 when={!presence().unmounted}>
+-      <ark.div
++  const __arkNode1 = untrack(() => (<ark.div
+     {...mergedProps}
+     hidden={mergedProps.hidden || !tour2().step?.backdrop}
+     ref={composeRefs(presence().ref, props.ref)}
+     state={tour2().getBackdropState()}
+-  />
+-    </Show2>;
++  />));
++  return <Show2 when={!presence().unmounted}>{__arkNode1}</Show2>;
+ };
+ 
+ // src/components/tour/tour-close-trigger.tsx
+@@ -146,9 +145,8 @@ var TourContent = (props) => {
+     () => presence().presenceProps,
+     props
+   );
+-  return <Show3 when={!presence().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presence().ref, props.ref)} state={tour2().getContentState()} />
+-    </Show3>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presence().ref, props.ref)} state={tour2().getContentState()} />));
++  return <Show3 when={!presence().unmounted}>{__arkNode2}</Show3>;
+ };
+ 
+ // src/components/tour/tour-context.tsx
+@@ -176,9 +174,8 @@ var TourPositioner = (props) => {
+   const tour2 = useTourContext();
+   const presence = usePresenceContext();
+   const mergedProps = mergeProps9(() => tour2().getPositionerProps(), props);
+-  return <Show4 when={!presence().unmounted}>
+-      <ark.div {...mergedProps} state={tour2().getPositionerState()} />
+-    </Show4>;
++  const __arkNode3 = untrack(() => (<ark.div {...mergedProps} state={tour2().getPositionerState()} />));
++  return <Show4 when={!presence().unmounted}>{__arkNode3}</Show4>;
+ };
+ 
+ // src/components/tour/tour-progress-text.tsx
+@@ -214,14 +211,13 @@ var TourSpotlight = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show5 when={!presenceApi().unmounted}>
+-      <ark.div
++  const __arkNode4 = untrack(() => (<ark.div
+     {...mergedProps}
+     hidden={mergedProps.hidden || !tour2().step?.target?.()}
+     ref={composeRefs(presenceApi().ref, props.ref)}
+     state={tour2().getSpotlightState()}
+-  />
+-    </Show5>;
++  />));
++  return <Show5 when={!presenceApi().unmounted}>{__arkNode4}</Show5>;
+ };
+ 
+ // src/components/tour/tour-title.tsx
+diff --git a/dist/chunk/JO4FNWJM.jsx b/dist/chunk/JO4FNWJM.jsx
+index e375565024b81a599d6168347f36bcc1e80d7190..b3c0c84671ffe8bb605d4b25304b6077309798f0 100644
+--- a/dist/chunk/JO4FNWJM.jsx
++++ b/dist/chunk/JO4FNWJM.jsx
+@@ -55,7 +55,7 @@ var DatePickerClearTrigger = (props) => {
+ 
+ // src/components/date-picker/date-picker-content.tsx
+ import { mergeProps as mergeProps2 } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ var DatePickerContent = (props) => {
+   const api = useDatePickerContext();
+   const presenceApi = usePresenceContext();
+@@ -64,9 +64,8 @@ var DatePickerContent = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />));
++  return <Show when={!presenceApi().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/date-picker/date-picker-context.tsx
+@@ -136,9 +135,8 @@ var DatePickerPositioner = (props) => {
+   const api = useDatePickerContext();
+   const presenceApi = usePresenceContext();
+   const mergedProps = mergeProps8(() => api().getPositionerProps(), props);
+-  return <Show2 when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} />
+-    </Show2>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} />));
++  return <Show2 when={!presenceApi().unmounted}>{__arkNode2}</Show2>;
+ };
+ 
+ // src/components/date-picker/date-picker-preset-trigger.tsx
+diff --git a/dist/chunk/KGQ25DXZ.js b/dist/chunk/KGQ25DXZ.js
+index 949c6b9b10dedf2135b27c9915a8721d3b2eabc0..b390d25f179d23686bf84f7c9026b4e99d2850c1 100644
+--- a/dist/chunk/KGQ25DXZ.js
++++ b/dist/chunk/KGQ25DXZ.js
+@@ -182,7 +182,12 @@ var useCheckbox = (ownProps = {}) => {
+     required: field?.().required,
+     dir: locale().dir,
+     getRootNode: environment().getRootNode,
+-    ...props()
++    ...props(),
++    // PATCHED (web-next): an `id` or `ids` passed as undefined keeps Ark's own (the generated id,
++    // the Field's label/control ids), as shadcn.io's checkbox expects: it forwards both whether set
++    // or not, and an explicit undefined otherwise gives every box one input id and unlinks its label.
++    id: props().id ?? id,
++    ids: props().ids ?? { label: field?.().ids.label, hiddenInput: field?.().ids.control }
+   }));
+   const service = useMachine(checkbox.machine, machineProps);
+   return createMemo(() => checkbox.connect(service, normalizeProps));
+diff --git a/dist/chunk/LGTIHFTJ.jsx b/dist/chunk/LGTIHFTJ.jsx
+index 936709034afc78754d447b5914c2c667684de30d..90a2ac4bccff71fe556264484666dae6b95373d6 100644
+--- a/dist/chunk/LGTIHFTJ.jsx
++++ b/dist/chunk/LGTIHFTJ.jsx
+@@ -38,7 +38,7 @@ import {
+ 
+ // src/components/drawer/drawer-backdrop.tsx
+ import { mergeProps } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ 
+ // src/components/drawer/use-drawer-context.ts
+ var [DrawerProvider, useDrawerContext] = createContext({
+@@ -56,9 +56,8 @@ var DrawerBackdrop = (props) => {
+     () => presence().presenceProps,
+     props
+   );
+-  return <Show when={!presence().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presence().ref, props.ref)} state={drawer3().getBackdropState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presence().ref, props.ref)} state={drawer3().getBackdropState()} />));
++  return <Show when={!presence().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/drawer/drawer-close-trigger.tsx
+@@ -81,9 +80,8 @@ var DrawerContent = (props) => {
+     () => presence().presenceProps,
+     localProps
+   );
+-  return <Show2 when={!presence().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presence().ref, localProps.ref)} state={drawer3().getContentState()} />
+-    </Show2>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presence().ref, localProps.ref)} state={drawer3().getContentState()} />));
++  return <Show2 when={!presence().unmounted}>{__arkNode2}</Show2>;
+ };
+ 
+ // src/components/drawer/drawer-description.tsx
+@@ -104,9 +102,8 @@ var DrawerPositioner = (props) => {
+   const drawer3 = useDrawerContext();
+   const presence = usePresenceContext();
+   const mergedProps = mergeProps5(() => drawer3().getPositionerProps(), props);
+-  return <Show3 when={!presence().unmounted}>
+-      <ark.div {...mergedProps} state={drawer3().getPositionerState()} />
+-    </Show3>;
++  const __arkNode3 = untrack(() => (<ark.div {...mergedProps} state={drawer3().getPositionerState()} />));
++  return <Show3 when={!presence().unmounted}>{__arkNode3}</Show3>;
+ };
+ 
+ // src/components/drawer/drawer-grabber.tsx
+diff --git a/dist/chunk/LYGG2VDX.jsx b/dist/chunk/LYGG2VDX.jsx
+index 82c9a68a01fef3058dbefe18358ccd82742ee73b..01ff3457df01b19b14476023d9543d00b8f96f59 100644
+--- a/dist/chunk/LYGG2VDX.jsx
++++ b/dist/chunk/LYGG2VDX.jsx
+@@ -57,7 +57,7 @@ var HoverCardArrowTip = (props) => {
+ 
+ // src/components/hover-card/hover-card-content.tsx
+ import { mergeProps as mergeProps3 } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ var HoverCardContent = (props) => {
+   const api = useHoverCardContext();
+   const presenceApi = usePresenceContext();
+@@ -66,9 +66,8 @@ var HoverCardContent = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />));
++  return <Show when={!presenceApi().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/hover-card/hover-card-context.tsx
+@@ -81,9 +80,8 @@ var HoverCardPositioner = (props) => {
+   const api = useHoverCardContext();
+   const presenceApi = usePresenceContext();
+   const mergedProps = mergeProps4(() => api().getPositionerProps(), props);
+-  return <Show2 when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} state={api().getPositionerState()} />
+-    </Show2>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} state={api().getPositionerState()} />));
++  return <Show2 when={!presenceApi().unmounted}>{__arkNode2}</Show2>;
+ };
+ 
+ // src/components/hover-card/hover-card-root.tsx
+diff --git a/dist/chunk/M5VWDJPD.jsx b/dist/chunk/M5VWDJPD.jsx
+index d1489a2fb7201ffa75cc0c5da14722c77b8dbf52..43d542865ed0743b81c99e0457b696e46d2c7d15 100644
+--- a/dist/chunk/M5VWDJPD.jsx
++++ b/dist/chunk/M5VWDJPD.jsx
+@@ -36,7 +36,7 @@ import {
+ 
+ // src/components/tabs/tab-content.tsx
+ import { mergeProps } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ 
+ // src/components/tabs/use-tabs-context.ts
+ var [TabsProvider, useTabsContext] = createContext({
+@@ -61,13 +61,12 @@ var TabContent = (props) => {
+     localProps
+   );
+   return <PresenceProvider value={presenceApi}>
+-      <Show when={!presenceApi().unmounted}>
+-        <ark.div
++      {(() => { const __arkNode1 = untrack(() => (<ark.div
+     {...mergedProps}
+     ref={composeRefs(presenceApi().ref, props.ref)}
+     state={api().getContentState(contentProps)}
+-  />
+-      </Show>
++  />));
++        return <Show when={!presenceApi().unmounted}>{__arkNode1}</Show>; })()}
+     </PresenceProvider>;
+ };
+ 
+diff --git a/dist/chunk/MBVZPYOJ.jsx b/dist/chunk/MBVZPYOJ.jsx
+index d25e195826b2976370ff9dd02aa48893f5da2615..dd6d4877fe7a252af6020f9efe3fd5eb4900f503 100644
+--- a/dist/chunk/MBVZPYOJ.jsx
++++ b/dist/chunk/MBVZPYOJ.jsx
+@@ -57,7 +57,7 @@ var TooltipArrowTip = (props) => {
+ 
+ // src/components/tooltip/tooltip-content.tsx
+ import { mergeProps as mergeProps3 } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ var TooltipContent = (props) => {
+   const api = useTooltipContext();
+   const presenceApi = usePresenceContext();
+@@ -66,9 +66,8 @@ var TooltipContent = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />));
++  return <Show when={!presenceApi().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/tooltip/tooltip-context.tsx
+@@ -81,9 +80,8 @@ var TooltipPositioner = (props) => {
+   const api = useTooltipContext();
+   const presenceApi = usePresenceContext();
+   const mergedProps = mergeProps4(() => api().getPositionerProps(), props);
+-  return <Show2 when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} />
+-    </Show2>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} />));
++  return <Show2 when={!presenceApi().unmounted}>{__arkNode2}</Show2>;
+ };
+ 
+ // src/components/tooltip/tooltip-root.tsx
+diff --git a/dist/chunk/OWJ5OGMB.jsx b/dist/chunk/OWJ5OGMB.jsx
+index 32e7a7eec9c2f3bd743d3f2703b1c8a785fab8d6..cd260ee388d6bafcfc9035603d934bb70e004c03 100644
+--- a/dist/chunk/OWJ5OGMB.jsx
++++ b/dist/chunk/OWJ5OGMB.jsx
+@@ -16,7 +16,7 @@ import {
+ 
+ // src/components/presence/presence.tsx
+ import { mergeProps } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ 
+ // src/components/presence/split-presence-props.ts
+ var splitPresenceProps = (props) => createSplitProps()(props, [
+@@ -34,9 +34,10 @@ var Presence = (props) => {
+   const [presenceProps, localProps] = splitPresenceProps(props);
+   const api = usePresence(presenceProps);
+   const mergedProps = mergeProps(() => api().presenceProps, localProps);
+-  return <Show when={!api().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(api().ref, props.ref)} data-presence-root="" />
+-    </Show>;
++  // PATCHED: build the node ONCE, outside Show's tracked compute. See
++  // patches/@ark-ui%2Fsolid@6.0.0-next.0.patch for the measurement.
++  const node = untrack(() => <ark.div {...mergedProps} ref={composeRefs(api().ref, props.ref)} data-presence-root="" />);
++  return <Show when={!api().unmounted}>{node}</Show>;
+ };
+ 
+ // src/components/presence/use-presence-context.ts
+diff --git a/dist/chunk/R5KTF722.jsx b/dist/chunk/R5KTF722.jsx
+index dcdc00ad4d24dd87aabb5534b8ca70f1a7d6b70f..3cc34c58afa014c3f03b2130a47071e831c26a28 100644
+--- a/dist/chunk/R5KTF722.jsx
++++ b/dist/chunk/R5KTF722.jsx
+@@ -61,7 +61,7 @@ var MenuArrowTip = (props) => {
+ 
+ // src/components/menu/menu-checkbox-item.tsx
+ import { mergeProps as mergeProps3 } from "@zag-js/solid";
+-import { createMemo } from "solid-js";
++import { createMemo, untrack } from "solid-js";
+ 
+ // src/components/menu/use-menu-item-context.ts
+ var [MenuItemProvider, useMenuItemContext] = createContext({
+@@ -109,13 +109,12 @@ var MenuContent = (props) => {
+     () => presenceContext().presenceProps,
+     props
+   );
+-  return <Show when={!presenceContext().unmounted}>
+-      <ark.div
++  const __arkNode1 = untrack(() => (<ark.div
+     {...mergedProps}
+     ref={composeRefs(presenceContext().ref, props.ref)}
+     state={context().getContentState()}
+-  />
+-    </Show>;
++  />));
++  return <Show when={!presenceContext().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/menu/menu-context.tsx
+@@ -220,9 +219,8 @@ var MenuPositioner = (props) => {
+   const context = useMenuContext();
+   const presence = usePresenceContext();
+   const mergedProps = mergeProps12(() => context().getPositionerProps(), props);
+-  return <Show2 when={!presence().unmounted}>
+-      <ark.div {...mergedProps} state={context().getPositionerState()} />
+-    </Show2>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} state={context().getPositionerState()} />));
++  return <Show2 when={!presence().unmounted}>{__arkNode2}</Show2>;
+ };
+ 
+ // src/components/menu/menu-radio-item.tsx
+diff --git a/dist/chunk/WPC2M2U3.jsx b/dist/chunk/WPC2M2U3.jsx
+index 488ee1266fe03a632b5ee87cb31c5d4e3f446117..e8285ab91878c14e4deb5f12c16ed57dfd0821db 100644
+--- a/dist/chunk/WPC2M2U3.jsx
++++ b/dist/chunk/WPC2M2U3.jsx
+@@ -55,7 +55,7 @@ var ComboboxClearTrigger = (props) => {
+ 
+ // src/components/combobox/combobox-content.tsx
+ import { mergeProps as mergeProps2 } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ var ComboboxContent = (props) => {
+   const api = useComboboxContext();
+   const presenceApi = usePresenceContext();
+@@ -64,9 +64,8 @@ var ComboboxContent = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />));
++  return <Show when={!presenceApi().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/combobox/combobox-empty.tsx
+@@ -204,9 +203,8 @@ var ComboboxPositioner = (props) => {
+   const api = useComboboxContext();
+   const presenceApi = usePresenceContext();
+   const mergedProps = mergeProps12(() => api().getPositionerProps(), props);
+-  return <Show3 when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} />
+-    </Show3>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} />));
++  return <Show3 when={!presenceApi().unmounted}>{__arkNode2}</Show3>;
+ };
+ 
+ // src/components/combobox/combobox-root.tsx
+diff --git a/dist/chunk/XK72FIHD.jsx b/dist/chunk/XK72FIHD.jsx
+index 631f2bc4decab358b0912f1afabecd2e2b5d222f..70079f5a64b6f5d92656016e47badb8abe5fd46d 100644
+--- a/dist/chunk/XK72FIHD.jsx
++++ b/dist/chunk/XK72FIHD.jsx
+@@ -73,7 +73,7 @@ var PopoverCloseTrigger = (props) => {
+ 
+ // src/components/popover/popover-content.tsx
+ import { mergeProps as mergeProps5 } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ var PopoverContent = (props) => {
+   const api = usePopoverContext();
+   const presenceApi = usePresenceContext();
+@@ -82,9 +82,8 @@ var PopoverContent = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />));
++  return <Show when={!presenceApi().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/popover/popover-context.tsx
+@@ -113,9 +112,8 @@ var PopoverPositioner = (props) => {
+   const api = usePopoverContext();
+   const presenceApi = usePresenceContext();
+   const mergedProps = mergeProps8(() => api().getPositionerProps(), props);
+-  return <Show2 when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} state={api().getPositionerState()} />
+-    </Show2>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} state={api().getPositionerState()} />));
++  return <Show2 when={!presenceApi().unmounted}>{__arkNode2}</Show2>;
+ };
+ 
+ // src/components/popover/popover-root.tsx
 diff --git a/dist/chunk/YA3AZOHJ.jsx b/dist/chunk/YA3AZOHJ.jsx
-index 4d61b2dcf02a5b10ee069b546be923853380a223..b8a8dd340e4a14662316dacffd5ceb2dd77bef7e 100644
+index 4d61b2dcf02a5b10ee069b546be923853380a223..3d69bcdfa309e0c6f73f65f96c10933f5ac50002 100644
 --- a/dist/chunk/YA3AZOHJ.jsx
 +++ b/dist/chunk/YA3AZOHJ.jsx
-@@ -65,11 +65,11 @@ var useCollapsible = (props = {}) => {
+@@ -25,7 +25,7 @@ import {
+ 
+ // src/components/collapsible/collapsible-content.tsx
+ import { mergeProps } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ 
+ // src/components/collapsible/use-collapsible-context.ts
+ var [CollapsibleProvider, useCollapsibleContext] = createContext({
+@@ -37,9 +37,8 @@ var [CollapsibleProvider, useCollapsibleContext] = createContext({
+ var CollapsibleContent = (props) => {
+   const api = useCollapsibleContext();
+   const mergedProps = mergeProps(() => api().getContentProps(), props);
+-  return <Show when={!api().unmounted}>
+-      <ark.div {...mergedProps} state={api().getContentState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} state={api().getContentState()} />));
++  return <Show when={!api().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/collapsible/collapsible-context.tsx
+@@ -65,11 +64,11 @@ var useCollapsible = (props = {}) => {
    }));
    const service = useMachine(collapsible.machine, machineProps);
    const [wasVisible, setWasVisible] = createSignal(false);
@@ -32,3 +636,95 @@ index 4d61b2dcf02a5b10ee069b546be923853380a223..b8a8dd340e4a14662316dacffd5ceb2d
    return createMemo(() => ({
      ...api(),
      unmounted: !api().visible && !wasVisible() && renderStrategyProps.lazyMount || renderStrategyProps.unmountOnExit && !api().visible && wasVisible()
+diff --git a/dist/chunk/ZTCKGMFA.js b/dist/chunk/ZTCKGMFA.js
+index 88c42501814ec074f6b542c173f43e662f64abc6..3bcaf49f6c482e8dd4cef2970b4b9a84535d3423 100644
+--- a/dist/chunk/ZTCKGMFA.js
++++ b/dist/chunk/ZTCKGMFA.js
+@@ -5,7 +5,7 @@ import { ark } from './JXJGVFFW.js';
+ import { createContext } from './THN5C4U6.js';
+ import { createComponent, mergeProps as mergeProps$1 } from 'solid-js/web';
+ import { mergeProps } from '@zag-js/solid';
+-import { Show } from 'solid-js';
++import { Show, untrack } from 'solid-js';
+ 
+ // src/components/presence/split-presence-props.ts
+ var splitPresenceProps = (props) => createSplitProps()(props, [
+@@ -23,19 +23,20 @@ var Presence = (props) => {
+   const [presenceProps, localProps] = splitPresenceProps(props);
+   const api = usePresence(presenceProps);
+   const mergedProps = mergeProps(() => api().presenceProps, localProps);
++  // PATCHED: `children` is a VALUE, not a getter, and is built once outside
++  // Show's tracked compute. See patches/@ark-ui%2Fsolid@6.0.0-next.0.patch.
++  const node = untrack(() => createComponent(ark.div, mergeProps$1(mergedProps, {
++    ref(r$) {
++      var _ref$ = composeRefs(api().ref, props.ref);
++      typeof _ref$ === "function" && _ref$(r$);
++    },
++    "data-presence-root": ""
++  })));
+   return createComponent(Show, {
+     get when() {
+       return !api().unmounted;
+     },
+-    get children() {
+-      return createComponent(ark.div, mergeProps$1(mergedProps, {
+-        ref(r$) {
+-          var _ref$ = composeRefs(api().ref, props.ref);
+-          typeof _ref$ === "function" && _ref$(r$);
+-        },
+-        "data-presence-root": ""
+-      }));
+-    }
++    children: node
+   });
+ };
+ 
+diff --git a/dist/chunk/ZVVR5JOO.jsx b/dist/chunk/ZVVR5JOO.jsx
+index 2ddf32854f7e52c3f32d5e4724e7881bead8be5a..6fc3a6231f0d9082b9839ff6a10017eab1f39bab 100644
+--- a/dist/chunk/ZVVR5JOO.jsx
++++ b/dist/chunk/ZVVR5JOO.jsx
+@@ -38,7 +38,7 @@ import {
+ 
+ // src/components/dialog/dialog-backdrop.tsx
+ import { mergeProps } from "@zag-js/solid";
+-import { Show } from "solid-js";
++import { Show, untrack } from "solid-js";
+ 
+ // src/components/dialog/use-dialog-context.ts
+ var [DialogProvider, useDialogContext] = createContext({
+@@ -56,9 +56,8 @@ var DialogBackdrop = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getBackdropState()} />
+-    </Show>;
++  const __arkNode1 = untrack(() => (<ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getBackdropState()} />));
++  return <Show when={!presenceApi().unmounted}>{__arkNode1}</Show>;
+ };
+ 
+ // src/components/dialog/dialog-close-trigger.tsx
+@@ -80,9 +79,8 @@ var DialogContent = (props) => {
+     () => presenceApi().presenceProps,
+     props
+   );
+-  return <Show2 when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />
+-    </Show2>;
++  const node = untrack(() => <ark.div {...mergedProps} ref={composeRefs(presenceApi().ref, props.ref)} state={api().getContentState()} />);
++  return <Show2 when={!presenceApi().unmounted}>{node}</Show2>;
+ };
+ 
+ // src/components/dialog/dialog-context.tsx
+@@ -103,9 +101,8 @@ var DialogPositioner = (props) => {
+   const api = useDialogContext();
+   const presenceApi = usePresenceContext();
+   const mergedProps = mergeProps5(() => api().getPositionerProps(), props);
+-  return <Show3 when={!presenceApi().unmounted}>
+-      <ark.div {...mergedProps} state={api().getPositionerState()} />
+-    </Show3>;
++  const __arkNode2 = untrack(() => (<ark.div {...mergedProps} state={api().getPositionerState()} />));
++  return <Show3 when={!presenceApi().unmounted}>{__arkNode2}</Show3>;
+ };
+ 
+ // src/components/dialog/dialog-root.tsx
